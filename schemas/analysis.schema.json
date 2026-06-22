@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyenovel/analysis.schema.json",
+  "title": "hyenovel story analysis",
+  "description": "唯一正本:一篇短篇的結構化分析。analyst 產出、viz.py 消費。型別固定、內容自由。",
+  "type": "object",
+  "required": ["slug", "nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": {
+      "type": "string",
+      "description": "故事資料夾名,對應 stories/<slug>/"
+    },
+    "title": {
+      "type": "string",
+      "description": "作品標題(可選)"
+    },
+    "synopsis": {
+      "type": "string",
+      "description": "一兩句故事梗概(可選,給人讀)"
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "type", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "全篇唯一識別碼,如 t1 / k2 / e3 / m1 / c1 / b4"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["theme", "motif", "technique", "effect", "character", "beat"],
+          "description": "theme=主題 motif=意象/母題 technique=技法 effect=效果 character=角色 beat=敘事節拍(文本軸骨幹)"
+        },
+        "label": {
+          "type": "string",
+          "description": "短標籤,圖上顯示用"
+        },
+        "note": {
+          "type": "string",
+          "description": "自由文字:細膩分析。可空。"
+        },
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "張力/情緒強度 0–1。effect / beat 節點才需要(給文本軸曲線);其他型別忽略。"
+        },
+        "evidence": {
+          "type": "array",
+          "description": "支撐此節點的原文證據。theme/motif/technique/effect/beat 應至少一條;character 可選。",
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["quote"],
+      "additionalProperties": false,
+      "properties": {
+        "quote": {
+          "type": "string",
+          "description": "逐字原句,必須能在 source.md 中精確找到(硬閘門:viz.py 會驗證並算出文本軸座標)。"
+        },
+        "note": {
+          "type": "string",
+          "description": "此引文為何構成證據(可選)"
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["type", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["manifests", "recurs_in", "serves", "produces", "tensions_with", "characterizes", "precedes", "relates_to"],
+          "description": "意圖鏈核心:produces(technique→effect)、serves(effect→theme)。其餘:manifests(motif→theme)recurs_in(motif→beat)tensions_with(theme↔theme)characterizes(technique/beat→character)precedes(beat→beat 時序)relates_to(泛用)"
+        },
+        "from": {
+          "type": "string",
+          "description": "來源 node id"
+        },
+        "to": {
+          "type": "string",
+          "description": "目標 node id"
+        },
+        "note": {
+          "type": "string",
+          "description": "自由文字:這條關係的細膩說明。可空。"
+        }
+      }
+    }
+  }
+}

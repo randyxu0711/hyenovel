@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Obsidian (stories/ 可當 vault;不版控其 app 設定)
+.obsidian/
+
+# 暫不版控生成物可在此加(目前保留 analysis/viz 進版控以便 review)
