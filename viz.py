@@ -42,14 +42,22 @@ def load(slug):
     return base, analysis, source
 
 
+# ASCII 標點 → 全形(1:1 等長,故正規化後的索引在原文仍有效)。
+# 容忍作者手打的半形/全形差異,但不放過真正缺字的幻覺引用。
+_PUNCT = str.maketrans({",": "，", ".": "。", "!": "！", "?": "？",
+                        ":": "：", ";": "；", "(": "（", ")": "）"})
+
+
 def locate(quote, source):
-    """回傳 (start, end) 或 None。先精確找,再容許空白差異。"""
-    idx = source.find(quote)
-    if idx != -1:
-        return idx, idx + len(quote)
-    # 容許換行/空白差異
-    pat = re.compile(r"\s*".join(re.escape(ch) for ch in quote if not ch.isspace()))
-    m = pat.search(source)
+    """回傳 (start, end) 或 None。容許半形/全形標點與空白差異;仍要求逐字。"""
+    nq, ns = quote.translate(_PUNCT), source.translate(_PUNCT)
+    for q, s in ((quote, source), (nq, ns)):
+        idx = s.find(q)
+        if idx != -1:
+            return idx, idx + len(quote)
+    # 容許換行/空白差異(在標點正規化後)
+    pat = re.compile(r"\s*".join(re.escape(ch) for ch in nq if not ch.isspace()))
+    m = pat.search(ns)
     if m:
         return m.start(), m.end()
     return None
@@ -71,6 +79,27 @@ def validate_and_locate(analysis, source):
                 ev["_start"], ev["_end"] = span
                 ev["_pos"] = span[0] / total
     return errors
+
+
+def load_feedback(base, source):
+    """讀 feedback.json(可選),就地把 quote 命中座標寫進 _quotes,回傳 (feedback, errors)。"""
+    fp = base / "feedback.json"
+    if not fp.exists():
+        return None, []
+    fb = json.loads(fp.read_text(encoding="utf-8"))
+    errors = []
+    for sec in ("strengths", "key_points"):
+        for pt in fb.get(sec, []) or []:
+            loc = []
+            for q in pt.get("quotes", []) or []:
+                span = locate(q, source)
+                if span is None:
+                    errors.append(("feedback:" + pt.get("title", "?")[:14], q))
+                    loc.append({"quote": q, "start": -1, "end": -1})
+                else:
+                    loc.append({"quote": q, "start": span[0], "end": span[1]})
+            pt["_quotes"] = loc
+    return fb, errors
 
 
 def diagnostics(analysis):
@@ -104,25 +133,10 @@ def diagnostics(analysis):
     return classes
 
 
-def build_html(slug, analysis, source, diag):
+def build_html(slug, analysis, source, diag, feedback=None):
     title = analysis.get("title") or slug
     nodes = analysis.get("nodes", [])
     edges = analysis.get("edges", [])
-
-    # cytoscape elements
-    cy_nodes = []
-    for n in nodes:
-        cls = sorted(diag.get(n["id"], set()))
-        cy_nodes.append({"data": {
-            "id": n["id"], "label": n.get("label", n["id"]),
-            "ntype": n["type"], "note": n.get("note", ""),
-        }, "classes": " ".join(cls)})
-    cy_edges = []
-    for i, e in enumerate(edges):
-        cy_edges.append({"data": {
-            "id": f"e{i}", "source": e["from"], "target": e["to"],
-            "label": e["type"], "note": e.get("note", ""),
-        }})
 
     # node 附帶 evidence(座標)給文本軸 + 點擊
     node_payload = []
@@ -137,12 +151,25 @@ def build_html(slug, analysis, source, diag):
                              "intensity": n.get("intensity"),
                              "evidence": evs})
 
+    feedback_payload = None
+    if feedback:
+        def pts(key):
+            out = []
+            for pt in feedback.get(key, []) or []:
+                out.append({"title": pt.get("title", ""), "body": pt.get("body", ""),
+                            "experiment": pt.get("experiment"), "question": pt.get("question"),
+                            "refs": pt.get("refs", []) or [], "quotes": pt.get("_quotes", [])})
+            return out
+        feedback_payload = {"read": feedback.get("read", ""),
+                            "strengths": pts("strengths"), "key_points": pts("key_points"),
+                            "minor": feedback.get("minor", []), "one_line": feedback.get("one_line", "")}
+
     data = {
         "slug": slug, "title": title,
-        "cyElements": cy_nodes + cy_edges,
         "nodes": node_payload, "edges": edges,
         "colors": NODE_COLORS, "cn": NODE_CN,
         "diag": {k: sorted(v) for k, v in diag.items()},
+        "feedback": feedback_payload,
     }
     data_json = json.dumps(data, ensure_ascii=False)
     source_json = json.dumps(source, ensure_ascii=False)
@@ -180,20 +207,22 @@ def main():
 
     base, analysis, source = load(slug)
     errors = validate_and_locate(analysis, source)
+    feedback, fb_errors = load_feedback(base, source)
+    errors += fb_errors
 
     if errors:
         print(f"⚠ 引用硬閘門:{len(errors)} 條 quote 在 source.md 找不到:")
         for nid, q in errors:
             print(f"  [{nid}] {q[:50]}")
     else:
-        print(f"✓ 引用硬閘門通過:所有 quote 皆對得上原文。")
+        print(f"✓ 引用硬閘門通過:所有 quote(含 feedback)皆對得上原文。")
 
     if check:
         sys.exit(1 if errors else 0)
 
     diag = diagnostics(analysis)
     out = base / "viz.html"
-    out.write_text(build_html(slug, analysis, source, diag), encoding="utf-8")
+    out.write_text(build_html(slug, analysis, source, diag, feedback), encoding="utf-8")
     n_nodes, n_edges = len(analysis.get("nodes", [])), len(analysis.get("edges", []))
     print(f"✓ 出圖:{out}  ({n_nodes} 節點 / {n_edges} 邊)")
     if diag:

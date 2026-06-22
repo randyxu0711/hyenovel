@@ -10,24 +10,30 @@
 </style></head>
 <body>
 <header><h1>hyenovel</h1><span class="sub" id="ttl"></span></header>
-<div class="tabs">
-  <div class="tab active" data-v="chain">① 意圖鏈</div>
-  <div class="tab" data-v="axis">② 文本軸解剖</div>
-</div>
 
-<div class="view active" id="v-chain"><div class="row">
-  <div id="cy"></div>
-  <div class="side">
+<div id="app">
+  <div id="main">
+    <div class="tabs">
+      <div class="tab active" data-v="chain">① 意圖鏈</div>
+      <div class="tab" data-v="axis">② 文本軸解剖</div>
+    </div>
+    <div class="viewarea">
+      <div class="view active" id="v-chain"><div id="cy"></div></div>
+      <div class="view" id="v-axis">
+        <div class="axiswrap"><svg id="axis" height="300"></svg></div>
+        <p class="hint">曲線=節拍張力(標峰值)。圓點=意象(同意象多次出現以虛線串起)、三角=技法、方塊=效果;金邊=編輯想聊。點任一標記跳原文 + 右欄帶出回饋。</p>
+        <div id="src"></div>
+      </div>
+    </div>
+  </div>
+
+  <aside id="dock">
+    <div class="dockhead">編輯 · 討論 <small>— 點圖上任一節點,這裡就接著聊</small></div>
+    <div id="dock-dyn"></div>
+    <hr class="dsep">
     <h3>圖例</h3><div class="legend" id="legend"></div>
     <h3>診斷</h3><div class="diagbox" id="diag"></div>
-    <h3>節點</h3><div id="info" class="hint">點任一節點:放大選中、點亮相連邊與鄰居、顯示 note 與原文證據。點主題會在「文本軸」高亮餵養它的段落。點空白還原。</div>
-  </div>
-</div></div>
-
-<div class="view" id="v-axis">
-  <div class="axiswrap"><svg id="axis" height="340"></svg></div>
-  <p class="hint">曲線=節拍張力(含峰值標示)。下方圓點=意象(同意象多次出現以虛線串起,看復現節奏)、三角=技法、方塊=效果。點任一標記跳原文高亮。</p>
-  <div id="src"></div>
+  </aside>
 </div>
 
 <script>

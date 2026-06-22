@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyenovel/feedback.schema.json",
+  "title": "hyenovel story feedback",
+  "description": "判斷層正本:criticizer(出版編輯)對一篇短篇的發展性回饋。結構化以便 (a) 渲染 feedback.md (b) viz 常駐欄錨定到節點。refs 指向 analysis.json 的 node id;quotes 為逐字原文。",
+  "type": "object",
+  "required": ["slug", "read", "key_points", "one_line"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": { "type": "string" },
+    "read": {
+      "type": "string",
+      "description": "『這篇在做什麼』——兩三句,證明讀懂了企圖,不套模板。"
+    },
+    "strengths": {
+      "type": "array",
+      "description": "最有效的地方(為什麼有效),非空泛吹捧。",
+      "items": { "$ref": "#/$defs/point" }
+    },
+    "key_points": {
+      "type": "array",
+      "description": "最關鍵的 2–3 件事(會改變整篇的),有輕重。",
+      "items": { "$ref": "#/$defs/point" }
+    },
+    "minor": {
+      "type": "array",
+      "description": "枝節(可選,簡短)。",
+      "items": { "type": "string" }
+    },
+    "one_line": {
+      "type": "string",
+      "description": "如果只能改一件事,改什麼。"
+    }
+  },
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": ["title", "quotes", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "description": "這個回饋點的一句話標題" },
+        "quotes": {
+          "type": "array",
+          "description": "支撐此點的逐字原文(必須能在 source.md 找到)。",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "refs": {
+          "type": "array",
+          "description": "綁到的 analysis.json node id(讓 viz 錨定;可空)。",
+          "items": { "type": "string" }
+        },
+        "body": {
+          "type": "string",
+          "description": "發展性說明:這個選擇造成什麼 / 若推到底會怎樣(談機制,非形容詞)。"
+        },
+        "experiment": {
+          "type": "string",
+          "description": "可以試的實驗(可選)。"
+        },
+        "question": {
+          "type": "string",
+          "description": "留給作者的反問——也是進 /story-discuss 的起手式(可選但建議)。"
+        }
+      }
+    }
+  }
+}

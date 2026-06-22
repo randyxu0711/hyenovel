@@ -27,19 +27,16 @@ description: 對一篇純文學短篇跑完整評論鏈。編排 analyst(產 ana
 
 ### 3. criticizer(隔離 subagent)
 用 Task 工具呼叫 `criticizer` subagent,prompt 給它故事資料夾路徑,要求:
-> 讀 stories/<slug>/analysis.json 與 source.md,產出 stories/<slug>/feedback.md(發展性、有輕重、不諂媚,每條掛逐字原文)。
+> 讀 stories/<slug>/analysis.json、source.md 與 schemas/feedback.schema.json,產出 stories/<slug>/feedback.json(發展性、有輕重、不諂媚,每點掛逐字 quotes 並用 refs 綁 node id)。
 
-等它完成。確認 `feedback.md` 已生成。
+等它完成。確認 `feedback.json` 已生成。
 
-### 4. 渲染 analysis.md(人讀,Obsidian 友善)
-讀 analysis.json,渲染成 `stories/<slug>/analysis.md`:
-- 前面加 YAML frontmatter(title、slug、tags: [hyenovel, story-analysis])。
-- 主題 / 意象 / 技法 / 效果 / 角色分節列出,每條附 note 與引文。
-- 意圖鏈用清單呈現(technique →produces→ effect →serves→ theme)。
-- 主題與意象之間用 `[[wikilink]]` 互連(Obsidian 圖譜用)。
+### 4. 渲染 analysis.md / feedback.md(人讀,Obsidian 友善)
+- 讀 analysis.json → `stories/<slug>/analysis.md`:YAML frontmatter(title、slug、tags:[hyenovel, story-analysis]);主題/意象/技法/效果/角色分節,每條附 note 與引文;意圖鏈清單(technique →produces→ effect →serves→ theme);主題與意象間用 `[[wikilink]]` 互連。
+- 讀 feedback.json → `stories/<slug>/feedback.md`:編輯給作者的信口吻;依序「這篇在做什麼 / 最有效的地方 / 我會往下推的 2–3 件事(含實驗與提問)/ 枝節 / 一句話」。
 
 ### 5. 視覺化
-跑 `python viz.py <slug>` → 產 `stories/<slug>/viz.html`。回報路徑。
+跑 `python viz.py <slug>` → 產 `stories/<slug>/viz.html`(viz.py 會同時讀 analysis.json 與 feedback.json,把回饋接進常駐「編輯」欄並錨定節點)。回報路徑。
 
 ### 6. 回報
 摘要:核心主題、criticizer 點出的 2–3 件關鍵事、節點/邊數、viz.html 路徑。
