@@ -33,6 +33,14 @@ NODE_CN = {"theme": "主題", "motif": "意象", "technique": "技法",
            "effect": "效果", "character": "角色", "beat": "節拍"}
 
 
+def read_json(path):
+    """讀 JSON;格式錯誤給乾淨訊息 + 退出碼 1(別吐 traceback,讓修正迴路能用)。"""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        sys.exit(f"✗ {path.name} 不是合法 JSON:{e.msg}(行 {e.lineno} 欄 {e.colno})。修正後重跑。")
+
+
 def load(slug):
     base = ROOT / "stories" / slug
     aj = base / "analysis.json"
@@ -41,15 +49,20 @@ def load(slug):
         sys.exit(f"找不到 {aj}(先跑 /story-critique)")
     if not src.exists():
         sys.exit(f"找不到 {src}")
-    analysis = json.loads(aj.read_text(encoding="utf-8"))
+    analysis = read_json(aj)
     source = src.read_text(encoding="utf-8")
     return base, analysis, source
 
 
-# ASCII 標點 → 全形(1:1 等長,故正規化後的索引在原文仍有效)。
-# 容忍作者手打的半形/全形差異,但不放過真正缺字的幻覺引用。
-_PUNCT = str.maketrans({",": "，", ".": "。", "!": "！", "?": "？",
-                        ":": "：", ";": "；", "(": "（", ")": "）"})
+# 標點正規化(1:1 等長,故正規化後的索引在原文仍有效)。
+# 容忍作者手打/子代理難辨的半形⇄全形與引號方向差異,但不放過真正缺字的幻覺引用。
+_PUNCT = str.maketrans({
+    ",": "，", ".": "。", "!": "！", "?": "？",
+    ":": "：", ";": "；", "(": "（", ")": "）",
+    # 引號:ASCII 與左右彎引號視為等價(作者常混用、子代理難辨方向),全部正規化到右彎引號
+    '"': "”", "“": "”",
+    "'": "’", "‘": "’",
+})
 
 
 def locate(quote, source):
@@ -90,7 +103,7 @@ def load_feedback(base, source):
     fp = base / "feedback.json"
     if not fp.exists():
         return None, []
-    fb = json.loads(fp.read_text(encoding="utf-8"))
+    fb = read_json(fp)
     errors = []
     for sec in ("strengths", "key_points"):
         for pt in fb.get(sec, []) or []:
@@ -120,7 +133,7 @@ def validate_schemas(base):
                 errors.append(f"{fname} 不存在")
             continue
         schema = json.loads((ROOT / "schemas" / sname).read_text(encoding="utf-8"))
-        data = json.loads(fp.read_text(encoding="utf-8"))
+        data = read_json(fp)
         for e in sorted(Draft202012Validator(schema).iter_errors(data),
                         key=lambda x: list(x.path)):
             path = "/".join(str(p) for p in e.path) or "(root)"

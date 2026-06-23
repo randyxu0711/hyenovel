@@ -31,6 +31,10 @@ description: 對一篇純文學短篇跑完整評論鏈。編排 analyst(產 ana
 
 等它完成。確認 `feedback.json` 已生成。
 
+### 3.5 驗證 feedback 閘門
+再跑一次 `python viz.py <slug> --check`(此時會一併驗 feedback.json 的 schema 與逐字引用)。
+- 若 feedback.json 不合法/quote 對不上 → 回報並**請 criticizer 修正**(SendMessage 接回原 criticizer),直到通過。先過閘門再渲染,避免下游吃到壞資料。
+
 ### 4. 渲染 analysis.md / feedback.md(人讀,Obsidian 友善)
 跑 `python render.py <slug>` —— 確定性渲染,讀 analysis.json / feedback.json 直接出兩份 md:
 - `analysis.md`:frontmatter(title、slug、tags);主題/意象/技法/效果/角色/節拍分節,每條附 note 與引文;

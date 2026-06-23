@@ -21,6 +21,14 @@ SECTIONS = [("theme", "主題"), ("motif", "意象"), ("technique", "技法"),
 NODE_CN = dict(SECTIONS)
 
 
+def read_json(path):
+    """讀 JSON;格式錯誤給乾淨訊息 + 退出碼 1(別吐 traceback)。"""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        sys.exit(f"✗ {path.name} 不是合法 JSON:{e.msg}(行 {e.lineno} 欄 {e.colno})。修正後重跑。")
+
+
 def parse_slug(raw):
     p = Path(raw.rstrip("/"))
     if p.name in ("source.md", "analysis.json", "feedback.json"):
@@ -157,13 +165,13 @@ def main():
     if not aj.exists():
         sys.exit(f"找不到 {aj}(先跑 /story-critique)")
 
-    analysis = json.loads(aj.read_text(encoding="utf-8"))
+    analysis = read_json(aj)
     (base / "analysis.md").write_text(render_analysis(analysis), encoding="utf-8")
     print(f"✓ 出:{base / 'analysis.md'}")
 
     fp = base / "feedback.json"
     if not analysis_only and fp.exists():
-        feedback = json.loads(fp.read_text(encoding="utf-8"))
+        feedback = read_json(fp)
         title = analysis.get("title") or slug
         (base / "feedback.md").write_text(render_feedback(feedback, title), encoding="utf-8")
         print(f"✓ 出:{base / 'feedback.md'}")
