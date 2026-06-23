@@ -46,8 +46,10 @@ description: 對一篇純文學短篇跑完整評論鏈。編排 analyst(產 ana
 跑 `python viz.py <slug>` → 先過兩道閘門,再產 `stories/<slug>/viz.json`(前端資料契約正本)+ `viz.html`
 (消費 viz.json,把回饋接進常駐「編輯」欄並錨定節點)。回報路徑。
 
-### 6. 回報
-摘要:核心主題、criticizer 點出的 2–3 件關鍵事、節點/邊數、viz.html 路徑。
+### 6. 更新全集列表 + 回報
+跑 `python index.py` 重生 `stories/index.json`(全集列表契約,讓新故事進列表)。
+摘要回報:核心主題、criticizer 點出的 2–3 件關鍵事、節點/邊數、viz.html 路徑;
+對照 `docs/RUBRIC.md` 5 條品質驗收(有據已由閘門保證,其餘為判斷提醒)。
 提示使用者可用 `/story-discuss <slug>` 深入討論、或瀏覽器開 viz.html。
 
 ## 注意

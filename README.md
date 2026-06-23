@@ -13,6 +13,8 @@ source.md ──analyst──▶ analysis.json ──criticizer──▶ feedbac
               ▼                             ▼
         render.py→analysis.md/feedback.md   viz.py→viz.json→viz.html
         (人讀 / Obsidian)                    (前端契約 / 可視化)
+
+index.py 掃 stories/*/ → stories/index.json(全集列表契約,前端首頁/枚舉用)
 ```
 
 ## 架構
@@ -26,7 +28,10 @@ source.md ──analyst──▶ analysis.json ──criticizer──▶ feedbac
 3. `python viz.py <slug>` → 過 schema + 引用兩道閘門,產 `viz.json`(前端契約)+ `viz.html`(瀏覽器開):
    - **意圖鏈** technique→effect→theme(看孤兒技法 / 過載主題 / 空心主題)
    - **文本軸解剖** 張力曲線 + 意象復現 + 點擊跳原文
-4. `/story-discuss <slug>` → 就這篇來回討論(有據、不諂媚)。
+4. `python index.py` → 重生 `stories/index.json`(全集列表;`/story-critique` 末步會自動跑)。
+5. `/story-discuss <slug>` → 就這篇來回討論(有據、不諂媚)。
+
+品質驗收 5 條見 `docs/RUBRIC.md`(有據由引用閘門保證,其餘為判斷提醒)。
 
 ## Schema
 見 `schemas/analysis.schema.json`。節點 6 型(theme/motif/technique/effect/character/beat),

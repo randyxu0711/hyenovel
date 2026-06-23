@@ -11,4 +11,6 @@ venv/
 # Obsidian (stories/ 可當 vault;不版控其 app 設定)
 .obsidian/
 
-# 暫不版控生成物可在此加(目前保留 analysis/viz 進版控以便 review)
+# 故事內容與其全部衍生物不進版控(使用者創作 + 可由腳本重生)。
+# 含 source.md / analysis.* / feedback.* / viz.* / index.json。只有程式碼進版控。
+stories/
