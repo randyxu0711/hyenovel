@@ -20,10 +20,10 @@ description: 對一篇純文學短篇跑完整評論鏈。編排 analyst(產 ana
 
 等它完成。確認 `stories/<slug>/analysis.json` 已生成。
 
-### 2. 驗證引用硬閘門
-跑 `python viz.py <slug> --check`(只驗證、不出圖)。
-- 若有 quote 對不上原文 → 把對不上的清單回報,**請 analyst 修正**(再呼叫一次 analyst,指出哪些 quote 找不到),直到全數通過。
-- 全通過才往下。
+### 2. 驗證閘門(schema + 逐字引用)
+跑 `python viz.py <slug> --check`(只驗、不出檔)。兩道閘門:① analysis.json 合 schema ② 每條 quote 對得上原文。
+- 若有 quote 對不上原文 → 把清單回報,**請 analyst 修正**(再呼叫一次 analyst,指出哪些 quote 找不到),直到全通過。
+- 若 schema 不合 → 同樣請 analyst 依 schema 修正。全通過才往下。
 
 ### 3. criticizer(隔離 subagent)
 用 Task 工具呼叫 `criticizer` subagent,prompt 給它故事資料夾路徑,要求:
@@ -32,11 +32,15 @@ description: 對一篇純文學短篇跑完整評論鏈。編排 analyst(產 ana
 等它完成。確認 `feedback.json` 已生成。
 
 ### 4. 渲染 analysis.md / feedback.md(人讀,Obsidian 友善)
-- 讀 analysis.json → `stories/<slug>/analysis.md`:YAML frontmatter(title、slug、tags:[hyenovel, story-analysis]);主題/意象/技法/效果/角色分節,每條附 note 與引文;意圖鏈清單(technique →produces→ effect →serves→ theme);主題與意象間用 `[[wikilink]]` 互連。
-- 讀 feedback.json → `stories/<slug>/feedback.md`:編輯給作者的信口吻;依序「這篇在做什麼 / 最有效的地方 / 我會往下推的 2–3 件事(含實驗與提問)/ 枝節 / 一句話」。
+跑 `python render.py <slug>` —— 確定性渲染,讀 analysis.json / feedback.json 直接出兩份 md:
+- `analysis.md`:frontmatter(title、slug、tags);主題/意象/技法/效果/角色/節拍分節,每條附 note 與引文;
+  意象/效果用 `[[wikilink]]` 連到主題;意圖鏈清單(technique →produces→ effect →serves→ theme)。
+- `feedback.md`:依序「這篇在做什麼 / 最有效的地方 / 關鍵 2–3 件(含實驗與提問)/ 枝節 / 一句話」。
+- md 只服務人讀 / Obsidian,**不是前端資料來源**(那是 viz.json);故意做成確定性、可重現,不靠 LLM 手渲染。
 
 ### 5. 視覺化
-跑 `python viz.py <slug>` → 產 `stories/<slug>/viz.html`(viz.py 會同時讀 analysis.json 與 feedback.json,把回饋接進常駐「編輯」欄並錨定節點)。回報路徑。
+跑 `python viz.py <slug>` → 先過兩道閘門,再產 `stories/<slug>/viz.json`(前端資料契約正本)+ `viz.html`
+(消費 viz.json,把回饋接進常駐「編輯」欄並錨定節點)。回報路徑。
 
 ### 6. 回報
 摘要:核心主題、criticizer 點出的 2–3 件關鍵事、節點/邊數、viz.html 路徑。

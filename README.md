@@ -4,26 +4,26 @@
 不是一次性產報告,而是**會分析、給發展性回饋、能來回討論、把分析視覺化**的個人思考工具。
 
 ## 核心原則
-**`analysis.json` 是唯一正本**;`viz.py`、`analysis.md`、(可選)Obsidian 都是它的下游消費者。
+**`analysis.json` = 觀察層正本、`feedback.json` = 判斷層正本**;`viz.json` / md / viz.html / Obsidian 都是下游消費者。
 
 ```
-source.md ──analyst──▶ analysis.json(正本)
-                            │
-              ┌─────────────┼──────────────┐
-              ▼             ▼              ▼
-        analysis.md     viz.py→viz.html   開 Obsidian 指向
-        feedback.md     ← 可視化           stories/ 即可翻讀
+source.md ──analyst──▶ analysis.json ──criticizer──▶ feedback.json
+                            │                              │
+              ┌─────────────┴──────────────┬──────────────┘
+              ▼                             ▼
+        render.py→analysis.md/feedback.md   viz.py→viz.json→viz.html
+        (人讀 / Obsidian)                    (前端契約 / 可視化)
 ```
 
 ## 架構
 兩個隔離的 subagent(「觀察」與「判斷」分開 context):
 - **analyst** — 整篇讀一次 → 產 `analysis.json`(型別固定、內容自由,每條附逐字原文引用)。
-- **criticizer** — 只看 `analysis.json` + 原文 → 產 `feedback.md`(出版編輯人格、發展性、不諂媚)。
+- **criticizer** — 只看 `analysis.json` + 原文 → 產 `feedback.json`(出版編輯人格、發展性、不諂媚)。
 
 ## 用法(L1)
 1. 把故事放成 `stories/<slug>/source.md`。
-2. `/story-critique stories/<slug>/source.md` → 產 `analysis.json` / `analysis.md` / `feedback.md`。
-3. `python viz.py <slug>` → 產 `stories/<slug>/viz.html`(瀏覽器開):
+2. `/story-critique stories/<slug>/source.md` → 產 `analysis.json` / `feedback.json`,並 `render.py` 出 md。
+3. `python viz.py <slug>` → 過 schema + 引用兩道閘門,產 `viz.json`(前端契約)+ `viz.html`(瀏覽器開):
    - **意圖鏈** technique→effect→theme(看孤兒技法 / 過載主題 / 空心主題)
    - **文本軸解剖** 張力曲線 + 意象復現 + 點擊跳原文
 4. `/story-discuss <slug>` → 就這篇來回討論(有據、不諂媚)。
