@@ -11,3 +11,16 @@
 .thread.dim{opacity:.06}.thread.hot{stroke:var(--amber);opacity:.95;stroke-width:1.9}
 .cnode{transition:opacity .3s}
 .viz text{font-family:var(--sans)}
+
+/* ---- catalog stage ---- */
+.field{position:fixed;inset:0}
+.story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter .8s,opacity .8s}
+.story .cap{font-family:var(--serif);font-size:17px;color:#f1e9d3;text-align:center;margin-top:2px;opacity:0;transition:.6s}
+.stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
+.stage-catalog .field:hover .story:hover{opacity:1;filter:none}
+.stage-catalog .story:hover .cap{opacity:1}
+.stage-overview .field{filter:blur(6px);opacity:.5;transition:.9s}
+.empty-state{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8f876f}
+.es-big{font-family:var(--serif);font-size:24px;color:#cabd92;letter-spacing:.1em}
+.es-add{margin-top:24px;border:1px dashed rgba(220,200,150,.4);padding:11px 26px;border-radius:999px;color:#cabd92}
+.loadmsg{padding:60px;color:#cabd92;line-height:2}
