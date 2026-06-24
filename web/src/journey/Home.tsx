@@ -8,11 +8,12 @@ export default function Home() {
   const [stage, setStage] = useState<"overview" | "catalog">("overview");
   const [entries, setEntries] = useState<IndexEntry[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { getIndex().then(i => setEntries(i.stories)).catch(e => setErr(String(e instanceof Error ? e.message : e))); }, []);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { getIndex().then(i => setEntries(i.stories)).catch(e => setErr(String(e instanceof Error ? e.message : e))).finally(() => setLoaded(true)); }, []);
   if (err) return <div className="loadmsg">讀不到故事列表:{err}<br />先在 repo 根跑 <code>python index.py</code>。</div>;
   return (
     <div className={`home stage-${stage}`} data-testid="home">
-      <Catalog entries={entries} />
+      <Catalog entries={entries} loading={!loaded} />
       {stage === "overview" && <Overview onEnter={() => setStage("catalog")} />}
     </div>
   );

@@ -16,7 +16,7 @@ export function layoutChain(viz: VizData, h: number): { nodes: ChainNode[]; edge
       classes: viz.diag[n.id] || [],
     }));
   }
-  const keep = new Set(["produces", "serves", "manifests"]);
+  const keep = new Set(["produces", "serves"]);
   const ids = new Set(nodes.map(n => n.id));
   const edges = viz.edges
     .filter(e => keep.has(e.type) && ids.has(e.from) && ids.has(e.to))

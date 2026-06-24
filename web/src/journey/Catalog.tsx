@@ -11,8 +11,9 @@ function seedTension(slug: string): number[] {
 // 散布座標(穩定):後續可改主題聚類
 const SPREAD = [["34%","52%"],["64%","42%"],["48%","70%"],["22%","36%"],["78%","60%"],["40%","26%"],["70%","76%"]];
 
-export default function Catalog({ entries }: { entries: IndexEntry[] }) {
+export default function Catalog({ entries, loading }: { entries: IndexEntry[]; loading?: boolean }) {
   const nav = useNavigate();
+  if (loading) return <div className="field" />;
   if (entries.length === 0) return (
     <div className="empty-state"><div className="es-big">這裡還沒有故事</div>
       <div className="es-add">＋ 放進第一篇(下一階段)</div></div>
