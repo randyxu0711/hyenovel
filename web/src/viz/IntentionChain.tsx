@@ -1,9 +1,6 @@
 import { layoutChain, focusSet, type ChainNode } from "../lib/chain";
 import type { VizData } from "../types";
-
-const HUE: Record<string, string> = {
-  technique: "var(--c-technique)", effect: "var(--c-effect)", theme: "var(--c-theme)",
-};
+import { HUE } from "./palette";
 const FLAG: Record<string, string> = { orphan: "⚑ 孤兒技法", overloaded: "⚑ 過載", hollow: "⚑ 單薄" };
 const rad = (n: ChainNode) => (n.type === "theme" ? (n.classes.includes("overloaded") ? 11 : 7) : 6);
 

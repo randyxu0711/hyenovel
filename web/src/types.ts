@@ -3,7 +3,15 @@ export type EdgeType =
   | "produces" | "serves" | "manifests" | "recurs_in"
   | "tensions_with" | "characterizes" | "precedes" | "relates_to";
 
-export interface Evidence { quote: string; start: number; end: number; pos: number | null; }
+export interface Evidence {
+  quote: string;
+  /** char offset of quote start in source.md */
+  start: number;
+  /** char offset of quote end in source.md */
+  end: number;
+  /** normalized text position [0..1] within source.md; null if not locatable */
+  pos: number | null;
+}
 export interface VizNode {
   id: string; type: NodeType; label: string; note: string;
   intensity: number | null; evidence: Evidence[];
@@ -12,7 +20,9 @@ export interface VizEdge { type: EdgeType; from: string; to: string; note?: stri
 
 export interface FeedbackPoint {
   title: string; body: string; experiment?: string | null; question?: string | null;
-  refs: string[]; quotes: { quote: string; start: number; end: number }[];
+  /** analysis node IDs this feedback anchors to */
+  refs: string[];
+  quotes: { quote: string; start: number; end: number }[];
 }
 export interface Feedback {
   read: string; strengths: FeedbackPoint[]; key_points: FeedbackPoint[];

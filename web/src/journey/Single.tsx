@@ -23,7 +23,7 @@ export default function Single() {
   useEffect(() => {
     if (!slug) return;
     setData(null); setErr(null); setSel(null); setTab("source");
-    getStory(slug).then(setData).catch(e => setErr(String(e.message)));
+    getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
   }, [slug]);
 
   if (err) return <div className="loadmsg">讀不到「{slug}」的分析:{err}</div>;

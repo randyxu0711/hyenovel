@@ -1,6 +1,7 @@
 import { orderedBeats, axisMarks } from "../lib/axis";
 import { spline, beatsToPoints } from "../lib/spline";
 import type { VizData } from "../types";
+import { HUE } from "./palette";
 
 // 用 pts 線性內插求某 x 在曲線上的 y(讓技法/效果打點落在張力曲線上)
 function yAtX(pts: [number, number][], x: number): number {
@@ -11,10 +12,6 @@ function yAtX(pts: [number, number][], x: number): number {
   }
   return pts[pts.length - 1][1];
 }
-
-const HUE: Record<string, string> = {
-  technique: "var(--c-technique)", effect: "var(--c-effect)", theme: "var(--c-theme)",
-};
 
 export default function TextAxis({ viz, onPick }: { viz: VizData; onPick: (id: string) => void }) {
   const x0 = 70, x1 = 930, yb = 300, amp = 200;
