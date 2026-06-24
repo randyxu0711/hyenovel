@@ -1,0 +1,8 @@
+.overview{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  filter:blur(0);} /* 骨架背景由 Catalog 層提供;總覽時加霧見 Task 11 */
+.ov-title{text-align:center}
+.ov-nm{font-family:var(--serif);font-size:52px;letter-spacing:.24em;color:#f3ecd6}
+.ov-en{font-size:14px;letter-spacing:.5em;color:#8c8265;text-transform:uppercase;margin-top:16px}
+.ov-go{margin-top:42px;font-size:13px;letter-spacing:.2em;color:#b9ad88;background:transparent;
+  border:1px solid rgba(220,200,150,.3);padding:11px 28px;border-radius:999px;cursor:pointer}
+.ov-go:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
