@@ -37,3 +37,16 @@
 .bubble.ed{background:rgba(220,200,150,.08);color:#d8cfb4;border:1px solid rgba(220,200,150,.12)}
 .dock-input{margin:8px 22px 22px;border:1px solid rgba(220,200,150,.2);border-radius:11px;padding:11px 14px;color:#7c7560;font-size:13px}
 .dock-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;background:rgba(220,200,150,.1);border:1px solid rgba(220,200,150,.2);border-right:0;border-radius:8px 0 0 8px;padding:14px 7px;color:#cabd92;cursor:pointer;letter-spacing:.3em}
+.single{position:fixed;inset:0;background:radial-gradient(110% 90% at 28% 22%,#14130e,#070705);display:flex;flex-direction:column}
+.single-top{display:flex;justify-content:space-between;align-items:center;padding:46px 46px 0}
+.single-top h2{font-family:var(--serif);font-weight:500;font-size:33px;color:#f3ecd6}
+.back{background:transparent;border:1px solid rgba(220,200,150,.2);color:#9a917a;padding:7px 16px;border-radius:999px;cursor:pointer}
+.single-body{flex:1;display:flex;min-height:0}
+.single-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.tabs{display:flex;gap:4px;margin:20px 46px 0;border-bottom:1px solid rgba(220,200,150,.12)}
+.tab{background:transparent;border:0;border-bottom:2px solid transparent;padding:11px 20px;font-size:13px;letter-spacing:.16em;color:#8c8265;cursor:pointer}
+.tab.on{color:#f3ecd6;border-bottom-color:#c2a35a}
+.pages{flex:1;overflow:auto;padding:28px 46px 40px}
+.src{font-family:var(--serif);font-size:17px;line-height:2.2;color:#e4dcc4;max-width:660px;white-space:pre-wrap}
+.fb p{font-size:15px;line-height:2;color:#dccfb1;max-width:680px}
+.q{font-family:var(--serif);font-size:16.5px;line-height:1.85;color:#e3d8b7;border-left:2px solid #7a6736;padding-left:16px;margin-top:12px}
