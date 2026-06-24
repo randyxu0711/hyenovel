@@ -67,3 +67,12 @@
   letter-spacing:.05em;color:#9a917a;background:rgba(12,11,9,.72);border:1px solid rgba(220,200,150,.12);
   padding:8px 16px;border-radius:999px;backdrop-filter:blur(8px)}.hint b{color:#ece3cb}
 .single-overlay{position:fixed;inset:0;z-index:15}
+
+/* ---- feedback accordion ---- */
+.acc{border-bottom:1px solid rgba(220,200,150,.1)}
+.acc-h{display:block;width:100%;text-align:left;background:transparent;border:0;cursor:pointer;
+  font-family:var(--serif);font-size:19px;color:#f1e7cd;padding:16px 0;letter-spacing:.02em}
+.acc.on .acc-h{color:#f3ecd6}
+.acc-h:hover{color:#ece3cb}
+.acc-b{padding:0 0 16px;animation:accIn .3s ease}
+@keyframes accIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}

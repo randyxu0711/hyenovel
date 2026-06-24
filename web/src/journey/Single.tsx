@@ -18,6 +18,8 @@ export default function Single() {
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("source");
   const [sel, setSel] = useState<string | null>(null);
+  const [openFb, setOpenFb] = useState<Record<string, boolean>>({});
+  const toggleFb = (k: string) => setOpenFb(s => ({ ...s, [k]: !s[k] }));
 
   useEffect(() => {
     if (!slug) return;
@@ -49,9 +51,26 @@ export default function Single() {
             {tab === "feedback" && (fb
               ? <div className="fb">
                   <div className="dock-lab">這篇在做什麼</div><p>{fb.read}</p>
-                  {fb.key_points.map((p, i) => <div key={i}>
-                    <div className="dock-lab">{p.title}</div><p>{p.body}</p>
-                    {p.question && <div className="q">{p.question}</div>}</div>)}
+                  {fb.key_points.map((p, i) => {
+                    const k = `kp${i}`, on = !!openFb[k];
+                    return (
+                      <div className={`acc ${on ? "on" : ""}`} key={k}>
+                        <button className="acc-h" onClick={() => toggleFb(k)}>{p.title}</button>
+                        {on && <div className="acc-b"><p>{p.body}</p>
+                          {p.question && <div className="q">{p.question}</div>}</div>}
+                      </div>
+                    );
+                  })}
+                  {fb.strengths.length > 0 && <div className="dock-lab">這篇的強處</div>}
+                  {fb.strengths.map((p, i) => {
+                    const k = `st${i}`, on = !!openFb[k];
+                    return (
+                      <div className={`acc ${on ? "on" : ""}`} key={k}>
+                        <button className="acc-h" onClick={() => toggleFb(k)}>{p.title}</button>
+                        {on && <div className="acc-b"><p>{p.body}</p></div>}
+                      </div>
+                    );
+                  })}
                   <div className="dock-lab">如果只能改一件事</div><p>{fb.one_line}</p>
                 </div>
               : <p className="loadmsg">這篇還沒有編輯回饋。</p>)}
