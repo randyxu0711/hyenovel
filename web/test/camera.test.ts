@@ -1,0 +1,33 @@
+import { describe, it, expect } from "vitest";
+import { WORLD, fitScale, zoomFor, camTransform, worldPos } from "../src/lib/camera";
+
+describe("camera math", () => {
+  it("WORLD 是 2600x1500", () => {
+    expect(WORLD).toEqual({ w: 2600, h: 1500 });
+  });
+  it("fitScale 取較小比例", () => {
+    expect(fitScale({ w: 1000, h: 500 }, 2000, 2000)).toBe(2); // min(2000/1000,2000/500)=2
+  });
+  it("zoomFor 各 stage 乘上對應係數", () => {
+    expect(zoomFor("overview", 2)).toBeCloseTo(1.8);
+    expect(zoomFor("catalog", 2)).toBeCloseTo(2.08);
+    expect(zoomFor("single", 2)).toBeCloseTo(3.0);
+  });
+  it("camTransform 把 focus 置中於視窗", () => {
+    const t = camTransform({ w: 1000, h: 1000 }, 800, 600, 2, { x: 100, y: 50 });
+    expect(t.scale).toBe(2);
+    expect(t.x).toBe(800 / 2 - 100 * 2); // 200
+    expect(t.y).toBe(600 / 2 - 50 * 2);  // 200
+  });
+  it("camTransform 無 focus 時置中世界中心", () => {
+    const t = camTransform({ w: 1000, h: 1000 }, 800, 600, 1);
+    expect(t.x).toBe(400 - 500);
+    expect(t.y).toBe(300 - 500);
+  });
+  it("worldPos 對同一 index 穩定,且落在世界內", () => {
+    const a = worldPos(3, WORLD), b = worldPos(3, WORLD);
+    expect(a).toEqual(b);
+    expect(a.x).toBeGreaterThan(0); expect(a.x).toBeLessThan(WORLD.w);
+    expect(a.y).toBeGreaterThan(0); expect(a.y).toBeLessThan(WORLD.h);
+  });
+});
