@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { orderedBeats, axisMarks } from "../lib/axis";
 import { spline, beatsToPoints } from "../lib/spline";
 import type { VizData } from "../types";
@@ -14,6 +15,7 @@ function yAtX(pts: [number, number][], x: number): number {
 }
 
 export default function TextAxis({ viz, onPick }: { viz: VizData; onPick: (id: string) => void }) {
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const x0 = 70, x1 = 930, yb = 300, amp = 200;
   const beats = orderedBeats(viz);
   const vals = beats.map(b => b.intensity ?? 0.3);
@@ -32,15 +34,29 @@ export default function TextAxis({ viz, onPick }: { viz: VizData; onPick: (id: s
         <path d={`${d} L${x1},${yb} L${x0},${yb} Z`} fill="rgba(230,201,138,.16)" />
         <path d={d} fill="none" stroke="var(--bone)" strokeWidth={2.4} strokeLinecap="round"
           style={{ filter: "drop-shadow(0 0 6px rgba(240,228,200,.5))" }} />
+        {pts.map((p, i) => (
+          <line key={`r${i}`} className="rib" x1={p[0]} y1={yb} x2={p[0]} y2={p[1]}
+            stroke="#dccfae" strokeWidth={1} opacity={0.55} />
+        ))}
         {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.4} fill="#f3ead2" />)}
       </>}
-      {marks.map((m, i) => (
-        <g key={i} className="cnode" data-id={m.node.id} style={{ cursor: "pointer" }}
-          onClick={() => onPick(m.node.id)}>
-          <circle cx={m.x} cy={m.y} r={3.6} fill={HUE[m.node.type] || "#f3ead2"} />
-          <text x={m.x} y={m.y - 10} fill="#cabd92" fontSize={11.5} textAnchor="middle">{m.node.label}</text>
-        </g>
-      ))}
+      {marks.map((m, i) => {
+        const on = hoverId === m.node.id;
+        const quote = m.node.evidence.find(e => e.quote)?.quote ?? "";
+        return (
+          <g key={i} className="cnode" data-id={m.node.id} style={{ cursor: "pointer" }}
+            onMouseEnter={() => setHoverId(m.node.id)} onMouseLeave={() => setHoverId(null)}
+            onClick={() => onPick(m.node.id)}>
+            <circle cx={m.x} cy={m.y} r={on ? 5 : 3.6} fill={HUE[m.node.type] || "#f3ead2"} />
+            {on && <>
+              <text data-label={m.node.id} x={m.x} y={m.y - 12} fill="#e6c98a" fontSize={12}
+                textAnchor="middle">{m.node.label}</text>
+              {quote && <text x={m.x} y={m.y - 28} fill="#9c8c5e" fontSize={10.5}
+                textAnchor="middle">{quote.length > 18 ? quote.slice(0, 18) + "…" : quote}</text>}
+            </>}
+          </g>
+        );
+      })}
     </svg>
   );
 }

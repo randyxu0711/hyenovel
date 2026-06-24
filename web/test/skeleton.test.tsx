@@ -9,4 +9,9 @@ describe("Skeleton", () => {
     expect(container.querySelectorAll("circle").length).toBe(3);
     expect(container.querySelector("path")).toBeTruthy();
   });
+  it("每隔一點畫一條肋線", () => {
+    const { container } = render(<Skeleton beats={[0.2, 0.6, 0.9, 0.4]} width={200} />);
+    // i%2===0 → index 0,2 → 2 條肋
+    expect(container.querySelectorAll("line.rib").length).toBe(2);
+  });
 });
