@@ -9,3 +9,11 @@
 html,body,#root{height:100%}
 body{font-family:var(--sans);color:#e8e3d6;
   background:radial-gradient(120% 90% at 50% 34%, #15140f 0%, #0c0b09 52%, #050504 100%)}
+
+/* themed thin scrollbars (取代醜的原生捲軸) */
+*{scrollbar-width:thin;scrollbar-color:rgba(220,200,150,.28) transparent}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(220,200,150,.22);border-radius:999px;
+  border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(236,201,138,.4);background-clip:content-box}
