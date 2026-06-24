@@ -1,5 +1,5 @@
-.overview{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  filter:blur(0);} /* 骨架背景由 Catalog 層提供;總覽時加霧見 Task 11 */
+.overview{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+  filter:blur(0);} /* z-index:8 在 stage(3)/fog(6) 之上:進入鈕可點、總覽時擋住後方星骨不被誤點 */
 .ov-title{text-align:center}
 .ov-nm{font-family:var(--serif);font-size:52px;letter-spacing:.24em;color:#f3ecd6}
 .ov-en{font-size:14px;letter-spacing:.5em;color:#8c8265;text-transform:uppercase;margin-top:16px}
@@ -69,11 +69,17 @@
 .single-overlay{position:fixed;inset:0;z-index:15}
 
 /* ---- feedback accordion ---- */
+/* 大標(段落骨幹)*/
+.fb-sec{font-family:var(--serif);font-weight:500;font-size:23px;color:#f3ecd6;letter-spacing:.04em;margin:34px 0 14px}
+.fb-sec:first-child{margin-top:6px}
+.fb-lead{font-size:15px;line-height:2;color:#dccfb1;max-width:680px}
+.fb-lead.one{color:#e8dcbd;border-left:2px solid #7a6736;padding-left:16px}
+/* 中標:可點開的「重點」*/
 .acc{border-bottom:1px solid rgba(220,200,150,.1)}
-.acc-h{display:block;width:100%;text-align:left;background:transparent;border:0;cursor:pointer;
-  font-family:var(--serif);font-size:19px;color:#f1e7cd;padding:16px 0;letter-spacing:.02em}
-.acc.on .acc-h{color:#f3ecd6}
-.acc-h:hover{color:#ece3cb}
+.acc-h{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;background:transparent;border:0;
+  cursor:pointer;font-family:var(--serif);font-size:16.5px;color:#e7dcc0;padding:14px 0;letter-spacing:.02em}
+.acc-mk{color:#c2a35a;font-size:14px;flex:none}
+.acc.on .acc-h,.acc-h:hover{color:#f3ecd6}
 .acc-b{padding:0 0 16px;animation:accIn .3s ease}
 @keyframes accIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
 

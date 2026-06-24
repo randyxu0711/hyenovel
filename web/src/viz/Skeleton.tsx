@@ -1,22 +1,23 @@
-import { spline, beatsToPoints } from "../lib/spline";
+import { buildBone } from "../lib/bone";
 
-export default function Skeleton({ beats, width }: { beats: number[]; width: number }) {
-  const x0 = 20, x1 = 280, yb = 120, amp = 92;
-  const pts = beatsToPoints(beats, x0, x1, yb, amp);
-  const d = spline(pts);
-  const max = Math.max(...beats);
+// 目錄星骨:v3 的魚骨骨架(脊椎 + 沿法線岔出的肋 + 端點),seed 決定身分。
+export default function Skeleton({ seed, width }: { seed: number; width: number }) {
+  const W = 310, H = 190;
+  const { d, ribs } = buildBone(seed, W, H);
   return (
-    <svg viewBox="0 0 300 150" width={width} height={(width * 150) / 300}
+    <svg viewBox={`0 0 ${W} ${H}`} width={width} height={(width * H) / W}
       style={{ filter: "drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))" }}>
-      <path d={`${d} L${x1},${yb} L${x0},${yb} Z`} fill="rgba(230,201,138,.10)" />
-      <path d={d} fill="none" stroke="var(--bone)" strokeWidth={2.2} strokeLinecap="round" />
-      {pts.map((p, i) => i % 2 === 0 && (
-        <line key={`r${i}`} className="rib" x1={p[0]} y1={p[1]} x2={p[0]} y2={yb}
-          stroke="#dccfae" strokeWidth={1} opacity={0.55} />
+      <path className="spine" d={d} fill="none" stroke="var(--bone)" strokeWidth={2.2} strokeLinecap="round" />
+      {ribs.map((b, i) => (
+        <line key={`s${i}`} className="stub" x1={b.x1} y1={b.y1} x2={b.sx} y2={b.sy}
+          stroke="#dccfae" strokeWidth={1.1} opacity={0.38} />
       ))}
-      {pts.map((p, i) => (
-        <circle key={i} cx={p[0]} cy={p[1]} r={beats[i] >= max - 1e-6 ? 4 : 2.2}
-          fill={beats[i] >= max - 1e-6 ? "var(--c-theme)" : "#f3ead2"} />
+      {ribs.map((b, i) => (
+        <line key={`r${i}`} className="rib" x1={b.x1} y1={b.y1} x2={b.x2} y2={b.y2}
+          stroke="#dccfae" strokeWidth={1.1} strokeLinecap="round" opacity={0.76} />
+      ))}
+      {ribs.map((b, i) => (
+        <circle key={`c${i}`} cx={b.cx} cy={b.cy} r={b.r} fill={b.theme ? "#ecc98a" : "#f3ead2"} />
       ))}
     </svg>
   );

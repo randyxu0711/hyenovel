@@ -52,28 +52,38 @@ export default function Single() {
             {tab === "chain" && <IntentionChain viz={viz} selected={sel} onPick={setSel} />}
             {tab === "feedback" && (fb
               ? <div className="fb">
-                  <div className="dock-lab">這篇在做什麼</div><p>{fb.read}</p>
+                  <h3 className="fb-sec">這篇在做什麼</h3>
+                  <p className="fb-lead">{fb.read}</p>
+
+                  {fb.key_points.length > 0 && <h3 className="fb-sec">最關鍵的 {fb.key_points.length} 件</h3>}
                   {fb.key_points.map((p, i) => {
                     const k = `kp${i}`, on = !!openFb[k];
                     return (
                       <div className={`acc ${on ? "on" : ""}`} key={k}>
-                        <button className="acc-h" onClick={() => toggleFb(k)}>{p.title}</button>
+                        <button className="acc-h" onClick={() => toggleFb(k)}>
+                          <span className="acc-mk">{on ? "−" : "+"}</span><span className="acc-tt">{p.title}</span>
+                        </button>
                         {on && <div className="acc-b"><p>{p.body}</p>
                           {p.question && <div className="q">{p.question}</div>}</div>}
                       </div>
                     );
                   })}
-                  {fb.strengths.length > 0 && <div className="dock-lab">這篇的強處</div>}
+
+                  {fb.strengths.length > 0 && <h3 className="fb-sec">這篇的強處</h3>}
                   {fb.strengths.map((p, i) => {
                     const k = `st${i}`, on = !!openFb[k];
                     return (
                       <div className={`acc ${on ? "on" : ""}`} key={k}>
-                        <button className="acc-h" onClick={() => toggleFb(k)}>{p.title}</button>
+                        <button className="acc-h" onClick={() => toggleFb(k)}>
+                          <span className="acc-mk">{on ? "−" : "+"}</span><span className="acc-tt">{p.title}</span>
+                        </button>
                         {on && <div className="acc-b"><p>{p.body}</p></div>}
                       </div>
                     );
                   })}
-                  <div className="dock-lab">如果只能改一件事</div><p>{fb.one_line}</p>
+
+                  <h3 className="fb-sec">如果只能改一件事</h3>
+                  <p className="fb-lead one">{fb.one_line}</p>
                 </div>
               : <p className="loadmsg">這篇還沒有編輯回饋。</p>)}
           </div>
