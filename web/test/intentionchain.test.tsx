@@ -15,7 +15,7 @@ describe("IntentionChain", () => {
     const diagId = Object.keys(v.diag)[0];
     if (diagId) {
       const g = container.querySelector(`g.cnode[data-id="${diagId}"]`);
-      expect(g?.className.baseVal).toMatch(/orphan|overloaded|hollow/);
+      expect(g?.getAttribute("class")).toMatch(/orphan|overloaded|hollow/);
     }
   });
 });

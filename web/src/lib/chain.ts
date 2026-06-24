@@ -24,7 +24,7 @@ export function layoutChain(viz: VizData, h: number): { nodes: ChainNode[]; edge
   return { nodes, edges };
 }
 
-export function focusSet(edges: Pick<VizEdge, "from" | "to" | "type">[], id: string): Set<string> {
+export function focusSet(edges: Pick<VizEdge, "from" | "to">[], id: string): Set<string> {
   const s = new Set<string>([id]);
   for (const e of edges) { if (e.from === id) s.add(e.to); if (e.to === id) s.add(e.from); }
   return s;
