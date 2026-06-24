@@ -24,3 +24,16 @@
 .es-big{font-family:var(--serif);font-size:24px;color:#cabd92;letter-spacing:.1em}
 .es-add{margin-top:24px;border:1px dashed rgba(220,200,150,.4);padding:11px 26px;border-radius:999px;color:#cabd92}
 .loadmsg{padding:60px;color:#cabd92;line-height:2}
+.dock{width:360px;flex:none;border-left:1px solid rgba(220,200,150,.13);background:rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
+.dock-head{display:flex;justify-content:space-between;align-items:center;padding:22px 22px 0}
+.dock-t{font-size:11px;letter-spacing:.3em;color:#9a8f6e;text-transform:uppercase}
+.dock-x{cursor:pointer;color:#9a8f6e}
+.dock-body{flex:1;overflow:auto;padding:18px 22px}
+.dock-type{font-size:11px;letter-spacing:.2em;color:var(--amber);text-transform:uppercase}
+.dock-label{font-family:var(--serif);font-size:21px;color:#f1e7cd;margin:6px 0 14px}
+.dock-lab{font-size:10.5px;letter-spacing:.24em;color:var(--amber);text-transform:uppercase;margin:18px 0 7px}
+.dock p{font-size:13.5px;line-height:1.85;color:#cfc6ac}
+.bubble{margin:10px 0;padding:11px 14px;border-radius:11px;font-size:13px;line-height:1.75}
+.bubble.ed{background:rgba(220,200,150,.08);color:#d8cfb4;border:1px solid rgba(220,200,150,.12)}
+.dock-input{margin:8px 22px 22px;border:1px solid rgba(220,200,150,.2);border-radius:11px;padding:11px 14px;color:#7c7560;font-size:13px}
+.dock-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;background:rgba(220,200,150,.1);border:1px solid rgba(220,200,150,.2);border-right:0;border-radius:8px 0 0 8px;padding:14px 7px;color:#cabd92;cursor:pointer;letter-spacing:.3em}
