@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { getStory } from "../data/client";
 import TextAxis from "../viz/TextAxis";
 import IntentionChain from "../viz/IntentionChain";
@@ -14,7 +14,6 @@ const TABS: { k: Tab; label: string }[] = [
 
 export default function Single() {
   const { slug } = useParams();
-  const nav = useNavigate();
   const [data, setData] = useState<{ viz: VizData; source: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("source");
@@ -26,8 +25,8 @@ export default function Single() {
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
   }, [slug]);
 
-  if (err) return <div className="loadmsg">讀不到「{slug}」的分析:{err}</div>;
-  if (!data) return <div className="loadmsg">載入中…</div>;
+  if (err) return <div className="single"><div className="loadmsg">讀不到「{slug}」的分析:{err}</div></div>;
+  if (!data) return <div className="single"><div className="loadmsg">載入中…</div></div>;
   const { viz, source } = data;
   const fb = viz.feedback;
 
@@ -35,7 +34,6 @@ export default function Single() {
     <div className="single">
       <div className="single-top">
         <h2>{viz.title}</h2>
-        <button className="back" onClick={() => nav("/")}>← 退</button>
       </div>
       <div className="single-body">
         <div className="single-main">

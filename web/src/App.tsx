@@ -1,13 +1,12 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Home from "./journey/Home";
-import Single from "./journey/Single";
+import Journey from "./journey/Journey";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/story/:slug" element={<Single />} />
+        <Route path="/" element={<Journey />} />
+        <Route path="/story/:slug" element={<Journey />} />
       </Routes>
     </BrowserRouter>
   );

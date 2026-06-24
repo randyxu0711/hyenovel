@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import Skeleton from "../viz/Skeleton";
+import { worldPos, WORLD } from "../lib/camera";
 import type { IndexEntry } from "../types";
 
 // 穩定假曲線(待 index.py 補 tension 後換真):slug → 8 點 0.25..0.85
@@ -8,8 +9,6 @@ function seedTension(slug: string): number[] {
   const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
   return Array.from({ length: 8 }, () => 0.25 + rnd() * 0.6);
 }
-// 散布座標(穩定):後續可改主題聚類
-const SPREAD = [["34%","52%"],["64%","42%"],["48%","70%"],["22%","36%"],["78%","60%"],["40%","26%"],["70%","76%"]];
 
 export default function Catalog({ entries, loading }: { entries: IndexEntry[]; loading?: boolean }) {
   const nav = useNavigate();
@@ -21,10 +20,10 @@ export default function Catalog({ entries, loading }: { entries: IndexEntry[]; l
   return (
     <div className="field">
       {entries.map((e, i) => {
-        const [x, y] = SPREAD[i % SPREAD.length];
+        const p = worldPos(i, WORLD);
         return (
           <div className="story" data-testid="story" key={e.slug}
-            style={{ left: x, top: y }} onClick={() => nav(`/story/${e.slug}`)}>
+            style={{ left: p.x, top: p.y }} onClick={() => nav(`/story/${e.slug}`)}>
             <Skeleton beats={seedTension(e.slug)} width={300} />
             <div className="cap">{e.title}</div>
           </div>
