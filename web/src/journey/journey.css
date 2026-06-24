@@ -76,3 +76,11 @@
 .acc-h:hover{color:#ece3cb}
 .acc-b{padding:0 0 16px;animation:accIn .3s ease}
 @keyframes accIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+
+/* ---- source evidence / highlight ---- */
+mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding:1px 2px}
+.ev{margin:8px 0 14px}
+.ev-q{font-family:var(--serif);color:#e3d8b7;font-size:14px;line-height:1.7}
+.dock-jump{margin-top:6px;background:transparent;border:1px solid rgba(220,200,150,.25);
+  color:#cabd92;font-size:11.5px;padding:5px 12px;border-radius:999px;cursor:pointer}
+.dock-jump:hover{background:rgba(220,200,150,.1);color:#f3ecd6}

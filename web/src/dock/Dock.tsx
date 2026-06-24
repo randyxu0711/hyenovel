@@ -3,7 +3,9 @@ import type { VizData } from "../types";
 
 const CN: Record<string, string> = { technique: "技法", effect: "效果", theme: "主題", motif: "意象", beat: "節拍", character: "角色" };
 
-export default function Dock({ viz, selected }: { viz: VizData; selected: string | null }) {
+export default function Dock(
+  { viz, selected, onJump }: { viz: VizData; selected: string | null; onJump?: (start: number, end: number) => void },
+) {
   const [open, setOpen] = useState(true);
   if (!open) return <button className="dock-tab" onClick={() => setOpen(true)}>編輯 · 討論</button>;
   const node = selected ? viz.nodes.find(n => n.id === selected) : null;
@@ -30,6 +32,15 @@ export default function Dock({ viz, selected }: { viz: VizData; selected: string
             <div className="dock-lab">編輯的判斷</div><p>{kp.body}</p>
             {kp.question && <div className="bubble ed">{kp.question}</div>}
           </> : <p>{node.note || "這個節點目前沒有編輯標記,從這裡開始討論也可以。"}</p>}
+          {node.evidence.length > 0 && <>
+            <div className="dock-lab">原文證據</div>
+            {node.evidence.map((ev, i) => (
+              <div className="ev" key={i}>
+                <p className="ev-q">「{ev.quote}」</p>
+                {onJump && <button className="dock-jump" onClick={() => onJump(ev.start, ev.end)}>在原文中看 ↗</button>}
+              </div>
+            ))}
+          </>}
         </>}
       </div>
       <div className="dock-input">就這裡寫下你的想法…(下一階段接即時討論)</div>

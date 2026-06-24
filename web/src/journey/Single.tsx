@@ -4,6 +4,7 @@ import { getStory } from "../data/client";
 import TextAxis from "../viz/TextAxis";
 import IntentionChain from "../viz/IntentionChain";
 import Dock from "../dock/Dock";
+import SourceView from "./SourceView";
 import type { VizData } from "../types";
 
 type Tab = "source" | "axis" | "chain" | "feedback";
@@ -20,10 +21,11 @@ export default function Single() {
   const [sel, setSel] = useState<string | null>(null);
   const [openFb, setOpenFb] = useState<Record<string, boolean>>({});
   const toggleFb = (k: string) => setOpenFb(s => ({ ...s, [k]: !s[k] }));
+  const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
     if (!slug) return;
-    setData(null); setErr(null); setSel(null); setTab("source");
+    setData(null); setErr(null); setSel(null); setTab("source"); setHl(null);
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
   }, [slug]);
 
@@ -45,7 +47,7 @@ export default function Single() {
             ))}
           </div>
           <div className="pages">
-            {tab === "source" && <div className="src">{source}</div>}
+            {tab === "source" && <SourceView source={source} highlight={hl} />}
             {tab === "axis" && <TextAxis viz={viz} onPick={setSel} />}
             {tab === "chain" && <IntentionChain viz={viz} selected={sel} onPick={setSel} />}
             {tab === "feedback" && (fb
@@ -76,7 +78,7 @@ export default function Single() {
               : <p className="loadmsg">這篇還沒有編輯回饋。</p>)}
           </div>
         </div>
-        <Dock viz={viz} selected={sel} />
+        <Dock viz={viz} selected={sel} onJump={(s, e) => { setTab("source"); setHl({ start: s, end: e }); }} />
       </div>
     </div>
   );
