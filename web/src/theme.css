@@ -1,0 +1,11 @@
+:root{
+  --serif:"Source Han Serif TC","Noto Serif TC","Songti TC",serif;
+  --sans:"Inter","Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  --bone:#efe6cf; --bg:#0c0b09;
+  --c-theme:#c47a72; --c-motif:#a98bb8; --c-technique:#7aa3bd; --c-effect:#c9a45e;
+  --c-character:#8fb89a; --c-beat:#9a9488; --amber:#ecc98a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%}
+body{font-family:var(--sans);color:#e8e3d6;
+  background:radial-gradient(120% 90% at 50% 34%, #15140f 0%, #0c0b09 52%, #050504 100%)}
