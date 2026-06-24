@@ -10,4 +10,4 @@
 .thread{stroke:#cbbd96;stroke-width:1.4;opacity:.45;transition:.3s}
 .thread.dim{opacity:.06}.thread.hot{stroke:var(--amber);opacity:.95;stroke-width:1.9}
 .cnode{transition:opacity .3s}
-text{font-family:var(--sans)}
+.viz text{font-family:var(--sans)}
