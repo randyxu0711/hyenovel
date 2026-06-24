@@ -6,3 +6,8 @@
 .ov-go{margin-top:42px;font-size:13px;letter-spacing:.2em;color:#b9ad88;background:transparent;
   border:1px solid rgba(220,200,150,.3);padding:11px 28px;border-radius:999px;cursor:pointer}
 .ov-go:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
+.viz{width:100%;max-width:1000px;background:rgba(0,0,0,.16);border:1px solid rgba(220,200,150,.08);border-radius:10px}
+.thread{stroke:#cbbd96;stroke-width:1.4;opacity:.45;transition:.3s}
+.thread.dim{opacity:.06}.thread.hot{stroke:var(--amber);opacity:.95;stroke-width:1.9}
+.cnode{transition:opacity .3s}
+text{font-family:var(--sans)}
