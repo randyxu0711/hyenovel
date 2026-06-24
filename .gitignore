@@ -8,9 +8,16 @@ venv/
 .DS_Store
 *.swp
 
+# Brainstorm visual companion(mockup 暫存,不版控)
+.superpowers/
+
 # Obsidian (stories/ 可當 vault;不版控其 app 設定)
 .obsidian/
 
 # 故事內容與其全部衍生物不進版控(使用者創作 + 可由腳本重生)。
 # 含 source.md / analysis.* / feedback.* / viz.* / index.json。只有程式碼進版控。
 stories/
+
+# Frontend build artifacts
+web/node_modules/
+web/dist/
