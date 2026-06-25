@@ -44,10 +44,6 @@ export default function Single() {
           <Skeleton viz={viz} width={heroMin ? 150 : 420} />
         </div>
         <div className="hero-title"><h2>{viz.title}</h2></div>
-        <button className="hero-toggle" onClick={() => setHeroMin(m => !m)}
-          title={heroMin ? "展開" : "收起,讓內容更寬敞"}>
-          {heroMin ? "▾ 展開" : "▴ 收起"}
-        </button>
       </div>
       <div className="single-body">
         <div className="single-main">
@@ -55,6 +51,10 @@ export default function Single() {
             {TABS.map(t => (
               <button key={t.k} className={`tab ${tab === t.k ? "on" : ""}`} onClick={() => setTab(t.k)}>{t.label}</button>
             ))}
+            <button className="hero-toggle" onClick={() => setHeroMin(m => !m)}
+              title={heroMin ? "展開上方星骨" : "收起上方星骨,讓內容更寬敞"}>
+              {heroMin ? "▾ 展開" : "▴ 收起"}
+            </button>
           </div>
           <div className="pages">
             <motion.div key={tab} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
