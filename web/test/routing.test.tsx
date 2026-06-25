@@ -6,7 +6,6 @@ import viz from "./fixtures/viz.json";
 vi.mock("../src/data/client", () => ({
   getStory: vi.fn(async () => ({ viz, source: "" })),
 }));
-vi.mock("../src/journey/Scene3D", () => ({ default: () => null })); // jsdom 無 WebGL
 import Single from "../src/journey/Single";
 
 describe("routing", () => {

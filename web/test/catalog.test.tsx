@@ -1,10 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Catalog from "../src/journey/Catalog";
 import type { IndexEntry } from "../src/types";
 
-vi.mock("../src/journey/Scene3D", () => ({ default: () => null })); // jsdom 無 WebGL
 
 const entries: IndexEntry[] = [
   { slug: "s01", title: "長夜", synopsis: "...", nodes: 43, edges: 61, has_feedback: true, has_viz: true, updated: "" },

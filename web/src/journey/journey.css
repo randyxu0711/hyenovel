@@ -91,10 +91,29 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   color:#cabd92;font-size:11.5px;padding:5px 12px;border-radius:999px;cursor:pointer}
 .dock-jump:hover{background:rgba(220,200,150,.1);color:#f3ecd6}
 
-/* ---- 3D hero (single) ---- */
-.hero3d{position:relative;height:44vh;min-height:300px;flex:none}
-.hero3d canvas{display:block}
+/* ---- hero 星骨(single):換 tab 重跑「拉近→轉→退開→重繪」 ---- */
+.hero3d{position:relative;height:38vh;min-height:230px;flex:none;
+  display:flex;align-items:center;justify-content:center;perspective:1000px;overflow:hidden}
+.hero-bone{transform-style:preserve-3d;animation:heroBone .95s cubic-bezier(.22,.85,.28,1) both}
+.hero-bone svg{display:block}
+/* 拉近 + 轉過頭一點 + 退開定位 */
+@keyframes heroBone{
+  0%{opacity:0;transform:rotateY(-24deg) scale(.78)}
+  55%{opacity:1;transform:rotateY(7deg) scale(1.09)}
+  100%{opacity:1;transform:rotateY(0) scale(1)}
+}
+/* 脊椎/肋骨在重掛時重新「畫」出來 */
+.hero-bone .spine{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .9s .12s ease forwards}
+.hero-bone .rib{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .55s ease forwards}
+.hero-bone .rib:nth-child(odd){animation-delay:.18s}
+.hero-bone .rib:nth-child(even){animation-delay:.3s}
+@keyframes draw{to{stroke-dashoffset:0}}
 .hero-title{position:absolute;left:46px;bottom:18px;z-index:2;pointer-events:none}
 .hero-title h2{font-family:var(--serif);font-weight:500;font-size:34px;color:#f3ecd6;letter-spacing:.04em;
   text-shadow:0 2px 18px rgba(0,0,0,.7)}
 .single .single-body{flex:1;display:flex;min-height:0}
+
+/* ---- catalog 星骨慢慢亮起來 ---- */
+.story.skel-in{animation:skelIn 1.1s ease backwards}
+@keyframes skelIn{from{opacity:0;transform:translate(-50%,-50%) scale(.9)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1)}}

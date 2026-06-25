@@ -6,8 +6,7 @@ import TextAxis from "../viz/TextAxis";
 import IntentionChain from "../viz/IntentionChain";
 import Dock from "../dock/Dock";
 import SourceView from "./SourceView";
-import Scene3D from "./Scene3D";
-import Bone3D from "../viz/Bone3D";
+import Skeleton from "../viz/Skeleton";
 import type { VizData } from "../types";
 
 const seedOf = (s: string) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) || 7;
@@ -17,11 +16,6 @@ const TABS: { k: Tab; label: string }[] = [
   { k: "source", label: "原文" }, { k: "axis", label: "文本軸" },
   { k: "chain", label: "意圖鏈" }, { k: "feedback", label: "回饋" },
 ];
-// 每個分頁 = 骨頭的一個面(四分之一圈)
-const TAB_ANGLE: Record<Tab, number> = {
-  source: 0, axis: Math.PI * 0.5, chain: Math.PI, feedback: Math.PI * 1.5,
-};
-
 export default function Single() {
   const { slug } = useParams();
   const [data, setData] = useState<{ viz: VizData; source: string } | null>(null);
@@ -31,20 +25,12 @@ export default function Single() {
   const [openFb, setOpenFb] = useState<Record<string, boolean>>({});
   const toggleFb = (k: string) => setOpenFb(s => ({ ...s, [k]: !s[k] }));
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
-  const [dolly, setDolly] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
     setData(null); setErr(null); setSel(null); setTab("source"); setHl(null);
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
   }, [slug]);
-
-  // 換 tab:相機脈衝拉近(431ms 後退開),骨頭轉到該面,文字隨後浮現
-  useEffect(() => {
-    setDolly(1);
-    const t = setTimeout(() => setDolly(0), 430);
-    return () => clearTimeout(t);
-  }, [tab]);
 
   if (err) return <div className="single"><div className="loadmsg">讀不到「{slug}」的分析:{err}</div></div>;
   if (!data) return <div className="single"><div className="loadmsg">載入中…</div></div>;
@@ -54,7 +40,10 @@ export default function Single() {
   return (
     <div className="single">
       <div className="hero3d">
-        <Scene3D dolly={dolly}><Bone3D seed={seedOf(viz.slug)} targetRot={TAB_ANGLE[tab]} /></Scene3D>
+        {/* key={tab} → 每次換頁重掛,重跑「拉近→重繪→退開」的 CSS 編排 */}
+        <div className="hero-bone" key={tab}>
+          <Skeleton seed={seedOf(viz.slug)} width={420} />
+        </div>
         <div className="hero-title"><h2>{viz.title}</h2></div>
       </div>
       <div className="single-body">

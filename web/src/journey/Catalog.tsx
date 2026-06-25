@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import BoneCard from "../viz/BoneCard";
+import Skeleton from "../viz/Skeleton";
 import { worldPos, WORLD } from "../lib/camera";
 import type { IndexEntry } from "../types";
 
@@ -18,9 +18,10 @@ export default function Catalog({ entries, loading }: { entries: IndexEntry[]; l
       {entries.map((e, i) => {
         const p = worldPos(i, WORLD);
         return (
-          <div className="story" data-testid="story" key={e.slug}
-            style={{ left: p.x, top: p.y }} onClick={() => nav(`/story/${e.slug}`)}>
-            <BoneCard seed={seedOf(e.slug)} />
+          <div className="story skel-in" data-testid="story" key={e.slug}
+            style={{ left: p.x, top: p.y, animationDelay: `${i * 0.12}s` }}
+            onClick={() => nav(`/story/${e.slug}`)}>
+            <Skeleton seed={seedOf(e.slug)} width={300} />
             <div className="cap">{e.title}</div>
           </div>
         );

@@ -5,7 +5,6 @@ import Journey from "../src/journey/Journey";
 import index from "./fixtures/index.json";
 import viz from "./fixtures/viz.json";
 
-vi.mock("../src/journey/Scene3D", () => ({ default: () => null })); // jsdom 無 WebGL
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
