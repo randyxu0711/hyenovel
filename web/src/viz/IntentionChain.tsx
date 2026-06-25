@@ -12,11 +12,14 @@ export default function IntentionChain(
   const hot = selected ? focusSet(edges, selected) : null;
   const dim = (id: string) => (hot ? !hot.has(id) : false);
   return (
-    <svg className="viz" viewBox="0 0 1000 460" onClick={() => onPick(null)}>
+    <svg className="viz" viewBox="0 0 1000 512" onClick={() => onPick(null)}>
       {[["技法", 210], ["效果", 520], ["主題", 830]].map(([t, x]) => (
-        <text key={t as string} x={x as number} y={40} fill="#8f876f" fontSize={12}
+        <text key={t as string} x={x as number} y={26} fill="#8f876f" fontSize={12}
           textAnchor="middle" letterSpacing="3">{t}</text>
       ))}
+      <line x1={40} y1={42} x2={960} y2={42} stroke="#2e2a20" strokeWidth={1} />
+      {/* 內容整組下移,避免最上面的節點/標籤壓到欄位標題 */}
+      <g transform="translate(0,52)">
       {edges.map((e, i) => {
         const A = byId.get(e.from)!, B = byId.get(e.to)!;
         const on = selected === e.from || selected === e.to;
@@ -42,6 +45,7 @@ export default function IntentionChain(
           </g>
         );
       })}
+      </g>
     </svg>
   );
 }

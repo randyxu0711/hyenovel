@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { orderedBeats, laneMarks, layoutLane, type PlacedLaneItem } from "../lib/axis";
+import { orderedBeats, laneMarks, layoutLane, type LaneItem, type PlacedLaneItem } from "../lib/axis";
 import { spline, beatsToPoints } from "../lib/spline";
 import type { VizData } from "../types";
 
-const X0 = 92, X1 = 940, MIN_DX = 64, ROW_H = 24;
-const trunc = (s: string, n = 8) => (s.length > n ? s.slice(0, n) + "…" : s);
+const X0 = 92, X1 = 940, ROW_H = 26, LABEL_MAX = 10;
+const trunc = (s: string, n = LABEL_MAX) => (s.length > n ? s.slice(0, n) + "…" : s);
+// 水平佔位 ≈ 點 + 標籤寬(中文每字約 12.5px)+ 緩衝;長標籤自動讓出空間
+const gapOf = (it: LaneItem) => 22 + trunc(it.node.label).length * 12.5;
 
 function Lane({ title, color, placed, top, hoverId, setHover, onPick }: {
   title: string; color: string; placed: PlacedLaneItem[]; top: number;
@@ -52,8 +54,8 @@ export default function TextAxis({ viz, onPick }: { viz: VizData; onPick: (id: s
   const d = spline(pts);
 
   // 兩條泳道:技法、效果(各自去重疊堆疊)
-  const tech = layoutLane(laneMarks(viz, "technique"), X0, X1, MIN_DX);
-  const eff = layoutLane(laneMarks(viz, "effect"), X0, X1, MIN_DX);
+  const tech = layoutLane(laneMarks(viz, "technique"), X0, X1, gapOf);
+  const eff = layoutLane(laneMarks(viz, "effect"), X0, X1, gapOf);
   const levels = (a: PlacedLaneItem[]) => (a.length ? Math.max(...a.map(p => p.level)) + 1 : 1);
 
   const TECH_TOP = 248;

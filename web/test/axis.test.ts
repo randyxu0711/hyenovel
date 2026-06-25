@@ -28,19 +28,29 @@ describe("axis", () => {
 });
 
 describe("layoutLane — 泳道內去重疊堆疊", () => {
+  const g60 = () => 60;
+
   it("pos 換算到 x:0→x0、1→x1", () => {
-    const out = layoutLane([item("a", 0), item("b", 1)], 70, 930, 60);
+    const out = layoutLane([item("a", 0), item("b", 1)], 70, 930, g60);
     expect(out.find(o => o.node.id === "a")!.x).toBe(70);
     expect(out.find(o => o.node.id === "b")!.x).toBe(930);
   });
 
   it("分散的點全在第 0 層", () => {
-    const out = layoutLane([item("a", 0.1), item("b", 0.5), item("c", 0.9)], 70, 930, 60);
+    const out = layoutLane([item("a", 0.1), item("b", 0.5), item("c", 0.9)], 70, 930, g60);
     expect(out.every(o => o.level === 0)).toBe(true);
   });
 
   it("擠在一起的點往上堆疊(level 遞增)", () => {
-    const out = layoutLane([item("a", 0.46), item("b", 0.47), item("c", 0.48)], 70, 930, 60);
+    const out = layoutLane([item("a", 0.46), item("b", 0.47), item("c", 0.48)], 70, 930, g60);
     expect(out.map(o => o.level).sort()).toEqual([0, 1, 2]);
+  });
+
+  it("長標籤需要更多空間 → 較易被往上推", () => {
+    const items = [item("a", 0.50), item("b", 0.58)]; // 相距約 69px(860 寬)
+    const gapWide = () => 120;  // 寬佔位 → 重疊 → 堆疊
+    const gapNarrow = () => 30; // 窄佔位 → 同層
+    expect(layoutLane(items, 70, 930, gapWide).map(o => o.level).sort()).toEqual([0, 1]);
+    expect(layoutLane(items, 70, 930, gapNarrow).every(o => o.level === 0)).toBe(true);
   });
 });

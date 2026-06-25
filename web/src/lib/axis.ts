@@ -41,16 +41,20 @@ export function laneMarks(viz: VizData, type: VizNode["type"]): LaneItem[] {
 export interface LaneItem { node: VizNode; pos: number; }
 export interface PlacedLaneItem extends LaneItem { x: number; level: number; }
 
-// 在一條泳道內把點依文本位置排開;太近的(< minDx)往上一層堆疊,避免重疊。
+// 在一條泳道內把點依文本位置排開;與同層前一個點的「水平佔位」重疊時往上一層堆疊。
+// gapOf(it) = 該點(含標籤)需要的水平寬度 → 長標籤自動讓出更多空間,短的擠得近。
 // x 永遠是真實文本位置,只有 level(縱向行)被挪動 → 加引線就能讀清楚。
-export function layoutLane(items: LaneItem[], x0: number, x1: number, minDx: number): PlacedLaneItem[] {
+export function layoutLane(
+  items: LaneItem[], x0: number, x1: number, gapOf: (it: LaneItem) => number,
+): PlacedLaneItem[] {
   const sorted = [...items].sort((a, b) => a.pos - b.pos);
-  const lastX: number[] = []; // 每層最後一個點的 x
+  const lastX: number[] = [];   // 每層最後一個點的 x
+  const lastGap: number[] = []; // 每層最後一個點的水平佔位
   return sorted.map(it => {
     const x = x0 + (x1 - x0) * it.pos;
     let level = 0;
-    while (lastX[level] != null && x - lastX[level] < minDx) level++;
-    lastX[level] = x;
+    while (lastX[level] != null && x - lastX[level] < lastGap[level]) level++;
+    lastX[level] = x; lastGap[level] = gapOf(it);
     return { ...it, x, level };
   });
 }
