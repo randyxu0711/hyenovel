@@ -41,6 +41,8 @@
 .dock-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;background:rgba(220,200,150,.1);border:1px solid rgba(220,200,150,.2);border-right:0;border-radius:8px 0 0 8px;padding:14px 7px;color:#cabd92;cursor:pointer;letter-spacing:.3em}
 /* 與目錄/body 同一張漸層,全站背景一致 */
 .single{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 34%,#15140f 0%,#0c0b09 52%,#050504 100%);display:flex;flex-direction:column}
+/* 飄塵帶進單篇:position:fixed 讓 .single 成獨立堆疊脈絡,z-index:-1 → 漸層之上、文字之下 */
+.single .dust{z-index:-1}
 .single-top{display:flex;justify-content:space-between;align-items:center;padding:46px 46px 0}
 .single-top h2{font-family:var(--serif);font-weight:500;font-size:33px;color:#f3ecd6}
 .back{background:transparent;border:1px solid rgba(220,200,150,.2);color:#9a917a;padding:7px 16px;border-radius:999px;cursor:pointer}

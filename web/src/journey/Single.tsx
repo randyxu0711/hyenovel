@@ -7,6 +7,7 @@ import IntentionChain from "../viz/IntentionChain";
 import Dock from "../dock/Dock";
 import SourceView from "./SourceView";
 import Skeleton from "../viz/Skeleton";
+import Dust from "./Dust";
 import type { VizData } from "../types";
 
 type Tab = "source" | "axis" | "chain" | "feedback";
@@ -38,6 +39,7 @@ export default function Single() {
 
   return (
     <div className={`single ${heroMin ? "hero-min" : ""}`}>
+      <Dust />
       <div className="hero3d">
         {/* key 含 heroMin → 收合/展開或換頁都重跑「拉近→重繪→退開」 */}
         <div className="hero-bone" key={`${tab}-${heroMin}`}>
