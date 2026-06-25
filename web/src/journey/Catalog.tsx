@@ -1,10 +1,22 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Skeleton from "../viz/Skeleton";
+import { getViz } from "../data/client";
 import { worldPos, WORLD } from "../lib/camera";
-import type { IndexEntry } from "../types";
+import type { IndexEntry, VizData } from "../types";
 
-// slug → 穩定數字 seed(決定該篇的骨架身分)
-const seedOf = (slug: string) => [...slug].reduce((a, c) => a + c.charCodeAt(0), 0) || 7;
+// 每篇載入自己的 viz.json,畫出資料驅動的星骨指紋(載入中先留空位)。
+function StoryBone({ slug, hasViz }: { slug: string; hasViz: boolean }) {
+  const [viz, setViz] = useState<VizData | null>(null);
+  useEffect(() => {
+    if (!hasViz) return;
+    let live = true;
+    getViz(slug).then(v => { if (live) setViz(v); }).catch(() => {});
+    return () => { live = false; };
+  }, [slug, hasViz]);
+  if (!viz) return <div className="bone-ph" style={{ width: 300, height: 184 }} />;
+  return <Skeleton viz={viz} width={300} />;
+}
 
 export default function Catalog({ entries, loading }: { entries: IndexEntry[]; loading?: boolean }) {
   const nav = useNavigate();
@@ -21,7 +33,7 @@ export default function Catalog({ entries, loading }: { entries: IndexEntry[]; l
           <div className="story skel-in" data-testid="story" key={e.slug}
             style={{ left: p.x, top: p.y, animationDelay: `${i * 0.12}s` }}
             onClick={() => nav(`/story/${e.slug}`)}>
-            <Skeleton seed={seedOf(e.slug)} width={300} />
+            <StoryBone slug={e.slug} hasViz={e.has_viz} />
             <div className="cap">{e.title}</div>
           </div>
         );

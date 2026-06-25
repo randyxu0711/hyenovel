@@ -12,10 +12,11 @@ async function getText(url: string): Promise<string> {
 }
 
 export const getIndex = () => getJSON<IndexFile>("/data/index.json");
+export const getViz = (slug: string) => getJSON<VizData>(`/data/${slug}/viz.json`);
 export const getSource = (slug: string) => getText(`/data/${slug}/source.md`);
 export async function getStory(slug: string): Promise<{ viz: VizData; source: string }> {
   const [viz, source] = await Promise.all([
-    getJSON<VizData>(`/data/${slug}/viz.json`),
+    getViz(slug),
     getSource(slug),
   ]);
   return { viz, source };

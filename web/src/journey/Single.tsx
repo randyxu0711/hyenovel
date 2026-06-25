@@ -9,8 +9,6 @@ import SourceView from "./SourceView";
 import Skeleton from "../viz/Skeleton";
 import type { VizData } from "../types";
 
-const seedOf = (s: string) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) || 7;
-
 type Tab = "source" | "axis" | "chain" | "feedback";
 const TABS: { k: Tab; label: string }[] = [
   { k: "source", label: "原文" }, { k: "axis", label: "文本軸" },
@@ -42,7 +40,7 @@ export default function Single() {
       <div className="hero3d">
         {/* key={tab} → 每次換頁重掛,重跑「拉近→重繪→退開」的 CSS 編排 */}
         <div className="hero-bone" key={tab}>
-          <Skeleton seed={seedOf(viz.slug)} width={420} />
+          <Skeleton viz={viz} width={420} />
         </div>
         <div className="hero-title"><h2>{viz.title}</h2></div>
       </div>
