@@ -14,7 +14,9 @@
 
 /* ---- catalog stage ---- */
 .field{position:fixed;inset:0}
-.story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter .8s,opacity .8s}
+.story{position:absolute;transform:translate(-50%,-50%);cursor:grab;transition:filter .8s,opacity .8s;
+  touch-action:none;user-select:none}
+.story:active{cursor:grabbing}
 .story .cap{font-family:var(--serif);font-size:17px;color:#f1e9d3;text-align:center;margin-top:2px;opacity:0;transition:.6s}
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
@@ -46,9 +48,9 @@
 .tabs{display:flex;gap:4px;margin:20px 46px 0;border-bottom:1px solid rgba(220,200,150,.12)}
 .tab{background:transparent;border:0;border-bottom:2px solid transparent;padding:11px 20px;font-size:13px;letter-spacing:.16em;color:#8c8265;cursor:pointer}
 .tab.on{color:#f3ecd6;border-bottom-color:#c2a35a}
-.pages{flex:1;overflow:auto;padding:28px 46px 40px}
-.src{font-family:var(--serif);font-size:17px;line-height:2.2;color:#e4dcc4;max-width:660px;white-space:pre-wrap}
-.fb p{font-size:15px;line-height:2;color:#dccfb1;max-width:680px}
+.pages{flex:1;overflow:auto;padding:30px 56px 48px}
+.src{font-family:var(--serif);font-size:17px;line-height:2.2;color:#e4dcc4;max-width:720px;white-space:pre-wrap}
+.fb p{font-size:15px;line-height:2;color:#dccfb1;max-width:720px}
 .q{font-family:var(--serif);font-size:16.5px;line-height:1.85;color:#e3d8b7;border-left:2px solid #7a6736;padding-left:16px;margin-top:12px}
 
 /* ---- journey shell (camera/ambient/chrome) ---- */
@@ -72,7 +74,7 @@
 /* 大標(段落骨幹)*/
 .fb-sec{font-family:var(--serif);font-weight:500;font-size:23px;color:#f3ecd6;letter-spacing:.04em;margin:34px 0 14px}
 .fb-sec:first-child{margin-top:6px}
-.fb-lead{font-size:15px;line-height:2;color:#dccfb1;max-width:680px}
+.fb-lead{font-size:15px;line-height:2;color:#dccfb1;max-width:720px}
 .fb-lead.one{color:#e8dcbd;border-left:2px solid #7a6736;padding-left:16px}
 /* 中標:可點開的「重點」*/
 .acc{border-bottom:1px solid rgba(220,200,150,.1)}
@@ -92,8 +94,17 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .dock-jump:hover{background:rgba(220,200,150,.1);color:#f3ecd6}
 
 /* ---- hero 星骨(single):換 tab 重跑「拉近→轉→退開→重繪」 ---- */
-.hero3d{position:relative;height:38vh;min-height:230px;flex:none;
-  display:flex;align-items:center;justify-content:center;perspective:1000px;overflow:hidden}
+.hero3d{position:relative;height:34vh;min-height:210px;flex:none;
+  display:flex;align-items:center;justify-content:center;perspective:1000px;overflow:hidden;
+  transition:height .5s cubic-bezier(.4,0,.2,1)}
+/* 收起:讓密集內容拿回垂直空間,星骨縮成一行 */
+.single.hero-min .hero3d{height:96px;min-height:96px}
+.single.hero-min .hero-title{bottom:auto;top:50%;transform:translateY(-50%)}
+.single.hero-min .hero-title h2{font-size:24px}
+.hero-toggle{position:absolute;top:16px;right:22px;z-index:3;font-size:11.5px;letter-spacing:.12em;
+  color:#9a917a;background:rgba(12,11,9,.5);border:1px solid rgba(220,200,150,.18);
+  padding:5px 12px;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px)}
+.hero-toggle:hover{color:#f3ecd6;border-color:rgba(220,200,150,.4)}
 .hero-bone{transform-style:preserve-3d;animation:heroBone .95s cubic-bezier(.22,.85,.28,1) both}
 .hero-bone svg{display:block}
 /* 拉近 + 轉過頭一點 + 退開定位 */

@@ -23,6 +23,7 @@ export default function Single() {
   const [openFb, setOpenFb] = useState<Record<string, boolean>>({});
   const toggleFb = (k: string) => setOpenFb(s => ({ ...s, [k]: !s[k] }));
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
+  const [heroMin, setHeroMin] = useState(false); // 收起星骨 → 把垂直空間讓給密集的內容
 
   useEffect(() => {
     if (!slug) return;
@@ -36,13 +37,17 @@ export default function Single() {
   const fb = viz.feedback;
 
   return (
-    <div className="single">
+    <div className={`single ${heroMin ? "hero-min" : ""}`}>
       <div className="hero3d">
-        {/* key={tab} → 每次換頁重掛,重跑「拉近→重繪→退開」的 CSS 編排 */}
-        <div className="hero-bone" key={tab}>
-          <Skeleton viz={viz} width={420} />
+        {/* key 含 heroMin → 收合/展開或換頁都重跑「拉近→重繪→退開」 */}
+        <div className="hero-bone" key={`${tab}-${heroMin}`}>
+          <Skeleton viz={viz} width={heroMin ? 150 : 420} />
         </div>
         <div className="hero-title"><h2>{viz.title}</h2></div>
+        <button className="hero-toggle" onClick={() => setHeroMin(m => !m)}
+          title={heroMin ? "展開星骨" : "收起星骨,讓內容更寬敞"}>
+          {heroMin ? "▾ 展開星骨" : "▴ 收起星骨"}
+        </button>
       </div>
       <div className="single-body">
         <div className="single-main">
