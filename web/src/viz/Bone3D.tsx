@@ -32,7 +32,9 @@ function Rib({ base, tip, theme }: { base: V3; tip: V3; theme: boolean }) {
   );
 }
 
-export default function Bone3D({ seed, spin = false }: { seed: number; spin?: boolean }) {
+export default function Bone3D(
+  { seed, spin = false, targetRot }: { seed: number; spin?: boolean; targetRot?: number },
+) {
   const ref = useRef<THREE.Group>(null);
   const { spine, ribs } = useMemo(() => buildBone3D(seed), [seed]);
   const curve = useMemo(
@@ -40,10 +42,11 @@ export default function Bone3D({ seed, spin = false }: { seed: number; spin?: bo
     [spine],
   );
   useFrame((_, dt) => {
-    if (spin && ref.current) {
-      ref.current.rotation.y += dt * 0.25;
-      ref.current.position.y = Math.sin(performance.now() * 0.0006) * 0.12;
-    }
+    const g = ref.current;
+    if (!g) return;
+    if (targetRot !== undefined) g.rotation.y += (targetRot - g.rotation.y) * 0.08; // 換 tab 轉到該面
+    else if (spin) g.rotation.y += dt * 0.25;                                       // 目錄緩轉
+    g.position.y = Math.sin(performance.now() * 0.0006) * 0.1;                       // 微浮
   });
   return (
     <group ref={ref}>

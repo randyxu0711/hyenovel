@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useParams } from "react-router-dom";
 import { getStory } from "../data/client";
 import TextAxis from "../viz/TextAxis";
@@ -16,6 +17,10 @@ const TABS: { k: Tab; label: string }[] = [
   { k: "source", label: "原文" }, { k: "axis", label: "文本軸" },
   { k: "chain", label: "意圖鏈" }, { k: "feedback", label: "回饋" },
 ];
+// 每個分頁 = 骨頭的一個面(四分之一圈)
+const TAB_ANGLE: Record<Tab, number> = {
+  source: 0, axis: Math.PI * 0.5, chain: Math.PI, feedback: Math.PI * 1.5,
+};
 
 export default function Single() {
   const { slug } = useParams();
@@ -26,12 +31,20 @@ export default function Single() {
   const [openFb, setOpenFb] = useState<Record<string, boolean>>({});
   const toggleFb = (k: string) => setOpenFb(s => ({ ...s, [k]: !s[k] }));
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
+  const [dolly, setDolly] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
     setData(null); setErr(null); setSel(null); setTab("source"); setHl(null);
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
   }, [slug]);
+
+  // 換 tab:相機脈衝拉近(431ms 後退開),骨頭轉到該面,文字隨後浮現
+  useEffect(() => {
+    setDolly(1);
+    const t = setTimeout(() => setDolly(0), 430);
+    return () => clearTimeout(t);
+  }, [tab]);
 
   if (err) return <div className="single"><div className="loadmsg">讀不到「{slug}」的分析:{err}</div></div>;
   if (!data) return <div className="single"><div className="loadmsg">載入中…</div></div>;
@@ -41,7 +54,7 @@ export default function Single() {
   return (
     <div className="single">
       <div className="hero3d">
-        <Scene3D><Bone3D seed={seedOf(viz.slug)} spin /></Scene3D>
+        <Scene3D dolly={dolly}><Bone3D seed={seedOf(viz.slug)} targetRot={TAB_ANGLE[tab]} /></Scene3D>
         <div className="hero-title"><h2>{viz.title}</h2></div>
       </div>
       <div className="single-body">
@@ -52,6 +65,8 @@ export default function Single() {
             ))}
           </div>
           <div className="pages">
+            <motion.div key={tab} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.34, ease: "easeOut" }}>
             {tab === "source" && <SourceView source={source} highlight={hl} />}
             {tab === "axis" && <TextAxis viz={viz} onPick={setSel} />}
             {tab === "chain" && <IntentionChain viz={viz} selected={sel} onPick={setSel} />}
@@ -91,6 +106,7 @@ export default function Single() {
                   <p className="fb-lead one">{fb.one_line}</p>
                 </div>
               : <p className="loadmsg">這篇還沒有編輯回饋。</p>)}
+            </motion.div>
           </div>
         </div>
         <Dock viz={viz} selected={sel} onJump={(s, e) => { setTab("source"); setHl({ start: s, end: e }); }} />
