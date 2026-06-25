@@ -90,3 +90,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .dock-jump{margin-top:6px;background:transparent;border:1px solid rgba(220,200,150,.25);
   color:#cabd92;font-size:11.5px;padding:5px 12px;border-radius:999px;cursor:pointer}
 .dock-jump:hover{background:rgba(220,200,150,.1);color:#f3ecd6}
+
+/* ---- 3D hero (single) ---- */
+.hero3d{position:relative;height:44vh;min-height:300px;flex:none}
+.hero3d canvas{display:block}
+.hero-title{position:absolute;left:46px;bottom:18px;z-index:2;pointer-events:none}
+.hero-title h2{font-family:var(--serif);font-weight:500;font-size:34px;color:#f3ecd6;letter-spacing:.04em;
+  text-shadow:0 2px 18px rgba(0,0,0,.7)}
+.single .single-body{flex:1;display:flex;min-height:0}

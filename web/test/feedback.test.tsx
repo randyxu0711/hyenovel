@@ -4,6 +4,8 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Single from "../src/journey/Single";
 import viz from "./fixtures/viz.json";
 
+vi.mock("../src/journey/Scene3D", () => ({ default: () => null })); // jsdom 無 WebGL
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string) =>
     url.includes("viz.json")

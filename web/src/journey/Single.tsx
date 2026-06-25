@@ -5,7 +5,11 @@ import TextAxis from "../viz/TextAxis";
 import IntentionChain from "../viz/IntentionChain";
 import Dock from "../dock/Dock";
 import SourceView from "./SourceView";
+import Scene3D from "./Scene3D";
+import Bone3D from "../viz/Bone3D";
 import type { VizData } from "../types";
+
+const seedOf = (s: string) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) || 7;
 
 type Tab = "source" | "axis" | "chain" | "feedback";
 const TABS: { k: Tab; label: string }[] = [
@@ -36,8 +40,9 @@ export default function Single() {
 
   return (
     <div className="single">
-      <div className="single-top">
-        <h2>{viz.title}</h2>
+      <div className="hero3d">
+        <Scene3D><Bone3D seed={seedOf(viz.slug)} spin /></Scene3D>
+        <div className="hero-title"><h2>{viz.title}</h2></div>
       </div>
       <div className="single-body">
         <div className="single-main">
