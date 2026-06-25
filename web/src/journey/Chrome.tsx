@@ -7,7 +7,10 @@ export default function Chrome(
   return (
     <>
       <div className="crumb">
-        <b>目錄</b>{stage === "single" && title && <><span>›</span><b>{title}</b></>}
+        {stage === "single"
+          ? <button className="crumb-link" onClick={onBack}>目錄</button>
+          : <b>目錄</b>}
+        {stage === "single" && title && <><span>›</span><b>{title}</b></>}
       </div>
       {stage === "single" && (
         <button className="chrome-back" onClick={onBack}>← 退</button>
