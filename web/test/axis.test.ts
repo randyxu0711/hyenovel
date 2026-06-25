@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { orderedBeats, axisMarks } from "../src/lib/axis";
-import type { VizData } from "../src/types";
+import { orderedBeats, axisMarks, layoutLane, type LaneItem } from "../src/lib/axis";
+import type { VizData, VizNode } from "../src/types";
+
+const item = (id: string, pos: number): LaneItem =>
+  ({ node: { id, type: "technique", label: id, note: "", intensity: null, evidence: [] } as VizNode, pos });
 
 const fake = {
   slug: "x", title: "x", colors: {}, cn: {}, diag: {}, feedback: null,
@@ -21,5 +24,23 @@ describe("axis", () => {
     const m = axisMarks(fake);
     expect(m).toHaveLength(1);
     expect(m[0].pos).toBe(0.5);
+  });
+});
+
+describe("layoutLane — 泳道內去重疊堆疊", () => {
+  it("pos 換算到 x:0→x0、1→x1", () => {
+    const out = layoutLane([item("a", 0), item("b", 1)], 70, 930, 60);
+    expect(out.find(o => o.node.id === "a")!.x).toBe(70);
+    expect(out.find(o => o.node.id === "b")!.x).toBe(930);
+  });
+
+  it("分散的點全在第 0 層", () => {
+    const out = layoutLane([item("a", 0.1), item("b", 0.5), item("c", 0.9)], 70, 930, 60);
+    expect(out.every(o => o.level === 0)).toBe(true);
+  });
+
+  it("擠在一起的點往上堆疊(level 遞增)", () => {
+    const out = layoutLane([item("a", 0.46), item("b", 0.47), item("c", 0.48)], 70, 930, 60);
+    expect(out.map(o => o.level).sort()).toEqual([0, 1, 2]);
   });
 });

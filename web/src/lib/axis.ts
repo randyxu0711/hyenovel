@@ -26,3 +26,31 @@ export function axisMarks(viz: VizData): { node: VizNode; pos: number }[] {
   }
   return out.sort((a, b) => a.pos - b.pos);
 }
+
+// 取單一型別(technique/effect)有定位的節點,給泳道用
+export function laneMarks(viz: VizData, type: VizNode["type"]): LaneItem[] {
+  const out: LaneItem[] = [];
+  for (const n of viz.nodes) {
+    if (n.type !== type) continue;
+    const ev = n.evidence.find(e => e.pos != null);
+    if (ev && ev.pos != null) out.push({ node: n, pos: ev.pos });
+  }
+  return out;
+}
+
+export interface LaneItem { node: VizNode; pos: number; }
+export interface PlacedLaneItem extends LaneItem { x: number; level: number; }
+
+// 在一條泳道內把點依文本位置排開;太近的(< minDx)往上一層堆疊,避免重疊。
+// x 永遠是真實文本位置,只有 level(縱向行)被挪動 → 加引線就能讀清楚。
+export function layoutLane(items: LaneItem[], x0: number, x1: number, minDx: number): PlacedLaneItem[] {
+  const sorted = [...items].sort((a, b) => a.pos - b.pos);
+  const lastX: number[] = []; // 每層最後一個點的 x
+  return sorted.map(it => {
+    const x = x0 + (x1 - x0) * it.pos;
+    let level = 0;
+    while (lastX[level] != null && x - lastX[level] < minDx) level++;
+    lastX[level] = x;
+    return { ...it, x, level };
+  });
+}

@@ -12,13 +12,10 @@ describe("TextAxis", () => {
     expect(container.querySelectorAll("line.rib").length).toBe(beatCount);
   });
 
-  it("預設不顯示任何 mark 標籤;hover 後才出現該 mark 的 label", () => {
+  it("每個 mark 標籤常駐顯示(泳道:不必 hover 就能掃讀)", () => {
     const v = viz as unknown as VizData;
     const mark = v.nodes.find(n => (n.type === "technique" || n.type === "effect") && n.evidence.some(e => e.pos != null))!;
     const { container } = render(<TextAxis viz={v} onPick={vi.fn()} />);
-    expect(container.querySelector(`text[data-label="${mark.id}"]`)).toBeNull();
-    const g = container.querySelector(`g.cnode[data-id="${mark.id}"]`)!;
-    fireEvent.mouseEnter(g);
     expect(container.querySelector(`text[data-label="${mark.id}"]`)).toBeTruthy();
   });
 
