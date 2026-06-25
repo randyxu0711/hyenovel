@@ -97,11 +97,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .hero3d{position:relative;height:34vh;min-height:210px;flex:none;
   display:flex;align-items:center;justify-content:center;perspective:1000px;overflow:hidden;
   transition:height .5s cubic-bezier(.4,0,.2,1)}
-/* 收起:讓密集內容拿回垂直空間,星骨縮成一行 */
+/* 收起:讓密集內容拿回垂直空間,星骨縮成一行;標題交給左上麵包屑,避免重疊 */
 .single.hero-min .hero3d{height:96px;min-height:96px}
-.single.hero-min .hero-title{bottom:auto;top:50%;transform:translateY(-50%)}
-.single.hero-min .hero-title h2{font-size:24px}
-.hero-toggle{position:absolute;top:16px;right:22px;z-index:3;font-size:11.5px;letter-spacing:.12em;
+.single.hero-min .hero-title{display:none}
+/* 收合鈕放 hero 右下,避開右上的「退」與左上的麵包屑 */
+.hero-toggle{position:absolute;bottom:14px;right:22px;z-index:3;font-size:11.5px;letter-spacing:.12em;
   color:#9a917a;background:rgba(12,11,9,.5);border:1px solid rgba(220,200,150,.18);
   padding:5px 12px;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px)}
 .hero-toggle:hover{color:#f3ecd6;border-color:rgba(220,200,150,.4)}

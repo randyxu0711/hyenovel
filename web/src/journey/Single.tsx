@@ -45,8 +45,8 @@ export default function Single() {
         </div>
         <div className="hero-title"><h2>{viz.title}</h2></div>
         <button className="hero-toggle" onClick={() => setHeroMin(m => !m)}
-          title={heroMin ? "展開星骨" : "收起星骨,讓內容更寬敞"}>
-          {heroMin ? "▾ 展開星骨" : "▴ 收起星骨"}
+          title={heroMin ? "展開" : "收起,讓內容更寬敞"}>
+          {heroMin ? "▾ 展開" : "▴ 收起"}
         </button>
       </div>
       <div className="single-body">
