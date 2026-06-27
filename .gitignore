@@ -17,7 +17,13 @@ venv/
 # 故事內容與其全部衍生物不進版控(使用者創作 + 可由腳本重生)。
 # 含 source.md / analysis.* / feedback.* / viz.* / index.json。只有程式碼進版控。
 stories/
+# empty-state 測試時暫存真故事的備份,同屬使用者內容
+stories_bak/
 
 # Frontend build artifacts
 web/node_modules/
 web/dist/
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json
