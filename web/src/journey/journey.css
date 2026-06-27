@@ -24,7 +24,82 @@
 .stage-overview .field{filter:blur(6px);opacity:.5;transition:.9s}
 .empty-state{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8f876f}
 .es-big{font-family:var(--serif);font-size:24px;color:#cabd92;letter-spacing:.1em}
-.es-add{margin-top:24px;border:1px dashed rgba(220,200,150,.4);padding:11px 26px;border-radius:999px;color:#cabd92}
+.es-sub{margin-top:12px;font-size:13px;letter-spacing:.18em;color:#7c745e}
+
+/* ---- 未誕生的星(入口)---- */
+.nascent{position:fixed;left:50%;bottom:15vh;transform:translateX(-50%);z-index:42;
+  display:flex;flex-direction:column;align-items:center;gap:11px;
+  background:transparent;border:0;cursor:pointer;padding:10px}
+.nascent-spark{width:7px;height:7px;border-radius:999px;background:#f3ead2;
+  box-shadow:0 0 10px 3px rgba(236,201,138,.5),0 0 26px 8px rgba(236,201,138,.18);
+  animation:nascentBreath 3.4s ease-in-out infinite}
+@keyframes nascentBreath{0%,100%{opacity:.42;transform:scale(.82)}50%{opacity:1;transform:scale(1.18)}}
+.nascent-whisper{font-family:var(--serif);font-size:13.5px;letter-spacing:.22em;color:#bdb088;
+  opacity:0;transform:translateY(-3px);transition:.5s}
+.nascent:hover .nascent-whisper{opacity:1;transform:none}
+.nascent:hover .nascent-spark{opacity:1;box-shadow:0 0 14px 4px rgba(236,201,138,.7),0 0 34px 12px rgba(236,201,138,.26)}
+
+/* ---- 拖檔進星空:整片微微亮起 ---- */
+.journey.drop-active::after{content:"";position:fixed;inset:0;z-index:41;pointer-events:none;
+  background:radial-gradient(60% 50% at 50% 78%,rgba(236,201,138,.16),transparent 70%);
+  box-shadow:inset 0 0 0 1px rgba(236,201,138,.25);animation:dropGlow .4s ease}
+@keyframes dropGlow{from{opacity:0}to{opacity:1}}
+
+/* ---- 成形的星(分析途中象徵成形 → 完成 snap 真實星骨)---- */
+.forming{position:fixed;left:50%;bottom:13vh;transform:translateX(-50%);z-index:44;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  animation:formingIn .8s ease both}
+@keyframes formingIn{from{opacity:0;transform:translate(-50%,8px) scale(.94)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+.forming-halo{position:absolute;top:30px;width:280px;height:150px;pointer-events:none;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(236,201,138,.12),transparent 70%);
+  animation:phPulse 2.6s ease-in-out infinite}
+.forming-sym{position:relative;transition:opacity .9s ease}
+.forming-sym.fade{opacity:0}
+.forming-real{position:absolute;top:0;opacity:0;animation:realIn .9s .15s ease forwards}
+@keyframes realIn{to{opacity:1}}
+.f-spine{stroke-dasharray:1;transition:stroke-dashoffset 2.4s ease}
+.f-rib{stroke-dasharray:1;transition:stroke-dashoffset .7s ease,opacity .7s ease}
+.forming-sym circle{transition:r .5s ease,fill .9s ease}
+.forming-cap{font-family:var(--serif);font-size:17px;color:#f1e9d3;margin-top:4px;letter-spacing:.04em}
+.forming-word{font-size:12px;letter-spacing:.3em;color:var(--amber);margin-top:7px;text-transform:none;
+  animation:phPulse 2s ease-in-out infinite}
+.forming.settled .forming-word{color:#bdb189;animation:none}
+.forming-dots::after{content:"…";animation:dots 1.4s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"·"}50%{content:"··"}75%{content:"···"}}
+.forming-acts{display:flex;gap:16px;align-items:center;margin-top:12px}
+.forming-cancel{margin-top:12px;opacity:0;transition:opacity .4s}
+.forming:hover .forming-cancel{opacity:.7}
+.forming-cancel:hover{opacity:1 !important}
+
+/* ---- 擲入面板 ---- */
+.add-scrim{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  background:rgba(4,4,3,.6);backdrop-filter:blur(3px)}
+.add-card{width:min(680px,92vw);max-height:88vh;display:flex;flex-direction:column;
+  background:radial-gradient(120% 100% at 50% 0%,#1a1812 0%,#100f0b 70%);
+  border:1px solid rgba(220,200,150,.18);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden}
+.add-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px 0}
+.add-body{padding:18px 24px 24px;overflow:auto;display:flex;flex-direction:column}
+.add-lead{font-size:13.5px;line-height:1.9;color:#cfc6ac;margin:0 0 16px}
+.add-lab{font-size:10.5px;letter-spacing:.22em;color:var(--amber);text-transform:uppercase;margin:12px 0 7px}
+.add-count{color:#8f876f;letter-spacing:0;text-transform:none;font-size:11.5px}
+.add-title{background:rgba(0,0,0,.25);border:1px solid rgba(220,200,150,.2);border-radius:9px;
+  padding:11px 14px;color:#f1e7cd;font-family:var(--serif);font-size:18px}
+.add-text{margin-top:2px;background:rgba(0,0,0,.25);border:1px solid rgba(220,200,150,.2);border-radius:9px;
+  padding:14px 16px;color:#e4dcc4;font-family:var(--serif);font-size:15px;line-height:1.9;
+  min-height:300px;resize:vertical;white-space:pre-wrap}
+.add-title:focus,.add-text:focus{outline:none;border-color:rgba(220,200,150,.5)}
+.add-drop{align-self:center;margin:14px 0;border:1px dashed rgba(220,200,150,.4);background:transparent;
+  color:#cabd92;font:inherit;font-size:14px;letter-spacing:.1em;padding:30px 48px;border-radius:14px;cursor:pointer;transition:.3s}
+.add-drop:hover:not(:disabled){background:rgba(220,200,150,.1);color:#f3ecd6;border-style:solid}
+.add-drop:disabled{opacity:.5;cursor:default}
+.add-actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px}
+.add-go{margin-left:auto;background:transparent;border:1px solid rgba(220,200,150,.4);color:#e8dcbd;
+  font:inherit;font-size:13px;letter-spacing:.12em;padding:10px 24px;border-radius:999px;cursor:pointer;transition:.3s}
+.add-go:hover:not(:disabled){background:rgba(220,200,150,.14);color:#f3ecd6}
+.add-go:disabled{opacity:.5;cursor:default}
+.add-ghost{background:transparent;border:0;color:#9a8f6e;font:inherit;font-size:12.5px;cursor:pointer}
+.add-ghost:hover{color:#cabd92}
+.add-err{color:#d98c6a;font-size:13px;line-height:1.7;margin:10px 0 0}
 .loadmsg{padding:60px;color:#cabd92;line-height:2}
 .dock{width:360px;flex:none;border-left:1px solid rgba(220,200,150,.13);background:rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
 .dock-head{display:flex;justify-content:space-between;align-items:center;padding:22px 22px 0}

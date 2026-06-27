@@ -37,8 +37,8 @@ export default function Catalog({ entries, loading }: { entries: IndexEntry[]; l
 
   if (loading) return <div className="field" />;
   if (entries.length === 0) return (
-    <div className="empty-state"><div className="es-big">這裡還沒有故事</div>
-      <div className="es-add">＋ 放進第一篇(下一階段)</div></div>
+    <div className="empty-state"><div className="es-big">這片星空還沒有故事</div>
+      <div className="es-sub">往下,新增第一篇</div></div>
   );
 
   const down = (ev: React.PointerEvent, slug: string, base: XY) => {
