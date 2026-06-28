@@ -110,9 +110,21 @@
 .dock-label{font-family:var(--serif);font-size:21px;color:#f1e7cd;margin:6px 0 14px}
 .dock-lab{font-size:10.5px;letter-spacing:.24em;color:var(--amber);text-transform:uppercase;margin:18px 0 7px}
 .dock p{font-size:13.5px;line-height:1.85;color:#cfc6ac}
-.bubble{margin:10px 0;padding:11px 14px;border-radius:11px;font-size:13px;line-height:1.75}
+.bubble{margin:10px 0;padding:11px 14px;border-radius:11px;font-size:13px;line-height:1.75;white-space:pre-wrap}
 .bubble.ed{background:rgba(220,200,150,.08);color:#d8cfb4;border:1px solid rgba(220,200,150,.12)}
-.dock-input{margin:8px 22px 22px;border:1px solid rgba(220,200,150,.2);border-radius:11px;padding:11px 14px;color:#7c7560;font-size:13px}
+.bubble.me{background:rgba(140,170,210,.10);color:#cdd6e2;border:1px solid rgba(150,180,220,.16);margin-left:30px}
+button.bubble{display:block;width:100%;text-align:left;cursor:pointer;font:inherit}
+button.q-seed:hover{background:rgba(220,200,150,.14);color:#f3ecd6}
+.dock-thread{margin-top:14px;border-top:1px solid rgba(220,200,150,.1);padding-top:6px}
+.dock-typing{opacity:.6;letter-spacing:.12em}
+.dock-compose{display:flex;gap:8px;align-items:flex-end;margin:8px 22px 22px}
+.dock-compose textarea{flex:1;resize:none;font:inherit;font-size:13px;line-height:1.7;color:#e8ddc2;
+  background:rgba(0,0,0,.25);border:1px solid rgba(220,200,150,.2);border-radius:11px;padding:9px 12px}
+.dock-compose textarea:focus{outline:none;border-color:rgba(220,200,150,.42)}
+.dock-compose textarea:disabled{opacity:.5}
+.dock-send{flex:none;font:inherit;font-size:12px;letter-spacing:.1em;color:#0c0b09;cursor:pointer;
+  background:var(--amber);border:0;border-radius:9px;padding:9px 14px}
+.dock-send:disabled{background:rgba(220,200,150,.22);color:#7c7560;cursor:default}
 .dock-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;background:rgba(220,200,150,.1);border:1px solid rgba(220,200,150,.2);border-right:0;border-radius:8px 0 0 8px;padding:14px 7px;color:#cabd92;cursor:pointer;letter-spacing:.3em}
 /* 與目錄/body 同一張漸層,全站背景一致 */
 .single{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 34%,#15140f 0%,#0c0b09 52%,#050504 100%);display:flex;flex-direction:column}

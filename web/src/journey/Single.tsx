@@ -103,7 +103,7 @@ export default function Single() {
             </motion.div>
           </div>
         </div>
-        <Dock viz={viz} selected={sel} onJump={(s, e) => { setTab("source"); setHl({ start: s, end: e }); }} />
+        <Dock slug={slug!} viz={viz} selected={sel} onJump={(s, e) => { setTab("source"); setHl({ start: s, end: e }); }} />
       </div>
     </div>
   );
