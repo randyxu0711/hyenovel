@@ -38,7 +38,7 @@ describe("Journey", () => {
   it("/story/:slug 進單篇:顯示麵包屑且有 single 面板", async () => {
     const slug = (index as { stories: { slug: string }[] }).stories[0].slug;
     const { container } = at(`/story/${slug}`);
-    await waitFor(() => expect(container.querySelector(".single")).toBeTruthy());
+    await waitFor(() => expect(container.querySelector(".sb")).toBeTruthy());
     expect(container.querySelector(".crumb")).toBeTruthy();
   });
 });

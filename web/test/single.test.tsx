@@ -16,10 +16,11 @@ function mount() {
 }
 
 describe("Single", () => {
-  it("預設顯示原文,可切到意圖鏈", async () => {
+  it("進單篇顯示骨舞台,三段切換在,可開原文覆蓋層", async () => {
     mount();
+    await waitFor(() => expect(document.querySelector("svg.bonestage")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "因果鏈" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "原文" }));
     await waitFor(() => expect(screen.getByText(/原文第一行/)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "意圖鏈" }));
-    await waitFor(() => expect(document.querySelector("g.cnode")).toBeTruthy());
   });
 });

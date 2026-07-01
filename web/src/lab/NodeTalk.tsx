@@ -8,8 +8,9 @@ type Msg = { role: "me" | "ed"; text: string };
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
 // 沿用 Dock 的串流 + 節點錨定;換節點不重開 session,改在訊息前補一句 context。
 export default function NodeTalk(
-  { slug, node, typeName, color, flag, kp, onClose }:
-  { slug: string; node: VizNode; typeName: string; color: string; flag: string; kp: FeedbackPoint | null; onClose: () => void },
+  { slug, node, typeName, color, flag, kp, source, onJump, onClose }:
+  { slug: string; node: VizNode; typeName: string; color: string; flag: string; kp: FeedbackPoint | null;
+    source?: string; onJump?: (start: number, end: number) => void; onClose: () => void },
 ) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -21,7 +22,14 @@ export default function NodeTalk(
   useEffect(() => { setMsgs([]); setInput(""); setBusy(false); sessionId.current = null; anchored.current = null; }, [slug]);
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs]);
 
-  const quote = node.evidence.find(e => e.quote)?.quote ?? "";
+  const cite = node.evidence.find(e => e.quote) ?? null;
+  const quote = cite?.quote ?? "";
+  // 附帶原文:抓引用句在原文的前後文,讓討論就貼著那段文本
+  const passage = (() => {
+    if (!source || !cite || cite.start == null || cite.end == null) return null;
+    const a = Math.max(0, cite.start - 70), b = Math.min(source.length, cite.end + 70);
+    return { pre: (a > 0 ? "…" : "") + source.slice(a, cite.start), mid: source.slice(cite.start, cite.end), post: source.slice(cite.end, b) + (b < source.length ? "…" : "") };
+  })();
 
   async function send() {
     const text = input.trim();
@@ -65,7 +73,10 @@ export default function NodeTalk(
             <p className="talk-kp-b">{kp.body}</p>
           </> : node.note ? <p className="talk-kp-b">{node.note}</p>
             : <p className="talk-kp-b dim">這顆目前沒有獨立的編輯標記，從這裡開始聊也行。</p>}
-          {quote && <p className="talk-quote">「{quote}」</p>}
+          {passage
+            ? <p className="talk-passage">{passage.pre}<mark>{passage.mid}</mark>{passage.post}</p>
+            : quote && <p className="talk-quote">「{quote}」</p>}
+          {cite && onJump && <button type="button" className="talk-jump" onClick={() => onJump(cite.start, cite.end)}>在原文中讀整段 ↗</button>}
           {kp?.question && (
             <button type="button" className="talk-qseed" onClick={() => setInput(kp.question!)}>{kp.question}</button>
           )}

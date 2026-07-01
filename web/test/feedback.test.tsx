@@ -27,7 +27,7 @@ describe("feedback 手風琴", () => {
     const slug = v.slug;
     const kp = v.feedback.key_points[0];
     const { container, getByText, queryByText } = renderSingle(slug);
-    await waitFor(() => expect(container.querySelector(".tabs")).toBeTruthy());
+    await waitFor(() => expect(container.querySelector(".sb-bar")).toBeTruthy());
     fireEvent.click(getByText("回饋"));
     expect(getByText(kp.title)).toBeTruthy();
     expect(queryByText(kp.body)).toBeNull();
