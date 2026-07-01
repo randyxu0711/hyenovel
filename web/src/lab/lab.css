@@ -1,0 +1,88 @@
+.lab{min-height:100vh;position:relative;overflow:hidden;font-family:var(--serif);color:#cabd92;
+  background:radial-gradient(120% 90% at 50% 30%,#15140f 0%,#0c0b09 54%,#050504 100%)}
+.lab .dust{position:fixed;inset:0;z-index:0;pointer-events:none}
+.lab-bar,.lab-stage,.lab-readout{position:relative;z-index:2}
+
+/* 釘住討論時,骨整體往左退、讓出右側給對話(同一片星空,不切版) */
+.lab-stage{transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}
+.lab.discussing .lab-stage{transform:translateX(-16%) scale(.9);opacity:.82}
+.lab-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:18px;
+  padding:14px 26px;background:rgba(8,7,6,.55);backdrop-filter:blur(4px);
+  border-bottom:1px solid rgba(220,200,150,.1)}
+.lab-tag{font-size:12px;letter-spacing:.16em;color:#7d745c}
+.lab-seg{display:flex;gap:6px;margin-left:auto}
+.lab-slugs{display:flex;gap:6px}
+.lab-seg button,.lab-slugs button{font:inherit;font-size:12.5px;letter-spacing:.1em;color:#cabd92;
+  background:rgba(10,9,7,.5);border:1px solid rgba(220,200,150,.24);padding:6px 14px;
+  border-radius:999px;cursor:pointer;transition:.2s}
+.lab-seg button:hover,.lab-slugs button:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
+.lab-seg button.on{background:rgba(236,201,138,.2);border-color:var(--amber);color:#f6efd9}
+.lab-slugs button.on{background:rgba(122,163,189,.16);border-color:var(--c-technique);color:#dfeaf2}
+
+.lab-stage{max-width:1100px;margin:0 auto;padding:30px 24px 60px;position:relative}
+.lab-title{font-size:22px;color:#e7dcbb;text-align:center;margin-bottom:8px;letter-spacing:.04em}
+.lab-msg{text-align:center;color:#8a8068;padding:80px 0;font-size:14px}
+.bonestage{display:block}
+@keyframes diagPulse{0%,100%{opacity:.12}50%{opacity:.5}}
+.bonestage .diag-pulse{animation:diagPulse 1.9s ease-in-out infinite}
+
+/* 固定讀出條:hover 節點細節 */
+.lab-readout{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);
+  display:flex;align-items:center;gap:14px;max-width:min(880px,92vw);
+  padding:11px 20px;border-radius:14px;
+  background:rgba(12,11,9,.82);border:1px solid rgba(220,200,150,.16);backdrop-filter:blur(7px);
+  font-family:var(--serif);opacity:0;pointer-events:none;transition:opacity .1s ease;z-index:6}
+.lab-readout.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.ro-type{font-size:11px;letter-spacing:.18em;padding:3px 9px;border-radius:999px;
+  border:1px solid currentColor;opacity:.92;white-space:nowrap}
+.ro-label{font-size:18px;color:#f0e7cf;white-space:nowrap}
+.ro-meter{width:74px;height:4px;border-radius:2px;background:rgba(220,200,150,.14);flex:none}
+.ro-meter i{display:block;height:100%;border-radius:2px}
+.ro-quote{font-size:13.5px;color:#9c937a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ro-flag,.talk-flag{font-size:11px;letter-spacing:.1em;color:#e0625a;
+  border:1px solid rgba(224,98,90,.5);border-radius:999px;padding:2px 8px;white-space:nowrap;flex:none}
+.talk-label{min-width:0}
+
+/* ── 沉浸討論:右側一欄發光文字,左緣用漸層化掉、讓骨透過來,不是硬框 ── */
+.talk{position:fixed;top:0;right:0;bottom:0;width:min(440px,42vw);z-index:4;
+  display:flex;flex-direction:column;padding:24px 26px 22px;
+  background:linear-gradient(90deg,rgba(8,7,6,0) 0%,rgba(8,7,6,.55) 22%,rgba(8,7,6,.86) 60%);
+  backdrop-filter:blur(2px);
+  border-left:1px solid rgba(236,201,138,.16);
+  box-shadow:-30px 0 60px -30px rgba(0,0,0,.7);
+  animation:talkIn .5s cubic-bezier(.3,0,.2,1)}
+@keyframes talkIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+.talk-head{display:flex;align-items:center;gap:11px;padding-bottom:14px;
+  border-bottom:1px solid rgba(220,200,150,.12);margin-bottom:8px}
+.talk-type{font-size:11px;letter-spacing:.18em;padding:3px 9px;border-radius:999px;border:1px solid currentColor;flex:none}
+.talk-label{font-size:18px;color:#f0e7cf;flex:1;text-shadow:0 0 12px rgba(236,201,138,.25)}
+.talk-x{background:none;border:none;color:#8a8068;font-size:15px;cursor:pointer;padding:4px}
+.talk-x:hover{color:#e7dcbb}
+.talk-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:10px 2px}
+.talk-seed{color:#928871;font-size:13.5px;line-height:1.9}
+/* 編輯對這顆已寫好的判斷(選中即見) */
+.talk-standing{padding:4px 2px 12px;border-bottom:1px dashed rgba(220,200,150,.14);margin-bottom:4px}
+.talk-kp-h{font-size:11px;letter-spacing:.16em;color:#9c8c5e;margin-bottom:6px}
+.talk-kp-b{font-size:14.5px;line-height:1.95;color:#ddd0b2}
+.talk-kp-b.dim{color:#8a8068}
+.talk-quote{font-size:13px;line-height:1.85;color:#9c937a;margin-top:8px;
+  border-left:2px solid rgba(236,201,138,.3);padding-left:10px}
+.talk-qseed{margin-top:12px;display:block;width:100%;text-align:left;cursor:pointer;
+  font:inherit;font-size:13.5px;line-height:1.7;color:#e6d3a6;
+  background:rgba(236,201,138,.08);border:1px solid rgba(236,201,138,.22);border-radius:10px;padding:9px 12px}
+.talk-qseed:hover{background:rgba(236,201,138,.16);color:#f6efd9}
+.talk-line{font-size:15px;line-height:1.95;white-space:pre-wrap;max-width:92%}
+.talk-line.me{align-self:flex-end;color:#cdd6e2;text-align:right;
+  border-right:2px solid rgba(150,180,220,.4);padding-right:12px}
+.talk-line.ed{align-self:flex-start;color:#e7dcc2;
+  text-shadow:0 0 16px rgba(236,201,138,.12)}
+.talk-typing{opacity:.6;letter-spacing:.14em}
+.talk-compose{display:flex;align-items:flex-end;gap:10px;padding-top:12px;
+  border-top:1px solid rgba(236,201,138,.18)}
+.talk-compose textarea{flex:1;resize:none;font:inherit;font-size:14.5px;color:#ece3c8;
+  background:none;border:none;outline:none;line-height:1.7;max-height:120px}
+.talk-compose textarea::placeholder{color:#6f6753}
+.talk-compose button{flex:none;width:34px;height:34px;border-radius:999px;cursor:pointer;
+  background:rgba(236,201,138,.16);border:1px solid var(--amber);color:var(--amber);font-size:15px}
+.talk-compose button:disabled{opacity:.4;cursor:default}
+.talk-compose button:not(:disabled):hover{background:rgba(236,201,138,.3)}
