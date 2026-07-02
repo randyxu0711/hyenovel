@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getIndex, getRunningCritiques } from "../data/client";
 import { worldPos, WORLD, type Stage } from "../lib/camera";
@@ -7,6 +7,7 @@ import Chrome from "./Chrome";
 import Dust from "./Dust";
 import Overview from "./Overview";
 import Catalog from "./Catalog";
+import Orbits from "./Orbits";
 import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
 import FormingStar from "./FormingStar";
@@ -25,6 +26,9 @@ export default function Journey() {
   const [dropFile, setDropFile] = useState<File | null>(null);
   const [forming, setForming] = useState<{ slug: string; title: string } | null>(null);
   const [dropping, setDropping] = useState(false);
+  const [flying, setFlying] = useState<string | null>(null); // 正飛向中心的那篇
+  const [bursting, setBursting] = useState(false);            // 飛抵中心後零件爆散
+  const flyTimers = useRef<number[]>([]);
 
   const refresh = () =>
     getIndex().then(i => setEntries(i.stories)).catch(() => {});
@@ -44,11 +48,23 @@ export default function Journey() {
     });
   }, [slug]);
 
+  // 點一篇故事:那具骨先飛向中心+放大發光(骨自己飛,非相機平移),飛到了才進單篇。
+  const pick = (s: string) => {
+    flyTimers.current.forEach(clearTimeout);
+    setFlying(s); setBursting(false);
+    flyTimers.current = [
+      window.setTimeout(() => setBursting(true), 1150),                     // 飛抵中心 → 零件爆散+亮閃
+      window.setTimeout(() => nav(`/story/${s}`), 1500),                    // 爆散中 → 進單篇,overlay 凝定落位接住
+      window.setTimeout(() => { setFlying(null); setBursting(false); }, 2300), // overlay 蓋住後才收
+    ];
+  };
+  useEffect(() => () => flyTimers.current.forEach(clearTimeout), []);
+
   if (err) return <div className="loadmsg">讀不到故事列表:{err}<br />先在 repo 根跑 <code>python index.py</code>。</div>;
 
   const stage: Stage = slug ? "single" : entered ? "catalog" : "overview";
   const idx = slug ? entries.findIndex(e => e.slug === slug) : -1;
-  const focus = idx >= 0 ? worldPos(idx, WORLD) : undefined;
+  const focus = idx >= 0 ? worldPos(idx, WORLD, entries.length) : undefined;
   const title = idx >= 0 ? entries[idx].title : undefined;
 
   // 整片星空當投放區:拖一個檔進來就開始擲入
@@ -65,12 +81,13 @@ export default function Journey() {
   };
 
   return (
-    <div className={`journey stage-${stage} ${dropping ? "drop-active" : ""}`} data-testid="home"
+    <div className={`journey stage-${stage} ${dropping ? "drop-active" : ""} ${flying ? "flying" : ""}`} data-testid="home"
       onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
       <Dust />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
       <Camera stage={stage} focus={focus}>
-        <Catalog entries={entries} loading={!loaded} />
+        {stage !== "overview" && <Orbits count={entries.length} />}
+        <Catalog entries={entries} loading={!loaded} flying={flying} bursting={bursting} onPick={pick} />
       </Camera>
       {stage === "catalog" && !forming && <NascentStar onOpen={() => setAdding(true)} />}
       {forming && (

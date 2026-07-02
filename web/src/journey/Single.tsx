@@ -28,14 +28,14 @@ export default function Single() {
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState<null | "source" | "feedback">(null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
-  const [openFb, setOpenFb] = useState<Record<string, boolean>>({});
-  const toggleFb = (k: string) => setOpenFb(s => ({ ...s, [k]: !s[k] }));
-  const accItems = (prefix: string, pts: FeedbackPoint[], withQ: boolean) => pts.map((p, i) => {
-    const k = `${prefix}${i}`, on = !!openFb[k];
+  // 回饋點 = 討論啟動器:點標題直接開該節點的討論框(NodeTalk 會把判斷+提問+原文+對話都帶出)
+  const accItems = (prefix: string, pts: FeedbackPoint[]) => pts.map((p, i) => {
+    const active = !!selected && p.refs.includes(selected);
     return (
-      <div className={`acc ${on ? "on" : ""}`} key={k}>
-        <button className="acc-h" onClick={() => toggleFb(k)}><span className="acc-mk">{on ? "−" : "+"}</span><span className="acc-tt">{p.title}</span></button>
-        {on && <div className="acc-b"><p>{p.body}</p>{withQ && p.question && <div className="q">{p.question}</div>}</div>}
+      <div className={`acc ${active ? "on" : ""}`} key={`${prefix}${i}`}>
+        <button className="acc-h" onClick={() => p.refs.length && setSelected(p.refs[0])}>
+          <span className="acc-mk">{active ? "💬" : "＋"}</span><span className="acc-tt">{p.title}</span>
+        </button>
       </div>
     );
   });
@@ -100,9 +100,9 @@ export default function Single() {
               <h3 className="fb-sec">這篇在做什麼</h3>
               <p className="fb-lead">{fb.read}</p>
               {fb.key_points.length > 0 && <h3 className="fb-sec">最關鍵的 {fb.key_points.length} 件</h3>}
-              {accItems("kp", fb.key_points, true)}
+              {accItems("kp", fb.key_points)}
               {fb.strengths.length > 0 && <h3 className="fb-sec">這篇的強處</h3>}
-              {accItems("st", fb.strengths, false)}
+              {accItems("st", fb.strengths)}
               <h3 className="fb-sec">如果只能改一件事</h3>
               <p className="fb-lead one">{fb.one_line}</p>
             </div>

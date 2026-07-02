@@ -173,7 +173,7 @@ export default function BoneStage(
 
       {/* 密骨:脊椎 + 椎節 + 全部肋(肋線淡出;節點本體在 bridges 飛) */}
       <g transform={`translate(0,${BONE_TOP})`} style={{ pointerEvents: eP > 0.5 ? "none" : "auto" }}>
-        <path d={d} fill="none" stroke="var(--bone)" strokeWidth={2.6} strokeLinecap="round" opacity={1 - eP}
+        <path className="bs-spine" pathLength={1} d={d} fill="none" stroke="var(--bone)" strokeWidth={2.6} strokeLinecap="round" opacity={1 - eP}
           style={{ filter: "drop-shadow(0 0 6px rgba(240,228,200,.45))" }} />
         {ribPaths.map((b, i) => (
           <path key={i} d={b.d} fill="none" stroke={b.color} strokeWidth={b.w}
@@ -181,7 +181,7 @@ export default function BoneStage(
         ))}
         {beats.map((b, i) => { if (!pts[i]) return null; const on = hover === b.id, x = pts[i][0], y = pts[i][1], end = x > X1 - 150;
           return (
-            <g key={`b${b.id}`} style={{ cursor: "pointer" }} onMouseEnter={() => onHover(b.id)} onMouseLeave={() => onHover(null)}>
+            <g key={`b${b.id}`} className="bs-node" style={{ cursor: "pointer" }} onMouseEnter={() => onHover(b.id)} onMouseLeave={() => onHover(null)}>
               <circle cx={x} cy={y} r={on ? 4.5 : 2.3 + (b.intensity ?? 0.3) * 1.5} fill="var(--c-beat)"
                 opacity={(1 - eP) * dim(b.id)} style={{ transition: "r .12s ease" }} />
               {on && <text x={end ? x - 7 : x + 7} y={y + 16} textAnchor={end ? "end" : "start"} fontSize={12.5} fill="#f6efd9" style={HALO} opacity={1 - eP}>{trunc(b.label)}</text>}
@@ -190,7 +190,7 @@ export default function BoneStage(
         })}
         {motifDots.map(m => { const on = hover === m.id, end = m.x > X1 - 150;
           return (
-            <g key={`md${m.id}`} style={{ cursor: "pointer" }} onMouseEnter={() => onHover(m.id)} onMouseLeave={() => onHover(null)}>
+            <g key={`md${m.id}`} className="bs-node" style={{ cursor: "pointer" }} onMouseEnter={() => onHover(m.id)} onMouseLeave={() => onHover(null)}>
               <circle cx={m.x} cy={m.y} r={on ? 4.5 : 3} fill="var(--c-motif)" opacity={(1 - eP) * dim(m.id)} style={{ transition: "r .12s ease" }} />
               {on && <text x={end ? m.x - 7 : m.x + 7} y={m.y - 7} textAnchor={end ? "end" : "start"} fontSize={12.5} fill="#f6efd9" style={HALO} opacity={1 - eP}>{trunc(m.label)}</text>}
             </g>
@@ -223,7 +223,7 @@ export default function BoneStage(
         const over = dg.includes("overloaded"), orphan = dg.includes("orphan"), hollow = dg.includes("hollow");
         const endSide = c.x > X1 - 150;                  // 靠右緣 → 標籤往左,避免切到
         return (
-          <g key={n.id} transform={`translate(${c.x},${c.y})`} opacity={base * dim(n.id)}
+          <g key={n.id} className="bs-node" transform={`translate(${c.x},${c.y})`} opacity={base * dim(n.id)}
             style={{ cursor: "pointer", transition: "opacity .25s ease" }}
             onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)}
             onClick={e => { e.stopPropagation(); onSelect(sel ? null : n.id); }}>
