@@ -122,29 +122,34 @@
 /* 半透明宇宙景深:讓底層 Dust 星塵透上來(模糊化成景深),不是死黑板 */
 .sb-textview{position:fixed;inset:0;z-index:9;overflow:auto;padding:96px 8vw 60px;
   background:radial-gradient(130% 100% at 50% 20%,rgba(20,19,14,.8) 0%,rgba(11,10,8,.89) 55%,rgba(4,4,3,.93) 100%);
-  backdrop-filter:blur(5px);animation:talkIn .3s ease;cursor:zoom-out}
+  backdrop-filter:blur(5px);animation:talkIn .3s ease;cursor:zoom-out;
+  transition:padding-right .6s cubic-bezier(.4,0,.2,1)}
 .sb-textview-inner{cursor:auto}
 .sb-textview .src{font-size:17px;line-height:2.3;color:#ddd3b8;max-width:720px;margin:0 auto;white-space:pre-wrap}
 .sb-textview .src .hl{background:rgba(236,201,138,.24);color:#fff;border-radius:2px}
-/* 關閉鍵移到右上「退」鍵正下方,避開置中控制列與麵包屑 */
-.sb-close{position:fixed;top:62px;right:28px;z-index:12;
-  padding:7px 18px;border-radius:999px;letter-spacing:.1em;
-  background:rgba(12,11,9,.7);border:1px solid rgba(220,200,150,.32);color:#e7dcbb;font-size:13px;cursor:pointer}
-.sb-close:hover{color:#f3ecd6;background:rgba(220,200,150,.14)}
+/* 討論開啟時:原文/回饋讓出右側給討論欄,內容重新置中到左半,兩者並置不重疊。
+   關閉靠上排「原文/回饋」再按一次(或點背景),不另設關閉鍵 */
+.sb.discussing .sb-textview{padding-right:min(468px,45vw)}
+/* 直排原文(vsrc):討論開時靜態保留右側一條給討論欄(不硬移閱讀位置)。
+   滾輪往下=往下文讀(內容左移)在 SourceAnnotated 接管 */
+.sb-textview.vsrc{padding:66px 7vw 46px}
+.sb.discussing .sb-textview.vsrc{padding-right:min(468px,45vw)}
 
 /* ── 原文可討論點:不畫底線、不螢光。只在句尾綴一顆類型色小星,hover/命中才淡淡一亮 ── */
-.src-annot{font-size:17px;line-height:2.5;color:#ddd3b8;max-width:720px;margin:0 auto;white-space:pre-wrap}
-.src-hint{max-width:720px;margin:0 auto 26px;font-size:12px;letter-spacing:.04em;color:#726a55}
-/* 關鍵:<mark> 預設是黃色螢光底,務必蓋掉,回到透明。標記只靠句尾小星 */
-.src-annot .ann{background:none;color:inherit;cursor:pointer;
-  text-decoration:none;text-underline-offset:4px;transition:color .15s}
-.src-annot .ann:hover{color:#f3ecd6;text-decoration:underline;
-  text-decoration-color:rgba(236,201,138,.45);text-decoration-thickness:1px}
-.src-annot .ann.hl{color:#f3ecd6;text-decoration:underline;
-  text-decoration-color:rgba(236,201,138,.7);text-decoration-thickness:1px}
-.src-annot .ann-dot{font-size:.52em;vertical-align:.55em;margin:0 1px 0 2px;
-  text-shadow:0 0 6px currentColor;opacity:.92}
-.src-annot .ann:hover .ann-dot,.src-annot .ann.hl .ann-dot{opacity:1;text-shadow:0 0 10px currentColor}
+/* 原文直排:傳統中文 vertical-rl 右起;英文一小段預設側躺(text-orientation:mixed),同實體書排法 */
+.src-annot{writing-mode:vertical-rl;font-size:18px;line-height:2.75;color:#ddd3b8;white-space:pre-wrap;
+  max-height:calc(100vh - 160px);margin:0 auto}
+/* 提示行固定在頂,右起捲動時不會被帶走 */
+.src-hint{position:fixed;top:22px;left:0;right:0;text-align:center;margin:0;z-index:10;
+  font-size:12px;letter-spacing:.04em;color:#726a55}
+/* 可討論段落:標記只用「欄側細線」(直排下 text-decoration 天然畫在欄側),
+   完全不佔字身、零版面位移;<mark> 預設黃底務必蓋掉。靜置很淡,hover/高亮才亮 */
+.src-annot .ann{background:none;color:inherit;cursor:pointer;text-underline-offset:.32em;
+  text-decoration-line:underline;text-decoration-thickness:2px;
+  text-decoration-color:color-mix(in srgb,var(--dot) 42%,transparent);
+  transition:text-decoration-color .15s,color .15s}
+.src-annot .ann:hover{color:#f6efd9;text-decoration-color:var(--dot);text-decoration-thickness:2.5px}
+.src-annot .ann.hl{color:#f6efd9;text-decoration-color:var(--amber);text-decoration-thickness:2.5px}
 
 /* ── 回饋:卡片式層級,一件事一塊,層級清楚 ── */
 .sb-textview .fb{color:#cfc6ac}

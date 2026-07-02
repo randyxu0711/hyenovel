@@ -91,8 +91,7 @@ export default function Single() {
 
       {/* 甲:原文/回饋覆蓋層(點背景 / ✕ / 再按一次同鍵 都可關) */}
       {text && (
-        <div className="sb-textview" onClick={() => setText(null)}>
-          <button className="sb-close" onClick={() => setText(null)}>✕ 關閉</button>
+        <div className={`sb-textview${text === "source" ? " vsrc" : ""}`} onClick={() => setText(null)}>
           <div className="sb-textview-inner" onClick={e => e.stopPropagation()}>
           {text === "source" && <SourceAnnotated source={source} viz={viz} highlight={hl}
             onDiscuss={setSelected} />}

@@ -16,7 +16,25 @@ export default function SourceAnnotated(
   { source: string; viz: VizData; highlight: { start: number; end: number } | null; onDiscuss: (id: string) => void },
 ) {
   const ref = useRef<HTMLElement | null>(null);
-  useEffect(() => { if (highlight && ref.current) ref.current.scrollIntoView({ block: "center" }); }, [highlight]);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const scroller = boxRef.current?.closest(".sb-textview") as HTMLElement | null;
+    // 直排 vertical-rl 是右起:捲軸預設停在左(最後一行),要撥到最右才是第一行
+    if (highlight && ref.current) ref.current.scrollIntoView({ block: "center", inline: "center" });
+    else if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+  }, [highlight]);
+  // 直排頁把直向滾輪接成水平:往下滾=往下文讀(內容左移),往上滾回上文
+  useEffect(() => {
+    const scroller = boxRef.current?.closest(".sb-textview") as HTMLElement | null;
+    if (!scroller) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.deltaY) return; // 觸控板水平滑動照舊由瀏覽器處理
+      e.preventDefault();
+      scroller.scrollLeft -= e.deltaY;
+    };
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => scroller.removeEventListener("wheel", onWheel);
+  }, []);
 
   const marks: Mark[] = [];
   for (const n of viz.nodes)
@@ -39,20 +57,20 @@ export default function SourceAnnotated(
   let hlDone = false;
   return (
     <>
-      <div className="src-hint">句尾的小星標是分析過的可討論點,點該句就那一點跟編輯討論。</div>
-      <div className="src-annot">
+      <div className="src-hint">欄側有細線的段落是分析過的可討論點,點它就那段跟編輯討論。</div>
+      <div className="src-annot" ref={boxRef}>
         {segs.map((s, k) => {
           if (s.o === -1) return <span key={k}>{s.text}</span>;
           const m = marks[s.o];
           const isHl = !!highlight && m.start >= highlight.start && m.end <= highlight.end;
           const attach = isHl && !hlDone;
           if (attach) hlDone = true;
-          const tail = s.end === m.end; // 一顆星只落在該節點段落的末字
           return (
             <mark key={k} className={`ann${isHl ? " hl" : ""}`} title={`就「${m.label}」討論`}
+              style={{ "--dot": C[m.type] } as React.CSSProperties}
               ref={attach ? (ref as React.RefObject<HTMLElement>) : undefined}
               onClick={() => onDiscuss(m.id)}>
-              {s.text}{tail && <sup className="ann-dot" style={{ color: C[m.type] }}>✦</sup>}
+              {s.text}
             </mark>
           );
         })}
