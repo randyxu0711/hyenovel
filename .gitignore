@@ -27,3 +27,6 @@ web/dist/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# 本機啟動腳本的 log
+.dev-logs/
