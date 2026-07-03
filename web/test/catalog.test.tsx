@@ -44,4 +44,14 @@ describe("Catalog", () => {
     eggEl.click(); expect(onPick).not.toHaveBeenCalled();
     bornEl.click(); expect(onPick).toHaveBeenCalledWith("born");
   });
+  it("同一 slug 從孕育轉誕生:renderer 由 GestatingStar 換成 Skeleton 佔位", () => {
+    const g: Map<string, Gestation> = new Map([["x", { step: 3, status: "running", title: "x" }]]);
+    const { container, rerender } = render(
+      <Catalog entries={[]} ordered={["x"]} gestations={g} onPick={() => {}} onCancel={() => {}} />);
+    expect(container.querySelector('[data-testid="gestating"]')).toBeTruthy();
+    rerender(
+      <Catalog entries={[mk("x", "x")]} ordered={["x"]} gestations={new Map()} onPick={() => {}} onCancel={() => {}} />);
+    expect(container.querySelector('[data-testid="gestating"]')).toBeNull();
+    expect(container.querySelector(".bone-ph")).toBeTruthy();
+  });
 });

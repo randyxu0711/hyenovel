@@ -47,15 +47,16 @@ export default function Catalog(
         const entry = byslug.get(slug);
         const isFly = slug === flying;
         const isHatch = slug === hatching;
-        const fly = isFly
-          ? { transform: `translate(-50%,-50%) translate(${cx - base.x}px, ${cy - base.y}px) scale(3)` }
-          : isHatch
-            ? { transform: `translate(-50%,-50%) translate(${cx - base.x}px, ${cy - base.y}px) scale(1.6)` }
-            : null;
-        const cls = `story skel-in${isFly ? " flying" : ""}${isHatch ? " hatching" : ""}${gest ? " gestating" : ""}`;
+        // hatching:用 hatchIn 動畫(靠 --hx/--hy 從中心飛到槽位),不套 skel-in 以免兩動畫互相覆蓋
+        const cls = `story ${isHatch ? "hatching" : "skel-in"}${isFly ? " flying" : ""}${gest ? " gestating" : ""}`;
+        const style: React.CSSProperties = isHatch
+          ? { left: base.x, top: base.y, ["--hx"]: `${cx - base.x}px`, ["--hy"]: `${cy - base.y}px` } as React.CSSProperties
+          : isFly
+            ? { left: base.x, top: base.y, animationDelay: `${i * 0.12}s`,
+                transform: `translate(-50%,-50%) translate(${cx - base.x}px, ${cy - base.y}px) scale(3)` }
+            : { left: base.x, top: base.y, animationDelay: `${i * 0.12}s` };
         return (
-          <div className={cls} data-testid="story" key={slug}
-            style={{ left: base.x, top: base.y, animationDelay: `${i * 0.12}s`, ...fly }}
+          <div className={cls} data-testid="story" key={slug} style={style}
             onClick={() => { if (!gest) onPick(slug); }}>
             {gest
               ? <GestatingStar step={gest.step} width={300} />

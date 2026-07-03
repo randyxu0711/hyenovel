@@ -71,4 +71,12 @@ describe("useGestations", () => {
     await new Promise(r => setTimeout(r, 10));
     expect(result.current.gestations.get("d")?.step).toBe(2);   // 舊 error 未誤刪新胎
   });
+
+  it("error 事件(非取消)→ 移除孕育星", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([{ event: "error", data: { where: "run", message: "壞了" } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("e", "戊"));
+    await waitFor(() => expect(result.current.gestations.has("e")).toBe(false));
+  });
 });
