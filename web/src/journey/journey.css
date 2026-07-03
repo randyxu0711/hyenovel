@@ -251,3 +251,16 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 /* 單篇 overlay 掛載即淡入+凝定落位,接住爆散後重組成文本軸(深連結也順)*/
 .single-overlay{animation:overlayIn .75s cubic-bezier(.4,0,.2,1)}
 @keyframes overlayIn{from{opacity:0;transform:scale(1.05)}to{opacity:1;transform:scale(1)}}
+
+/* ── 孕育星(GestatingStar):就地生長 + 前緣呼吸 ───────────────── */
+.gs{overflow:visible}
+.gs-spine{stroke-dasharray:1;transition:stroke-dashoffset 2.4s ease}
+.gs-rib{stroke-dasharray:1;transition:stroke-dashoffset .7s ease,opacity .7s ease}
+.gs-node{transition:r .5s ease,fill .9s ease}
+/* 前緣(正在長的那段)緩緩發光:還在幹活,但不假裝完成 */
+.gs[data-step="1"] .gs-spine{animation:gsBreath 1.8s ease-in-out infinite}
+.gs[data-step="2"] .gs-rib{animation:gsBreath 1.8s ease-in-out infinite}
+.gs[data-step="3"] .gs-node{animation:gsBreath 1.8s ease-in-out infinite}
+@keyframes gsBreath{0%,100%{opacity:.55}50%{opacity:1}}
+.gs.lit{animation:gsLit 1s ease-out}
+@keyframes gsLit{0%{filter:brightness(1)}30%{filter:brightness(1.9) drop-shadow(0 0 14px rgba(246,232,196,.9))}100%{filter:brightness(1.15)}}
