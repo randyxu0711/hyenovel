@@ -71,22 +71,24 @@
 .forming-cancel:hover{opacity:1 !important}
 
 /* ---- 擲入面板 ---- */
+/* 新增故事:不是對話框,是種骨在星空裡張開 —— 背後只壓暗不消失 */
 .add-scrim{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
-  background:rgba(4,4,3,.6);backdrop-filter:blur(3px)}
-.add-card{width:min(680px,92vw);max-height:88vh;display:flex;flex-direction:column;
-  background:radial-gradient(120% 100% at 50% 0%,#1a1812 0%,#100f0b 70%);
-  border:1px solid rgba(220,200,150,.18);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden}
-.add-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px 0}
+  background:radial-gradient(ellipse at center, rgba(10,11,15,.72), rgba(6,7,10,.9));backdrop-filter:blur(2px)}
+.add-card{position:relative;width:min(640px,90vw);max-height:88vh;display:flex;flex-direction:column;
+  background:transparent;border:none;box-shadow:none;overflow:hidden}
+.add-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px 0;border:none}
 .add-body{padding:18px 24px 24px;overflow:auto;display:flex;flex-direction:column}
-.add-lead{font-size:13.5px;line-height:1.9;color:#cfc6ac;margin:0 0 16px}
+/* 主邀請:柔和襯線,不是說明書口氣 */
+.add-lead{font-family:var(--serif);font-size:13.5px;line-height:1.9;color:#c9c19c;letter-spacing:.06em;text-align:center;margin:0 0 16px}
 .add-lab{font-size:10.5px;letter-spacing:.22em;color:var(--amber);text-transform:uppercase;margin:12px 0 7px}
 .add-count{color:#8f876f;letter-spacing:0;text-transform:none;font-size:11.5px}
-.add-title{background:rgba(0,0,0,.25);border:1px solid rgba(220,200,150,.2);border-radius:9px;
-  padding:11px 14px;color:#f1e7cd;font-family:var(--serif);font-size:18px}
-.add-text{margin-top:2px;background:rgba(0,0,0,.25);border:1px solid rgba(220,200,150,.2);border-radius:9px;
-  padding:14px 16px;color:#e4dcc4;font-family:var(--serif);font-size:15px;line-height:1.9;
+/* 內文墨落虛空:弱化框線 */
+.add-title,.add-text{background:rgba(255,255,255,.03);border:1px solid rgba(226,208,160,.14);
+  color:#efe7d1;border-radius:8px}
+.add-title{padding:11px 14px;font-family:var(--serif);font-size:18px}
+.add-text{margin-top:2px;padding:14px 16px;font-family:var(--serif);font-size:15px;line-height:1.9;
   min-height:300px;resize:vertical;white-space:pre-wrap}
-.add-title:focus,.add-text:focus{outline:none;border-color:rgba(220,200,150,.5)}
+.add-title:focus,.add-text:focus{outline:none;border-color:rgba(236,201,138,.45)}
 .add-drop{align-self:center;margin:14px 0;border:1px dashed rgba(220,200,150,.4);background:transparent;
   color:#cabd92;font:inherit;font-size:14px;letter-spacing:.1em;padding:30px 48px;border-radius:14px;cursor:pointer;transition:.3s}
 .add-drop:hover:not(:disabled){background:rgba(220,200,150,.1);color:#f3ecd6;border-style:solid}
@@ -99,6 +101,8 @@
 .add-ghost{background:transparent;border:0;color:#9a8f6e;font:inherit;font-size:12.5px;cursor:pointer}
 .add-ghost:hover{color:#cabd92}
 .add-err{color:#d98c6a;font-size:13px;line-height:1.7;margin:10px 0 0}
+/* 檔型提示退成角落小字 */
+.add-hint{position:absolute;bottom:10px;left:14px;font-size:11px;letter-spacing:.14em;color:#7d765f}
 .loadmsg{padding:60px;color:#cabd92;line-height:2}
 .dock{width:360px;flex:none;border-left:1px solid rgba(220,200,150,.13);background:rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
 .dock-head{display:flex;justify-content:space-between;align-items:center;padding:22px 22px 0}

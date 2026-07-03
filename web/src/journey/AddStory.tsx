@@ -4,7 +4,7 @@ import { extractStory, createStory } from "../data/client";
 type Phase = "pick" | "preview";
 
 // 只負責「擲入前」:選檔 → 抽文字 → 過目改字 → 落 source.md。
-// 確認後把 slug 交給 FormingStar,讓星骨在目錄裡長出來(分析串流不在這裡)。
+// 確認後 onCreated(slug, title) 交給 Journey,啟動孕育(begin)與飛入軌道的孵化動畫。
 export default function AddStory(
   { open, initialFile, onClose, onCreated }:
   { open: boolean; initialFile?: File | null; onClose: () => void; onCreated: (slug: string, title: string) => void },
@@ -67,7 +67,8 @@ export default function AddStory(
 
         {phase === "pick" && (
           <div className="add-body">
-            <p className="add-lead">請使用 txt / md / pdf / docx</p>
+            <p className="add-lead">把一篇丟進來,讓它長成一顆星</p>
+            <span className="add-hint">txt / md / pdf / docx</span>
             <button className="add-drop" disabled={busy} onClick={() => fileRef.current?.click()}>
               {busy ? "讀取中…" : "＋ 選擇檔案"}
             </button>
