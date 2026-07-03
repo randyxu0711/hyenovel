@@ -23,6 +23,8 @@ stories_bak/
 # Frontend build artifacts
 web/node_modules/
 web/dist/
+# 前端動畫原型(視覺試驗 HTML,dev 直接開;不版控)
+web/public/
 
 # MemPalace per-project files (issue #185)
 mempalace.yaml
