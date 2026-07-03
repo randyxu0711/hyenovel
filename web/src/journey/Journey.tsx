@@ -12,7 +12,7 @@ import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
 import FormingStar from "./FormingStar";
 import Single from "./Single";
-import type { IndexEntry } from "../types";
+import type { IndexEntry, Gestation } from "../types";
 import "./journey.css";
 
 export default function Journey() {
@@ -28,7 +28,9 @@ export default function Journey() {
   const [dropping, setDropping] = useState(false);
   const [flying, setFlying] = useState<string | null>(null); // 正飛向中心的那篇
   const [bursting, setBursting] = useState(false);            // 飛抵中心後零件爆散
+  const [demo, setDemo] = useState<{ slug: string; step: number } | null>(null);
   const flyTimers = useRef<number[]>([]);
+  const orderRef = useRef<string[]>([]);
 
   const refresh = () =>
     getIndex().then(i => setEntries(i.stories)).catch(() => {});
@@ -67,6 +69,15 @@ export default function Journey() {
   const focus = idx >= 0 ? worldPos(idx, WORLD, entries.length) : undefined;
   const title = idx >= 0 ? entries[idx].title : undefined;
 
+  // demo(dev only):把假胚胎併進 gestations,不碰後端。真實孕育在 Task 4 接上。
+  const shown: Map<string, Gestation> = demo
+    ? new Map<string, Gestation>().set(demo.slug, { step: demo.step, status: "running", title: "示範" })
+    : new Map<string, Gestation>();
+  // 穩定槽位:所有見過的 slug 依首見順序固定,狀態變不重排 → 誕生不跳位。
+  const present = [...entries.map(e => e.slug), ...shown.keys()];
+  for (const s of present) if (!orderRef.current.includes(s)) orderRef.current.push(s);
+  const ordered = orderRef.current.filter(s => present.includes(s));
+
   // 整片星空當投放區:拖一個檔進來就開始擲入
   const canDrop = stage === "catalog" && !forming;
   const onDragOver = (e: React.DragEvent) => {
@@ -86,8 +97,9 @@ export default function Journey() {
       <Dust />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
       <Camera stage={stage} focus={focus}>
-        {stage !== "overview" && <Orbits count={entries.length} />}
-        <Catalog entries={entries} loading={!loaded} flying={flying} bursting={bursting} onPick={pick} />
+        {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} />}
+        <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
+          gestations={shown} hatching={null} onPick={pick} onCancel={() => setDemo(null)} />
       </Camera>
       {stage === "catalog" && !forming && <NascentStar onOpen={() => setAdding(true)} />}
       {forming && (
@@ -101,6 +113,17 @@ export default function Journey() {
         onClose={() => { setAdding(false); setDropFile(null); }}
         onForming={(s, t) => { setAdding(false); setDropFile(null); setForming({ slug: s, title: t }); }} />
       <Chrome stage={stage} title={title} onBack={() => nav("/")} />
+      {import.meta.env.DEV && stage === "catalog" && (
+        <div className="demo-panel">
+          {!demo && <button onClick={() => setDemo({ slug: "__demo", step: 1 })}>demo 胚胎</button>}
+          {demo && <>
+            <span>step {demo.step}</span>
+            <button onClick={() => setDemo(d => d && { ...d, step: Math.max(1, d.step - 1) })}>−</button>
+            <button onClick={() => setDemo(d => d && { ...d, step: Math.min(4, d.step + 1) })}>＋</button>
+            <button onClick={() => setDemo(null)}>清除</button>
+          </>}
+        </div>
+      )}
     </div>
   );
 }

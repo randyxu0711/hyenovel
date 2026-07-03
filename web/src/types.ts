@@ -41,3 +41,6 @@ export interface IndexEntry {
   nodes: number; edges: number; has_feedback: boolean; has_viz: boolean; updated: string;
 }
 export interface IndexFile { generated: string; count: number; stories: IndexEntry[]; }
+
+// 孕育中星星的即時狀態(來自 SSE / /running;step 1→4)
+export type Gestation = { step: number; status: string; title: string };

@@ -1,23 +1,47 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render } from "@testing-library/react";
 import Catalog from "../src/journey/Catalog";
-import type { IndexEntry } from "../src/types";
+import type { IndexEntry, Gestation } from "../src/types";
 
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(() =>
+    Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response)));
+});
 
-const entries: IndexEntry[] = [
-  { slug: "s01", title: "長夜", synopsis: "...", nodes: 43, edges: 61, has_feedback: true, has_viz: true, updated: "" },
-  { slug: "s02", title: "鬣狗", synopsis: "...", nodes: 38, edges: 49, has_feedback: true, has_viz: true, updated: "" },
-];
+// 完整 IndexEntry(8 欄必填);has_viz 預設 true
+const mk = (slug: string, title: string, has_viz = true): IndexEntry =>
+  ({ slug, title, synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz, updated: "" });
+
+const entries: IndexEntry[] = [mk("born", "已生")];
+const noGest: Map<string, Gestation> = new Map();
 
 describe("Catalog", () => {
   it("每篇一個 story 元素", () => {
-    render(<MemoryRouter><Catalog entries={entries} /></MemoryRouter>);
-    expect(screen.getAllByTestId("story").length).toBe(2);
-    expect(screen.getByText("長夜")).toBeTruthy();
+    const { getAllByTestId, getByText } = render(
+      <Catalog entries={entries} ordered={["born"]} gestations={noGest} onPick={() => {}} onCancel={() => {}} />);
+    expect(getAllByTestId("story").length).toBe(1);
+    expect(getByText("已生")).toBeTruthy();
   });
-  it("空陣列顯示空狀態", () => {
-    render(<MemoryRouter><Catalog entries={[]} /></MemoryRouter>);
-    expect(screen.getByText(/還沒有故事/)).toBeTruthy();
+  it("空 ordered 顯示空狀態", () => {
+    const { getByText } = render(
+      <Catalog entries={[]} ordered={[]} gestations={noGest} onPick={() => {}} onCancel={() => {}} />);
+    expect(getByText(/還沒有故事/)).toBeTruthy();
+  });
+  it("誕生用 Skeleton(bone-ph 佔位),孕育用 GestatingStar + 階段詞", () => {
+    const g: Map<string, Gestation> = new Map([["egg", { step: 2, status: "running", title: "胚胎" }]]);
+    const { container, getByText } = render(
+      <Catalog entries={entries} ordered={["born", "egg"]} gestations={g} onPick={() => {}} onCancel={() => {}} />);
+    expect(container.querySelector('[data-testid="gestating"]')).toBeTruthy(); // egg
+    expect(container.querySelector(".bone-ph")).toBeTruthy();                   // born(viz 未載入 → 佔位)
+    expect(getByText("讀出結構")).toBeTruthy();                                  // step2 階段詞
+  });
+  it("點孕育星不觸發 onPick;點誕生星觸發 onPick", () => {
+    const g: Map<string, Gestation> = new Map([["egg", { step: 1, status: "running", title: "胚胎" }]]);
+    const onPick = vi.fn();
+    const { getAllByTestId } = render(
+      <Catalog entries={entries} ordered={["born", "egg"]} gestations={g} onPick={onPick} onCancel={() => {}} />);
+    const [bornEl, eggEl] = getAllByTestId("story");
+    eggEl.click(); expect(onPick).not.toHaveBeenCalled();
+    bornEl.click(); expect(onPick).toHaveBeenCalledWith("born");
   });
 });
