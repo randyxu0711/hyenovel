@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIndex, getRunningCritiques } from "../data/client";
+import { getIndex } from "../data/client";
 import { worldPos, WORLD, type Stage } from "../lib/camera";
 import Camera from "./Camera";
 import Chrome from "./Chrome";
@@ -10,8 +10,8 @@ import Catalog from "./Catalog";
 import Orbits from "./Orbits";
 import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
-import FormingStar from "./FormingStar";
 import Single from "./Single";
+import { useGestations } from "./useGestations";
 import type { IndexEntry, Gestation } from "../types";
 import "./journey.css";
 
@@ -21,65 +21,69 @@ export default function Journey() {
   const [entries, setEntries] = useState<IndexEntry[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [entered, setEntered] = useState(false); // overview→catalog
+  const [entered, setEntered] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dropFile, setDropFile] = useState<File | null>(null);
-  const [forming, setForming] = useState<{ slug: string; title: string } | null>(null);
   const [dropping, setDropping] = useState(false);
-  const [flying, setFlying] = useState<string | null>(null); // 正飛向中心的那篇
-  const [bursting, setBursting] = useState(false);            // 飛抵中心後零件爆散
+  const [flying, setFlying] = useState<string | null>(null);
+  const [bursting, setBursting] = useState(false);
+  const [hatching, setHatching] = useState<string | null>(null);
   const [demo, setDemo] = useState<{ slug: string; step: number } | null>(null);
   const flyTimers = useRef<number[]>([]);
+  const hatchTimer = useRef<number>();
   const orderRef = useRef<string[]>([]);
 
-  const refresh = () =>
-    getIndex().then(i => setEntries(i.stories)).catch(() => {});
+  const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
+  const { gestations, begin, cancel } = useGestations(refresh);
+
   useEffect(() => {
     getIndex().then(i => setEntries(i.stories))
       .catch(e => setErr(String(e instanceof Error ? e.message : e)))
       .finally(() => setLoaded(true));
   }, []);
-  // 深連結 /story/:slug 直接視為已進入
   useEffect(() => { if (slug) setEntered(true); }, [slug]);
+  // 重整後若還有胚胎在孕育,直接落在 catalog
+  useEffect(() => { if (gestations.size) setEntered(true); }, [gestations.size]);
+  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); }, []);
 
-  // 重整後復原:後端若還有 critique 在跑,重新接上成形動畫(不在單篇頁時)
-  useEffect(() => {
-    if (slug) return;
-    getRunningCritiques().then(rs => {
-      if (rs.length) { setEntered(true); setForming(f => f ?? { slug: rs[0].slug, title: rs[0].title }); }
-    });
-  }, [slug]);
-
-  // 點一篇故事:那具骨先飛向中心+放大發光(骨自己飛,非相機平移),飛到了才進單篇。
+  // 點已誕生的星:那具骨飛向中心+放大爆散,飛抵才進單篇
   const pick = (s: string) => {
     flyTimers.current.forEach(clearTimeout);
     setFlying(s); setBursting(false);
     flyTimers.current = [
-      window.setTimeout(() => setBursting(true), 1150),                     // 飛抵中心 → 零件爆散+亮閃
-      window.setTimeout(() => nav(`/story/${s}`), 1500),                    // 爆散中 → 進單篇,overlay 凝定落位接住
-      window.setTimeout(() => { setFlying(null); setBursting(false); }, 2300), // overlay 蓋住後才收
+      window.setTimeout(() => setBursting(true), 1150),
+      window.setTimeout(() => nav(`/story/${s}`), 1500),
+      window.setTimeout(() => { setFlying(null); setBursting(false); }, 2300),
     ];
   };
-  useEffect(() => () => flyTimers.current.forEach(clearTimeout), []);
+
+  // 新故事落 source.md 完成 → 開始孕育 + 從中心飛到軌道空位(hatching);不自動潛入單篇
+  const onCreated = (s: string, t: string) => {
+    setAdding(false); setDropFile(null);
+    begin(s, t);
+    setHatching(s);
+    clearTimeout(hatchTimer.current);
+    hatchTimer.current = window.setTimeout(() => setHatching(null), 1200);
+  };
 
   if (err) return <div className="loadmsg">讀不到故事列表:{err}<br />先在 repo 根跑 <code>python index.py</code>。</div>;
 
   const stage: Stage = slug ? "single" : entered ? "catalog" : "overview";
-  const idx = slug ? entries.findIndex(e => e.slug === slug) : -1;
-  const focus = idx >= 0 ? worldPos(idx, WORLD, entries.length) : undefined;
-  const title = idx >= 0 ? entries[idx].title : undefined;
 
-  // demo(dev only):把假胚胎併進 gestations,不碰後端。真實孕育在 Task 4 接上。
+  // demo(dev only):把假胚胎併進真實 gestations,不碰後端
   const shown: Map<string, Gestation> = demo
-    ? new Map<string, Gestation>().set(demo.slug, { step: demo.step, status: "running", title: "示範" })
-    : new Map<string, Gestation>();
-  // 穩定槽位:所有見過的 slug 依首見順序固定,狀態變不重排 → 誕生不跳位。
+    ? new Map(gestations).set(demo.slug, { step: demo.step, status: "running", title: "示範" })
+    : gestations;
+  // 穩定槽位:所有見過的 slug 依首見順序固定,狀態變不重排 → 誕生不跳位
   const present = [...entries.map(e => e.slug), ...shown.keys()];
   for (const s of present) if (!orderRef.current.includes(s)) orderRef.current.push(s);
   const ordered = orderRef.current.filter(s => present.includes(s));
 
-  // 整片星空當投放區:拖一個檔進來就開始擲入
-  const canDrop = stage === "catalog" && !forming;
+  const oidx = slug ? ordered.indexOf(slug) : -1;
+  const focus = oidx >= 0 ? worldPos(oidx, WORLD, ordered.length) : undefined;
+  const title = slug ? entries.find(e => e.slug === slug)?.title : undefined;
+
+  const canDrop = stage === "catalog";
   const onDragOver = (e: React.DragEvent) => {
     if (!canDrop || !Array.from(e.dataTransfer.types).includes("Files")) return;
     e.preventDefault(); setDropping(true);
@@ -99,19 +103,14 @@ export default function Journey() {
       <Camera stage={stage} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
-          gestations={shown} hatching={null} onPick={pick} onCancel={() => setDemo(null)} />
+          gestations={shown} hatching={hatching} onPick={pick} onCancel={cancel} />
       </Camera>
-      {stage === "catalog" && !forming && <NascentStar onOpen={() => setAdding(true)} />}
-      {forming && (
-        <FormingStar slug={forming.slug} title={forming.title}
-          onDone={s => { setForming(null); refresh(); nav(`/story/${s}`); }}
-          onAbort={() => { setForming(null); refresh(); }} />
-      )}
+      {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} />}
       {stage === "overview" && <Overview onEnter={() => setEntered(true)} />}
       {stage === "single" && <div className="single-overlay"><Single /></div>}
       <AddStory open={adding} initialFile={dropFile}
         onClose={() => { setAdding(false); setDropFile(null); }}
-        onForming={(s, t) => { setAdding(false); setDropFile(null); setForming({ slug: s, title: t }); }} />
+        onCreated={onCreated} />
       <Chrome stage={stage} title={title} onBack={() => nav("/")} />
       {import.meta.env.DEV && stage === "catalog" && (
         <div className="demo-panel">

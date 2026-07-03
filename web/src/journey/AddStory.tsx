@@ -6,8 +6,8 @@ type Phase = "pick" | "preview";
 // 只負責「擲入前」:選檔 → 抽文字 → 過目改字 → 落 source.md。
 // 確認後把 slug 交給 FormingStar,讓星骨在目錄裡長出來(分析串流不在這裡)。
 export default function AddStory(
-  { open, initialFile, onClose, onForming }:
-  { open: boolean; initialFile?: File | null; onClose: () => void; onForming: (slug: string, title: string) => void },
+  { open, initialFile, onClose, onCreated }:
+  { open: boolean; initialFile?: File | null; onClose: () => void; onCreated: (slug: string, title: string) => void },
 ) {
   const [phase, setPhase] = useState<Phase>("pick");
   const [title, setTitle] = useState("");
@@ -49,7 +49,7 @@ export default function AddStory(
     try {
       const r = await createStory(title.trim(), text);
       const slug = r.slug, t = title.trim();
-      reset(); onClose(); onForming(slug, t);   // 交棒給成形的星
+      reset(); onClose(); onCreated(slug, t);   // 交棒給成形的星
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e)); setBusy(false);
     }
