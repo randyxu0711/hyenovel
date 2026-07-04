@@ -33,7 +33,7 @@ describe("Catalog", () => {
       <Catalog entries={entries} ordered={["born", "egg"]} gestations={g} onPick={() => {}} onCancel={() => {}} />);
     expect(container.querySelector('[data-testid="gestating"]')).toBeTruthy(); // egg
     expect(container.querySelector(".bone-ph")).toBeTruthy();                   // born(viz 未載入 → 佔位)
-    expect(getByText("讀出結構")).toBeTruthy();                                  // step2 階段詞
+    expect(getByText("長出骨架")).toBeTruthy();                                  // step2 階段詞
   });
   it("點孕育星不觸發 onPick;點誕生星觸發 onPick", () => {
     const g: Map<string, Gestation> = new Map([["egg", { step: 1, status: "running", title: "胚胎" }]]);

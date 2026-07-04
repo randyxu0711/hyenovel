@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { extractStory, createStory } from "../data/client";
+import { spline } from "../lib/spline";
+import { SP, buildRibs } from "./GestatingStar";
 
 type Phase = "pick" | "preview";
+
+// 選檔框裡的淡虛線骨 —— 與孕育星同一副座標,丟進去長成的就是這根骨
+const DROP_D = spline(SP);
+const DROP_RIBS = buildRibs();
 
 // 只負責「擲入前」:選檔 → 抽文字 → 過目改字 → 落 source.md。
 // 確認後 onCreated(slug, title) 交給 Journey,啟動孕育(begin)與飛入軌道的孵化動畫。
@@ -67,10 +73,20 @@ export default function AddStory(
 
         {phase === "pick" && (
           <div className="add-body">
-            <p className="add-lead">把一篇丟進來,讓它長成一顆星</p>
-            <span className="add-hint">txt / md / pdf / docx</span>
             <button className="add-drop" disabled={busy} onClick={() => fileRef.current?.click()}>
-              {busy ? "讀取中…" : "＋ 選擇檔案"}
+              <svg className="drop-bone" viewBox="0 0 310 190" preserveAspectRatio="xMidYMid meet" aria-hidden>
+                <path d={DROP_D} fill="none" stroke="currentColor" strokeWidth={2.4}
+                  strokeLinecap="round" strokeDasharray="7 6" />
+                {DROP_RIBS.map((b, i) => (
+                  <line key={`r${i}`} x1={b.x} y1={b.y} x2={b.ex} y2={b.ey} stroke="currentColor"
+                    strokeWidth={1.2} strokeLinecap="round" strokeDasharray="5 5" />
+                ))}
+                {DROP_RIBS.map((b, i) => (
+                  <circle key={`n${i}`} cx={b.ex} cy={b.ey} r={b.gold ? 3.4 : 2.2} fill="currentColor" />
+                ))}
+              </svg>
+              <span className="add-drop-t">{busy ? "讀取中…" : "＋ 選擇檔案"}</span>
+              <span className="add-hint">txt · md · pdf · docx</span>
             </button>
             <input ref={fileRef} type="file" accept=".txt,.md,.pdf,.docx" hidden
               onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; }} />

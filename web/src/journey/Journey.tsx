@@ -28,13 +28,19 @@ export default function Journey() {
   const [flying, setFlying] = useState<string | null>(null);
   const [bursting, setBursting] = useState(false);
   const [hatching, setHatching] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [demo, setDemo] = useState<{ slug: string; step: number } | null>(null);
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
   const orderRef = useRef<string[]>([]);
 
   const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
-  const { gestations, begin, cancel } = useGestations(refresh);
+  // 誕生:重整列表,並把這篇標成「新成形」→ 柔金暈常駐(閱讀優先);點進或 refresh 後卸下
+  const onBorn = useCallback(async (s: string) => {
+    await refresh();
+    setFresh(f => new Set(f).add(s));
+  }, [refresh]);
+  const { gestations, begin, cancel } = useGestations(onBorn);
 
   useEffect(() => {
     getIndex().then(i => setEntries(i.stories))
@@ -48,6 +54,7 @@ export default function Journey() {
 
   // 點已誕生的星:那具骨飛向中心+放大爆散,飛抵才進單篇
   const pick = (s: string) => {
+    setFresh(f => { if (!f.has(s)) return f; const n = new Set(f); n.delete(s); return n; });
     flyTimers.current.forEach(clearTimeout);
     setFlying(s); setBursting(false);
     flyTimers.current = [
@@ -103,7 +110,7 @@ export default function Journey() {
       <Camera stage={stage} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
-          gestations={shown} hatching={hatching} onPick={pick} onCancel={cancel} />
+          gestations={shown} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
       </Camera>
       {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} />}
       {stage === "overview" && <Overview onEnter={() => setEntered(true)} />}

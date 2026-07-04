@@ -3,7 +3,7 @@ import { spline, type Pt } from "../lib/spline";
 
 const W = 310, H = 190;
 // 象徵性脊椎:孕育途中還沒真資料,先給一根有起伏的骨(誕生後由 Catalog 換成真實 Skeleton)
-const SP: Pt[] = [[18, 98], [70, 66], [120, 118], [170, 72], [214, 112], [262, 80], [292, 100]];
+export const SP: Pt[] = [[18, 98], [70, 66], [120, 118], [170, 72], [214, 112], [262, 80], [292, 100]];
 
 type Rib = { x: number; y: number; ex: number; ey: number; r: number; gold: boolean };
 
@@ -16,7 +16,7 @@ function onPoly(p: Pt[], f: number) {
   return { x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t, nx: -ty, ny: tx };
 }
 
-function buildRibs(): Rib[] {
+export function buildRibs(): Rib[] {
   const specs = [
     { f: .12, up: true, gold: true, len: 38 }, { f: .22, up: false, gold: false, len: 26 },
     { f: .34, up: true, gold: false, len: 30 }, { f: .44, up: false, gold: true, len: 46 },
@@ -52,6 +52,14 @@ export default function GestatingStar({ step, width = 300 }: { step: number; wid
         <circle key={`c${i}`} className="gs-node" cx={b.ex} cy={b.ey} r={step >= 3 ? b.r : 0}
           fill={b.gold ? "#ecc98a" : "#f3ead2"} style={{ transitionDelay: `${0.2 + i * 0.1}s` }} />
       ))}
+      {/* 進度光點:孕育中沿脊椎頭→尾巡遊,到成形(step4)才熄 */}
+      {step >= 1 && step < 4 && (
+        <circle className="gs-spark" r={3.2} fill="#f8f0d8" opacity={0}>
+          <animateMotion dur="2.2s" repeatCount="indefinite" path={d} />
+          <animate attributeName="opacity" dur="2.2s" repeatCount="indefinite"
+            values="0;1;1;0" keyTimes="0;0.12;0.85;1" />
+        </circle>
+      )}
     </svg>
   );
 }

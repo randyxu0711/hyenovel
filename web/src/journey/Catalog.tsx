@@ -18,13 +18,13 @@ function StoryBone({ slug, hasViz, burst }: { slug: string; hasViz: boolean; bur
   return <Skeleton viz={viz} width={300} burst={burst} />;
 }
 
-const WORD = ["", "凝聚", "讀出結構", "聽見重音", "成形"];
+const WORD = ["", "凝聚", "長出骨架", "秤出輕重", "成形"];
 
 export default function Catalog(
-  { entries, ordered, loading, flying, bursting, gestations, hatching, onPick, onCancel }:
+  { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, onPick, onCancel }:
   {
     entries: IndexEntry[]; ordered: string[]; loading?: boolean; flying?: string | null; bursting?: boolean;
-    gestations: Map<string, Gestation>; hatching?: string | null;
+    gestations: Map<string, Gestation>; hatching?: string | null; fresh?: Set<string>;
     onPick: (slug: string) => void; onCancel: (slug: string) => void;
   },
 ) {
@@ -48,7 +48,7 @@ export default function Catalog(
         const isFly = slug === flying;
         const isHatch = slug === hatching;
         // hatching:用 hatchIn 動畫(靠 --hx/--hy 從中心飛到槽位),不套 skel-in 以免兩動畫互相覆蓋
-        const cls = `story ${isHatch ? "hatching" : "skel-in"}${isFly ? " flying" : ""}${gest ? " gestating" : ""}`;
+        const cls = `story ${isHatch ? "hatching" : "skel-in"}${isFly ? " flying" : ""}${gest ? " gestating" : ""}${!gest && fresh?.has(slug) ? " fresh" : ""}`;
         const style: React.CSSProperties = isHatch
           ? { left: base.x, top: base.y, ["--hx"]: `${cx - base.x}px`, ["--hy"]: `${cy - base.y}px` } as React.CSSProperties
           : isFly
