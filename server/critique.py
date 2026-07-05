@@ -11,9 +11,10 @@
                                   ClaudeSDKClient __aexit__ 收掉 claude 行程)
 """
 import asyncio
+import shutil
 import time
 
-from . import orchestrator
+from . import config, orchestrator
 
 # phase name → 生長階(給 /running 顯示、前端成形動畫對齊)
 _STEP = {"analyst": 1, "criticizer": 2, "render": 3}
@@ -24,6 +25,7 @@ class Run:
     def __init__(self, slug: str, title: str):
         self.slug = slug
         self.title = title
+        self.dir = config.STORIES / slug             # 綁定一次;取消刪檔只認這個 Path,不再吃字串
         self.events: list[dict] = []                 # 已發事件(補播用)
         self.subscribers: set[asyncio.Queue] = set()
         self.status = "running"                       # running|done|error|cancelled
@@ -95,6 +97,8 @@ async def _drive(run: Run):
 
 def start(slug: str, title: str) -> Run:
     """開一個 Run;若該 slug 已在跑就回既有的(避免重整/重送造成雙重派工燒錢)。"""
+    if not config.valid_slug(slug):
+        raise ValueError(f"invalid slug: {slug!r}")   # Run 只為合法 slug 存在 → run.dir 必為 STORIES 直下單段
     cur = _runs.get(slug)
     if cur and cur.status == "running":
         return cur
@@ -141,7 +145,19 @@ async def cancel(slug: str) -> bool:
         await run.task
     except BaseException:  # noqa: BLE001 —— 取消必然拋 CancelledError/連線錯誤,吞掉
         pass
+    _discard_story(run)    # 取消=連檔一起丟:ingest 出來的 source.md 等一併移除,不留孤兒
     return True
+
+
+def _discard_story(run: Run) -> None:
+    """刪掉這個 Run 綁定的故事目錄。目錄在 Run 建立時(slug 已過白名單)就固定,
+    此處不從任何外部字串重建路徑,故無遍歷可乘之機。symlink 一律拒(不順著刪到外面)。"""
+    d = run.dir
+    if d.is_symlink() or not d.is_dir():
+        return
+    if d.resolve().parent != config.STORIES.resolve():
+        return              # belt-and-suspenders:確認仍在 STORIES 直下
+    shutil.rmtree(d, ignore_errors=True)
 
 
 async def sweep_runs():
