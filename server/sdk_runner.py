@@ -26,6 +26,29 @@ def load_agent_prompt(name: str) -> str:
     return text.strip()
 
 
+_ASYNC_DISPATCH_SIG = "Async agent launched successfully"
+
+
+class AsyncDispatchError(RuntimeError):
+    """子代理以背景(async)模式執行——編排器要求同步。多半是 CLI 改了預設。"""
+
+
+def contains_async_dispatch(text: str) -> bool:
+    return _ASYNC_DISPATCH_SIG in (text or "")
+
+
+def classify_failure(message: str) -> str:
+    """把已知死法簽章對到可讀 reason,給前端顯示、給我們冷卻判斷。"""
+    m = message or ""
+    if "Stream closed at sendRequest" in m or "Error in hook callback" in m:
+        return "usage-limit"          # 訂閱額度撞頂:子行程被拆
+    if _ASYNC_DISPATCH_SIG in m:
+        return "async-dispatch"
+    if "budget" in m.lower():
+        return "budget"               # max_budget_usd 超支
+    return "unknown"
+
+
 # ── 縱深防禦:路徑白名單硬閘 ────────────────────────────────────────
 # 就算子代理被 source.md 內的注入騎劫,檔案工具也只能碰 stories/(讀寫)與
 # schemas/(唯讀)—— 讀不到 repo 外的機密、寫不出 stories/ 之外。PreToolUse

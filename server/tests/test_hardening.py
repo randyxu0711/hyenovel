@@ -13,6 +13,19 @@ def test_load_agent_prompt_strips_frontmatter():
         assert "description:" not in body.split("\n", 1)[0]
 
 
+def test_async_dispatch_detection():
+    assert sdk_runner.contains_async_dispatch("... Async agent launched successfully\nagentId: x")
+    assert not sdk_runner.contains_async_dispatch("正常摘要,無背景派工")
+
+
+def test_classify_failure():
+    assert sdk_runner.classify_failure("... Stream closed at sendRequest") == "usage-limit"
+    assert sdk_runner.classify_failure("Error in hook callback hook_0") == "usage-limit"
+    assert sdk_runner.classify_failure("Async agent launched successfully") == "async-dispatch"
+    assert sdk_runner.classify_failure("max_budget exceeded") == "budget"
+    assert sdk_runner.classify_failure("some other failure") == "unknown"
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
