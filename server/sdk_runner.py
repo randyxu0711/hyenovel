@@ -50,9 +50,9 @@ def classify_failure(message: str) -> str:
 
 
 # ── 縱深防禦:路徑白名單硬閘 ────────────────────────────────────────
-# 就算子代理被 source.md 內的注入騎劫,檔案工具也只能碰 stories/(讀寫)與
+# 就算代理被 source.md 內的注入騎劫,檔案工具也只能碰 stories/(讀寫)與
 # schemas/(唯讀)—— 讀不到 repo 外的機密、寫不出 stories/ 之外。PreToolUse
-# hook 對 Task 派出的子代理(analyst/criticizer)工具呼叫同樣會觸發,故真正
+# hook 對 analyst/criticizer(以主代理直接跑)的檔案工具呼叫觸發,故真正
 # 接觸下毒文本的那一層也在守備範圍內。違規當下直接 deny,不重試。
 _FILE_TOOLS = {"Read", "Write", "Edit", "MultiEdit", "NotebookEdit"}
 _WRITE_ROOTS = [config.STORIES.resolve()]
