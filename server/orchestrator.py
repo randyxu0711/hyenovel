@@ -43,32 +43,34 @@ def _gate_feedback(slug: str) -> tuple[bool, str]:
     沒這道,criticizer 沒寫檔時 _gate 會『空過』,orchestrator 會誤判成功並渲染出無回饋的結果。"""
     fp = config.STORIES / slug / "feedback.json"
     if not fp.exists():
-        return False, (f"feedback.json 沒有被產生出來。請務必用 criticizer subagent "
-                       f"實際寫出 stories/{slug}/feedback.json 檔案(不是只回報摘要)。")
+        return False, (f"feedback.json 沒有被產生出來。請用 Write 工具實際寫出 "
+                       f"stories/{slug}/feedback.json 檔案(不是只回報摘要)。")
     return _gate(slug)
 
 
 async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gate, on_client=None):
-    """一格「派子代理 → 過閘門 → 失敗重派」的確定性迴圈。
+    """一格「直接跑 agent → 過閘門 → 失敗重派」的確定性迴圈。
 
-    每格用**自己一個** ClaudeSDKClient(協調者):一是強化觀察/判斷隔離——criticizer 的
-    協調者 context 不該看到 analyst 那格的摘要;二是實測發現共用 client 時第二格協調者會
-    誤以為「已完成」而不真的派子代理(2 秒空回),分開後穩定派工。重試仍在同格 client 內,
-    讓協調者保有「剛剛做了什麼」的 context。gate_fn 回 (通過?, 失敗明細)。
+    name 即 .claude/agents/<name>.md:把該 agent 的 body 當 system_prompt、直接當主代理跑,
+    沒有協調者、沒有 Task 巢狀。每格用**自己一個** ClaudeSDKClient(觀察/判斷隔離——
+    criticizer 不該看到 analyst 那格的 context)。run_turn 等到 ResultMessage 才返回,且包
+    wait_for 逾時。重試仍在同格 client 內,讓代理保有「剛剛做了什麼」的 context。
+    gate_fn 回 (通過?, 失敗明細)。
 
     on_client(client|None):把當前 client 回報給上層(critique.Run),讓「取消」能直接
     disconnect 它、確實收掉 claude 子行程——光靠 task.cancel() 會在 __aexit__ 期間漏掉。"""
     cost = 0.0
     detail = ""
     ok = False
-    async with ClaudeSDKClient(options=sdk_runner.critique_options()) as client:
+    async with ClaudeSDKClient(options=sdk_runner.agent_options(name)) as client:
         if on_client:
             on_client(client)
         try:
             for attempt in range(config.MAX_GATE_RETRIES + 1):
                 yield ("event", {"event": "phase", "data": {"name": name, "status": "start", "attempt": attempt}})
                 prompt = first_prompt if attempt == 0 else retry_prompt(detail)
-                _, turn_cost, _ = await sdk_runner.run_turn(client, prompt)
+                _, turn_cost, _ = await asyncio.wait_for(
+                    sdk_runner.run_turn(client, prompt), timeout=config.PHASE_TIMEOUT)
                 cost += turn_cost
                 gate_ok, detail = await asyncio.to_thread(gate_fn, slug)
                 if gate_ok:
@@ -99,11 +101,11 @@ async def run_critique(slug: str, on_client=None):
     total_cost = 0.0
     try:
         # ── 第一格:analyst(自己一個協調者 client)──
-        ana_first = (f"使用 analyst subagent 分析 stories/{slug}/:讀 source.md 與 "
-                     f"schemas/analysis.schema.json,產出 stories/{slug}/analysis.json。只回報簡短摘要。")
+        ana_first = (f"分析 stories/{slug}/:讀 source.md 與 schemas/analysis.schema.json,"
+                     f"用 Write 工具產出 stories/{slug}/analysis.json。只回報簡短摘要。")
         ana_retry = lambda d: (f"analysis.json 沒過閘門:\n{d}\n"
-                               f"請再用 analyst subagent 修正 stories/{slug}/analysis.json"
-                               f"(逐字引用須對得上 source.md、符合 schema)。")
+                               f"請修正 stories/{slug}/analysis.json"
+                               f"(逐字引用須對得上 source.md、符合 schema),用 Write 工具寫回。")
         res = None
         async for kind, payload in _phase_with_retry("analyst", ana_first, ana_retry, slug, on_client=on_client):
             if kind == "event":
@@ -117,11 +119,11 @@ async def run_critique(slug: str, on_client=None):
             return
 
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
-        cri_first = (f"使用 criticizer subagent:讀 stories/{slug}/analysis.json、source.md、"
-                     f"schemas/feedback.schema.json,產出 stories/{slug}/feedback.json"
+        cri_first = (f"讀 stories/{slug}/analysis.json、source.md、schemas/feedback.schema.json,"
+                     f"用 Write 工具產出 stories/{slug}/feedback.json"
                      f"(發展性、有輕重、不諂媚,每點掛逐字 quotes、refs 綁 node id)。只回報摘要。")
         cri_retry = lambda d: (f"feedback.json 沒過閘門:\n{d}\n"
-                               f"請再用 criticizer subagent 修正 stories/{slug}/feedback.json。")
+                               f"請修正 stories/{slug}/feedback.json,用 Write 工具寫回。")
         res = None
         async for kind, payload in _phase_with_retry("criticizer", cri_first, cri_retry, slug,
                                                      gate_fn=_gate_feedback, on_client=on_client):
@@ -134,8 +136,14 @@ async def run_critique(slug: str, on_client=None):
             yield {"event": "error", "data": {"where": "criticizer",
                    "message": "feedback 閘門重試後仍未過", "recoverable": False}}
             return
+    except asyncio.TimeoutError:
+        yield {"event": "error", "data": {"where": "timeout",
+               "message": f"分析階段逾時(> {config.PHASE_TIMEOUT}s)",
+               "recoverable": False, "reason": "timeout"}}
+        return
     except Exception as e:
-        yield {"event": "error", "data": {"where": "sdk", "message": str(e), "recoverable": False}}
+        yield {"event": "error", "data": {"where": "sdk", "message": str(e),
+               "recoverable": False, "reason": sdk_runner.classify_failure(str(e))}}
         return
 
     # ── 確定性層:render + viz + index(純 Python,無 LLM)──
