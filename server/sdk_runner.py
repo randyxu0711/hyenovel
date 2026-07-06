@@ -108,12 +108,17 @@ def agent_options(agent_name: str) -> ClaudeAgentOptions:
         setting_sources=["project"],
         system_prompt=load_agent_prompt(agent_name),
         allowed_tools=["Read", "Write"],
-        disallowed_tools=["Task", "Bash", "Edit", "MultiEdit", "NotebookEdit"],
+        disallowed_tools=["Task", "Bash", "Edit", "NotebookEdit"],
         permission_mode="acceptEdits",
         hooks=_GUARD_HOOKS,
         model=config.CRITIQUE_MODEL,
         max_budget_usd=config.CRITIQUE_BUDGET_USD,
         max_turns=config.AGENT_MAX_TURNS,
+        thinking={"type": "disabled"},   # 關掉 extended thinking:讓主代理回到當子代理時的行為。
+        # 這活是「讀檔→照 .md 指令吐結構化 JSON」,不需大草稿紙;主代理預設 adaptive 會想到撞
+        # max_tokens 截斷、還沒 Write 就死。max_thinking_tokens 在新模型已 deprecated(非零=adaptive,
+        # 等於沒設),故用非 deprecated 的 thinking 旗標硬關。(若日後 A/B 證明想一下能提升分析深度,
+        # 再換 {"type":"enabled","budget_tokens":N} 並確認不截斷。)
         include_partial_messages=False,
     )
 
