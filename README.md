@@ -1,8 +1,8 @@
 # hyenovel
 
 純文學短篇的**評論 / 思考討論工具**,跑在 Claude Code(吃訂閱、不用 API token)。
-不是一次性產一份報告,而是**會分析、給發展性回饋、能來回討論、把分析視覺化**的個人思考工具。
-使用者寫中文 / 台語白話的純文學短篇(< 1 萬字),它陪你把一篇讀透、讀出所以然。
+不是一次性產一份報告,而是**會分析、給發展性回饋、能來回討論、把分析視覺化**的個人思考工具——
+你寫中文 / 台語白話的純文學短篇(< 1 萬字),它陪你把一篇讀透、讀出所以然。
 
 ![hyenovel](assets/cover.png)
 
@@ -20,49 +20,48 @@
 **發展性回饋** — 出版編輯人格,有輕重、不諂媚,每條意見都掛著原文。
 ![回饋](assets/feedback.png)
 
-## 核心原則
-**`analysis.json` = 觀察層正本、`feedback.json` = 判斷層正本**;`viz.json` / md / viz.html / Obsidian 都是它們的下游消費者。
+## 安裝
 
+**前置**
+- [Claude Code](https://claude.com/claude-code) 已安裝並登入——本工具吃訂閱、不走 API 計費。
+- Python 3、Node.js。
+
+**步驟**
+```bash
+git clone https://github.com/randyxu0711/hyenovel.git
+cd hyenovel
+
+# 後端(Python)
+python3 -m venv server/.venv
+server/.venv/bin/pip install -r server/requirements.txt
+
+# 前端(Node);dev.sh 首次啟動也會自動補跑
+cd web && npm install && cd ..
 ```
-source.md ──analyst──▶ analysis.json ──criticizer──▶ feedback.json
-                            │                              │
-              ┌─────────────┴──────────────┬──────────────┘
-              ▼                             ▼
-        render.py→analysis.md/feedback.md   viz.py→viz.json→viz.html
-        (人讀 / Obsidian)                    (前端契約 / 可視化)
 
-index.py 掃 stories/*/ → stories/index.json(全集列表契約,前端首頁 / 枚舉用)
+## 啟動與使用
+
+### Web app(推薦)
+```bash
+./dev.sh          # 一鍵起前後端,Ctrl+C 一起收
 ```
+開 http://localhost:5173 ——挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋,或就地來回討論。
 
-## 架構
-兩個**隔離**的 subagent(「觀察」與「判斷」各自 context,不互相污染):
-- **analyst** — 整篇讀一次 → 產 `analysis.json`(型別固定、內容自由,每條附逐字原文引用)。
-- **criticizer** — 只看 `analysis.json` + 原文 → 產 `feedback.json`(出版編輯人格、發展性、不諂媚)。
+> 只跑 localhost、單人使用;訂閱認證綁本機憑證,**別部署到雲端**。
 
-## 用法(L1)
+### 命令列(在 repo 目錄開的 Claude Code session)
 1. 把故事放成 `stories/<slug>/source.md`。
-2. `/story-critique stories/<slug>/source.md` → 產 `analysis.json` / `feedback.json`,並由 `render.py` 出 md。
-3. `python viz.py <slug>` → 過 schema + 引用兩道閘門,產 `viz.json`(前端契約)+ `viz.html`(瀏覽器開):
-   - **意圖鏈** technique → effect → theme(看孤兒技法 / 過載主題 / 空心主題)
-   - **文本軸解剖** 張力曲線 + 意象復現 + 點擊跳原文
-4. `python index.py` → 重生 `stories/index.json`(全集列表;`/story-critique` 末步會自動跑)。
-5. `/story-discuss <slug>` → 就這篇來回討論(有據、不諂媚)。
+2. `/story-critique stories/<slug>/source.md` — 跑完整評論鏈,產出分析 + 回饋。
+3. `python viz.py <slug>` — 出 `viz.html`(瀏覽器開):意圖鏈 + 文本軸解剖。
+4. `/story-discuss <slug>` — 就這篇來回討論(有據、不諂媚)。
 
-品質驗收 5 條見 `docs/RUBRIC.md`(「有據」由引用閘門保證,其餘為判斷提醒)。
+## 運作原理(一眼)
 
-## Schema
-見 `schemas/analysis.schema.json`。節點 6 型(theme / motif / technique / effect / character / beat),
-邊 8 型;意圖鏈核心 = `produces`(technique → effect)+ `serves`(effect → theme);
-`effect` / `beat` 帶 `intensity`(0–1)給曲線;`evidence.quote` 必須逐字對得上原文(硬閘門)。
+一篇故事進來,兩個**隔離**的 AI 分工:一個只**觀察**(拆出主題 / 意象 / 技法 / 效果 / 角色 / 節拍,每條掛逐字原文),
+另一個只**判斷**(出版編輯人格,給有輕重、不諂媚的發展性回饋)。觀察與判斷分開,判斷才獨立。
+兩者的產物再餵給視覺化,把「技法 → 效果 → 主題」的意圖鏈與文本張力曲線畫出來。**每條主張都必須逐字對得上原文**(硬閘門,擋幻覺引用)。
 
-## 依賴
-python3、cytoscape.js(CDN,免裝)。Obsidian 為可選 viewer。
-
-## 路線
-- **L1**(跑通):單篇端到端。
-- L2:schema 硬化、rubric 細修、viz 互動打磨、headless smoke test。
-- L3:多篇 corpus、3D galaxy、跨故事檢索(屆時評估 MemPalace)、可換人格。
-- **L4**(開發中):Web app —— Agent SDK 後端 + 動畫前端(上方截圖即此)。
+> 想看內部契約與設計:`schemas/analysis.schema.json`、`docs/DESIGN.md`。
 
 ---
 
