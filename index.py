@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import atomicio
+
 ROOT = Path(__file__).resolve().parent
 STORIES = ROOT / "stories"
 
@@ -69,7 +71,7 @@ def main():
         print(f"共 {data['count']} 篇(--check,未寫檔)。")
         return
     out = STORIES / "index.json"
-    out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomicio.write_text_atomic(out, json.dumps(data, ensure_ascii=False, indent=2))
     print(f"✓ 出列表契約:{out}  ({data['count']} 篇)")
 
 

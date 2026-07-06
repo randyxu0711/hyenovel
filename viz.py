@@ -18,6 +18,7 @@ import sys
 import html
 from pathlib import Path
 
+import atomicio
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent
@@ -278,8 +279,8 @@ def main():
 
     diag = diagnostics(analysis)
     data = build_viz_data(slug, analysis, source, diag, feedback)
-    (base / "viz.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    (base / "viz.html").write_text(build_html(data, source), encoding="utf-8")
+    atomicio.write_text_atomic(base / "viz.json", json.dumps(data, ensure_ascii=False, indent=2))
+    atomicio.write_text_atomic(base / "viz.html", build_html(data, source))
     n_nodes, n_edges = len(analysis.get("nodes", [])), len(analysis.get("edges", []))
     print(f"✓ 出資料契約:{base / 'viz.json'}")
     print(f"✓ 出圖:{base / 'viz.html'}  ({n_nodes} 節點 / {n_edges} 邊)")

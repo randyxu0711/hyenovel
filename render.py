@@ -13,6 +13,8 @@ import json
 import sys
 from pathlib import Path
 
+import atomicio
+
 ROOT = Path(__file__).resolve().parent
 
 # 章節順序與中文名(對齊 viz.py 的 NODE_CN)
@@ -166,14 +168,14 @@ def main():
         sys.exit(f"找不到 {aj}(先跑 /story-critique)")
 
     analysis = read_json(aj)
-    (base / "analysis.md").write_text(render_analysis(analysis), encoding="utf-8")
+    atomicio.write_text_atomic(base / "analysis.md", render_analysis(analysis))
     print(f"✓ 出:{base / 'analysis.md'}")
 
     fp = base / "feedback.json"
     if not analysis_only and fp.exists():
         feedback = read_json(fp)
         title = analysis.get("title") or slug
-        (base / "feedback.md").write_text(render_feedback(feedback, title), encoding="utf-8")
+        atomicio.write_text_atomic(base / "feedback.md", render_feedback(feedback, title))
         print(f"✓ 出:{base / 'feedback.md'}")
     elif not fp.exists():
         print("(無 feedback.json,略過 feedback.md)")
