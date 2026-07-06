@@ -32,3 +32,6 @@ entities.json
 
 # 本機啟動腳本的 log
 .dev-logs/
+
+# 內部開發文件(設計/現況/計畫)留本地,不進公開 repo
+docs/
