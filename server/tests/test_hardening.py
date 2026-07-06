@@ -26,6 +26,15 @@ def test_classify_failure():
     assert sdk_runner.classify_failure("some other failure") == "unknown"
 
 
+def test_agent_options_shape():
+    opt = sdk_runner.agent_options("analyst")
+    assert opt.system_prompt, "system_prompt 該是 analyst body"
+    assert opt.allowed_tools == ["Read", "Write"]
+    assert "Task" in opt.disallowed_tools, "必須禁 Task(斷 async 巢狀)"
+    assert "Bash" in opt.disallowed_tools, "必須禁 Bash(斷亂試)"
+    assert opt.max_turns == config.AGENT_MAX_TURNS
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

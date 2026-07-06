@@ -98,19 +98,23 @@ _GUARD_HOOKS = {
 }
 
 
-def critique_options() -> ClaudeAgentOptions:
-    """協調者:cwd 指本專案 → 原封載入 analyst/criticizer subagent 與閘門。
-    只給 Read/Write/Task(派子代理);acceptEdits 讓無人值守也能落 json。
-    路徑白名單 hook 把檔案工具鎖在 stories/ 與 schemas/ 內(縱深防禦)。"""
+def agent_options(agent_name: str) -> ClaudeAgentOptions:
+    """把 analyst/criticizer 當『主代理』直接跑:該 agent 的 body 當 system_prompt,
+    只給 Read/Write,明令禁 Task(斷 async 子代理巢狀)與 Bash(斷亂試)。
+    沒有協調者、沒有 Task 巢狀 —— 『本輪返回』與『檔已寫出』重新耦合。
+    路徑白名單 hook 仍把檔案工具鎖在 stories/ 與 schemas/ 內。"""
     return ClaudeAgentOptions(
         cwd=str(config.ROOT),
-        setting_sources=["project"],          # 只載專案 .claude/,跳過全域 plugin
-        allowed_tools=["Read", "Write", "Task"],
-        permission_mode="acceptEdits",        # 自動收 edit,後端無人按核准
+        setting_sources=["project"],
+        system_prompt=load_agent_prompt(agent_name),
+        allowed_tools=["Read", "Write"],
+        disallowed_tools=["Task", "Bash", "Edit", "MultiEdit", "NotebookEdit"],
+        permission_mode="acceptEdits",
         hooks=_GUARD_HOOKS,
         model=config.CRITIQUE_MODEL,
         max_budget_usd=config.CRITIQUE_BUDGET_USD,
-        include_partial_messages=False,       # critique 只要進度,不要逐 token
+        max_turns=config.AGENT_MAX_TURNS,
+        include_partial_messages=False,
     )
 
 
@@ -139,6 +143,8 @@ async def run_turn(client: ClaudeSDKClient, prompt: str):
             for b in m.content:
                 if isinstance(b, TextBlock):
                     text = b.text
+                    if contains_async_dispatch(text):
+                        raise AsyncDispatchError(text[:200])
         elif isinstance(m, ResultMessage):
             cost = m.total_cost_usd or 0.0
             err = bool(m.is_error)
