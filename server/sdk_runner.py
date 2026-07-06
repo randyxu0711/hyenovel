@@ -15,6 +15,17 @@ from claude_agent_sdk import (
 from . import config
 
 
+def load_agent_prompt(name: str) -> str:
+    """讀 .claude/agents/<name>.md,剝掉 YAML frontmatter,body 當 system_prompt。
+    單一真相仍是那份 .md(不複製人格);Python 直接讀檔,不經 guard hook。"""
+    text = (config.ROOT / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+    if text.startswith("---"):
+        parts = text.split("---", 2)   # ['', frontmatter, body];maxsplit=2 保留 body 內任何 '---'
+        if len(parts) == 3:
+            return parts[2].strip()
+    return text.strip()
+
+
 # ── 縱深防禦:路徑白名單硬閘 ────────────────────────────────────────
 # 就算子代理被 source.md 內的注入騎劫,檔案工具也只能碰 stories/(讀寫)與
 # schemas/(唯讀)—— 讀不到 repo 外的機密、寫不出 stories/ 之外。PreToolUse
