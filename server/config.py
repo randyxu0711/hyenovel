@@ -30,6 +30,8 @@ DISCUSS_MODEL = "sonnet"
 # ── 安全閥 ──────────────────────────────────────────────────────────
 CRITIQUE_BUDGET_USD = 3.0        # 單次 critique 成本上限(SDK max_budget_usd)
 MAX_GATE_RETRIES = 2             # 閘門失敗後最多重派 subagent 幾次
+PHASE_TIMEOUT = 600             # 單格(analyst/criticizer)LLM 回合逾時上限(秒)—— 防無界卡住
+AGENT_MAX_TURNS = 12            # 單一代理最多回合(讀幾檔 + 寫一次;綁上限防失控)
 DISCUSS_IDLE_TIMEOUT = 30 * 60   # 討論 session 閒置幾秒後回收(秒)
 
 # ── 服務 ────────────────────────────────────────────────────────────
