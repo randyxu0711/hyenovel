@@ -273,7 +273,3 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   14%{opacity:1}
   100%{transform:translate(-50%,-50%) scale(1);filter:drop-shadow(0 0 0 rgba(236,201,138,0))}
 }
-/* dev-only demo 面板 */
-.demo-panel{position:fixed;right:16px;bottom:14px;z-index:70;display:flex;gap:8px;align-items:center;
-  font-size:12px;color:#bdb088;background:rgba(20,22,28,.7);padding:6px 10px;border-radius:8px}
-.demo-panel button{background:none;border:1px solid #4a4636;color:#d8cca6;border-radius:6px;padding:2px 8px;cursor:pointer}

@@ -12,7 +12,7 @@ import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
 import Single from "./Single";
 import { useGestations } from "./useGestations";
-import type { IndexEntry, Gestation } from "../types";
+import type { IndexEntry } from "../types";
 import "./journey.css";
 
 export default function Journey() {
@@ -29,7 +29,6 @@ export default function Journey() {
   const [bursting, setBursting] = useState(false);
   const [hatching, setHatching] = useState<string | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
-  const [demo, setDemo] = useState<{ slug: string; step: number } | null>(null);
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
   const orderRef = useRef<string[]>([]);
@@ -77,12 +76,8 @@ export default function Journey() {
 
   const stage: Stage = slug ? "single" : entered ? "catalog" : "overview";
 
-  // demo(dev only):把假胚胎併進真實 gestations,不碰後端
-  const shown: Map<string, Gestation> = demo
-    ? new Map(gestations).set(demo.slug, { step: demo.step, status: "running", title: "示範" })
-    : gestations;
   // 穩定槽位:所有見過的 slug 依首見順序固定,狀態變不重排 → 誕生不跳位
-  const present = [...entries.map(e => e.slug), ...shown.keys()];
+  const present = [...entries.map(e => e.slug), ...gestations.keys()];
   for (const s of present) if (!orderRef.current.includes(s)) orderRef.current.push(s);
   const ordered = orderRef.current.filter(s => present.includes(s));
 
@@ -110,7 +105,7 @@ export default function Journey() {
       <Camera stage={stage} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
-          gestations={shown} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
+          gestations={gestations} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
       </Camera>
       {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} />}
       {stage === "overview" && <Overview onEnter={() => setEntered(true)} />}
@@ -119,17 +114,6 @@ export default function Journey() {
         onClose={() => { setAdding(false); setDropFile(null); }}
         onCreated={onCreated} />
       <Chrome stage={stage} title={title} onBack={() => nav("/")} />
-      {import.meta.env.DEV && stage === "catalog" && (
-        <div className="demo-panel">
-          {!demo && <button onClick={() => setDemo({ slug: "__demo", step: 1 })}>demo 胚胎</button>}
-          {demo && <>
-            <span>step {demo.step}</span>
-            <button onClick={() => setDemo(d => d && { ...d, step: Math.max(1, d.step - 1) })}>−</button>
-            <button onClick={() => setDemo(d => d && { ...d, step: Math.min(4, d.step + 1) })}>＋</button>
-            <button onClick={() => setDemo(null)}>清除</button>
-          </>}
-        </div>
-      )}
     </div>
   );
 }
