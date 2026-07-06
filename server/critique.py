@@ -14,7 +14,7 @@ import asyncio
 import shutil
 import time
 
-from . import config, orchestrator
+from . import config, orchestrator, sdk_runner
 
 # phase name → 生長階(給 /running 顯示、前端成形動畫對齊)
 _STEP = {"analyst": 1, "criticizer": 2, "render": 3}
@@ -84,7 +84,8 @@ async def _drive(run: Run):
         if run.status == "running":
             run.status = "error"
             _record(run, {"event": "error",
-                          "data": {"where": "run", "message": str(e), "recoverable": False}})
+                          "data": {"where": "run", "message": str(e), "recoverable": False,
+                                   "reason": sdk_runner.classify_failure(str(e))}})
         else:
             _record(run, {"event": "error",
                           "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
