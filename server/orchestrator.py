@@ -99,6 +99,7 @@ async def run_critique(slug: str, on_client=None):
         return
 
     total_cost = 0.0
+    stage = "analyst"          # 目前跑到哪格;逾時報錯時標對階段
     try:
         # ── 第一格:analyst(自己一個協調者 client)──
         ana_first = (f"分析 stories/{slug}/:讀 source.md 與 schemas/analysis.schema.json,"
@@ -119,6 +120,7 @@ async def run_critique(slug: str, on_client=None):
             return
 
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
+        stage = "criticizer"
         cri_first = (f"讀 stories/{slug}/analysis.json、source.md、schemas/feedback.schema.json,"
                      f"用 Write 工具產出 stories/{slug}/feedback.json"
                      f"(發展性、有輕重、不諂媚,每點掛逐字 quotes、refs 綁 node id)。只回報摘要。")
@@ -137,8 +139,9 @@ async def run_critique(slug: str, on_client=None):
                    "message": "feedback 閘門重試後仍未過", "recoverable": False}}
             return
     except asyncio.TimeoutError:
+        label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]
         yield {"event": "error", "data": {"where": "timeout",
-               "message": f"分析階段逾時(> {config.PHASE_TIMEOUT}s)",
+               "message": f"{label}階段逾時(> {config.PHASE_TIMEOUT}s)",
                "recoverable": False, "reason": "timeout"}}
         return
     except Exception as e:
@@ -148,13 +151,14 @@ async def run_critique(slug: str, on_client=None):
 
     # ── 確定性層:render + viz + index(純 Python,無 LLM)──
     yield {"event": "phase", "data": {"name": "render", "status": "start"}}
-    await asyncio.to_thread(_run_py, [str(config.ROOT / "render.py"), slug])
+    render = await asyncio.to_thread(_run_py, [str(config.ROOT / "render.py"), slug])
     viz = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
-    await asyncio.to_thread(_run_py, [str(config.ROOT / "index.py")])
-    if viz.returncode != 0:
-        yield {"event": "error", "data": {"where": "render",
-               "message": (viz.stdout + viz.stderr)[:800], "recoverable": False}}
-        return
+    index = await asyncio.to_thread(_run_py, [str(config.ROOT / "index.py")])
+    for label, proc in (("render", render), ("viz", viz), ("index", index)):
+        if proc.returncode != 0:
+            yield {"event": "error", "data": {"where": "render",
+                   "message": f"{label}: " + (proc.stdout + proc.stderr)[:800], "recoverable": False}}
+            return
     yield {"event": "phase", "data": {"name": "render", "status": "ok"}}
     yield {"event": "done", "data": {"ok": True, "cost_usd": round(total_cost, 4),
            "artifacts": ["viz.json", "feedback.md", "analysis.md", "index.json"]}}

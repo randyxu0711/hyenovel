@@ -1,7 +1,6 @@
 """零成本回歸 canary(不燒訂閱):守住加固後不會無聲退回舊行為。
 跑法(repo 根):  ./server/.venv/bin/python -m server.tests.test_hardening
 """
-import atomicio
 from server import sdk_runner, config
 
 

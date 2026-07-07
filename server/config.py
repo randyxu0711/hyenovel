@@ -28,7 +28,8 @@ CRITIQUE_MODEL = "sonnet"
 DISCUSS_MODEL = "sonnet"
 
 # ── 安全閥 ──────────────────────────────────────────────────────────
-CRITIQUE_BUDGET_USD = 3.0        # 單次 critique 成本上限(SDK max_budget_usd)
+CRITIQUE_BUDGET_USD = 3.0        # 單格(analyst / criticizer 各一)成本上限(SDK max_budget_usd);
+                                 # 每格 client 各套一次 → 整支 critique 天花板約 2×(analyst + criticizer)
 MAX_GATE_RETRIES = 2             # 閘門失敗後最多重派 subagent 幾次
 PHASE_TIMEOUT = 600             # 單格(analyst/criticizer)LLM 回合逾時上限(秒)—— 防無界卡住
 AGENT_MAX_TURNS = 12            # 單一代理最多回合(讀幾檔 + 寫一次;綁上限防失控)
