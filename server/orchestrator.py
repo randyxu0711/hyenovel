@@ -20,6 +20,7 @@ import sys
 from claude_agent_sdk import ClaudeSDKClient
 
 from . import config, sdk_runner
+from .log import log, setup
 
 
 def _run_py(args: list[str]) -> subprocess.CompletedProcess:
@@ -68,6 +69,7 @@ async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gat
         try:
             for attempt in range(config.MAX_GATE_RETRIES + 1):
                 yield ("event", {"event": "phase", "data": {"name": name, "status": "start", "attempt": attempt}})
+                log.info(f"phase={name} status=start attempt={attempt}")
                 prompt = first_prompt if attempt == 0 else retry_prompt(detail)
                 _, turn_cost, _ = await asyncio.wait_for(
                     sdk_runner.run_turn(client, prompt), timeout=config.PHASE_TIMEOUT)
@@ -76,9 +78,13 @@ async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gat
                 if gate_ok:
                     ok = True
                     yield ("event", {"event": "phase", "data": {"name": name, "status": "ok", "attempt": attempt}})
+                    log.info(f"phase={name} status=ok attempt={attempt}")
                     break
                 yield ("event", {"event": "phase",
                                  "data": {"name": name, "status": "retry", "attempt": attempt, "detail": detail[:800]}})
+                # detail 是閘門 stdout,可能夾帶 analyst 逐字引用/欄位值 → 不入 log(守 safe-to-log)。
+                # 明細仍走上面的 SSE event 給本機作者看,只是不落地到 critique.log。
+                log.warning(f"phase={name} status=retry attempt={attempt} (gate-fail)")
         finally:
             if on_client:
                 on_client(None)
@@ -98,6 +104,7 @@ async def run_critique(slug: str, on_client=None):
                "message": f"找不到 stories/{slug}/source.md", "recoverable": False}}
         return
 
+    setup()
     total_cost = 0.0
     stage = "analyst"          # 目前跑到哪格;逾時報錯時標對階段
     try:

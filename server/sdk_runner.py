@@ -161,6 +161,12 @@ async def run_turn(client: ClaudeSDKClient, prompt: str):
         elif isinstance(m, ResultMessage):
             cost = m.total_cost_usd or 0.0
             err = bool(m.is_error)
+        else:
+            info = rate_limit_of(m)
+            if info is not None:
+                from .log import log
+                log.info(f"rate_limit status={info.status} util={info.utilization} "
+                         f"reset={info.resets_at} type={info.rate_limit_type}")
     return text, cost, err
 
 

@@ -104,6 +104,12 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
                     cost = m.total_cost_usd or 0.0
                     if m.session_id:
                         sess.sdk_session_id = m.session_id
+                else:
+                    info = sdk_runner.rate_limit_of(m)
+                    if info is not None:
+                        from .log import log
+                        log.info(f"discuss rate_limit status={info.status} "
+                                 f"reset={info.resets_at} type={info.rate_limit_type}")
         except Exception as e:
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return

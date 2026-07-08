@@ -15,7 +15,7 @@ import json
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from . import config, critique, discuss, ingest
+from . import config, critique, discuss, ingest, log
 
 app = FastAPI(title="hyenovel backend")
 
@@ -42,6 +42,7 @@ def _sse(gen):
 
 @app.on_event("startup")
 async def _startup():
+    log.setup()
     asyncio.create_task(discuss.sweep_idle())
     asyncio.create_task(critique.sweep_runs())
 
