@@ -55,6 +55,24 @@ def test_rate_limit_of():
     assert sdk_runner.rate_limit_of(None) is None
 
 
+def test_capacity_failure_classifier():
+    from claude_agent_sdk import RateLimitInfo
+    T = sdk_runner.TurnResult
+    assert sdk_runner._capacity_failure(T("", 0.0, True, 429)) == "hard"
+    assert sdk_runner._capacity_failure(T("", 0.0, True, 529)) == "transient"
+    assert sdk_runner._capacity_failure(T("", 0.0, True, 500)) == "transient"
+    assert sdk_runner._capacity_failure(T("", 0.0, False, None)) is None
+    assert sdk_runner._capacity_failure(T("", 0.0, True, None)) is None   # error 但無容量碼 → 走內容路
+    # 沒 api 碼但 RateLimitEvent 說 rejected → 也算硬上限
+    r = T("", 0.0, True, None, rate_limit=RateLimitInfo(status="rejected", resets_at=1))
+    assert sdk_runner._capacity_failure(r) == "hard"
+
+
+def test_backoff_config_present():
+    assert isinstance(config.TRANSIENT_MAX_RETRIES, int) and config.TRANSIENT_MAX_RETRIES >= 1
+    assert isinstance(config.BACKOFF_BASE, (int, float)) and config.BACKOFF_BASE >= 0
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

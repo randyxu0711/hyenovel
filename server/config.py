@@ -34,6 +34,8 @@ MAX_GATE_RETRIES = 2             # 閘門失敗後最多重派 subagent 幾次
 PHASE_TIMEOUT = 600             # 單格(analyst/criticizer)LLM 回合逾時上限(秒)—— 防無界卡住
 AGENT_MAX_TURNS = 12            # 單一代理最多回合(讀幾檔 + 寫一次;綁上限防失控)
 DISCUSS_IDLE_TIMEOUT = 30 * 60   # 討論 session 閒置幾秒後回收(秒)
+TRANSIENT_MAX_RETRIES = 2        # 瞬時 overload(529/500)最多退避幾次,耗盡轉 fail-fast
+BACKOFF_BASE = 2.0               # 退避基數(秒),指數:BACKOFF_BASE * 2**n
 
 # ── 服務 ────────────────────────────────────────────────────────────
 # 訂閱認證綁本機 credentials → 只跑 localhost、單人。別丟雲端。

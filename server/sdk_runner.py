@@ -6,11 +6,12 @@
   - discuss:長命 client + token 串流(在 discuss.py 直接消費 receive_response)。
 """
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from claude_agent_sdk import (
     ClaudeSDKClient, ClaudeAgentOptions,
-    AssistantMessage, TextBlock, ResultMessage, HookMatcher, RateLimitEvent,
+    AssistantMessage, TextBlock, ResultMessage, HookMatcher, RateLimitEvent, RateLimitInfo,
 )
 from . import config
 
@@ -37,11 +38,35 @@ def contains_async_dispatch(text: str) -> bool:
     return _ASYNC_DISPATCH_SIG in (text or "")
 
 
-def rate_limit_of(msg):
+def rate_limit_of(msg) -> RateLimitInfo | None:
     """若 msg 是 RateLimitEvent,回其 RateLimitInfo(帶 status/resets_at/utilization/…),否則 None。
     critique 與 discuss 兩條迴圈共用這一個偵測點,不長平行路。"""
     if isinstance(msg, RateLimitEvent):
         return msg.rate_limit_info
+    return None
+
+
+@dataclass
+class TurnResult:
+    """一輪 run_turn 的結果。除文字/成本外,帶結構化失敗訊號供 critique 分流。"""
+    text: str
+    cost: float
+    is_error: bool
+    api_error_status: int | None = None       # ResultMessage.api_error_status(429/500/529)
+    rate_limit: RateLimitInfo | None = None    # 最新一筆 RateLimitEvent 的 info
+
+
+def _capacity_failure(r: "TurnResult") -> str | None:
+    """把一輪結果分到容量失敗的哪一類(否則 None,交還內容閘門)。
+      "transient" = 529/500,牆幾秒清 → 值得有界退避
+      "hard"      = 429 或 RateLimitInfo 說 rejected,訂閱窗多小時才 reset → fail-fast
+    """
+    if r.api_error_status == 429:
+        return "hard"
+    if r.api_error_status in (500, 529):
+        return "transient"
+    if r.rate_limit is not None and r.rate_limit.status == "rejected":
+        return "hard"
     return None
 
 
