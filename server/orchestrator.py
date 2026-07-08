@@ -49,6 +49,51 @@ def _gate_feedback(slug: str) -> tuple[bool, str]:
     return _gate(slug)
 
 
+async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt):
+    """一格的重試核心(與 client 解耦、可測)。run_one(prompt)->TurnResult 由呼叫者注入。
+    三路:容量瞬時→有界退避(不佔 gate 額度);容量硬失敗→fail-fast 帶 resets_at;
+    內容失敗→修正 prompt 重派(原行為)。"""
+    cost = 0.0
+    detail = ""
+    ok = False
+    transient = 0
+    attempt = 0
+    while attempt <= config.MAX_GATE_RETRIES:
+        yield ("event", {"event": "phase", "data": {"name": name, "status": "start", "attempt": attempt}})
+        log.info(f"phase={name} status=start attempt={attempt}")
+        prompt = first_prompt if attempt == 0 else retry_prompt(detail)
+        r = await run_one(prompt)
+        cost += r.cost
+
+        cap = sdk_runner._capacity_failure(r)
+        if cap == "transient" and transient < config.TRANSIENT_MAX_RETRIES:
+            transient += 1
+            log.warning(f"phase={name} status=retry attempt={attempt} api_error={r.api_error_status} (overloaded)")
+            yield ("event", {"event": "phase", "data": {
+                "name": name, "status": "retry", "attempt": attempt,
+                "detail": f"服務過載({r.api_error_status}),退避重試"}})
+            await asyncio.sleep(config.BACKOFF_BASE * 2 ** transient)
+            continue                                  # 不推進 attempt(不吃 gate 額度)
+        if cap is not None:                           # "hard" 或 transient 耗盡
+            resets = r.rate_limit.resets_at if r.rate_limit else None
+            log.error(f"phase={name} status=fail reason=usage-limit resets_at={resets}")
+            yield ("result", {"ok": False, "cost": cost, "reason": "usage-limit", "resets_at": resets})
+            return
+
+        gate_ok, detail = await asyncio.to_thread(gate_fn, slug)
+        if gate_ok:
+            ok = True
+            yield ("event", {"event": "phase", "data": {"name": name, "status": "ok", "attempt": attempt}})
+            log.info(f"phase={name} status=ok attempt={attempt}")
+            break
+        # 不把 detail(閘門 stdout)入 log:可能夾帶 analyst 逐字引用/欄位值,守 safe-to-log。
+        log.warning(f"phase={name} status=retry attempt={attempt} (gate-fail)")
+        yield ("event", {"event": "phase", "data": {
+            "name": name, "status": "retry", "attempt": attempt, "detail": detail[:800]}})
+        attempt += 1
+    yield ("result", {"ok": ok, "cost": cost})
+
+
 async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gate, on_client=None):
     """一格「直接跑 agent → 過閘門 → 失敗重派」的確定性迴圈。
 
@@ -60,35 +105,18 @@ async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gat
 
     on_client(client|None):把當前 client 回報給上層(critique.Run),讓「取消」能直接
     disconnect 它、確實收掉 claude 子行程——光靠 task.cancel() 會在 __aexit__ 期間漏掉。"""
-    cost = 0.0
-    detail = ""
-    ok = False
     async with ClaudeSDKClient(options=sdk_runner.agent_options(name)) as client:
         if on_client:
             on_client(client)
         try:
-            for attempt in range(config.MAX_GATE_RETRIES + 1):
-                yield ("event", {"event": "phase", "data": {"name": name, "status": "start", "attempt": attempt}})
-                log.info(f"phase={name} status=start attempt={attempt}")
-                prompt = first_prompt if attempt == 0 else retry_prompt(detail)
-                r = await asyncio.wait_for(
+            async def run_one(prompt):
+                return await asyncio.wait_for(
                     sdk_runner.run_turn(client, prompt), timeout=config.PHASE_TIMEOUT)
-                cost += r.cost
-                gate_ok, detail = await asyncio.to_thread(gate_fn, slug)
-                if gate_ok:
-                    ok = True
-                    yield ("event", {"event": "phase", "data": {"name": name, "status": "ok", "attempt": attempt}})
-                    log.info(f"phase={name} status=ok attempt={attempt}")
-                    break
-                yield ("event", {"event": "phase",
-                                 "data": {"name": name, "status": "retry", "attempt": attempt, "detail": detail[:800]}})
-                # detail 是閘門 stdout,可能夾帶 analyst 逐字引用/欄位值 → 不入 log(守 safe-to-log)。
-                # 明細仍走上面的 SSE event 給本機作者看,只是不落地到 critique.log。
-                log.warning(f"phase={name} status=retry attempt={attempt} (gate-fail)")
+            async for item in _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt):
+                yield item
         finally:
             if on_client:
                 on_client(None)
-    yield ("result", {"ok": ok, "cost": cost})
 
 
 async def run_critique(slug: str, on_client=None):
@@ -122,8 +150,13 @@ async def run_critique(slug: str, on_client=None):
                 res = payload
         total_cost += res["cost"]
         if not res["ok"]:
-            yield {"event": "error", "data": {"where": "analyst",
-                   "message": "analysis 閘門重試後仍未過", "recoverable": False}}
+            if res.get("reason") == "usage-limit":
+                yield {"event": "error", "data": {"where": "analyst",
+                       "message": "撞到訂閱用量上限,稍後再跑", "recoverable": True,
+                       "reason": "usage-limit", "resets_at": res.get("resets_at")}}
+            else:
+                yield {"event": "error", "data": {"where": "analyst",
+                       "message": "analysis 閘門重試後仍未過", "recoverable": False}}
             return
 
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
@@ -142,8 +175,13 @@ async def run_critique(slug: str, on_client=None):
                 res = payload
         total_cost += res["cost"]
         if not res["ok"]:
-            yield {"event": "error", "data": {"where": "criticizer",
-                   "message": "feedback 閘門重試後仍未過", "recoverable": False}}
+            if res.get("reason") == "usage-limit":
+                yield {"event": "error", "data": {"where": "criticizer",
+                       "message": "撞到訂閱用量上限,稍後再跑", "recoverable": True,
+                       "reason": "usage-limit", "resets_at": res.get("resets_at")}}
+            else:
+                yield {"event": "error", "data": {"where": "criticizer",
+                       "message": "feedback 閘門重試後仍未過", "recoverable": False}}
             return
     except asyncio.TimeoutError:
         label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]

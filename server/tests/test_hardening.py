@@ -80,6 +80,64 @@ def test_backoff_config_present():
     assert isinstance(config.BACKOFF_BASE, (int, float)) and config.BACKOFF_BASE >= 0
 
 
+def _run_drive(run_one, gate):
+    """跑 _drive_phase,收集事件;回 (calls_ref, result_payload)。"""
+    import asyncio
+    from server import orchestrator
+    calls = {"n": 0}
+    async def counted(prompt):
+        calls["n"] += 1
+        return await run_one(prompt, calls["n"])
+    out = {}
+    async def drive():
+        async for kind, p in orchestrator._drive_phase(
+                "analyst", counted, gate, "s", "first", lambda d: f"fix:{d}"):
+            if kind == "result":
+                out["result"] = p
+    asyncio.run(drive())
+    return calls, out["result"]
+
+
+def test_drive_phase_hard_limit_fail_fast():
+    from claude_agent_sdk import RateLimitInfo
+    async def run_one(prompt, n):
+        return sdk_runner.TurnResult("", 0.1, True, 429,
+                                     rate_limit=RateLimitInfo(status="rejected", resets_at=999))
+    def gate(slug):
+        raise AssertionError("硬上限不該走到閘門")
+    calls, result = _run_drive(run_one, gate)
+    assert calls["n"] == 1, "硬上限只跑一次,不重試"
+    assert result["ok"] is False and result["reason"] == "usage-limit" and result["resets_at"] == 999
+
+
+def test_drive_phase_transient_backoff_then_fail():
+    old = config.BACKOFF_BASE
+    config.BACKOFF_BASE = 0.0                      # 免真的睡
+    try:
+        async def run_one(prompt, n):
+            return sdk_runner.TurnResult("", 0.0, True, 529)
+        def gate(slug):
+            raise AssertionError("容量失敗不該走閘門")
+        calls, result = _run_drive(run_one, gate)
+        assert calls["n"] == config.TRANSIENT_MAX_RETRIES + 1, "退避 N 次後放棄"
+        assert result["ok"] is False and result["reason"] == "usage-limit"
+    finally:
+        config.BACKOFF_BASE = old
+
+
+def test_drive_phase_content_retry_then_pass():
+    async def run_one(prompt, n):
+        return sdk_runner.TurnResult("ok", 0.0, False, None)
+    seq = {1: (False, "bad json"), 2: (True, "")}
+    state = {"g": 0}
+    def gate(slug):
+        state["g"] += 1
+        return seq[state["g"]]
+    calls, result = _run_drive(run_one, gate)
+    assert calls["n"] == 2, "第一次閘門失敗 → 修正 prompt 重派 → 第二次過"
+    assert result["ok"] is True
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
