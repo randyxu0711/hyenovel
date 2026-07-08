@@ -4,6 +4,16 @@
 from server import sdk_runner, config
 
 
+def test_log_setup_idempotent():
+    from server import log
+    log.setup()
+    n = len(log.log.handlers)
+    log.setup()                       # 再呼一次不該重複加 handler
+    assert log.log.handlers, "setup 後該有 handler"
+    assert len(log.log.handlers) == n, "setup 必須冪等"
+    assert log.log.name == "hyenovel"
+
+
 def test_load_agent_prompt_strips_frontmatter():
     for name in ("analyst", "criticizer"):
         body = sdk_runner.load_agent_prompt(name)

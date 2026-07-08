@@ -38,3 +38,6 @@ docs/
 
 # 介紹簡報(HTML deck,本地/Windows 雙擊開;不版控)
 slides/
+
+# logger 輸出(system log,活過 Run 的 TTL;不版控)
+server/logs/
