@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-LOGS=.dev-logs
+LOGS=server/logs          # 所有 log 收攏一窩:server.log / web.log 與 logger 的 critique.log 同處
 mkdir -p "$LOGS"
 
 if [ ! -x server/.venv/bin/uvicorn ]; then

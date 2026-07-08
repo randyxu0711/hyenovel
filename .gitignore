@@ -30,14 +30,11 @@ web/public/
 mempalace.yaml
 entities.json
 
-# 本機啟動腳本的 log
-.dev-logs/
-
 # 內部開發文件(設計/現況/計畫)留本地,不進公開 repo
 docs/
 
 # 介紹簡報(HTML deck,本地/Windows 雙擊開;不版控)
 slides/
 
-# logger 輸出(system log,活過 Run 的 TTL;不版控)
+# 本機 log 全收這:logger 的 critique.log + dev.sh 的 server.log / web.log(不版控)
 server/logs/
