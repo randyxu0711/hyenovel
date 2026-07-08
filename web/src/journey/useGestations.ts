@@ -10,6 +10,7 @@ const STEP: Record<string, number> = { analyst: 1, criticizer: 2, render: 3 };
 // 事件(如取消 error)不再改狀態 —— 避免 cancel→立即 re-begin 的競態誤刪新胎。
 export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
   const [gestations, setGestations] = useState<Map<string, Gestation>>(new Map());
+  const [usageLimitResetAt, setUsageLimitResetAt] = useState<number | null | undefined>(undefined);  // undefined=無提示;resets_at(可 null)
   const epochs = useRef<Map<string, number>>(new Map());  // slug -> 當前有效訂閱的 epoch
   const seq = useRef(0);                                    // 全域單調遞增,epoch 永不重用
   const onBornRef = useRef(onBorn);
@@ -41,7 +42,10 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
             await onBornRef.current(slug);      // 先刷 index(has_viz 變 true)
             if (fresh()) drop(slug);            // 再移除孕育態 → Catalog 換真實 Skeleton
           } else if (ev.event === "error") {
-            if (fresh()) drop(slug);            // 取消/失敗:安靜收掉(只有當前這條才動)
+            if (fresh()) {
+              if (ev.data?.reason === "usage-limit") setUsageLimitResetAt(ev.data.resets_at ?? null);
+              drop(slug);                        // 取消/失敗:安靜收掉(只有當前這條才動)
+            }
           }
         }
       } catch {
@@ -63,5 +67,5 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     drop(slug);
   }, []);
 
-  return { gestations, begin, cancel };
+  return { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit: () => setUsageLimitResetAt(undefined) };
 }

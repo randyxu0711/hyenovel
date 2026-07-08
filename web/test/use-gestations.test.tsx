@@ -79,4 +79,16 @@ describe("useGestations", () => {
     act(() => result.current.begin("e", "戊"));
     await waitFor(() => expect(result.current.gestations.has("e")).toBe(false));
   });
+
+  it("error 事件 reason=usage-limit → 設 usageLimitResetAt(resets_at)供 UI 顯示,仍移除孕育星;dismiss 可清掉", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([{ event: "error", data: { reason: "usage-limit", resets_at: 123 } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    expect(result.current.usageLimitResetAt).toBeUndefined();
+    act(() => result.current.begin("f", "己"));
+    await waitFor(() => expect(result.current.gestations.has("f")).toBe(false));
+    expect(result.current.usageLimitResetAt).toBe(123);
+    act(() => result.current.dismissUsageLimit());
+    expect(result.current.usageLimitResetAt).toBeUndefined();
+  });
 });

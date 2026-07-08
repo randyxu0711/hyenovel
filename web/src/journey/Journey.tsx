@@ -12,6 +12,7 @@ import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
 import Single from "./Single";
 import { useGestations } from "./useGestations";
+import { formatResetHint } from "./usageLimit";
 import type { IndexEntry } from "../types";
 import "./journey.css";
 
@@ -39,7 +40,7 @@ export default function Journey() {
     await refresh();
     setFresh(f => new Set(f).add(s));
   }, [refresh]);
-  const { gestations, begin, cancel } = useGestations(onBorn);
+  const { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit } = useGestations(onBorn);
 
   useEffect(() => {
     getIndex().then(i => setEntries(i.stories))
@@ -114,6 +115,12 @@ export default function Journey() {
         onClose={() => { setAdding(false); setDropFile(null); }}
         onCreated={onCreated} />
       <Chrome stage={stage} title={title} onBack={() => nav("/")} />
+      {usageLimitResetAt !== undefined && (
+        <div className="usage-toast">
+          <span>{formatResetHint(usageLimitResetAt)}</span>
+          <button className="usage-toast-x" onClick={dismissUsageLimit} aria-label="關閉">×</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -273,3 +273,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   14%{opacity:1}
   100%{transform:translate(-50%,-50%) scale(1);filter:drop-shadow(0 0 0 rgba(236,201,138,0))}
 }
+
+/* 撞訂閱用量上限:右下角可關閉提示(對齊 Claude Code 的位置) */
+.usage-toast{position:fixed;right:22px;bottom:22px;z-index:80;display:flex;align-items:center;gap:12px;
+  max-width:340px;padding:12px 14px;border-radius:10px;
+  background:rgba(12,11,9,.92);border:1px solid rgba(220,200,150,.25);
+  font-size:13.5px;line-height:1.6;color:#e8ddc2;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.usage-toast-x{flex:none;background:none;border:0;color:#9a8f6e;font-size:16px;line-height:1;cursor:pointer;padding:0}
+.usage-toast-x:hover{color:#f3ecd6}
