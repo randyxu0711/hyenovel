@@ -44,6 +44,17 @@ def test_agent_options_shape():
     assert opt.max_turns == config.AGENT_MAX_TURNS
 
 
+def test_rate_limit_of():
+    from claude_agent_sdk import RateLimitEvent, RateLimitInfo
+    ev = RateLimitEvent(
+        rate_limit_info=RateLimitInfo(status="rejected", resets_at=999, rate_limit_type="five_hour"),
+        uuid="u", session_id="s")
+    info = sdk_runner.rate_limit_of(ev)
+    assert info is not None and info.status == "rejected" and info.resets_at == 999
+    assert sdk_runner.rate_limit_of("不是事件的東西") is None
+    assert sdk_runner.rate_limit_of(None) is None
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

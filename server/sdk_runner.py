@@ -10,7 +10,7 @@ from pathlib import Path
 
 from claude_agent_sdk import (
     ClaudeSDKClient, ClaudeAgentOptions,
-    AssistantMessage, TextBlock, ResultMessage, HookMatcher,
+    AssistantMessage, TextBlock, ResultMessage, HookMatcher, RateLimitEvent,
 )
 from . import config
 
@@ -35,6 +35,14 @@ class AsyncDispatchError(RuntimeError):
 
 def contains_async_dispatch(text: str) -> bool:
     return _ASYNC_DISPATCH_SIG in (text or "")
+
+
+def rate_limit_of(msg):
+    """若 msg 是 RateLimitEvent,回其 RateLimitInfo(帶 status/resets_at/utilization/…),否則 None。
+    critique 與 discuss 兩條迴圈共用這一個偵測點,不長平行路。"""
+    if isinstance(msg, RateLimitEvent):
+        return msg.rate_limit_info
+    return None
 
 
 def classify_failure(message: str) -> str:
