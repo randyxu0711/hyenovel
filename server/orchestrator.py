@@ -71,9 +71,9 @@ async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gat
                 yield ("event", {"event": "phase", "data": {"name": name, "status": "start", "attempt": attempt}})
                 log.info(f"phase={name} status=start attempt={attempt}")
                 prompt = first_prompt if attempt == 0 else retry_prompt(detail)
-                _, turn_cost, _ = await asyncio.wait_for(
+                r = await asyncio.wait_for(
                     sdk_runner.run_turn(client, prompt), timeout=config.PHASE_TIMEOUT)
-                cost += turn_cost
+                cost += r.cost
                 gate_ok, detail = await asyncio.to_thread(gate_fn, slug)
                 if gate_ok:
                     ok = True

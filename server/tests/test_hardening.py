@@ -68,6 +68,13 @@ def test_capacity_failure_classifier():
     assert sdk_runner._capacity_failure(r) == "hard"
 
 
+def test_run_turn_returns_turnresult_type():
+    # 只驗回傳建構子存在且欄位齊(不連真 client;真跑由 smoke 覆蓋)
+    r = sdk_runner.TurnResult("hi", 0.3, False)
+    assert (r.text, r.cost, r.is_error) == ("hi", 0.3, False)
+    assert r.api_error_status is None and r.rate_limit is None
+
+
 def test_backoff_config_present():
     assert isinstance(config.TRANSIENT_MAX_RETRIES, int) and config.TRANSIENT_MAX_RETRIES >= 1
     assert isinstance(config.BACKOFF_BASE, (int, float)) and config.BACKOFF_BASE >= 0

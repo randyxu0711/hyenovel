@@ -14,6 +14,7 @@ from claude_agent_sdk import (
     AssistantMessage, TextBlock, ResultMessage, HookMatcher, RateLimitEvent, RateLimitInfo,
 )
 from . import config
+from .log import log
 
 
 def load_agent_prompt(name: str) -> str:
@@ -171,11 +172,12 @@ def discuss_options(resume: str | None = None) -> ClaudeAgentOptions:
     )
 
 
-async def run_turn(client: ClaudeSDKClient, prompt: str):
-    """送一輪 prompt、把回應抽乾,回 (summary_text, cost_usd, is_error)。
-    給 critique 協調者用:我們只在意它完成了、花多少,內容看閘門結果。"""
+async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
+    """送一輪 prompt、抽乾回應,回 TurnResult(帶結構化失敗訊號)。"""
     await client.query(prompt)
     text, cost, err = "", 0.0, False
+    api_status: int | None = None
+    rl = None
     async for m in client.receive_response():
         if isinstance(m, AssistantMessage):
             for b in m.content:
@@ -186,13 +188,15 @@ async def run_turn(client: ClaudeSDKClient, prompt: str):
         elif isinstance(m, ResultMessage):
             cost = m.total_cost_usd or 0.0
             err = bool(m.is_error)
+            api_status = m.api_error_status
         else:
             info = rate_limit_of(m)
             if info is not None:
-                from .log import log
+                rl = info
                 log.info(f"rate_limit status={info.status} util={info.utilization} "
                          f"reset={info.resets_at} type={info.rate_limit_type}")
-    return text, cost, err
+    return TurnResult(text=text, cost=cost, is_error=err,
+                      api_error_status=api_status, rate_limit=rl)
 
 
 def delta_text(stream_event) -> str | None:
