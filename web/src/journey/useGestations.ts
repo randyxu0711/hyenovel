@@ -4,13 +4,31 @@ import type { Gestation } from "../types";
 
 const STEP: Record<string, number> = { analyst: 1, criticizer: 2, render: 3 };
 
+// 撞牆提示跨重整記住(F5 不消失):存 resets_at(可 null);到重置時刻或讀取時已過期就清掉。
+const USAGE_KEY = "hy:usageLimit";
+function loadUsageLimit(): number | null | undefined {
+  try {
+    const raw = localStorage.getItem(USAGE_KEY);
+    if (raw === null) return undefined;
+    const v = JSON.parse(raw) as number | null;
+    if (typeof v === "number" && v * 1000 <= Date.now()) { localStorage.removeItem(USAGE_KEY); return undefined; }
+    return v;
+  } catch { return undefined; }
+}
+function saveUsageLimit(v: number | null | undefined) {
+  try {
+    if (v === undefined) localStorage.removeItem(USAGE_KEY);
+    else localStorage.setItem(USAGE_KEY, JSON.stringify(v));
+  } catch { /* localStorage 不可用就算了 */ }
+}
+
 // 獨佔後端孕育狀態:載入時併 /running、逐篇訂閱 SSE 更新 step、done → 誕生(onBorn+移除)。
 // 連線斷了不影響後端 Run;重整後靠 /running + 重訂閱把胚胎接回來。
 // 每條訂閱帶一個單調遞增 epoch;cancel 或對同 slug 重新 begin 會作廢舊 epoch,使舊串流的殘留
 // 事件(如取消 error)不再改狀態 —— 避免 cancel→立即 re-begin 的競態誤刪新胎。
 export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
   const [gestations, setGestations] = useState<Map<string, Gestation>>(new Map());
-  const [usageLimitResetAt, setUsageLimitResetAt] = useState<number | null | undefined>(undefined);  // undefined=無提示;resets_at(可 null)
+  const [usageLimitResetAt, setUsageLimitResetAt] = useState<number | null | undefined>(loadUsageLimit);  // undefined=無提示;resets_at(可 null)。初值讀持久化 → F5 不消失
   const epochs = useRef<Map<string, number>>(new Map());  // slug -> 當前有效訂閱的 epoch
   const seq = useRef(0);                                    // 全域單調遞增,epoch 永不重用
   const onBornRef = useRef(onBorn);
@@ -43,7 +61,11 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
             if (fresh()) drop(slug);            // 再移除孕育態 → Catalog 換真實 Skeleton
           } else if (ev.event === "error") {
             if (fresh()) {
-              if (ev.data?.reason === "usage-limit") setUsageLimitResetAt(ev.data.resets_at ?? null);
+              if (ev.data?.reason === "usage-limit") {
+                const r = (ev.data.resets_at ?? null) as number | null;
+                setUsageLimitResetAt(r);
+                saveUsageLimit(r);
+              }
               drop(slug);                        // 取消/失敗:安靜收掉(只有當前這條才動)
             }
           }
@@ -60,6 +82,16 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     getRunningCritiques().then(rs => rs.forEach(r => { put(r.slug, r.title, r.step); subscribe(r.slug, r.title); }));
   }, [subscribe]);
 
+  // 到重置時刻自動收掉提示(順手清掉過期持久化);頁面開著跨過 reset 也會自己消失
+  useEffect(() => {
+    if (typeof usageLimitResetAt !== "number") return;
+    const clear = () => { setUsageLimitResetAt(undefined); saveUsageLimit(undefined); };
+    const ms = usageLimitResetAt * 1000 - Date.now();
+    if (ms <= 0) { clear(); return; }
+    const t = window.setTimeout(clear, Math.min(ms, 2_147_483_647));
+    return () => window.clearTimeout(t);
+  }, [usageLimitResetAt]);
+
   const begin = useCallback((slug: string, title: string) => { put(slug, title, 1); subscribe(slug, title); }, [subscribe]);
   const cancel = useCallback((slug: string) => {
     cancelCritique(slug);
@@ -67,5 +99,6 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     drop(slug);
   }, []);
 
-  return { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit: () => setUsageLimitResetAt(undefined) };
+  const dismissUsageLimit = useCallback(() => { setUsageLimitResetAt(undefined); saveUsageLimit(undefined); }, []);
+  return { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit };
 }

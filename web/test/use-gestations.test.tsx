@@ -13,7 +13,7 @@ import { useGestations } from "../src/journey/useGestations";
 
 async function* gen(evs: unknown[]) { for (const e of evs) yield e; }
 
-beforeEach(() => { running.mockReset(); stream.mockReset(); cancel.mockReset(); });
+beforeEach(() => { running.mockReset(); stream.mockReset(); cancel.mockReset(); localStorage.clear(); });
 
 describe("useGestations", () => {
   it("載入時把 /running 併入孕育態", async () => {
@@ -80,15 +80,38 @@ describe("useGestations", () => {
     await waitFor(() => expect(result.current.gestations.has("e")).toBe(false));
   });
 
-  it("error 事件 reason=usage-limit → 設 usageLimitResetAt(resets_at)供 UI 顯示,仍移除孕育星;dismiss 可清掉", async () => {
+  it("error reason=usage-limit(未來 resets_at)→ 設 usageLimitResetAt 供 UI + 持久化;仍移除孕育星;dismiss 清掉", async () => {
     running.mockResolvedValue([]);
-    stream.mockReturnValue(gen([{ event: "error", data: { reason: "usage-limit", resets_at: 123 } }]));
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    stream.mockReturnValue(gen([{ event: "error", data: { reason: "usage-limit", resets_at: future } }]));
     const { result } = renderHook(() => useGestations(() => {}));
     expect(result.current.usageLimitResetAt).toBeUndefined();
     act(() => result.current.begin("f", "己"));
     await waitFor(() => expect(result.current.gestations.has("f")).toBe(false));
-    expect(result.current.usageLimitResetAt).toBe(123);
+    expect(result.current.usageLimitResetAt).toBe(future);
+    expect(localStorage.getItem("hy:usageLimit")).toBe(String(future));  // 跨 F5 存下
     act(() => result.current.dismissUsageLimit());
     expect(result.current.usageLimitResetAt).toBeUndefined();
+    expect(localStorage.getItem("hy:usageLimit")).toBeNull();
+  });
+
+  it("已過期的 resets_at → 讀取即清、不顯示", async () => {
+    running.mockResolvedValue([]);
+    const past = Math.floor(Date.now() / 1000) - 10;
+    stream.mockReturnValue(gen([{ event: "error", data: { reason: "usage-limit", resets_at: past } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("g", "庚"));
+    await waitFor(() => expect(result.current.gestations.has("g")).toBe(false));
+    await waitFor(() => expect(result.current.usageLimitResetAt).toBeUndefined());
+    expect(localStorage.getItem("hy:usageLimit")).toBeNull();
+  });
+
+  it("F5:初值讀 localStorage 未過期的 resets_at → 直接顯示(不需重新撞牆)", () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([]));
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    localStorage.setItem("hy:usageLimit", String(future));
+    const { result } = renderHook(() => useGestations(() => {}));
+    expect(result.current.usageLimitResetAt).toBe(future);
   });
 });

@@ -12,7 +12,8 @@ import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
 import Single from "./Single";
 import { useGestations } from "./useGestations";
-import { formatResetHint } from "./usageLimit";
+import { formatResetTime } from "./usageLimit";
+import HyenaSweat from "./HyenaSweat";
 import type { IndexEntry } from "../types";
 import "./journey.css";
 
@@ -116,8 +117,14 @@ export default function Journey() {
         onCreated={onCreated} />
       <Chrome stage={stage} title={title} onBack={() => nav("/")} />
       {usageLimitResetAt !== undefined && (
-        <div className="usage-toast">
-          <span>{formatResetHint(usageLimitResetAt)}</span>
+        <div className="usage-toast" role="status">
+          <HyenaSweat />
+          <div className="usage-toast-body">
+            <span className="usage-toast-lead">訂閱用量上限</span>
+            {formatResetTime(usageLimitResetAt)
+              ? <span className="usage-toast-reset"><b className="usage-toast-time">{formatResetTime(usageLimitResetAt)}</b> 重置</span>
+              : <span className="usage-toast-reset">稍後再試</span>}
+          </div>
           <button className="usage-toast-x" onClick={dismissUsageLimit} aria-label="關閉">×</button>
         </div>
       )}
