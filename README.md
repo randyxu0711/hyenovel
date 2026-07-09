@@ -25,6 +25,10 @@
 進站是一片星空,每篇故事是一根**資料驅動的星骨**(脊椎=張力曲線、肋=主題與意象);挑一篇俯衝進去,就進到單篇的三個視角。
 
 <div align="center">
+<img src="assets/demo.gif" alt="hyenovel 動態旅程:進站 → 選篇 → 俯衝 → 解剖" width="80%">
+</div>
+
+<div align="center">
 <img src="assets/shot-catalog.png" alt="目錄星空:每篇是一根星骨" width="80%">
 </div>
 
@@ -32,8 +36,6 @@
 |:---:|:---:|:---:|
 | ![意圖鏈](assets/shot-chain.png) | ![文本軸](assets/shot-axis.png) | ![回饋](assets/shot-feedback.png) |
 | 技法 → 效果 → 主題,一條一條看懂「這招造成什麼後座力」 | 張力曲線 + 意象復現 + 技法/效果打點,沿文本軸攤開 | 編輯總覽、最關鍵的幾件事、強處、若只能改一件事 —— 每條錨定原文 |
-
-▶ **[看完整動態旅程(進站 → 選篇 → 俯衝 → 解剖)](assets/demo.gif)**
 
 ## 為什麼不同
 

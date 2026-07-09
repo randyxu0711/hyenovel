@@ -25,6 +25,10 @@ It isn't a paste-and-get-a-review one-shot. It's a personal thinking partner tha
 You arrive in a starfield where each story is a **data-driven star-bone** (spine = tension curve, ribs = themes and motifs). Dive into one and you land on its three views.
 
 <div align="center">
+<img src="assets/demo.gif" alt="hyenovel journey: enter → pick → dive → dissect" width="80%">
+</div>
+
+<div align="center">
 <img src="assets/shot-catalog.png" alt="Catalog starfield: each story is a star-bone" width="80%">
 </div>
 
@@ -32,8 +36,6 @@ You arrive in a starfield where each story is a **data-driven star-bone** (spine
 |:---:|:---:|:---:|
 | ![intention chain](assets/shot-chain.png) | ![text axis](assets/shot-axis.png) | ![feedback](assets/shot-feedback.png) |
 | technique → effect → theme: see exactly what recoil each move produces | tension curve + motif recurrence + technique/effect marks, laid out along the text | editor overview, the few things that matter most, strengths, the one change to make — each anchored to the source |
-
-▶ **[Watch the full journey (enter → pick → dive → dissect)](assets/demo.gif)**
 
 ## Why it's different
 
