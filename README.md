@@ -108,6 +108,4 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json 判�
 
 <div align="center">
 <img src="assets/footer.svg" alt="hyenovel" width="100%">
-
-<sub>故事內容(<code>stories/</code>)是使用者創作,不進版控;本 repo 只含程式碼與工具。</sub>
 </div>

@@ -108,6 +108,4 @@ The observer and the judge are **two subagents with separate contexts** — neve
 
 <div align="center">
 <img src="assets/footer.svg" alt="hyenovel" width="100%">
-
-<sub>Story content (<code>stories/</code>) is the user's own writing and is not committed; this repo contains only code and tooling.</sub>
 </div>
