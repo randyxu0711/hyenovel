@@ -182,6 +182,22 @@ def test_drive_phase_gate_exhausted_carries_reason():
     assert "reason" in result, "耗盡路徑的 result 缺 reason 鍵(與硬上限不對稱)"
 
 
+def test_phase_error_shapes():
+    """analyst/criticizer 共用的錯誤事件產生器:usage-limit 帶 resets_at+recoverable,
+    泛用閘門失敗帶對應 gate 名詞、不可恢復。"""
+    from server import orchestrator
+    ul = orchestrator._phase_error("analyst", "analysis",
+                                   {"ok": False, "cost": 0.3, "reason": "usage-limit", "resets_at": 42})
+    assert ul["event"] == "error"
+    d = ul["data"]
+    assert d["where"] == "analyst" and d["reason"] == "usage-limit"
+    assert d["resets_at"] == 42 and d["recoverable"] is True
+    gen = orchestrator._phase_error("criticizer", "feedback", {"ok": False, "cost": 0.3})
+    assert gen["data"]["where"] == "criticizer"
+    assert gen["data"]["message"] == "feedback 閘門重試後仍未過"
+    assert gen["data"]["recoverable"] is False
+
+
 def test_cancel_discards_fresh_story():
     """fresh(新孕育)Run 中途取消,該清掉剛 ingest 的孤兒(維持誕生流程的預期收尾)。"""
     from server import critique

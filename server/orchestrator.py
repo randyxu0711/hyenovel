@@ -120,6 +120,17 @@ async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gat
                 on_client(None)
 
 
+def _phase_error(where: str, gate_noun: str, res: dict) -> dict:
+    """把一格失敗的 res 轉成統一 error 事件(analyst / criticizer 共用,免兩處重複)。
+    usage-limit → 可恢復、帶 resets_at;其餘(閘門耗盡)→ 不可恢復、帶對應 gate 名詞。"""
+    if res.get("reason") == "usage-limit":
+        data = {"where": where, "message": "撞到訂閱用量上限,稍後再跑",
+                "recoverable": True, "reason": "usage-limit", "resets_at": res.get("resets_at")}
+    else:
+        data = {"where": where, "message": f"{gate_noun} 閘門重試後仍未過", "recoverable": False}
+    return {"event": "error", "data": data}
+
+
 async def run_critique(slug: str, on_client=None):
     # 縱深防禦:slug 會拼路徑、也會當 argv 餵子行程(viz/render/index)。
     # API 邊界已擋,這裡再守一道(本函式也可被直接呼叫)。
@@ -151,13 +162,7 @@ async def run_critique(slug: str, on_client=None):
                 res = payload
         total_cost += res["cost"]
         if not res["ok"]:
-            if res.get("reason") == "usage-limit":
-                yield {"event": "error", "data": {"where": "analyst",
-                       "message": "撞到訂閱用量上限,稍後再跑", "recoverable": True,
-                       "reason": "usage-limit", "resets_at": res.get("resets_at")}}
-            else:
-                yield {"event": "error", "data": {"where": "analyst",
-                       "message": "analysis 閘門重試後仍未過", "recoverable": False}}
+            yield _phase_error("analyst", "analysis", res)
             return
 
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
@@ -176,13 +181,7 @@ async def run_critique(slug: str, on_client=None):
                 res = payload
         total_cost += res["cost"]
         if not res["ok"]:
-            if res.get("reason") == "usage-limit":
-                yield {"event": "error", "data": {"where": "criticizer",
-                       "message": "撞到訂閱用量上限,稍後再跑", "recoverable": True,
-                       "reason": "usage-limit", "resets_at": res.get("resets_at")}}
-            else:
-                yield {"event": "error", "data": {"where": "criticizer",
-                       "message": "feedback 閘門重試後仍未過", "recoverable": False}}
+            yield _phase_error("criticizer", "feedback", res)
             return
     except asyncio.TimeoutError:
         label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]
