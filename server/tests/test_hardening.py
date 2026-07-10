@@ -187,15 +187,26 @@ def test_phase_error_shapes():
     泛用閘門失敗帶對應 gate 名詞、不可恢復。"""
     from server import orchestrator
     ul = orchestrator._phase_error("analyst", "analysis",
-                                   {"ok": False, "cost": 0.3, "reason": "usage-limit", "resets_at": 42})
+                                   {"ok": False, "reason": "usage-limit", "resets_at": 42}, cost=0.3)
     assert ul["event"] == "error"
     d = ul["data"]
     assert d["where"] == "analyst" and d["reason"] == "usage-limit"
     assert d["resets_at"] == 42 and d["recoverable"] is True
-    gen = orchestrator._phase_error("criticizer", "feedback", {"ok": False, "cost": 0.3})
+    assert d["cost_usd"] == 0.3, "錯誤事件也要帶已花成本(F3)"
+    gen = orchestrator._phase_error("criticizer", "feedback", {"ok": False}, cost=0.8)
     assert gen["data"]["where"] == "criticizer"
     assert gen["data"]["message"] == "feedback 閘門重試後仍未過"
     assert gen["data"]["recoverable"] is False
+    assert gen["data"]["cost_usd"] == 0.8, "criticizer 失敗要含累計成本(含 analyst)"
+
+
+def test_record_captures_cost_on_error():
+    """失敗收場的 Run 也該記下已花的錢(原本只有 done 事件會設 run.cost)。"""
+    from server import critique
+    run = critique.Run("s01", "t")
+    critique._record(run, {"event": "error",
+                           "data": {"where": "analyst", "message": "x", "cost_usd": 0.42}})
+    assert run.cost == 0.42, "error 事件帶的成本該被記到 run.cost"
 
 
 def test_cancel_discards_fresh_story():

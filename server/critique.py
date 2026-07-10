@@ -60,8 +60,10 @@ def _record(run: Run, ev: dict):
         run.status = "done"
         run.cost = data.get("cost_usd", run.cost)
         run.step = 4
-    elif kind == "error" and run.status == "running":
-        run.status = "error"
+    elif kind == "error":
+        run.cost = data.get("cost_usd", run.cost)   # 失敗也記已花的錢(F3),不讓成本消失
+        if run.status == "running":
+            run.status = "error"
     for q in list(run.subscribers):
         q.put_nowait(ev)
 

@@ -120,14 +120,16 @@ async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gat
                 on_client(None)
 
 
-def _phase_error(where: str, gate_noun: str, res: dict) -> dict:
+def _phase_error(where: str, gate_noun: str, res: dict, cost: float = 0.0) -> dict:
     """把一格失敗的 res 轉成統一 error 事件(analyst / criticizer 共用,免兩處重複)。
-    usage-limit → 可恢復、帶 resets_at;其餘(閘門耗盡)→ 不可恢復、帶對應 gate 名詞。"""
+    usage-limit → 可恢復、帶 resets_at;其餘(閘門耗盡)→ 不可恢復、帶對應 gate 名詞。
+    cost=至此累計已花的錢(含前面成功的格),失敗也照實回報,不讓花掉的成本消失(F3)。"""
     if res.get("reason") == "usage-limit":
         data = {"where": where, "message": "撞到訂閱用量上限,稍後再跑",
                 "recoverable": True, "reason": "usage-limit", "resets_at": res.get("resets_at")}
     else:
         data = {"where": where, "message": f"{gate_noun} 閘門重試後仍未過", "recoverable": False}
+    data["cost_usd"] = round(cost, 4)
     return {"event": "error", "data": data}
 
 
@@ -162,7 +164,7 @@ async def run_critique(slug: str, on_client=None):
                 res = payload
         total_cost += res["cost"]
         if not res["ok"]:
-            yield _phase_error("analyst", "analysis", res)
+            yield _phase_error("analyst", "analysis", res, total_cost)
             return
 
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
@@ -181,17 +183,18 @@ async def run_critique(slug: str, on_client=None):
                 res = payload
         total_cost += res["cost"]
         if not res["ok"]:
-            yield _phase_error("criticizer", "feedback", res)
+            yield _phase_error("criticizer", "feedback", res, total_cost)
             return
     except asyncio.TimeoutError:
         label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]
         yield {"event": "error", "data": {"where": "timeout",
                "message": f"{label}階段逾時(> {config.PHASE_TIMEOUT}s)",
-               "recoverable": False, "reason": "timeout"}}
+               "recoverable": False, "reason": "timeout", "cost_usd": round(total_cost, 4)}}
         return
     except Exception as e:
         yield {"event": "error", "data": {"where": "sdk", "message": str(e),
-               "recoverable": False, "reason": sdk_runner.classify_failure(str(e))}}
+               "recoverable": False, "reason": sdk_runner.classify_failure(str(e)),
+               "cost_usd": round(total_cost, 4)}}
         return
 
     # ── 確定性層:render + viz + index(純 Python,無 LLM)──
