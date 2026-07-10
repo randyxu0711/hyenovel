@@ -89,7 +89,12 @@ async def discuss_close(slug: str, session_id: str):
 # ── 新故事 ingestion ─────────────────────────────────────────────────
 @app.post("/api/stories/extract")
 async def stories_extract(file: UploadFile):
-    text = ingest.extract_text(file.filename or "", await file.read())
+    # 只讀到上限 +1:巨檔不會整個進記憶體,超標當場擋(413)。
+    data = await file.read(config.MAX_UPLOAD_BYTES + 1)
+    try:
+        text = ingest.extract_text(file.filename or "", data)
+    except ValueError as e:
+        raise HTTPException(status_code=413, detail=str(e))
     return {"filename": file.filename, "text": text, "chars": len(text)}
 
 

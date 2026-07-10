@@ -13,6 +13,8 @@ from . import config
 
 
 def extract_text(filename: str, data: bytes) -> str:
+    if len(data) > config.MAX_UPLOAD_BYTES:
+        raise ValueError(f"檔案過大(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
     ext = (filename or "").lower().rsplit(".", 1)[-1] if "." in (filename or "") else ""
     if ext == "pdf":
         text = _pdf(data)

@@ -182,6 +182,18 @@ def test_drive_phase_gate_exhausted_carries_reason():
     assert "reason" in result, "耗盡路徑的 result 缺 reason 鍵(與硬上限不對稱)"
 
 
+def test_extract_text_rejects_oversize():
+    """上傳超過上限的檔案該被擋(避免 read 巨檔 / docx zip bomb 撐爆記憶體)。"""
+    from server import ingest
+    big = b"x" * (config.MAX_UPLOAD_BYTES + 1)
+    try:
+        ingest.extract_text("a.txt", big)
+        assert False, "過大檔案應拒"
+    except ValueError:
+        pass
+    assert ingest.extract_text("a.txt", b"hello").strip() == "hello"   # 界內照常
+
+
 def test_phase_error_shapes():
     """analyst/criticizer 共用的錯誤事件產生器:usage-limit 帶 resets_at+recoverable,
     泛用閘門失敗帶對應 gate 名詞、不可恢復。"""
