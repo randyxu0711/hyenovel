@@ -91,10 +91,12 @@ async def discuss_close(slug: str, session_id: str):
 async def stories_extract(file: UploadFile):
     # 只讀到上限 +1:巨檔不會整個進記憶體,超標當場擋(413)。
     data = await file.read(config.MAX_UPLOAD_BYTES + 1)
+    if len(data) > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"檔案過大(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
     try:
         text = ingest.extract_text(file.filename or "", data)
-    except ValueError as e:
-        raise HTTPException(status_code=413, detail=str(e))
+    except ValueError as e:      # 壞檔 / 加密 / 讀不了 → 400,不冒成 500
+        raise HTTPException(status_code=400, detail=str(e))
     return {"filename": file.filename, "text": text, "chars": len(text)}
 
 

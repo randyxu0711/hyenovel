@@ -246,6 +246,16 @@ def test_run_py_enforces_timeout():
         pass
 
 
+def test_extract_text_bad_pdf_friendly_error():
+    """壞/加密的 pdf·docx 要轉成友善 ValueError(app 層 →4xx),不讓 pypdf/docx 例外冒成 500。"""
+    from server import ingest
+    try:
+        ingest.extract_text("broken.pdf", b"%PDF-1.4 this is not a real pdf at all")
+        assert False, "壞 pdf 應拒"
+    except ValueError:
+        pass
+
+
 def test_phase_error_shapes():
     """analyst/criticizer 共用的錯誤事件產生器:usage-limit 帶 resets_at+recoverable,
     泛用閘門失敗帶對應 gate 名詞、不可恢復。"""

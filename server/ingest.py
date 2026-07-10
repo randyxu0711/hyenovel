@@ -16,12 +16,15 @@ def extract_text(filename: str, data: bytes) -> str:
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise ValueError(f"檔案過大(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
     ext = (filename or "").lower().rsplit(".", 1)[-1] if "." in (filename or "") else ""
-    if ext == "pdf":
-        text = _pdf(data)
-    elif ext == "docx":
-        text = _docx(data)
-    else:                       # txt / md / 其餘:當純文字解
-        text = _decode(data)
+    try:
+        if ext == "pdf":
+            text = _pdf(data)
+        elif ext == "docx":
+            text = _docx(data)
+        else:                   # txt / md / 其餘:當純文字解(_decode 有 fallback,不會拋)
+            text = _decode(data)
+    except Exception as e:      # pypdf / docx 解析失敗(壞檔 / 加密)→ 友善訊息,不冒成 500
+        raise ValueError(f"讀不了這個檔(可能損壞或加密):{type(e).__name__}")
     return _normalize(text)
 
 
