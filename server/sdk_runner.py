@@ -141,7 +141,9 @@ def agent_options(agent_name: str) -> ClaudeAgentOptions:
         cwd=str(config.ROOT),
         setting_sources=["project"],
         system_prompt=load_agent_prompt(agent_name),
-        allowed_tools=["Read", "Write"],
+        allowed_tools=["Read", "Write"],   # allow-list:只有這兩個可用(其餘一律不可)
+        # 顯式硬 deny(即使 allow-list 已排除,仍列出讓意圖不用跨兩行對照):
+        # Task=斷 async 子代理巢狀、Bash=斷亂試、Edit/NotebookEdit=逼全檔 Write、不做局部竄改。
         disallowed_tools=["Task", "Bash", "Edit", "NotebookEdit"],
         permission_mode="acceptEdits",
         hooks=_GUARD_HOOKS,
