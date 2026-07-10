@@ -170,6 +170,18 @@ def test_cancel_preserves_nonfresh_story():
         restore()
 
 
+def test_drive_phase_gate_exhausted_carries_reason():
+    """內容閘門重試耗盡的 result 也要帶 reason 鍵(與硬上限路徑對稱),
+    免得上層把兩種 result 一律處理時誤路由。"""
+    async def run_one(prompt, n):
+        return sdk_runner.TurnResult("ok", 0.0, False, None)
+    def gate(slug):
+        return (False, "永遠壞")                       # 每次都失敗 → 耗盡重試
+    calls, result = _run_drive(run_one, gate)
+    assert result["ok"] is False
+    assert "reason" in result, "耗盡路徑的 result 缺 reason 鍵(與硬上限不對稱)"
+
+
 def test_cancel_discards_fresh_story():
     """fresh(新孕育)Run 中途取消,該清掉剛 ingest 的孤兒(維持誕生流程的預期收尾)。"""
     from server import critique

@@ -91,7 +91,8 @@ async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt)
         yield ("event", {"event": "phase", "data": {
             "name": name, "status": "retry", "attempt": attempt, "detail": detail[:800]}})
         attempt += 1
-    yield ("result", {"ok": ok, "cost": cost})
+    # reason 與硬上限路徑(line 上方 usage-limit)對稱:耗盡=閘門始終沒過(gate),成功=None。
+    yield ("result", {"ok": ok, "cost": cost, "reason": None if ok else "gate"})
 
 
 async def _phase_with_retry(name, first_prompt, retry_prompt, slug, gate_fn=_gate, on_client=None):
