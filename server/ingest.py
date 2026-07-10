@@ -70,8 +70,15 @@ def create_story(title: str, text: str) -> str:
         raise ValueError("空白故事,不建立。")
     if len(text.encode("utf-8")) > config.MAX_UPLOAD_BYTES:   # 與 extract 一致的界,擋直接 POST 繞過
         raise ValueError(f"故事過長(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
-    slug = next_slug()
-    d = config.STORIES / slug
-    d.mkdir(parents=True, exist_ok=False)
-    (d / "source.md").write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
-    return slug
+    # mkdir(exist_ok=False) 當 slug 的原子佔位:並發/重送撞號就進位重試(next_slug 會看到
+    # 剛被搶走的目錄、回更大的號),避免 FileExistsError 冒成 500。撞幾次都收斂,給個保險上限。
+    for _ in range(16):
+        slug = next_slug()
+        d = config.STORIES / slug
+        try:
+            d.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        (d / "source.md").write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        return slug
+    raise RuntimeError("slug 配號連續撞號,異常")   # 幾乎不可能:16 次都撞代表有別的問題

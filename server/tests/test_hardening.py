@@ -215,6 +215,26 @@ def test_create_story_rejects_oversize():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_create_story_retries_on_slug_collision():
+    """並發/重送下 next_slug 可能回到已被搶走的 slug;mkdir 當原子佔位,撞了要進位重試,
+    不該讓 FileExistsError 冒成 500。"""
+    from server import ingest
+    import tempfile, pathlib, shutil
+    old_stories, old_next = config.STORIES, ingest.next_slug
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    config.STORIES = tmp
+    (tmp / "s01").mkdir()                       # s01 已被另一請求搶先建好
+    seq = iter(["s01", "s02"])                  # next_slug 先回撞號 s01、再回 s02
+    ingest.next_slug = lambda: next(seq)
+    try:
+        slug = ingest.create_story("t", "內文")
+        assert slug == "s02", "撞號後應進位到 s02"
+        assert (tmp / "s02" / "source.md").exists()
+    finally:
+        config.STORIES, ingest.next_slug = old_stories, old_next
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_phase_error_shapes():
     """analyst/criticizer 共用的錯誤事件產生器:usage-limit 帶 resets_at+recoverable,
     泛用閘門失敗帶對應 gate 名詞、不可恢復。"""
