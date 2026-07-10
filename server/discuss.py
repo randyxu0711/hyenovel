@@ -18,6 +18,7 @@ from claude_agent_sdk import (
 )
 
 from . import config, sdk_runner
+from .log import log
 
 
 class Session:
@@ -107,7 +108,6 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
                 else:
                     info = sdk_runner.rate_limit_of(m)
                     if info is not None:
-                        from .log import log
                         log.info(f"discuss rate_limit status={info.status} "
                                  f"reset={info.resets_at} type={info.rate_limit_type}")
         except Exception as e:
