@@ -235,6 +235,17 @@ def test_create_story_retries_on_slug_collision():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_run_py_enforces_timeout():
+    """確定性層子行程(render/viz/index/gate)要有逾時,卡死的子行程不能讓 Run 永遠 running。"""
+    import subprocess
+    from server import orchestrator
+    try:
+        orchestrator._run_py(["-c", "import time; time.sleep(5)"], timeout=0.3)
+        assert False, "超時應拋 TimeoutExpired"
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def test_phase_error_shapes():
     """analyst/criticizer 共用的錯誤事件產生器:usage-limit 帶 resets_at+recoverable,
     泛用閘門失敗帶對應 gate 名詞、不可恢復。"""

@@ -23,11 +23,14 @@ from . import config, sdk_runner
 from .log import log, setup
 
 
-def _run_py(args: list[str]) -> subprocess.CompletedProcess:
-    """以本 venv 的 python 跑專案腳本(子行程隔離 sys.exit / jsonschema 依賴)。"""
+def _run_py(args: list[str], timeout: float | None = None) -> subprocess.CompletedProcess:
+    """以本 venv 的 python 跑專案腳本(子行程隔離 sys.exit / jsonschema 依賴)。
+    timeout 逾時 subprocess.run 會殺掉子行程並拋 TimeoutExpired;預設走 config 上限,
+    讓卡死的 render/viz/index/gate 不會把 Run 永遠吊在 running。"""
     return subprocess.run(
         [sys.executable, *args],
         capture_output=True, text=True, cwd=str(config.ROOT),
+        timeout=timeout if timeout is not None else config.SUBPROCESS_TIMEOUT,
     )
 
 
@@ -199,9 +202,15 @@ async def run_critique(slug: str, on_client=None):
 
     # ── 確定性層:render + viz + index(純 Python,無 LLM)──
     yield {"event": "phase", "data": {"name": "render", "status": "start"}}
-    render = await asyncio.to_thread(_run_py, [str(config.ROOT / "render.py"), slug])
-    viz = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
-    index = await asyncio.to_thread(_run_py, [str(config.ROOT / "index.py")])
+    try:
+        render = await asyncio.to_thread(_run_py, [str(config.ROOT / "render.py"), slug])
+        viz = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
+        index = await asyncio.to_thread(_run_py, [str(config.ROOT / "index.py")])
+    except subprocess.TimeoutExpired:
+        yield {"event": "error", "data": {"where": "render",
+               "message": f"確定性層子行程逾時(> {config.SUBPROCESS_TIMEOUT}s)",
+               "recoverable": False, "reason": "timeout", "cost_usd": round(total_cost, 4)}}
+        return
     for label, proc in (("render", render), ("viz", viz), ("index", index)):
         if proc.returncode != 0:
             yield {"event": "error", "data": {"where": "render",
