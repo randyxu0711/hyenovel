@@ -94,6 +94,7 @@ async def _drive(run: Run):
                           "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
     finally:
         run.client = None
+        _discard_if_failed_birth(run)   # fresh 誕生失敗 → 清半成品(cancel 走自己的路,不在此)
         run.finished.set()
         for q in list(run.subscribers):
             q.put_nowait(None)   # 串流結束哨兵
@@ -167,6 +168,14 @@ def _discard_story(run: Run) -> None:
     if d.resolve().parent != config.STORIES.resolve():
         return              # belt-and-suspenders:確認仍在 STORIES 直下
     shutil.rmtree(d, ignore_errors=True)
+
+
+def _discard_if_failed_birth(run: Run) -> None:
+    """fresh 誕生以 **error** 收場(撞用量上限 / 閘門耗盡 / 逾時 / 例外)→ 清掉半成品目錄,
+    不留孤兒;使用者用量回血後自己重加即可(不做 resets_at 自動重試)。
+    只認 error:done 不刪、cancelled 由 cancel() 自己處理(避免雙重刪)。"""
+    if run.fresh and run.status == "error":
+        _discard_story(run)
 
 
 async def sweep_runs():

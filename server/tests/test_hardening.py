@@ -283,6 +283,45 @@ def test_record_captures_cost_on_error():
     assert run.cost == 0.42, "error 事件帶的成本該被記到 run.cost"
 
 
+def test_failed_fresh_birth_discards():
+    """fresh 誕生以 error 收場(如撞用量上限)→ 清掉半成品,不留孤兒(使用者回血後自己重加)。"""
+    from server import critique
+    restore, d = _tmp_story("s01")
+    try:
+        run = critique.Run("s01", "t", fresh=True)
+        run.status = "error"
+        critique._discard_if_failed_birth(run)
+        assert not d.exists(), "fresh 誕生失敗該清掉半成品目錄"
+    finally:
+        restore()
+
+
+def test_failed_nonfresh_birth_keeps():
+    """既有故事再評論失敗,絕不刪(source.md 是心血)。"""
+    from server import critique
+    restore, d = _tmp_story("s01")
+    try:
+        run = critique.Run("s01", "t", fresh=False)
+        run.status = "error"
+        critique._discard_if_failed_birth(run)
+        assert d.exists(), "非 fresh 失敗不該刪"
+    finally:
+        restore()
+
+
+def test_done_fresh_birth_keeps():
+    """成功誕生的 fresh Run 不該被清(只認 error)。"""
+    from server import critique
+    restore, d = _tmp_story("s01")
+    try:
+        run = critique.Run("s01", "t", fresh=True)
+        run.status = "done"
+        critique._discard_if_failed_birth(run)
+        assert d.exists(), "done 不該刪"
+    finally:
+        restore()
+
+
 def test_cancel_discards_fresh_story():
     """fresh(新孕育)Run 中途取消,該清掉剛 ingest 的孤兒(維持誕生流程的預期收尾)。"""
     from server import critique
