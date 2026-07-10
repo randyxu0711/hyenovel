@@ -194,6 +194,27 @@ def test_extract_text_rejects_oversize():
     assert ingest.extract_text("a.txt", b"hello").strip() == "hello"   # 界內照常
 
 
+def test_create_story_rejects_oversize():
+    """直接 POST /api/stories 的 create 路徑也要有上限(否則繞過 extract 的讀取上限,
+    把巨量 text 寫進 source.md)。且拒絕時不可留半成品目錄。"""
+    from server import ingest
+    import tempfile, pathlib, shutil
+    old = config.STORIES
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    config.STORIES = tmp
+    try:
+        big = "x" * (config.MAX_UPLOAD_BYTES + 1)
+        try:
+            ingest.create_story("t", big)
+            assert False, "過長故事應拒"
+        except ValueError:
+            pass
+        assert not any(tmp.iterdir()), "拒絕時不該建立任何故事目錄"
+    finally:
+        config.STORIES = old
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_phase_error_shapes():
     """analyst/criticizer 共用的錯誤事件產生器:usage-limit 帶 resets_at+recoverable,
     泛用閘門失敗帶對應 gate 名詞、不可恢復。"""

@@ -68,6 +68,8 @@ def next_slug() -> str:
 def create_story(title: str, text: str) -> str:
     if not text.strip():
         raise ValueError("空白故事,不建立。")
+    if len(text.encode("utf-8")) > config.MAX_UPLOAD_BYTES:   # 與 extract 一致的界,擋直接 POST 繞過
+        raise ValueError(f"故事過長(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
     slug = next_slug()
     d = config.STORIES / slug
     d.mkdir(parents=True, exist_ok=False)
