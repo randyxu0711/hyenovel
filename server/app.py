@@ -60,8 +60,9 @@ def critique_running():
 
 @app.post("/api/critique/{slug}")
 async def critique_start(slug: str, body: dict = Body(default={})):
-    # 開始-或-接上:同一 slug 已在跑就補播+續播,不會重複派工
-    return _sse(critique.attach(_slug(slug), body.get("title", "")))
+    # 開始-或-接上:同一 slug 已在跑就補播+續播,不會重複派工。
+    # fresh=新孕育(取消可清孤兒);既有故事再評論預設非 fresh → 取消絕不刪 source.md。
+    return _sse(critique.attach(_slug(slug), body.get("title", ""), fresh=bool(body.get("fresh"))))
 
 
 @app.delete("/api/critique/{slug}")

@@ -68,9 +68,10 @@ async function* sseStream(url: string, body: unknown): AsyncGenerator<SSEEvent> 
 }
 
 /** 觸發-或-接上完整 critique 鏈;串 phase 進度,done 後呼叫端應重 fetch viz.json + index。
- *  後端是背景 Run:重整後用同一 slug 再呼一次就會補播已發事件並續播(不會重複派工)。 */
-export const streamCritique = (slug: string, title?: string) =>
-  sseStream(`/api/critique/${slug}`, { title: title ?? "" });
+ *  後端是背景 Run:重整後用同一 slug 再呼一次就會補播已發事件並續播(不會重複派工)。
+ *  fresh=這是新孕育(取消時後端可清掉剛 ingest 的孤兒);既有故事再評論不要帶,取消才不會刪 source.md。 */
+export const streamCritique = (slug: string, title?: string, fresh = false) =>
+  sseStream(`/api/critique/${slug}`, { title: title ?? "", fresh });
 
 export type RunningCritique = { slug: string; title: string; status: string; step: number };
 

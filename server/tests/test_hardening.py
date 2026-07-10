@@ -138,6 +138,50 @@ def test_drive_phase_content_retry_then_pass():
     assert result["ok"] is True
 
 
+def _tmp_story(slug: str):
+    """在臨時 STORIES 下建一個帶 source.md 的故事目錄;回 (restore_fn, dir)。"""
+    import tempfile, pathlib
+    from server import critique  # noqa: F401 —— 確保 config 已載入
+    old = config.STORIES
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    config.STORIES = tmp
+    d = tmp / slug
+    d.mkdir()
+    (d / "source.md").write_text("使用者的心血", encoding="utf-8")
+    (d / "analysis.json").write_text("{}", encoding="utf-8")
+
+    def restore():
+        import shutil
+        config.STORIES = old
+        shutil.rmtree(tmp, ignore_errors=True)
+    return restore, d
+
+
+def test_cancel_preserves_nonfresh_story():
+    """非 fresh 的 Run 取消,絕不刪既有故事(source.md 是無版控退路的心血)。"""
+    from server import critique
+    restore, d = _tmp_story("s01")
+    try:
+        run = critique.Run("s01", "既有故事")          # 預設非 fresh
+        critique._discard_story(run)
+        assert d.exists(), "非 fresh 取消不該刪故事目錄"
+        assert (d / "source.md").exists(), "source.md 絕不能被取消刪掉"
+    finally:
+        restore()
+
+
+def test_cancel_discards_fresh_story():
+    """fresh(新孕育)Run 中途取消,該清掉剛 ingest 的孤兒(維持誕生流程的預期收尾)。"""
+    from server import critique
+    restore, d = _tmp_story("s01")
+    try:
+        run = critique.Run("s01", "孕育中", fresh=True)
+        critique._discard_story(run)
+        assert not d.exists(), "fresh 取消該清掉孤兒故事目錄"
+    finally:
+        restore()
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

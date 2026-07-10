@@ -44,14 +44,15 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
   const drop = (slug: string) =>
     setGestations(m => { const n = new Map(m); n.delete(slug); return n; });
 
-  const subscribe = useCallback((slug: string, title: string) => {
+  const subscribe = useCallback((slug: string, title: string, born = false) => {
     if (epochs.current.has(slug)) return;      // 同一 slug 已有活訂閱 → 不重複派工
     const epoch = ++seq.current;               // 這條訂閱的身分(永不重用)
     epochs.current.set(slug, epoch);
     const fresh = () => epochs.current.get(slug) === epoch;   // 仍是當前這條?
     (async () => {
       try {
-        for await (const ev of streamCritique(slug, title)) {
+        // born=新孕育 → 帶 fresh:取消時後端可清孤兒。重整重接的既有 Run 不帶(後端已存原值)。
+        for await (const ev of streamCritique(slug, title, born)) {
           if (!fresh()) return;                // 已被 cancel / 新 begin 取代 → 停手
           if (ev.event === "phase") {
             const s = (STEP[ev.data?.name] ?? 0) + (ev.data?.status === "ok" ? 1 : 0);
@@ -92,7 +93,7 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     return () => window.clearTimeout(t);
   }, [usageLimitResetAt]);
 
-  const begin = useCallback((slug: string, title: string) => { put(slug, title, 1); subscribe(slug, title); }, [subscribe]);
+  const begin = useCallback((slug: string, title: string) => { put(slug, title, 1); subscribe(slug, title, true); }, [subscribe]);
   const cancel = useCallback((slug: string) => {
     cancelCritique(slug);
     epochs.current.delete(slug);   // 作廢當前訂閱:其後續事件(含取消 error)不再改狀態
