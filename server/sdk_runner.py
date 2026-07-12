@@ -49,12 +49,16 @@ def rate_limit_of(msg) -> RateLimitInfo | None:
 
 @dataclass
 class TurnResult:
-    """一輪 run_turn 的結果。除文字/成本外,帶結構化失敗訊號供 critique 分流。"""
+    """一輪 run_turn 的結果。除文字/成本外,帶結構化失敗訊號供 critique 分流,及帳本用量。"""
     text: str
     cost: float
     is_error: bool
     api_error_status: int | None = None       # ResultMessage.api_error_status(429/500/529)
     rate_limit: RateLimitInfo | None = None    # 最新一筆 RateLimitEvent 的 info
+    usage: dict | None = None                  # ResultMessage.usage(input/output/cache_* tokens)
+    model_usage: dict | None = None            # ResultMessage.model_usage(按模型再拆)
+    duration_ms: int | None = None             # 這輪牆鐘毫秒
+    num_turns: int | None = None               # 這輪內部回合數
 
 
 def _capacity_failure(r: "TurnResult") -> str | None:
@@ -180,6 +184,8 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
     text, cost, err = "", 0.0, False
     api_status: int | None = None
     rl = None
+    usage = model_usage = None
+    duration_ms = num_turns = None
     async for m in client.receive_response():
         if isinstance(m, AssistantMessage):
             for b in m.content:
@@ -191,6 +197,10 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
             cost = m.total_cost_usd or 0.0
             err = bool(m.is_error)
             api_status = m.api_error_status
+            usage = m.usage
+            model_usage = m.model_usage
+            duration_ms = m.duration_ms
+            num_turns = m.num_turns
         else:
             info = rate_limit_of(m)
             if info is not None:
@@ -198,7 +208,9 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
                 log.info(f"rate_limit status={info.status} util={info.utilization} "
                          f"reset={info.resets_at} type={info.rate_limit_type}")
     return TurnResult(text=text, cost=cost, is_error=err,
-                      api_error_status=api_status, rate_limit=rl)
+                      api_error_status=api_status, rate_limit=rl,
+                      usage=usage, model_usage=model_usage,
+                      duration_ms=duration_ms, num_turns=num_turns)
 
 
 def delta_text(stream_event) -> str | None:
