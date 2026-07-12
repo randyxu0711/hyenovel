@@ -15,7 +15,7 @@ import json
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from . import config, critique, discuss, ingest, log
+from . import config, critique, discuss, ingest, ledger, log
 
 app = FastAPI(title="hyenovel backend")
 
@@ -107,3 +107,14 @@ def stories_create(body: dict = Body(...)):
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     return {"slug": slug}
+
+
+# ── 用量帳本(讀時聚合,不落檔)─────────────────────────────────────
+@app.get("/api/usage")
+def usage_all():
+    return ledger.aggregate_all()
+
+
+@app.get("/api/usage/{slug}")
+def usage_one(slug: str):
+    return ledger.aggregate(_slug(slug))

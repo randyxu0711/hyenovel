@@ -153,6 +153,18 @@ def test_drive_phase_appends_ledger():
         assert rows[0]["phase"] == "analyst" and rows[0]["cost_usd"] == 0.3
 
 
+# ── Task 5 ──────────────────────────────────────────────────────────
+def test_usage_endpoints_callable():
+    from server import app as appmod, ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=0.3))
+        one = appmod.usage_one("s99")
+        assert one["slug"] == "s99" and one["total"]["cost_usd"] == 0.3
+        allr = appmod.usage_all()
+        assert allr["total"]["cost_usd"] == 0.3 and allr["empty"] is False
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
