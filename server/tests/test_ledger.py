@@ -53,6 +53,37 @@ def test_run_turn_captures_usage():
     assert r.num_turns == 2 and r.duration_ms == 1500, "num_turns/duration_ms 該接到"
 
 
+# ── Task 2 ──────────────────────────────────────────────────────────
+def test_append_writes_and_load_reads():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=0.3, input=100, cr=900, output=50))
+        ledger.append("s99", "criticizer", 0, _fake_turn(cost=0.4, input=60))
+        rows = ledger.load("s99")
+        assert len(rows) == 2, "該有兩行"
+        assert rows[0]["phase"] == "analyst" and rows[0]["cache_read"] == 900
+        assert rows[0]["cost_usd"] == 0.3 and rows[0]["input"] == 100
+        assert rows[1]["phase"] == "criticizer" and rows[1]["input"] == 60
+
+
+def test_append_skips_missing_dir():
+    from server import ledger
+    with _tmp_stories():
+        ledger.append("s_nonexistent", "analyst", 0, _fake_turn())   # 不該炸
+        assert ledger.load("s_nonexistent") == []
+
+
+def test_load_skips_bad_line():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "usage.jsonl").write_text(
+            '{"phase":"analyst"}\nNOT JSON\n{"phase":"discuss"}\n', encoding="utf-8")
+        rows = ledger.load("s99")
+        assert len(rows) == 2 and rows[1]["phase"] == "discuss"
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
