@@ -79,8 +79,8 @@ export default function UsagePanel({ slug }: { slug: string }) {
 
       <div className="u-sec">效率</div>
       <div className="u-eff">
-        <div><span className="lab">cache 省下</span><span className="n">~{fmtK(t.cache_read)} token</span></div>
-        <div><span className="lab">重試</span><span className="n">{agg.retry_count} 次 · {fmtUsd(agg.retry_cost_usd)}</span></div>
+        <div><span className="u-lab">cache 省下</span><span className="n">~{fmtK(t.cache_read)} token</span></div>
+        <div><span className="u-lab">重試</span><span className="n">{agg.retry_count} 次 · {fmtUsd(agg.retry_cost_usd)}</span></div>
       </div>
     </div>
   );

@@ -178,21 +178,21 @@
 .sb-textview .u-sec{font-family:var(--serif);font-size:12px;letter-spacing:.2em;color:var(--amber);
   font-weight:500;margin:34px 0 16px;padding-bottom:8px;border-bottom:1px solid rgba(236,201,138,.16)}
 .sb-textview .u-sec:first-child{margin-top:0}
-.u-hero{display:flex;align-items:baseline;gap:14px}
-.u-hero .big{font-size:60px;font-weight:600;color:#f8efd2;font-variant-numeric:tabular-nums;line-height:1;
+.sb-textview .u .u-hero{display:flex;align-items:baseline;gap:14px}
+.sb-textview .u .u-hero .big{font-size:60px;font-weight:600;color:#f8efd2;font-variant-numeric:tabular-nums;line-height:1;
   text-shadow:0 0 26px rgba(236,201,138,.18)}
-.u-hero .sub{margin-left:auto;font-size:14px;color:#9a9488;font-variant-numeric:tabular-nums;
+.sb-textview .u .u-hero .sub{margin-left:auto;font-size:14px;color:#9a9488;font-variant-numeric:tabular-nums;
   text-align:right;line-height:1.7}
-.prow{display:grid;grid-template-columns:120px 1fr 72px;align-items:center;gap:16px;padding:12px 0}
-.prow .pk{font-size:16px;color:#e6ddc6}
-.prow .pv{font-size:18px;text-align:right;font-variant-numeric:tabular-nums;color:var(--amber);font-weight:600}
-.track{height:10px;background:rgba(220,200,150,.08);border-radius:5px;position:relative;overflow:hidden}
-.fill{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,#8a6d2e,#ecc98a);
+.sb-textview .u .prow{display:grid;grid-template-columns:120px 1fr 72px;align-items:center;gap:16px;padding:12px 0}
+.sb-textview .u .prow .pk{font-size:16px;color:#e6ddc6}
+.sb-textview .u .prow .pv{font-size:18px;text-align:right;font-variant-numeric:tabular-nums;color:var(--amber);font-weight:600}
+.sb-textview .u .track{height:10px;background:rgba(220,200,150,.08);border-radius:5px;position:relative;overflow:hidden}
+.sb-textview .u .fill{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,#8a6d2e,#ecc98a);
   transform-origin:left;transition:transform .85s cubic-bezier(.2,.7,.2,1)}
-@media (prefers-reduced-motion:reduce){.fill{transition:none}}
-.u-eff{display:flex;gap:40px;align-items:baseline}
-.u-eff .lab{color:#9a9488;font-size:13px;display:block;margin-bottom:5px;letter-spacing:.06em}
-.u-eff .n{font-size:26px;color:#f4ecd4;font-variant-numeric:tabular-nums;font-weight:600}
+@media (prefers-reduced-motion:reduce){.sb-textview .u .fill{transition:none}}
+.sb-textview .u .u-eff{display:flex;gap:40px;align-items:baseline}
+.sb-textview .u .u-eff .u-lab{color:#9a9488;font-size:13px;display:block;margin-bottom:5px;letter-spacing:.06em}
+.sb-textview .u .u-eff .n{font-size:26px;color:#f4ecd4;font-variant-numeric:tabular-nums;font-weight:600}
 
 /* ── 進單篇入場:文本軸就地重組(接住目錄骨爆散)──
    脊椎像心電圖描出、節點一顆顆錯開浮現。掛載即播一次;換 tab 不重播(元素不重掛) */
