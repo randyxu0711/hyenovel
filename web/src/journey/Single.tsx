@@ -4,6 +4,7 @@ import { getStory } from "../data/client";
 import BoneStage from "../lab/BoneStage";
 import NodeTalk from "../lab/NodeTalk";
 import SourceAnnotated from "./SourceAnnotated";
+import UsagePanel from "./UsagePanel";
 import Dust from "./Dust";
 import type { VizData, FeedbackPoint } from "../types";
 import "../lab/lab.css";
@@ -26,7 +27,7 @@ export default function Single() {
   const [mode, setMode] = useState<Mode>("axis");
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [text, setText] = useState<null | "source" | "feedback">(null);
+  const [text, setText] = useState<null | "source" | "feedback" | "usage">(null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
   // 回饋點 = 討論啟動器:點標題直接開該節點的討論框(NodeTalk 會把判斷+提問+原文+對話都帶出)
   const accItems = (prefix: string, pts: FeedbackPoint[]) => pts.map((p, i) => {
@@ -66,6 +67,7 @@ export default function Single() {
         <div className="sb-textabs">
           <button className={text === "source" ? "on" : ""} onClick={() => setText(text === "source" ? null : "source")}>原文</button>
           <button className={text === "feedback" ? "on" : ""} onClick={() => setText(text === "feedback" ? null : "feedback")}>回饋</button>
+          <button className={text === "usage" ? "on" : ""} onClick={() => setText(text === "usage" ? null : "usage")}>用量</button>
         </div>
       </div>
 
@@ -107,6 +109,7 @@ export default function Single() {
               <p className="fb-lead one">{fb.one_line}</p>
             </div>
           ) : <p className="sb-msg">這篇還沒有編輯回饋。</p>)}
+          {text === "usage" && <UsagePanel slug={slug!} />}
           </div>
         </div>
       )}
