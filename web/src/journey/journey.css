@@ -69,7 +69,7 @@
   color:#efe7d1;border-radius:8px}
 .add-title{padding:11px 14px;font-family:var(--serif);font-size:18px}
 .add-text{margin-top:2px;padding:14px 16px;font-family:var(--serif);font-size:15px;line-height:1.9;
-  min-height:300px;resize:vertical;white-space:pre-wrap}
+  min-height:300px;resize:none;white-space:pre-wrap}
 .add-title:focus,.add-text:focus{outline:none;border-color:rgba(236,201,138,.45)}
 /* 選檔框:一副淡虛線骨在等你把字填進去 */
 .add-drop{position:relative;align-self:stretch;margin:6px 0;min-height:286px;overflow:hidden;
