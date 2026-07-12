@@ -184,6 +184,30 @@ def test_load_swallows_io_error():
         assert ledger.load("s99") == []
 
 
+# ── Unit B Task 1 ──────────────────────────────────────────────────
+def test_aggregate_turns_and_retry_count():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=0.3))
+        ledger.append("s99", "analyst", 1, _fake_turn(cost=0.25))   # 重試那輪
+        ledger.append("s99", "criticizer", 0, _fake_turn(cost=0.4))
+        ledger.append("s99", "discuss", 0, _fake_turn(cost=0.2))
+        ledger.append("s99", "discuss", 0, _fake_turn(cost=0.2))
+        agg = ledger.aggregate("s99")
+        assert agg["phases"]["analyst"]["turns"] == 2
+        assert agg["phases"]["criticizer"]["turns"] == 1
+        assert agg["phases"]["discuss"]["turns"] == 2
+        assert agg["retry_count"] == 1
+
+
+def test_aggregate_empty_has_retry_count():
+    from server import ledger
+    with _tmp_stories():
+        agg = ledger.aggregate("s_none")
+        assert agg["empty"] is True and agg["retry_count"] == 0
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

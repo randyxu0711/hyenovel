@@ -81,12 +81,12 @@ def _round_cost(d):
 
 
 def aggregate(slug):
-    """單篇:各 phase 小計 + 總計 + 衍生量(cache 命中率、重試成本)。無資料回 empty 態。"""
+    """單篇:各 phase 小計 + 總計 + 衍生量(cache 命中率、重試成本/次數)。無資料回 empty 態。"""
     rows = load(slug)
     if not rows:
         return {"slug": slug, "empty": True, "phases": {}, "total": _zero(),
-                "cache_read_ratio": 0.0, "retry_cost_usd": 0.0}
-    phases, total, retry_cost = {}, _zero(), 0.0
+                "cache_read_ratio": 0.0, "retry_cost_usd": 0.0, "retry_count": 0}
+    phases, total, retry_cost, retry_count = {}, _zero(), 0.0, 0
     for r in rows:
         acc = phases.setdefault(r.get("phase", "unknown"), _zero())
         for k in ("input", "output", "cache_creation", "cache_read"):
@@ -96,8 +96,10 @@ def aggregate(slug):
         c = r.get("cost_usd", 0.0) or 0.0
         acc["cost_usd"] += c
         total["cost_usd"] += c
+        acc["turns"] = acc.get("turns", 0) + 1
         if (r.get("attempt", 0) or 0) > 0:
             retry_cost += c
+            retry_count += 1
     denom = total["input"] + total["cache_creation"] + total["cache_read"]
     return {
         "slug": slug, "empty": False,
@@ -105,6 +107,7 @@ def aggregate(slug):
         "total": _round_cost(total),
         "cache_read_ratio": round(total["cache_read"] / denom, 4) if denom else 0.0,
         "retry_cost_usd": round(retry_cost, 6),
+        "retry_count": retry_count,
     }
 
 
