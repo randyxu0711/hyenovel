@@ -44,3 +44,17 @@ export interface IndexFile { generated: string; count: number; stories: IndexEnt
 
 // 孕育中星星的即時狀態(來自 SSE / /running;step 1→4)
 export type Gestation = { step: number; status: string; title: string };
+
+export type UsagePhase = {
+  input: number; output: number; cache_creation: number; cache_read: number;
+  cost_usd: number; turns: number;
+};
+export type UsageAggregate = {
+  slug: string;
+  empty: boolean;
+  phases: Record<string, UsagePhase>;   // key ∈ analyst | criticizer | discuss
+  total: { input: number; output: number; cache_creation: number; cache_read: number; cost_usd: number };
+  cache_read_ratio: number;
+  retry_cost_usd: number;
+  retry_count: number;
+};

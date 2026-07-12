@@ -32,4 +32,11 @@ describe("dataClient", () => {
     vi.stubGlobal("fetch", mockFetch({}));
     await expect(getIndex()).rejects.toThrow(/index\.json/);
   });
+  it("getUsage 打 /api/usage/{slug} 並解析", async () => {
+    const agg = { slug: "s02", empty: false, phases: {}, total: {}, cache_read_ratio: 0, retry_cost_usd: 0, retry_count: 0 };
+    vi.stubGlobal("fetch", mockFetch({ "/api/usage/s02": agg }));
+    const { getUsage } = await import("../src/data/client");
+    const r = await getUsage("s02");
+    expect(r.slug).toBe("s02");
+  });
 });
