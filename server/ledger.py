@@ -58,3 +58,60 @@ def load(slug):
         except json.JSONDecodeError:
             continue
     return out
+
+
+def _zero():
+    return {"input": 0, "output": 0, "cache_creation": 0, "cache_read": 0, "cost_usd": 0.0}
+
+
+def _round_cost(d):
+    d = dict(d)
+    d["cost_usd"] = round(d["cost_usd"], 6)
+    return d
+
+
+def aggregate(slug):
+    """單篇:各 phase 小計 + 總計 + 衍生量(cache 命中率、重試成本)。無資料回 empty 態。"""
+    rows = load(slug)
+    if not rows:
+        return {"slug": slug, "empty": True, "phases": {}, "total": _zero(),
+                "cache_read_ratio": 0.0, "retry_cost_usd": 0.0}
+    phases, total, retry_cost = {}, _zero(), 0.0
+    for r in rows:
+        acc = phases.setdefault(r.get("phase", "unknown"), _zero())
+        for k in ("input", "output", "cache_creation", "cache_read"):
+            v = r.get(k, 0) or 0
+            acc[k] += v
+            total[k] += v
+        c = r.get("cost_usd", 0.0) or 0.0
+        acc["cost_usd"] += c
+        total["cost_usd"] += c
+        if (r.get("attempt", 0) or 0) > 0:
+            retry_cost += c
+    denom = total["input"] + total["cache_creation"] + total["cache_read"]
+    return {
+        "slug": slug, "empty": False,
+        "phases": {k: _round_cost(v) for k, v in phases.items()},
+        "total": _round_cost(total),
+        "cache_read_ratio": round(total["cache_read"] / denom, 4) if denom else 0.0,
+        "retry_cost_usd": round(retry_cost, 6),
+    }
+
+
+def aggregate_all():
+    """跨篇:掃 stories/*/usage.jsonl,總計 + 每篇 rollup。"""
+    stories, total = [], _zero()
+    if config.STORIES.is_dir():
+        for d in sorted(p for p in config.STORIES.iterdir() if p.is_dir()):
+            agg = aggregate(d.name)
+            if agg["empty"]:
+                continue
+            t = agg["total"]
+            for k in _zero():
+                total[k] += t[k]
+            stories.append({
+                "slug": d.name,
+                "cost_usd": t["cost_usd"],
+                "tokens": t["input"] + t["output"] + t["cache_creation"] + t["cache_read"],
+            })
+    return {"empty": not stories, "total": _round_cost(total), "stories": stories}

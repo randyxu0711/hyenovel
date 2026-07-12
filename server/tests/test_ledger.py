@@ -84,6 +84,52 @@ def test_load_skips_bad_line():
         assert len(rows) == 2 and rows[1]["phase"] == "discuss"
 
 
+# ── Task 3 ──────────────────────────────────────────────────────────
+def test_aggregate_sums_and_ratio():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=0.3, input=100, cc=200, cr=900, output=50))
+        ledger.append("s99", "criticizer", 0, _fake_turn(cost=0.4, input=60, cr=300, output=40))
+        agg = ledger.aggregate("s99")
+        assert agg["empty"] is False
+        assert agg["total"]["cost_usd"] == 0.7
+        assert agg["total"]["cache_read"] == 1200
+        assert agg["phases"]["analyst"]["input"] == 100
+        # ratio = cache_read / (input + cache_creation + cache_read) = 1200 / (160+200+1200)
+        assert agg["cache_read_ratio"] == round(1200 / 1560, 4)
+
+
+def test_aggregate_retry_cost():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=0.3))
+        ledger.append("s99", "analyst", 1, _fake_turn(cost=0.25))   # attempt>0 = 重試那輪
+        agg = ledger.aggregate("s99")
+        assert agg["retry_cost_usd"] == 0.25
+
+
+def test_aggregate_empty():
+    from server import ledger
+    with _tmp_stories():
+        agg = ledger.aggregate("s_none")
+        assert agg["empty"] is True and agg["total"]["cost_usd"] == 0.0
+
+
+def test_aggregate_all_grand_total():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s01").mkdir()
+        (S / "s02").mkdir()
+        ledger.append("s01", "analyst", 0, _fake_turn(cost=0.3))
+        ledger.append("s02", "analyst", 0, _fake_turn(cost=0.5))
+        allagg = ledger.aggregate_all()
+        assert allagg["empty"] is False
+        assert allagg["total"]["cost_usd"] == 0.8
+        assert {s["slug"] for s in allagg["stories"]} == {"s01", "s02"}
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
