@@ -19,7 +19,7 @@ import sys
 
 from claude_agent_sdk import ClaudeSDKClient
 
-from . import config, sdk_runner
+from . import config, ledger, sdk_runner
 from .log import log, setup
 
 
@@ -67,6 +67,7 @@ async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt)
         prompt = first_prompt if attempt == 0 else retry_prompt(detail)
         r = await run_one(prompt)
         cost += r.cost
+        ledger.append(slug, name, attempt, r)   # 每輪(含重試)記帳:name=phase、attempt=第幾次
 
         cap = sdk_runner._capacity_failure(r)
         if cap == "transient" and transient < config.TRANSIENT_MAX_RETRIES:

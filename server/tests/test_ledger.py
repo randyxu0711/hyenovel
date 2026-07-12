@@ -130,6 +130,29 @@ def test_aggregate_all_grand_total():
         assert {s["slug"] for s in allagg["stories"]} == {"s01", "s02"}
 
 
+# ── Task 4 ──────────────────────────────────────────────────────────
+def test_drive_phase_appends_ledger():
+    from server import orchestrator, ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+
+        async def run_one(prompt):
+            return _fake_turn(cost=0.3, input=10)
+
+        def gate_ok(slug):
+            return True, ""
+
+        async def drive():
+            async for _ in orchestrator._drive_phase(
+                    "analyst", run_one, gate_ok, "s99", "p", lambda d: "r"):
+                pass
+
+        asyncio.run(drive())
+        rows = ledger.load("s99")
+        assert len(rows) == 1, "analyst 一輪該記一筆"
+        assert rows[0]["phase"] == "analyst" and rows[0]["cost_usd"] == 0.3
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

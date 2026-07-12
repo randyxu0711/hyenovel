@@ -17,7 +17,7 @@ from claude_agent_sdk import (
     ClaudeSDKClient, AssistantMessage, TextBlock, StreamEvent, ResultMessage,
 )
 
-from . import config, sdk_runner
+from . import config, ledger, sdk_runner
 from .log import log
 
 
@@ -90,6 +90,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
     async with sess.lock:
         sess.last_active = time.time()
         final, cost = "", 0.0
+        res_usage = res_model = res_dur = res_nt = None
         try:
             await sess.client.query(prompt)
             async for m in sess.client.receive_response():
@@ -103,6 +104,8 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
                             final = b.text
                 elif isinstance(m, ResultMessage):
                     cost = m.total_cost_usd or 0.0
+                    res_usage, res_model = m.usage, m.model_usage
+                    res_dur, res_nt = m.duration_ms, m.num_turns
                     if m.session_id:
                         sess.sdk_session_id = m.session_id
                 else:
@@ -114,5 +117,8 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()
+        ledger.append(slug, "discuss", 0, sdk_runner.TurnResult(
+            text=final, cost=cost, is_error=False, usage=res_usage,
+            model_usage=res_model, duration_ms=res_dur, num_turns=res_nt))
         yield {"event": "message", "data": {"role": "assistant", "text": final, "session_id": sid}}
         yield {"event": "done", "data": {"ok": True, "cost_usd": round(cost, 4), "session_id": sid}}
