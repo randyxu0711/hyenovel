@@ -3,10 +3,13 @@
 """
 import asyncio
 import json
+import logging
 import tempfile
 from pathlib import Path
 
 from server import config, sdk_runner
+
+logging.getLogger("hyenovel").addHandler(logging.NullHandler())
 
 
 # ── 測試工具 ────────────────────────────────────────────────────────
@@ -163,6 +166,22 @@ def test_usage_endpoints_callable():
         assert one["slug"] == "s99" and one["total"]["cost_usd"] == 0.3
         allr = appmod.usage_all()
         assert allr["total"]["cost_usd"] == 0.3 and allr["empty"] is False
+
+
+def test_append_swallows_io_error():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "usage.jsonl").mkdir()          # open("a") → IsADirectoryError
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=0.3))   # 不該拋
+
+
+def test_load_swallows_io_error():
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "usage.jsonl").mkdir()          # read_text → IsADirectoryError
+        assert ledger.load("s99") == []
 
 
 def _main():

@@ -8,6 +8,7 @@ import json
 import time
 
 from . import config
+from .log import log
 
 
 def _usage_path(slug):
@@ -35,21 +36,30 @@ def record_of(phase, attempt, turn):
 
 
 def append(slug, phase, attempt, turn):
-    """append 一行到該篇 usage.jsonl。目錄不存在就跳過(記帳絕不擋主流程)。"""
+    """append 一行到該篇 usage.jsonl。目錄不存在就跳過(記帳絕不擋主流程)。
+    寫入 I/O 失敗(磁碟滿/權限/TOCTOU 被 rmtree)也吞掉並記 log,絕不讓記帳打斷主流程。"""
     if not (config.STORIES / slug).is_dir():
         return
     line = json.dumps(record_of(phase, attempt, turn), ensure_ascii=False)
-    with _usage_path(slug).open("a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    try:
+        with _usage_path(slug).open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError as e:
+        log.warning(f"ledger append failed slug={slug} phase={phase}: {type(e).__name__}")
 
 
 def load(slug):
-    """讀該篇所有 record;檔不存在回 [];壞行跳過(一行壞不讓整份讀不了)。"""
+    """讀該篇所有 record;檔不存在回 [];壞行跳過(一行壞不讓整份讀不了)。
+    讀取 I/O 失敗(TOCTOU 被 rmtree/換成目錄)也吞掉,回 []。"""
     p = _usage_path(slug)
     if not p.exists():
         return []
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError:
+        return []
     out = []
-    for ln in p.read_text(encoding="utf-8").splitlines():
+    for ln in text.splitlines():
         ln = ln.strip()
         if not ln:
             continue
