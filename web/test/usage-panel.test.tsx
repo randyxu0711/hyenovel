@@ -37,6 +37,14 @@ describe("UsagePanel", () => {
     expect(container.querySelectorAll(".prow").length).toBe(3);
   });
 
+  it("reduced-motion 直接顯示終值(不卡在跑帳中途)", async () => {
+    // beforeEach 已 stub matchMedia → matches:true(reduce)
+    getUsage.mockResolvedValue(AGG);
+    const { getByText } = render(<UsagePanel slug="s02" />);
+    await waitFor(() => expect(getByText("$1.40")).toBeTruthy());   // 終值,非 $0.00
+    expect(getByText("$0.60")).toBeTruthy();
+  });
+
   it("空態顯示提示", async () => {
     getUsage.mockResolvedValue({ slug: "s02", empty: true, phases: {}, total: { input:0,output:0,cache_creation:0,cache_read:0,cost_usd:0 }, cache_read_ratio: 0, retry_cost_usd: 0, retry_count: 0 });
     const { getByText } = render(<UsagePanel slug="s02" />);
