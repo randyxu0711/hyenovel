@@ -46,17 +46,17 @@ function Star(
         {Array.from({ length: s.runs }, (_, k) => (
           <span key={k} className="uring"
             style={{ width: `${(r + 6 + k * 5) * 2}px`, height: `${(r + 6 + k * 5) * 2}px`,
-                     animationDelay: `${0.75 + k * 0.1}s` }} />
+                     animationDelay: `${1.05 + k * 0.12}s` }} />
         ))}
         {/* 疤:機器重試過(閘門擋下幻覺引用而重派) */}
         {s.retry_count > 0 && (
           <span className="uscar"
             style={{ width: `${(r + 6 + s.runs * 5) * 2}px`, height: `${(r + 6 + s.runs * 5) * 2}px`,
-                     animationDelay: `${0.75 + s.runs * 0.1}s` }} />
+                     animationDelay: `${1.05 + s.runs * 0.12}s` }} />
         )}
         {/* 星:大小 = 花費 */}
         <span className="udot" style={{ width: `${r * 2}px`, height: `${r * 2}px`,
-                                        animationDelay: `${0.05 + i * 0.1}s` }} />
+                                        animationDelay: `${0.62 + i * 0.09}s` }} />
         {/* hover:綻成那具骨 */}
         {viz && <span className="ubone"><Skeleton viz={viz} width={120} /></span>}
       </div>
@@ -71,8 +71,9 @@ function Star(
 }
 
 export default function UsageMap(
-  { entries, onPick, onClose }:
-  { entries: IndexEntry[]; onPick: (slug: string) => void; onClose: () => void },
+  { entries, onPick, onClose, from }:
+  { entries: IndexEntry[]; onPick: (slug: string) => void; onClose: () => void;
+    from?: { x: number; y: number } },   // 入口那行小字的位置 → 它飛進來、變成中心的大數字
 ) {
   const [all, setAll] = useState<UsageAll | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -106,13 +107,20 @@ export default function UsageMap(
   const dPct = discuss && t.cost_usd > 0 ? Math.round((discuss.cost_usd / t.cost_usd) * 100) : 0;
   const rPct = t.cost_usd > 0 ? Math.round((all.retry_cost_usd / t.cost_usd) * 100) : 0;
 
+  // 那行小字飛向中心:算它相對於畫面正中的位移(FLIP;沒有 from 就直接就位)
+  const fly = from
+    ? { ["--fx"]: `${from.x - window.innerWidth / 2}px`,
+        ["--fy"]: `${from.y - window.innerHeight / 2}px` } as React.CSSProperties
+    : undefined;
+
   return shell(<>
     <svg className="umap-orbits" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
       <ellipse cx="50" cy="50" rx="36" ry="31" />
       <ellipse cx="50" cy="50" rx="22" ry="19" />
     </svg>
 
-    <div className="ucenter">
+    <div className={`ucenter${from ? " flyin" : ""}`} style={fly}>
+      <span className="uc-halo" />
       <div className="uc-big">{fmtUsd(t.cost_usd)}</div>
       <div className="uc-est">估 算</div>
       <div className="uc-sub">{all.stories.length} 篇 · {fmtK(tokens)} tokens</div>

@@ -16,7 +16,7 @@
 .field{position:fixed;inset:0}
 .story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter .8s,opacity .8s;
   touch-action:none;user-select:none}
-.story .cap{font-family:var(--serif);font-size:21px;color:#f4eddb;text-align:center;margin-top:4px;opacity:0;transition:.6s}
+.story .cap{font-family:var(--serif);font-size:24px;color:#f4eddb;text-align:center;margin-top:4px;opacity:0;transition:.6s}
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
 .stage-catalog .story:hover .cap{opacity:1}
@@ -28,8 +28,8 @@
 @keyframes freshHalo{0%,100%{opacity:.45}50%{opacity:.95}}
 .stage-overview .field{filter:blur(6px);opacity:.5;transition:.9s}
 .empty-state{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8f876f}
-.es-big{font-family:var(--serif);font-size:24px;color:#cabd92;letter-spacing:.1em}
-.es-sub{margin-top:12px;font-size:14px;letter-spacing:.18em;color:#7c745e}
+.es-big{font-family:var(--serif);font-size:28px;color:#cabd92;letter-spacing:.1em}
+.es-sub{margin-top:12px;font-size:15.5px;letter-spacing:.18em;color:#7c745e}
 
 /* ---- 未誕生的星(入口)---- */
 .nascent{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:42;
@@ -39,7 +39,7 @@
   box-shadow:0 0 10px 3px rgba(236,201,138,.5),0 0 26px 8px rgba(236,201,138,.18);
   animation:nascentBreath 3.4s ease-in-out infinite}
 @keyframes nascentBreath{0%,100%{opacity:.42;transform:scale(.82)}50%{opacity:1;transform:scale(1.18)}}
-.nascent-whisper{font-family:var(--serif);font-size:13.5px;letter-spacing:.22em;color:#bdb088;
+.nascent-whisper{font-family:var(--serif);font-size:15px;letter-spacing:.22em;color:#bdb088;
   opacity:0;transform:translateY(-3px);transition:.5s}
 .nascent:hover .nascent-whisper{opacity:1;transform:none}
 .nascent:hover .nascent-spark{opacity:1;box-shadow:0 0 14px 4px rgba(236,201,138,.7),0 0 34px 12px rgba(236,201,138,.26)}
@@ -260,9 +260,9 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 @keyframes gsLit{0%{filter:brightness(1)}30%{filter:brightness(1.9) drop-shadow(0 0 14px rgba(246,232,196,.9))}100%{filter:brightness(1.15)}}
 
 .story.gestating{cursor:default}
-.gest-word{font-size:15px;letter-spacing:.2em;color:var(--amber);text-align:center;margin-top:6px}
+.gest-word{font-size:17px;letter-spacing:.2em;color:var(--amber);text-align:center;margin-top:6px}
 .gest-x{position:absolute;top:-6px;left:50%;transform:translateX(-50%);opacity:0;
-  background:none;border:none;color:#bdb088;font-size:12.5px;letter-spacing:.1em;cursor:pointer;transition:opacity .3s}
+  background:none;border:none;color:#bdb088;font-size:13.5px;letter-spacing:.1em;cursor:pointer;transition:opacity .3s}
 .story.gestating:hover .gest-x{opacity:.75}
 .gest-x:hover{opacity:1;color:#f6efd9}
 /* 胚胎從中心飛到軌道空位(誕生運鏡);與 .flying 同機制,反向 */
@@ -302,25 +302,25 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   color:#8d8674;font-size:19px;padding:6px}
 .umap-x:hover,.umap-x:focus-visible{color:#ecc98a;outline:none}
 .umap-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;color:#c7bea4;font-size:16px;line-height:2;text-align:center}
+  justify-content:center;color:#c7bea4;font-size:18px;line-height:2;text-align:center}
 
 .umap .umap-orbits{position:absolute;inset:0;width:100%;height:100%}
 .umap .umap-orbits ellipse{fill:none;stroke:rgba(220,200,150,.10);vector-effect:non-scaling-stroke}
 
 /* 中心:總計 */
+/* 圓框畫在 .uc-halo(下方)上,不畫在這層:飛行時只有數字在動 */
 .umap .ucenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
-  width:150px;height:150px;border-radius:50%;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  background:rgba(236,201,138,.04);border:1px solid rgba(236,201,138,.28)}
-.umap .uc-big{font-family:var(--serif);font-size:38px;color:#f8efd2;font-variant-numeric:tabular-nums;
+  width:172px;height:172px;border-radius:50%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center}
+.umap .uc-big{font-family:var(--serif);font-size:46px;color:#f8efd2;font-variant-numeric:tabular-nums;
   line-height:1;text-shadow:0 0 26px rgba(236,201,138,.18)}
-.umap .uc-est{font-size:9.5px;letter-spacing:.22em;color:#8d8674;margin-top:6px}
-.umap .uc-sub{font-size:11.5px;color:#a89f88;font-variant-numeric:tabular-nums;margin-top:7px}
+.umap .uc-est{font-size:11px;letter-spacing:.22em;color:#8d8674;margin-top:6px}
+.umap .uc-sub{font-size:13.5px;color:#a89f88;font-variant-numeric:tabular-nums;margin-top:7px}
 
 /* 星 */
 .umap .ufield{position:absolute;inset:0}
 .umap .ustar{position:absolute;transform:translate(-50%,-50%);cursor:pointer;text-align:center;
-  width:170px}
+  width:200px}
 .umap .ustar:focus-visible{outline:1px solid rgba(236,201,138,.6);outline-offset:8px;border-radius:8px}
 .umap .ucore-wrap{position:relative;height:56px;display:flex;align-items:center;justify-content:center}
 .umap .udot{position:absolute;border-radius:50%;background:#efe6cf;
@@ -332,12 +332,12 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap .ubone{position:absolute;opacity:0;transition:opacity .35s ease;pointer-events:none}
 .umap .ustar:hover .udot,.umap .ustar:focus-visible .udot{opacity:0}
 .umap .ustar:hover .ubone,.umap .ustar:focus-visible .ubone{opacity:1}
-.umap .uname{font-family:var(--serif);font-size:13px;color:#cfc6ac;margin-top:8px;
+.umap .uname{font-family:var(--serif);font-size:16px;color:#cfc6ac;margin-top:8px;
   transition:color .25s}
 .umap .ustar:hover .uname{color:#f8efd2}
-.umap .ucost{font-size:14px;color:var(--amber);font-variant-numeric:tabular-nums;font-weight:600;
+.umap .ucost{font-size:17px;color:var(--amber);font-variant-numeric:tabular-nums;font-weight:600;
   margin-top:3px}
-.umap .uunit{font-size:10px;color:#8d8674;font-variant-numeric:tabular-nums;letter-spacing:.04em;
+.umap .uunit{font-size:12px;color:#8d8674;font-variant-numeric:tabular-nums;letter-spacing:.04em;
   margin-top:3px;opacity:0;transition:opacity .3s ease}
 .umap .ustar:hover .uunit,.umap .ustar:focus-visible .uunit{opacity:1}
 
@@ -355,26 +355,48 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap .ud-tr{right:44px;top:46px;text-align:right}
 .umap .ud-bl{left:44px;bottom:44px}
 .umap .ud-br{right:44px;bottom:44px;text-align:right}
-.umap .ud-lab{font-family:var(--serif);font-size:10px;letter-spacing:.22em;color:var(--amber);
+.umap .ud-lab{font-family:var(--serif);font-size:11.5px;letter-spacing:.22em;color:var(--amber);
   margin-bottom:10px}
 .umap .ud-lab.scar{color:#c9928c}
-.umap .ud-big{font-size:20px;color:#f4ecd4;font-weight:600}
+.umap .ud-big{font-size:25px;color:#f4ecd4;font-weight:600}
 .umap .ud-big.scar{color:#c9928c}
-.umap .ud-row{display:grid;grid-template-columns:66px 92px 46px;gap:10px;align-items:center;
-  padding:3px 0;font-size:11px;color:#a89f88}
+.umap .ud-row{display:grid;grid-template-columns:78px 96px 54px;gap:11px;align-items:center;
+  padding:4px 0;font-size:13px;color:#a89f88}
 .umap .ud-track{height:4px;background:rgba(220,200,150,.09);border-radius:2px;position:relative}
 .umap .ud-fill{position:absolute;inset:0 auto 0 0;border-radius:2px;
   background:linear-gradient(90deg,#8a6d2e,#ecc98a)}
-.umap .ud-val{text-align:right;color:#e6ddc6;font-size:12px}
-.umap .ud-foot{font-size:10.5px;color:#8d8674;margin-top:9px;letter-spacing:.04em}
+.umap .ud-val{text-align:right;color:#e6ddc6;font-size:14px}
+.umap .ud-foot{font-size:12px;color:#8d8674;margin-top:9px;letter-spacing:.04em}
 
 /* 用量入口:目錄層右下角,一行低調的字。不是按鈕造型——是星空邊緣的一則註腳。 */
 .usage-entry{position:absolute;right:26px;bottom:24px;z-index:5;background:none;border:0;
-  cursor:pointer;font-family:var(--serif);font-size:12.5px;letter-spacing:.16em;
+  cursor:pointer;font-family:var(--serif);font-size:14.5px;letter-spacing:.16em;
   color:#8d8674;display:flex;align-items:baseline;gap:9px;padding:6px 4px;
   transition:color .3s ease}
-.usage-entry b{font-family:var(--sans);font-size:13px;font-weight:600;color:#b9ab84;
+.usage-entry b{font-family:var(--sans);font-size:16px;font-weight:600;color:#b9ab84;
   font-variant-numeric:tabular-nums;letter-spacing:0;transition:color .3s ease}
 .usage-entry:hover,.usage-entry:focus-visible{color:#cfc6ac;outline:none}
 .usage-entry:hover b,.usage-entry:focus-visible b{color:var(--amber)}
 @media (prefers-reduced-motion:reduce){.usage-entry,.usage-entry b{transition:none}}
+
+/* ── 進場過場:入口那行小字「飛進來、變成」中心的大數字 ──
+   與目錄→單篇「骨飛向中心+爆散重組」同一套文法:你點的那個東西,變成你正在看的東西。
+   節奏:數字落定(.62s)→ 光暈亮起 → 軌道與星塵浮現 → 星從中心量出來 → 年輪最後。 */
+.umap .ucenter.flyin{animation:ucFly .62s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes ucFly{
+  from{transform:translate(-50%,-50%) translate(var(--fx),var(--fy)) scale(.34);opacity:.75}
+  to  {transform:translate(-50%,-50%) scale(1);opacity:1}
+}
+/* 光暈(圓框+底)獨立出來:飛行途中不該有一個縮小的圈跟著跑,落定才亮。
+   .ucenter 有 transform → 自成 stacking context,z-index:-1 只沉到自家文字底下 */
+.umap .uc-halo{position:absolute;inset:0;z-index:-1;border-radius:50%;
+  background:rgba(236,201,138,.04);border:1px solid rgba(236,201,138,.28)}
+.umap .ucenter.flyin .uc-halo{animation:ucHalo .5s ease .5s backwards}
+@keyframes ucHalo{from{opacity:0;transform:scale(.72)}}
+/* 軌道與星塵:等數字落定才浮現 */
+.umap .umap-orbits{animation:uFade .8s ease .45s backwards}
+.umap .udust{animation:uFade .8s ease .55s backwards}
+@media (prefers-reduced-motion:reduce){
+  .umap .ucenter.flyin,.umap .ucenter.flyin .uc-halo,
+  .umap .umap-orbits,.umap .udust{animation:none}
+}

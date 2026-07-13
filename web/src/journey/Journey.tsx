@@ -33,6 +33,7 @@ export default function Journey() {
   const [hatching, setHatching] = useState<string | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [usageOpen, setUsageOpen] = useState(false);
+  const [usageFrom, setUsageFrom] = useState<{ x: number; y: number } | undefined>();
   const [spend, setSpend] = useState<number | null>(null);   // 入口上的累計小數字;讀不到就不顯示
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
@@ -119,12 +120,17 @@ export default function Journey() {
       </Camera>
       {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} />}
       {stage === "catalog" && (
-        <button className="usage-entry" onClick={() => setUsageOpen(true)}>
+        // 點它 → 這行小字本身飛到中心、放大成總計(它就是同一個數字)
+        <button className="usage-entry" onClick={e => {
+          const r = (e.currentTarget.querySelector("b") ?? e.currentTarget).getBoundingClientRect();
+          setUsageFrom({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+          setUsageOpen(true);
+        }}>
           用量{spend !== null && <b>${spend.toFixed(2)}</b>}
         </button>
       )}
       {usageOpen && (
-        <UsageMap entries={entries} onClose={() => setUsageOpen(false)}
+        <UsageMap entries={entries} from={usageFrom} onClose={() => setUsageOpen(false)}
           onPick={s => { setUsageOpen(false); nav(`/story/${s}`, { state: { tab: "usage" } }); }} />
       )}
       {stage === "overview" && <Overview onEnter={() => setEntered(true)} />}
