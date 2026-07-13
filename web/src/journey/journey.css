@@ -372,11 +372,15 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .usage-entry{position:absolute;right:26px;bottom:24px;z-index:5;background:none;border:0;
   cursor:pointer;font-family:var(--serif);font-size:14.5px;letter-spacing:.16em;
   color:#8d8674;display:flex;align-items:baseline;gap:9px;padding:6px 4px;
-  transition:color .3s ease}
+  transition:color .3s ease,bottom .4s cubic-bezier(.3,.7,.2,1)}
 .usage-entry b{font-family:var(--sans);font-size:16px;font-weight:600;color:#b9ab84;
   font-variant-numeric:tabular-nums;letter-spacing:0;transition:color .3s ease}
 .usage-entry:hover,.usage-entry:focus-visible{color:#cfc6ac;outline:none}
 .usage-entry:hover b,.usage-entry:focus-visible b{color:var(--amber)}
+/* 用量上限 toast 也住右下角(bottom:22 + 約 63px 高)且 z-index 80 → 會整個蓋掉入口。
+   toast 在場時,右下角的常駐元素往上讓位,兩者都看得到、點得到。 */
+.journey.toasting .usage-entry{bottom:98px}
+.journey.toasting .umap .ud-br{bottom:112px}
 @media (prefers-reduced-motion:reduce){.usage-entry,.usage-entry b{transition:none}}
 
 /* ── 進場過場:入口那行小字「飛進來、變成」中心的大數字 ──

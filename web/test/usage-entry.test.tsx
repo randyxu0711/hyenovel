@@ -15,6 +15,7 @@ const USAGE_ALL = {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
     clearRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
   } as unknown as CanvasRenderingContext2D);
@@ -61,6 +62,24 @@ describe("用量入口", () => {
     await waitFor(() => expect(r.container.querySelector(".usage-entry")).toBeTruthy());
     fireEvent.click(r.container.querySelector(".usage-entry")!);
     await waitFor(() => expect(r.getByTestId("usage-map")).toBeTruthy());
+  });
+
+  // toast 跟入口同住右下角(toast 340px 寬、z-index 高)→ 撞上限時入口會被整個蓋掉。
+  // 讓 journey 掛上 toasting,CSS 據此把入口(和星圖右下那格)抬到 toast 上方。
+  it("用量上限 toast 在場時,右下角讓位(journey 掛 toasting)", async () => {
+    localStorage.setItem("hy:usageLimit", String(Math.floor(Date.now() / 1000) + 3600));
+    const r = app();
+    await toCatalog(r);
+    await waitFor(() => expect(r.container.querySelector(".usage-toast")).toBeTruthy());
+    expect(r.container.querySelector(".journey")!.className).toContain("toasting");
+    expect(r.container.querySelector(".usage-entry")).toBeTruthy();   // 兩個都還在
+  });
+
+  it("沒 toast 就不讓位", async () => {
+    const r = app();
+    await toCatalog(r);
+    await waitFor(() => expect(r.container.querySelector(".usage-entry")).toBeTruthy());
+    expect(r.container.querySelector(".journey")!.className).not.toContain("toasting");
   });
 
   it("點星 → 進該篇,且直接開在用量 tab", async () => {

@@ -109,7 +109,7 @@ export default function Journey() {
   };
 
   return (
-    <div className={`journey stage-${stage} ${dropping ? "drop-active" : ""} ${flying ? "flying" : ""}`} data-testid="home"
+    <div className={`journey stage-${stage} ${dropping ? "drop-active" : ""} ${flying ? "flying" : ""} ${usageLimitResetAt !== undefined ? "toasting" : ""}`} data-testid="home"
       onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
       <Dust />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
