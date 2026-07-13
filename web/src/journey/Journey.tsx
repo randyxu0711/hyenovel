@@ -118,7 +118,8 @@ export default function Journey() {
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
           gestations={gestations} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
       </Camera>
-      {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} />}
+      {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}
+      {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} />}
       {stage === "catalog" && (
         // 點它 → 這行小字本身飛到中心、放大成總計(它就是同一個數字)
         <button className="usage-entry" onClick={e => {

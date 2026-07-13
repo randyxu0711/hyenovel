@@ -82,6 +82,19 @@ describe("用量入口", () => {
     expect(r.container.querySelector(".journey")!.className).not.toContain("toasting");
   });
 
+  // .nascent(z-index 42)住畫面正中,比 .umap(40)高 → 星圖開著時它壓在中央總額上還能點。
+  it("星圖開著時,中心的新增故事入口收起", async () => {
+    const r = app();
+    await toCatalog(r);
+    await waitFor(() => expect(r.container.querySelector(".nascent")).toBeTruthy());
+    fireEvent.click(r.container.querySelector(".usage-entry")!);
+    await waitFor(() => expect(r.getByTestId("usage-map")).toBeTruthy());
+    expect(r.container.querySelector(".nascent")).toBeNull();
+    // 關掉星圖 → 入口回來
+    fireEvent.click(r.container.querySelector(".umap-x")!);
+    await waitFor(() => expect(r.container.querySelector(".nascent")).toBeTruthy());
+  });
+
   it("點星 → 進該篇,且直接開在用量 tab", async () => {
     const slug = (index as { stories: { slug: string }[] }).stories[0].slug;
     const r = app();
