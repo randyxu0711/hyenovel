@@ -103,7 +103,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
                         if isinstance(b, TextBlock):
                             final = b.text
                 elif isinstance(m, ResultMessage):
-                    cost = m.total_cost_usd or 0.0
+                    cost = sdk_runner.turn_cost(sess.client, m.total_cost_usd)
                     res_usage, res_model = m.usage, m.model_usage
                     res_dur, res_nt = m.duration_ms, m.num_turns
                     if m.session_id:

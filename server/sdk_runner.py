@@ -6,6 +6,7 @@
   - discuss:長命 client + token 串流(在 discuss.py 直接消費 receive_response)。
 """
 import sys
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,6 +46,29 @@ def rate_limit_of(msg) -> RateLimitInfo | None:
     if isinstance(msg, RateLimitEvent):
         return msg.rate_limit_info
     return None
+
+
+_COST_SEEN: "weakref.WeakKeyDictionary[object, float]" = weakref.WeakKeyDictionary()
+
+
+def turn_cost(client, total_cost_usd: float | None) -> float:
+    """把 ResultMessage.total_cost_usd 換算成「這一輪」的花費。
+
+    SDK 文件明載該欄是 *Cumulative across the conversation*:CLI 內部是個 `+=` 累加器,
+    同一個 ClaudeSDKClient 上每次 query 回報的都是「這個 client 開跑至今」的總額。
+    (`query()` 函式每呼叫一次開新行程,才會看起來像單輪值。)照抄相加會重複計——
+    重試與 discuss 多輪尤其嚴重。故在此扣掉同一 client 上一次的累計。
+
+    注意這是**本機估算值**(SDK 用內建價目表算的),非帳單。
+    """
+    total = total_cost_usd or 0.0
+    prev = _COST_SEEN.get(client, 0.0)
+    _COST_SEEN[client] = total
+    delta = total - prev
+    if delta < 0:                      # 累加器倒退 = 語意變了(或 client 被重用),別瞎猜
+        log.warning(f"cost accumulator went backwards ({prev} → {total}); recording as-is")
+        return total
+    return delta
 
 
 @dataclass
@@ -194,7 +218,7 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
                     if contains_async_dispatch(text):
                         raise AsyncDispatchError(text[:200])
         elif isinstance(m, ResultMessage):
-            cost = m.total_cost_usd or 0.0
+            cost = turn_cost(client, m.total_cost_usd)
             err = bool(m.is_error)
             api_status = m.api_error_status
             usage = m.usage

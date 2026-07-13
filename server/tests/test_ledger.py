@@ -208,6 +208,95 @@ def test_aggregate_empty_has_retry_count():
         assert agg["empty"] is True and agg["retry_count"] == 0
 
 
+# ── 累計成本 → 單輪增量 ──────────────────────────────────────────────
+class _CumulativeClient:
+    """假 client:照 CLI 真行為,每輪回報「這個 client 開跑至今的累計花費」。
+    數字取自 s07 真帳(analyst 兩次嘗試共用同一 client)。"""
+    def __init__(self, totals):
+        self._totals = list(totals)
+
+    async def query(self, prompt):
+        pass
+
+    async def receive_response(self):
+        from claude_agent_sdk import ResultMessage
+        yield ResultMessage(
+            subtype="success", duration_ms=1500, duration_api_ms=1400,
+            is_error=False, num_turns=4, session_id="s",
+            total_cost_usd=self._totals.pop(0),
+            usage={"input_tokens": 5, "output_tokens": 12000,
+                   "cache_creation_input_tokens": 29000, "cache_read_input_tokens": 28000},
+            model_usage={"claude-sonnet-4-6": {}})
+
+
+def test_cost_is_this_turn_not_session_cumulative():
+    c = _CumulativeClient([0.371415, 0.745130])
+    first = asyncio.run(sdk_runner.run_turn(c, "go"))
+    second = asyncio.run(sdk_runner.run_turn(c, "retry"))
+    assert abs(first.cost - 0.371415) < 1e-9, f"第一輪 = 累計本身,得 {first.cost}"
+    assert abs(second.cost - 0.373715) < 1e-9, \
+        f"第二輪該是增量 0.373715(0.745130-0.371415),不是累計 0.745130;得 {second.cost}"
+
+
+def test_cost_restarts_per_client():
+    a = _CumulativeClient([0.90])
+    b = _CumulativeClient([0.20])
+    asyncio.run(sdk_runner.run_turn(a, "go"))
+    r = asyncio.run(sdk_runner.run_turn(b, "go"))
+    assert abs(r.cost - 0.20) < 1e-9, f"另一個 client 自己從 0 起算,不受 a 影響;得 {r.cost}"
+
+
+def test_ledger_total_matches_true_spend():
+    """s07 實況:analyst 一個 client 跑兩次(累計 0.371415 → 0.745130)、
+    criticizer 另一個 client 跑一次(0.270338)。真實總花費 = 0.745130 + 0.270338。"""
+    from server import ledger
+    with _tmp_stories() as stories:
+        (stories / "s07").mkdir()
+        analyst = _CumulativeClient([0.371415, 0.745130])
+        for attempt in (0, 1):
+            ledger.append("s07", "analyst", attempt,
+                          asyncio.run(sdk_runner.run_turn(analyst, "p")))
+        criticizer = _CumulativeClient([0.270338])
+        ledger.append("s07", "criticizer", 0,
+                      asyncio.run(sdk_runner.run_turn(criticizer, "p")))
+
+        agg = ledger.aggregate("s07")
+        assert abs(agg["total"]["cost_usd"] - 1.015468) < 1e-6, \
+            f"總帳該是 1.015468,不是重複計的 1.386883;得 {agg['total']['cost_usd']}"
+        assert abs(agg["phases"]["analyst"]["cost_usd"] - 0.745130) < 1e-6, \
+            f"analyst 該格 = 0.745130;得 {agg['phases']['analyst']['cost_usd']}"
+
+
+def test_discuss_records_this_turn_not_running_total():
+    """discuss 是常駐 client、多輪 query → 累計值最毒(聊 N 輪等於三角級數式暴脹)。
+    連兩輪累計 0.20 → 0.45,帳本該記 0.20 與 0.25。"""
+    from server import discuss, ledger
+
+    async def drive(sid, msg):
+        return [ev async for ev in discuss.run_discuss("s01", sid, msg)]
+
+    with _tmp_stories() as stories:
+        (stories / "s01").mkdir()
+        (stories / "s01" / "analysis.json").write_text("{}", encoding="utf-8")
+        client = _CumulativeClient([0.20, 0.45])
+        sid = "sess_test"
+        discuss._sessions[sid] = discuss.Session("s01", client)
+        try:
+            asyncio.run(drive(sid, "第一輪"))
+            events = asyncio.run(drive(sid, "第二輪"))
+        finally:
+            discuss._sessions.pop(sid, None)
+
+        rows = ledger.load("s01")
+        assert len(rows) == 2, f"兩輪該記兩列;得 {len(rows)}"
+        assert abs(rows[0]["cost_usd"] - 0.20) < 1e-9, f"第一輪 0.20;得 {rows[0]['cost_usd']}"
+        assert abs(rows[1]["cost_usd"] - 0.25) < 1e-9, \
+            f"第二輪該記增量 0.25,不是累計 0.45;得 {rows[1]['cost_usd']}"
+        done = [e for e in events if e["event"] == "done"][0]
+        assert abs(done["data"]["cost_usd"] - 0.25) < 1e-6, \
+            f"done 事件回報的也該是這輪的錢;得 {done['data']['cost_usd']}"
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
