@@ -80,13 +80,27 @@ def _round_cost(d):
     return d
 
 
+def _last_run_cost(rows):
+    """最後一次 critique 的花費(每節點單價的分子——分母是最新那具骨的節點數,兩者要對齊)。
+    一次 critique 從 analyst attempt=0 起算;discuss 不屬於任何一次 critique,排除。"""
+    starts = [i for i, r in enumerate(rows)
+              if r.get("phase") == "analyst" and not (r.get("attempt", 0) or 0)]
+    if not starts:
+        return 0.0
+    return sum(r.get("cost_usd", 0.0) or 0.0
+               for r in rows[starts[-1]:] if r.get("phase") != "discuss")
+
+
 def aggregate(slug):
-    """單篇:各 phase 小計 + 總計 + 衍生量(cache 命中率、重試成本/次數)。無資料回 empty 態。"""
+    """單篇:各 phase 小計 + 總計 + 衍生量(cache 命中率、重試成本/次數、牆鐘、重跑次數)。
+    無資料回 empty 態。"""
     rows = load(slug)
     if not rows:
         return {"slug": slug, "empty": True, "phases": {}, "total": _zero(),
-                "cache_read_ratio": 0.0, "retry_cost_usd": 0.0, "retry_count": 0}
+                "cache_read_ratio": 0.0, "retry_cost_usd": 0.0, "retry_count": 0,
+                "duration_ms": 0, "runs": 0, "last_run_cost_usd": 0.0}
     phases, total, retry_cost, retry_count = {}, _zero(), 0.0, 0
+    duration_ms, runs = 0, 0
     for r in rows:
         acc = phases.setdefault(r.get("phase", "unknown"), _zero())
         for k in ("input", "output", "cache_creation", "cache_read"):
@@ -97,9 +111,12 @@ def aggregate(slug):
         acc["cost_usd"] += c
         total["cost_usd"] += c
         acc["turns"] = acc.get("turns", 0) + 1
+        duration_ms += r.get("duration_ms", 0) or 0
         if (r.get("attempt", 0) or 0) > 0:
             retry_cost += c
             retry_count += 1
+        elif r.get("phase") == "analyst":
+            runs += 1                      # 一次 critique 從 analyst attempt=0 起算 → 年輪一圈
     denom = total["input"] + total["cache_creation"] + total["cache_read"]
     return {
         "slug": slug, "empty": False,
@@ -108,12 +125,17 @@ def aggregate(slug):
         "cache_read_ratio": round(total["cache_read"] / denom, 4) if denom else 0.0,
         "retry_cost_usd": round(retry_cost, 6),
         "retry_count": retry_count,
+        "duration_ms": duration_ms,
+        "runs": runs,
+        "last_run_cost_usd": round(_last_run_cost(rows), 6),
     }
 
 
 def aggregate_all():
-    """跨篇:掃 stories/*/usage.jsonl,總計 + 每篇 rollup。"""
-    stories, total = [], _zero()
+    """跨篇:掃 stories/*/usage.jsonl,總計 + 各 phase 小計 + 每篇 rollup。
+    每篇帶 runs(年輪)與 retry_count(暖紅疤)與 last_run_cost_usd(每節點單價的分子)。"""
+    stories, total, phases = [], _zero(), {}
+    retry_cost, retry_count, duration_ms = 0.0, 0, 0
     if config.STORIES.is_dir():
         for d in sorted(p for p in config.STORIES.iterdir() if p.is_dir()):
             agg = aggregate(d.name)
@@ -122,9 +144,30 @@ def aggregate_all():
             t = agg["total"]
             for k in _zero():
                 total[k] += t[k]
+            for name, ph in agg["phases"].items():
+                acc = phases.setdefault(name, {**_zero(), "turns": 0})
+                for k in _zero():
+                    acc[k] += ph[k]
+                acc["turns"] += ph.get("turns", 0)
+            retry_cost += agg["retry_cost_usd"]
+            retry_count += agg["retry_count"]
+            duration_ms += agg["duration_ms"]
             stories.append({
                 "slug": d.name,
                 "cost_usd": t["cost_usd"],
                 "tokens": t["input"] + t["output"] + t["cache_creation"] + t["cache_read"],
+                "runs": agg["runs"],
+                "retry_count": agg["retry_count"],
+                "last_run_cost_usd": agg["last_run_cost_usd"],
             })
-    return {"empty": not stories, "total": _round_cost(total), "stories": stories}
+    denom = total["input"] + total["cache_creation"] + total["cache_read"]
+    return {
+        "empty": not stories,
+        "total": _round_cost(total),
+        "phases": {k: _round_cost(v) for k, v in phases.items()},
+        "retry_cost_usd": round(retry_cost, 6),
+        "retry_count": retry_count,
+        "duration_ms": duration_ms,
+        "cache_read_ratio": round(total["cache_read"] / denom, 4) if denom else 0.0,
+        "stories": stories,
+    }

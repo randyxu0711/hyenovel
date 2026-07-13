@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIndex } from "../data/client";
+import { getIndex, getUsageAll } from "../data/client";
 import { worldPos, WORLD, type Stage } from "../lib/camera";
 import Camera from "./Camera";
 import Chrome from "./Chrome";
@@ -10,6 +10,7 @@ import Catalog from "./Catalog";
 import Orbits from "./Orbits";
 import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
+import UsageMap from "./UsageMap";
 import Single from "./Single";
 import { useGestations } from "./useGestations";
 import { formatResetTime } from "./usageLimit";
@@ -31,6 +32,8 @@ export default function Journey() {
   const [bursting, setBursting] = useState(false);
   const [hatching, setHatching] = useState<string | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [spend, setSpend] = useState<number | null>(null);   // 入口上的累計小數字;讀不到就不顯示
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
   const orderRef = useRef<string[]>([]);
@@ -47,6 +50,11 @@ export default function Journey() {
     getIndex().then(i => setEntries(i.stories))
       .catch(e => setErr(String(e instanceof Error ? e.message : e)))
       .finally(() => setLoaded(true));
+  }, []);
+  useEffect(() => {
+    let live = true;
+    getUsageAll().then(a => { if (live && !a.empty) setSpend(a.total.cost_usd); }).catch(() => {});
+    return () => { live = false; };
   }, []);
   useEffect(() => { if (slug) setEntered(true); }, [slug]);
   // 重整後若還有胚胎在孕育,直接落在 catalog
@@ -110,6 +118,15 @@ export default function Journey() {
           gestations={gestations} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
       </Camera>
       {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} />}
+      {stage === "catalog" && (
+        <button className="usage-entry" onClick={() => setUsageOpen(true)}>
+          用量{spend !== null && <b>${spend.toFixed(2)}</b>}
+        </button>
+      )}
+      {usageOpen && (
+        <UsageMap entries={entries} onClose={() => setUsageOpen(false)}
+          onPick={s => { setUsageOpen(false); nav(`/story/${s}`, { state: { tab: "usage" } }); }} />
+      )}
       {stage === "overview" && <Overview onEnter={() => setEntered(true)} />}
       {stage === "single" && <div className="single-overlay"><Single /></div>}
       <AddStory open={adding} initialFile={dropFile}

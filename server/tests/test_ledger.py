@@ -297,6 +297,66 @@ def test_discuss_records_this_turn_not_running_total():
             f"done 事件回報的也該是這輪的錢;得 {done['data']['cost_usd']}"
 
 
+# ── 星圖要的衍生量 ──────────────────────────────────────────────────
+def test_aggregate_counts_runs_and_last_run_cost():
+    """runs = 這篇被 critique 過幾次(數 analyst attempt=0);
+    last_run_cost_usd = 最後那次 critique 的花費(每節點單價的分子——分母是最新那具骨的節點數)。"""
+    from server import ledger
+    with _tmp_stories() as stories:
+        (stories / "s01").mkdir()
+        # 第一次 critique(含一次重試)
+        ledger.append("s01", "analyst", 0, _fake_turn(cost=0.30))
+        ledger.append("s01", "analyst", 1, _fake_turn(cost=0.20))
+        ledger.append("s01", "criticizer", 0, _fake_turn(cost=0.25))
+        ledger.append("s01", "discuss", 0, _fake_turn(cost=0.10))
+        # 第二次 critique(重跑)
+        ledger.append("s01", "analyst", 0, _fake_turn(cost=0.40))
+        ledger.append("s01", "criticizer", 0, _fake_turn(cost=0.35))
+
+        agg = ledger.aggregate("s01")
+        assert agg["runs"] == 2, f"critique 跑過兩次;得 {agg.get('runs')}"
+        assert abs(agg["last_run_cost_usd"] - 0.75) < 1e-9, \
+            f"最後一次 critique = 0.40+0.35 = 0.75(不含 discuss);得 {agg.get('last_run_cost_usd')}"
+        assert abs(agg["total"]["cost_usd"] - 1.60) < 1e-9, "總花費仍是全部相加"
+
+
+def test_aggregate_sums_duration():
+    from server import ledger
+    with _tmp_stories() as stories:
+        (stories / "s01").mkdir()
+        ledger.append("s01", "analyst", 0, _fake_turn(cost=0.3))      # duration_ms=1200
+        ledger.append("s01", "criticizer", 0, _fake_turn(cost=0.2))
+        assert ledger.aggregate("s01")["duration_ms"] == 2400, "牆鐘該累加"
+
+
+def test_aggregate_all_carries_starmap_fields():
+    """星圖:中心要總計,四角要階段/重試/cache/時數,每顆星要 runs 與 last_run_cost。"""
+    from server import ledger
+    with _tmp_stories() as stories:
+        for s in ("s01", "s02"):
+            (stories / s).mkdir()
+        ledger.append("s01", "analyst", 0, _fake_turn(cost=0.30, cr=900))
+        ledger.append("s01", "analyst", 1, _fake_turn(cost=0.20, cr=900))   # 重試
+        ledger.append("s01", "criticizer", 0, _fake_turn(cost=0.25))
+        ledger.append("s02", "analyst", 0, _fake_turn(cost=0.40))
+        ledger.append("s02", "discuss", 0, _fake_turn(cost=0.15))
+
+        all_ = ledger.aggregate_all()
+        assert abs(all_["total"]["cost_usd"] - 1.30) < 1e-9
+        assert abs(all_["phases"]["analyst"]["cost_usd"] - 0.90) < 1e-9, "跨篇的階段小計"
+        assert abs(all_["phases"]["discuss"]["cost_usd"] - 0.15) < 1e-9
+        assert all_["phases"]["discuss"]["turns"] == 1, "discuss 輪數(討論比例要用)"
+        assert all_["retry_count"] == 1 and abs(all_["retry_cost_usd"] - 0.20) < 1e-9
+        assert all_["duration_ms"] == 6000, "五輪 × 1200ms"
+        assert all_["cache_read_ratio"] > 0, "cache 命中率(跨篇)"
+
+        by = {s["slug"]: s for s in all_["stories"]}
+        assert by["s01"]["runs"] == 1 and by["s02"]["runs"] == 1
+        assert by["s01"]["retry_count"] == 1, "這顆星該有暖紅疤"
+        assert by["s02"]["retry_count"] == 0, "這顆星乾淨"
+        assert abs(by["s01"]["last_run_cost_usd"] - 0.75) < 1e-9, "每節點單價的分子"
+
+
 def _main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

@@ -49,12 +49,34 @@ export type UsagePhase = {
   input: number; output: number; cache_creation: number; cache_read: number;
   cost_usd: number; turns: number;
 };
+export type UsageTotal = {
+  input: number; output: number; cache_creation: number; cache_read: number; cost_usd: number;
+};
 export type UsageAggregate = {
   slug: string;
   empty: boolean;
   phases: Record<string, UsagePhase>;   // key ∈ analyst | criticizer | discuss
-  total: { input: number; output: number; cache_creation: number; cache_read: number; cost_usd: number };
+  total: UsageTotal;
   cache_read_ratio: number;
   retry_cost_usd: number;
   retry_count: number;
+  duration_ms: number;
+  runs: number;                          // 這篇被 critique 過幾次(年輪)
+  last_run_cost_usd: number;             // 最後一次 critique 的花費(每節點單價的分子)
+};
+
+// 跨篇總量(用量星圖):中心=total、四角=phases/retry/duration/cache、每顆星=stories[]
+export type UsageStory = {
+  slug: string; cost_usd: number; tokens: number;
+  runs: number; retry_count: number; last_run_cost_usd: number;
+};
+export type UsageAll = {
+  empty: boolean;
+  total: UsageTotal;
+  phases: Record<string, UsagePhase>;
+  retry_cost_usd: number;
+  retry_count: number;
+  duration_ms: number;
+  cache_read_ratio: number;
+  stories: UsageStory[];
 };

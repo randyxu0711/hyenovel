@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { getStory } from "../data/client";
 import BoneStage from "../lab/BoneStage";
 import NodeTalk from "../lab/NodeTalk";
@@ -27,7 +27,10 @@ export default function Single() {
   const [mode, setMode] = useState<Mode>("axis");
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [text, setText] = useState<null | "source" | "feedback" | "usage">(null);
+  // 從用量星圖點星進來 → 直接開在用量 tab(route state,不汙染 URL)
+  const wantTab = (useLocation().state as { tab?: string } | null)?.tab;
+  const [text, setText] = useState<null | "source" | "feedback" | "usage">(
+    wantTab === "usage" ? "usage" : null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
   // 回饋點 = 討論啟動器:點標題直接開該節點的討論框(NodeTalk 會把判斷+提問+原文+對話都帶出)
   const accItems = (prefix: string, pts: FeedbackPoint[]) => pts.map((p, i) => {
@@ -43,9 +46,10 @@ export default function Single() {
 
   useEffect(() => {
     if (!slug) return;
-    setData(null); setErr(null); setSelected(null); setHover(null); setText(null); setHl(null);
+    setData(null); setErr(null); setSelected(null); setHover(null); setHl(null);
+    setText(wantTab === "usage" ? "usage" : null);   // 換篇歸零;但從星圖點進來的意圖要留著
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
-  }, [slug]);
+  }, [slug, wantTab]);
 
   if (err) return <div className="sb"><div className="sb-msg">讀不到「{slug}」的分析:{err}</div></div>;
   if (!data) return <div className="sb"><div className="sb-msg">載入中…</div></div>;

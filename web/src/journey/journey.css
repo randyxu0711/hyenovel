@@ -290,3 +290,91 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .usage-toast-x{flex:none;align-self:flex-start;background:none;border:0;color:#9a8f6e;font-size:16px;line-height:1;cursor:pointer;padding:0}
 .usage-toast-x:hover{color:#f3ecd6}
 .usage-toast-x:focus-visible{outline:2px solid rgba(236,201,138,.7);outline-offset:2px;border-radius:3px}
+
+/* ══ 用量星圖(獨立一層)══
+   星的大小 = 花費(面積正比);年輪 = 你重跑過幾次;暖紅 = 機器重試過。
+   hover 綻成那具骨 + 浮出每節點單價。全數 scope 在 .umap 底下。 */
+.umap{position:fixed;inset:0;z-index:40;overflow:hidden;
+  background:radial-gradient(85% 70% at 50% 46%, #14130e 0%, #08080799 70%, #050504 100%);
+  backdrop-filter:blur(2px);animation:umapIn .5s ease}
+@keyframes umapIn{from{opacity:0}}
+.umap-x{position:absolute;top:22px;right:26px;z-index:3;background:none;border:0;cursor:pointer;
+  color:#8d8674;font-size:19px;padding:6px}
+.umap-x:hover,.umap-x:focus-visible{color:#ecc98a;outline:none}
+.umap-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;color:#c7bea4;font-size:16px;line-height:2;text-align:center}
+
+.umap .umap-orbits{position:absolute;inset:0;width:100%;height:100%}
+.umap .umap-orbits ellipse{fill:none;stroke:rgba(220,200,150,.10);vector-effect:non-scaling-stroke}
+
+/* 中心:總計 */
+.umap .ucenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
+  width:150px;height:150px;border-radius:50%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:rgba(236,201,138,.04);border:1px solid rgba(236,201,138,.28)}
+.umap .uc-big{font-family:var(--serif);font-size:38px;color:#f8efd2;font-variant-numeric:tabular-nums;
+  line-height:1;text-shadow:0 0 26px rgba(236,201,138,.18)}
+.umap .uc-est{font-size:9.5px;letter-spacing:.22em;color:#8d8674;margin-top:6px}
+.umap .uc-sub{font-size:11.5px;color:#a89f88;font-variant-numeric:tabular-nums;margin-top:7px}
+
+/* 星 */
+.umap .ufield{position:absolute;inset:0}
+.umap .ustar{position:absolute;transform:translate(-50%,-50%);cursor:pointer;text-align:center;
+  width:170px}
+.umap .ustar:focus-visible{outline:1px solid rgba(236,201,138,.6);outline-offset:8px;border-radius:8px}
+.umap .ucore-wrap{position:relative;height:56px;display:flex;align-items:center;justify-content:center}
+.umap .udot{position:absolute;border-radius:50%;background:#efe6cf;
+  box-shadow:0 0 14px rgba(240,228,200,.35);transition:opacity .3s ease;
+  animation:uMeasure .9s cubic-bezier(.2,.7,.2,1) backwards}
+.umap .uring,.umap .uscar{position:absolute;border-radius:50%;border:1px solid rgba(236,201,138,.20);
+  animation:uFade .7s ease backwards}
+.umap .uscar{border-color:rgba(201,146,140,.45)}
+.umap .ubone{position:absolute;opacity:0;transition:opacity .35s ease;pointer-events:none}
+.umap .ustar:hover .udot,.umap .ustar:focus-visible .udot{opacity:0}
+.umap .ustar:hover .ubone,.umap .ustar:focus-visible .ubone{opacity:1}
+.umap .uname{font-family:var(--serif);font-size:13px;color:#cfc6ac;margin-top:8px;
+  transition:color .25s}
+.umap .ustar:hover .uname{color:#f8efd2}
+.umap .ucost{font-size:14px;color:var(--amber);font-variant-numeric:tabular-nums;font-weight:600;
+  margin-top:3px}
+.umap .uunit{font-size:10px;color:#8d8674;font-variant-numeric:tabular-nums;letter-spacing:.04em;
+  margin-top:3px;opacity:0;transition:opacity .3s ease}
+.umap .ustar:hover .uunit,.umap .ustar:focus-visible .uunit{opacity:1}
+
+/* 進場:星從中心「量」出來——與單篇長條的丈量同一種動作語言 */
+@keyframes uMeasure{from{transform:scale(0)}}
+@keyframes uFade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  .umap,.umap .udot,.umap .uring,.umap .uscar{animation:none}
+  .umap .udot,.umap .ubone,.umap .uunit,.umap .uname{transition:none}
+}
+
+/* 星塵:散在四角,不裝盒子 */
+.umap .udust{position:absolute;font-variant-numeric:tabular-nums}
+.umap .ud-tl{left:44px;top:46px}
+.umap .ud-tr{right:44px;top:46px;text-align:right}
+.umap .ud-bl{left:44px;bottom:44px}
+.umap .ud-br{right:44px;bottom:44px;text-align:right}
+.umap .ud-lab{font-family:var(--serif);font-size:10px;letter-spacing:.22em;color:var(--amber);
+  margin-bottom:10px}
+.umap .ud-lab.scar{color:#c9928c}
+.umap .ud-big{font-size:20px;color:#f4ecd4;font-weight:600}
+.umap .ud-big.scar{color:#c9928c}
+.umap .ud-row{display:grid;grid-template-columns:66px 92px 46px;gap:10px;align-items:center;
+  padding:3px 0;font-size:11px;color:#a89f88}
+.umap .ud-track{height:4px;background:rgba(220,200,150,.09);border-radius:2px;position:relative}
+.umap .ud-fill{position:absolute;inset:0 auto 0 0;border-radius:2px;
+  background:linear-gradient(90deg,#8a6d2e,#ecc98a)}
+.umap .ud-val{text-align:right;color:#e6ddc6;font-size:12px}
+.umap .ud-foot{font-size:10.5px;color:#8d8674;margin-top:9px;letter-spacing:.04em}
+
+/* 用量入口:目錄層右下角,一行低調的字。不是按鈕造型——是星空邊緣的一則註腳。 */
+.usage-entry{position:absolute;right:26px;bottom:24px;z-index:5;background:none;border:0;
+  cursor:pointer;font-family:var(--serif);font-size:12.5px;letter-spacing:.16em;
+  color:#8d8674;display:flex;align-items:baseline;gap:9px;padding:6px 4px;
+  transition:color .3s ease}
+.usage-entry b{font-family:var(--sans);font-size:13px;font-weight:600;color:#b9ab84;
+  font-variant-numeric:tabular-nums;letter-spacing:0;transition:color .3s ease}
+.usage-entry:hover,.usage-entry:focus-visible{color:#cfc6ac;outline:none}
+.usage-entry:hover b,.usage-entry:focus-visible b{color:var(--amber)}
+@media (prefers-reduced-motion:reduce){.usage-entry,.usage-entry b{transition:none}}
