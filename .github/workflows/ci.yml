@@ -11,7 +11,8 @@ permissions:
   contents: read          # 只需要 checkout
 
 jobs:
-  py:
+  python:
+    name: 後端與確定性層
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0   # v7.0.0
@@ -19,22 +20,22 @@ jobs:
         with:
           enable-cache: true
 
-      # 3.14 對齊本機 server/.venv
-      - name: Create venv
+      - name: 建 venv(Python 3.14,對齊本機)
         run: uv venv --python 3.14
 
       # requirements.txt 含 claude-agent-sdk —— CI 只 import 它(拿 RateLimitEvent 等型別),
       # 不會連線、不需要 ~/.claude/.credentials.json、不燒訂閱。
-      - name: Install deps
+      - name: 裝依賴
         run: uv pip install -r server/requirements.txt -r requirements-dev.txt
 
       # 確定性層(viz/render/index/atomicio/ingest)門檻 100%,少一行就紅。
-      # server/ 的其餘模組不設數字門檻:它們混了 SDK 接線,100% 只能靠 mock 演出來。
-      # 那些模組靠「行為契約逐條有測」守(server/tests/)。
-      - name: Tests + 確定性層 100% 門檻
+      # server/ 的其餘模組不設數字門檻:它們混了 SDK 接線,100% 只能靠 mock 演出來,
+      # 那種測試在 SDK 改版時會集體假綠。它們靠「行為契約逐條有測」守。
+      - name: 測試 + 確定性層 100% 覆蓋門檻
         run: uv run pytest -q --cov --cov-report=term-missing --cov-fail-under=100
 
   web:
+    name: 前端
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,6 +48,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - run: npm ci
-      - run: npm test
-      - run: npm run typecheck
+      - name: 裝依賴
+        run: npm ci
+
+      - name: 測試(vitest)
+        run: npm test
+
+      - name: 型別檢查(tsc)
+        run: npm run typecheck
