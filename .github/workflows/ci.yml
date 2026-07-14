@@ -1,0 +1,52 @@
+name: CI
+
+# push 任何分支 + PR 都跑。習慣是開 feature branch 再 ff-merge 回 main,
+# 分支上就該知道綠不綠。public repo → Actions 免費,不必為省時間做 path filter
+# (整套跑完不到一分鐘,filter 只會增加漏跑的風險)。
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read          # 只需要 checkout
+
+jobs:
+  py:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0   # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+
+      # 3.14 對齊本機 server/.venv
+      - name: Create venv
+        run: uv venv --python 3.14
+
+      # requirements.txt 含 claude-agent-sdk —— CI 只 import 它(拿 RateLimitEvent 等型別),
+      # 不會連線、不需要 ~/.claude/.credentials.json、不燒訂閱。
+      - name: Install deps
+        run: uv pip install -r server/requirements.txt -r requirements-dev.txt
+
+      # 確定性層(viz/render/index/atomicio/ingest)門檻 100%,少一行就紅。
+      # server/ 的其餘模組不設數字門檻:它們混了 SDK 接線,100% 只能靠 mock 演出來。
+      # 那些模組靠「行為契約逐條有測」守(server/tests/)。
+      - name: Tests + 確定性層 100% 門檻
+        run: uv run pytest -q --cov --cov-report=term-missing --cov-fail-under=100
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0   # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
