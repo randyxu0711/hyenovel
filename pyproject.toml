@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests", "server/tests"]
+# 既有 server 測試靠 `from server import ...`,需要 repo 根在 sys.path
+pythonpath = ["."]
+
+[tool.coverage.run]
+branch = true

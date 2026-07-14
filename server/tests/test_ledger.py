@@ -1,5 +1,5 @@
 """帳本(usage/token ledger)零成本 canary。
-跑法(repo 根):  ./server/.venv/bin/python -m server.tests.test_ledger
+跑法(repo 根):  server/.venv/bin/python -m pytest
 """
 import asyncio
 import json
@@ -357,22 +357,3 @@ def test_aggregate_all_carries_starmap_fields():
         assert abs(by["s01"]["last_run_cost_usd"] - 0.75) < 1e-9, "每節點單價的分子"
 
 
-def _main():
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"PASS {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"FAIL {t.__name__}: {e}")
-        except Exception as e:  # noqa: BLE001
-            failed += 1
-            print(f"ERROR {t.__name__}: {type(e).__name__}: {e}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passed")
-    raise SystemExit(1 if failed else 0)
-
-
-if __name__ == "__main__":
-    _main()

@@ -38,3 +38,7 @@ slides/
 
 # 本機 log 全收這:logger 的 critique.log + dev.sh 的 server.log / web.log(不版控)
 server/logs/
+
+# 測試覆蓋率報告(本機產物)
+.coverage
+htmlcov/
