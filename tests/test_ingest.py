@@ -181,3 +181,48 @@ def test_encoding_priority_favors_big5_over_gb18030():
     """
     text = ingest.extract_text("a.txt", "他走進門。".encode("big5"))
     assert "他走進門。" in text, "繁中 big5 必須正確解出來(這是主要使用情境)"
+
+
+# ── 補洞:編碼 fallback 的邊界 + pdf/docx 的「頁段合併」是我們的決策 ──
+
+def test_bom_present_but_truncated_falls_through():
+    """有 utf-16 BOM 但資料被截斷(奇數 bytes)→ 不得炸,往下試其他編碼。"""
+    text = ingest.extract_text("a.txt", b"\xff\xfe\x41")
+    assert isinstance(text, str)
+
+
+def test_all_encodings_fail_falls_back_to_replace():
+    """連 gb18030 都解不了 → errors='replace' 兜底,絕不拋。"""
+    text = ingest.extract_text("a.txt", b"\x80\x81\x82")
+    assert isinstance(text, str)
+
+
+def test_pdf_pages_are_joined_with_blank_line():
+    """真 PDF:頁與頁之間用空行接 —— join 的方式是我們的決策(不是 pypdf 的)。"""
+    pypdf = pytest.importorskip("pypdf")
+    import io
+
+    w = pypdf.PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    w.add_blank_page(width=200, height=200)
+    buf = io.BytesIO()
+    w.write(buf)
+
+    text = ingest.extract_text("a.pdf", buf.getvalue())
+    assert isinstance(text, str)      # 空白頁抽不出字,但兩頁要能走完 join 不炸
+
+
+def test_docx_paragraphs_are_joined_with_blank_line():
+    """真 docx:段落之間用空行接(同樣是我們的決策)。"""
+    docx = pytest.importorskip("docx")
+    import io
+
+    d = docx.Document()
+    d.add_paragraph("他走進門。")
+    d.add_paragraph("屋裡沒有人。")
+    buf = io.BytesIO()
+    d.save(buf)
+
+    text = ingest.extract_text("a.docx", buf.getvalue())
+    assert "他走進門。" in text
+    assert "屋裡沒有人。" in text

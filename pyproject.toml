@@ -19,3 +19,10 @@ include = [
     "atomicio.py",
     "server/ingest.py",
 ]
+
+[tool.coverage.report]
+# 只排除「本質上不可測」的行 —— 不是拿來藏測不動的邏輯。
+# 若哪天想在這裡加東西,先問:那真的不可測,還是我懶得測?
+exclude_lines = [
+    'if __name__ == .__main__.:',   # CLI 進入點:main() 本身有測,這行只是 python 的儀式
+]

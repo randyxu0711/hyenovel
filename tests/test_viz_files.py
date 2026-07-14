@@ -271,3 +271,62 @@ def test_main_without_args_exits(monkeypatch):
     monkeypatch.setattr(viz.sys, "argv", ["viz.py"])
     with pytest.raises(SystemExit):
         viz.main()
+
+
+# ── 補洞:讀檔失敗路徑 + 診斷的 manifests 分支 + main 的邊界 ──────────
+
+def test_read_json_bad_json_exits_cleanly(story):
+    """壞 JSON → 乾淨閘門訊息,不吐 traceback。"""
+    slug, base = story
+    (base / "analysis.json").write_text("{ 這不是 JSON", encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        viz.read_json(base / "analysis.json")
+    assert "不是合法 JSON" in str(e.value)
+
+
+def test_load_missing_analysis_exits(story):
+    slug, base = story
+    (base / "analysis.json").unlink()
+    with pytest.raises(SystemExit) as e:
+        viz.load(slug)
+    assert "找不到" in str(e.value)
+
+
+def test_load_missing_source_exits(story):
+    slug, base = story
+    (base / "source.md").unlink()
+    with pytest.raises(SystemExit) as e:
+        viz.load(slug)
+    assert "找不到" in str(e.value)
+
+
+def test_diagnostics_motif_manifests_counts_as_feeding_theme():
+    """意象 →manifests→ 主題 也算餵養(主題不該因此被判空心)。"""
+    a = {
+        "nodes": [
+            {"id": "m1", "type": "motif", "label": "燈"},
+            {"id": "t1", "type": "theme", "label": "等待"},
+        ],
+        "edges": [{"type": "manifests", "from": "m1", "to": "t1"}],
+    }
+    assert "hollow" not in viz.diagnostics(a).get("t1", set())
+
+
+def test_main_with_only_flags_exits(story, monkeypatch):
+    """只給 --check 沒給 slug → 乾淨退出。"""
+    monkeypatch.setattr(viz.sys, "argv", ["viz.py", "--check"])
+    with pytest.raises(SystemExit) as e:
+        viz.main()
+    assert "缺 slug" in str(e.value)
+
+
+def test_main_prints_diagnostics_when_present(story, monkeypatch, capsys):
+    """圖有病(孤兒技法)→ 出檔時要印診斷數,別讓問題無聲。"""
+    slug, base = story
+    data = _analysis(base)
+    data["edges"] = [e for e in data["edges"] if e["type"] != "produces"]   # k1 變孤兒
+    _write(base, "analysis.json", data)
+
+    monkeypatch.setattr(viz.sys, "argv", ["viz.py", slug])
+    viz.main()
+    assert "診斷:" in capsys.readouterr().out

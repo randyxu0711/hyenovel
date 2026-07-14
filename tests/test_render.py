@@ -216,3 +216,71 @@ def test_main_with_only_flags_exits(monkeypatch):
     with pytest.raises(SystemExit) as e:
         render.main()
     assert "缺 slug" in str(e.value)
+
+
+# ── 補洞:關係指向非主題節點時不得誤標 + feedback 可選段落 ────────────
+
+def test_linked_themes_ignores_non_theme_target():
+    """manifests 指向的不是主題(資料髒)→ 不得列進關聯主題。"""
+    a = {
+        "slug": "x",
+        "nodes": [
+            {"id": "m1", "type": "motif", "label": "燈"},
+            {"id": "e1", "type": "effect", "label": "效"},
+        ],
+        "edges": [{"type": "manifests", "from": "m1", "to": "e1"}],
+    }
+    md = render.render_analysis(a)
+    assert "關聯主題" not in md
+
+
+def test_intent_chain_ignores_serves_to_non_theme():
+    """serves 指向的不是主題 → 意圖鏈只印半條,不得亂接。"""
+    a = {
+        "slug": "x",
+        "nodes": [
+            {"id": "k1", "type": "technique", "label": "技"},
+            {"id": "e1", "type": "effect", "label": "效"},
+            {"id": "e2", "type": "effect", "label": "另一個效"},
+        ],
+        "edges": [
+            {"type": "produces", "from": "k1", "to": "e1"},
+            {"type": "serves", "from": "e1", "to": "e2"},      # 指向 effect,不是 theme
+        ],
+    }
+    md = render.render_analysis(a)
+    assert "- 技 →produces→ 效" in md
+    assert "→serves→" not in md
+
+
+def test_feedback_md_without_read():
+    fb = {"slug": "x", "key_points": [{"title": "點", "quotes": ["q"], "body": "b"}],
+          "one_line": "o"}
+    md = render.render_feedback(fb, "標題")
+    assert "## 這篇在做什麼" not in md
+
+
+def test_feedback_md_without_one_line():
+    fb = {"slug": "x", "read": "r",
+          "key_points": [{"title": "點", "quotes": ["q"], "body": "b"}]}
+    md = render.render_feedback(fb, "標題")
+    assert "## 一句話" not in md
+
+
+def test_feedback_md_without_key_points():
+    fb = {"slug": "x", "read": "r",
+          "strengths": [{"title": "強", "quotes": ["q"], "body": "b"}],
+          "one_line": "o"}
+    md = render.render_feedback(fb, "標題")
+    assert "## 我會往下推的關鍵" not in md
+    assert "### 強" in md
+
+
+def test_feedback_md_point_without_body():
+    """point 沒 body(schema 要求有,但渲染不得因缺欄位炸掉)。"""
+    fb = {"slug": "x", "read": "r",
+          "strengths": [{"title": "強", "quotes": ["q"]}],
+          "key_points": [{"title": "點", "quotes": ["q"]}],
+          "one_line": "o"}
+    md = render.render_feedback(fb, "標題")
+    assert "### 強" in md and "### 1. 點" in md
