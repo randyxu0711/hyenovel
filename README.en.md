@@ -5,7 +5,8 @@
 <br>
 
 ![runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-d97757?style=flat-square)
-![stack](https://img.shields.io/badge/stack-Python%20%2B%20Node-c9a45e?style=flat-square)
+![backend](https://img.shields.io/badge/backend-FastAPI-0d8a6a?style=flat-square)
+![frontend](https://img.shields.io/badge/frontend-React%20%2F%20Vite-d97757?style=flat-square)
 ![runtime](https://img.shields.io/badge/runtime-localhost%20only-8fb89a?style=flat-square)
 
 [繁體中文](README.md) · **English**
@@ -43,8 +44,8 @@ You arrive in a starfield where each story is a **data-driven star-bone** (spine
 |---|---|---|
 | **Observe vs. judge** | two isolated subagents: observe first, judge second — judgment stays independent | one model writes it all at once; observation is polluted by judgment |
 | **Citations** | every claim is **pinned to a verbatim quote**; a hard gate verifies it against the source and blocks hallucinated quotes | often riffs from impression, hard to trace back |
-| **Billing** | runs on Claude Code, **on your subscription** — not metered per token | metered per API token; the more you talk, the more it costs |
-| **Privacy** | **localhost, single-user** only; your writing never leaves your machine | content uploaded to a third-party cloud |
+| **Billing** | runs on Claude Code, **on your subscription** — the whole pipeline isn't metered per token. At API price-list rates a single critique costs roughly **$0.7–0.9** (analyst + criticizer + deterministic layer); multi-turn discussion rides the cache and costs less. That delta is what the subscription saves versus per-token billing. | metered per API token; the more you talk, the more it costs |
+| **Privacy** | **localhost, single-user** only; your story is processed through your own Claude Code subscription (Anthropic) — not uploaded to a separate third-party review service, not stored in a vendor database. Your writing stays as local files under `stories/` | content uploaded to a third-party cloud review site |
 | **Visualization** | intention chain (technique→effect→theme) + text-axis tension curve | plain bulleted text |
 | **Interaction** | **discuss** a piece back and forth — opinionated, anti-sycophancy, asks back | one-shot, tends toward flattering summaries |
 
@@ -91,9 +92,9 @@ Open http://localhost:5173 — dive into a story, view the intention chain / tex
 ## How it works
 
 ```
-stories/<slug>/source.md ──analyst (subagent)──▶ analysis.json   observation of record
+stories/<slug>/source.md ──analyst (subagent)──▶ analysis.json   observation layer (source of truth)
                                                       │
-analysis.json + source.md ──criticizer (subagent)──▶ feedback.json  judgment of record
+analysis.json + source.md ──criticizer (subagent)──▶ feedback.json  judgment layer (source of truth)
                                                       │
                      ┌────────────────┬────────────────┘
                      ▼                ▼

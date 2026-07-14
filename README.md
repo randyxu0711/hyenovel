@@ -5,7 +5,8 @@
 <br>
 
 ![runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-d97757?style=flat-square)
-![stack](https://img.shields.io/badge/stack-Python%20%2B%20Node-c9a45e?style=flat-square)
+![backend](https://img.shields.io/badge/backend-FastAPI-0d8a6a?style=flat-square)
+![frontend](https://img.shields.io/badge/frontend-React%20%2F%20Vite-d97757?style=flat-square)
 ![runtime](https://img.shields.io/badge/runtime-localhost%20only-8fb89a?style=flat-square)
 
 **繁體中文** · [English](README.en.md)
@@ -43,8 +44,8 @@
 |---|---|---|
 | **觀察 vs 判斷** | 兩個隔離的 subagent:先觀察、再判斷,判斷獨立 | 單一模型一口氣寫完,觀察被判斷污染 |
 | **引用** | 每條主張**必附逐字原文**;硬閘門搜原文驗證,幻覺引用直接擋 | 常憑印象發揮,難回溯到原文 |
-| **計費** | 跑在 Claude Code、**吃訂閱**,不按 token 計費 | 按 API token 計費,越聊越貴 |
-| **隱私** | 只跑 **localhost、單人**;你的創作不出本機 | 內容上傳雲端第三方 |
+| **計費** | 跑在 Claude Code、**吃訂閱**,整條 pipeline 不另按 token 計價;以 API 價目表估算,單篇 critique 約 **$0.7–0.9**(analyst + criticizer + 確定性層),多輪討論走快取更便宜 —— 這就是訂閱相對按 token 付費省下的部分 | 按 API token 計費,越聊越貴 |
+| **隱私** | 只跑 **localhost、單人**;故事經你自己的 Claude Code 訂閱送給 Anthropic 處理,不進任何第三方審稿服務、也不另存廠商資料庫,創作以本地檔案(stories/)形式留在本機 | 內容上傳雲端第三方審稿網站 |
 | **視覺化** | 意圖鏈(技法→效果→主題)+ 文本軸張力曲線 | 純文字條列 |
 | **互動** | 能就一篇**來回討論**,反諂媚、有主見、會反問 | 一次性、傾向諂媚綜述 |
 
