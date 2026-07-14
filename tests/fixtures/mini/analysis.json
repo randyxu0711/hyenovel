@@ -1,0 +1,37 @@
+{
+  "slug": "mini",
+  "title": "極小合成樣本",
+  "synopsis": "測試用的契約樣本,不是真故事。",
+  "nodes": [
+    {
+      "id": "b1",
+      "type": "beat",
+      "label": "進門",
+      "intensity": 0.3,
+      "evidence": [{ "quote": "他走進門。屋裡沒有人。" }]
+    },
+    {
+      "id": "k1",
+      "type": "technique",
+      "label": "物件擬人",
+      "evidence": [{ "quote": "像在等誰" }]
+    },
+    {
+      "id": "e1",
+      "type": "effect",
+      "label": "空缺感",
+      "intensity": 0.6,
+      "evidence": [{ "quote": "他把燈關了。" }]
+    },
+    {
+      "id": "t1",
+      "type": "theme",
+      "label": "等待的落空",
+      "evidence": [{ "quote": "還亮著" }]
+    }
+  ],
+  "edges": [
+    { "type": "produces", "from": "k1", "to": "e1" },
+    { "type": "serves", "from": "e1", "to": "t1" }
+  ]
+}

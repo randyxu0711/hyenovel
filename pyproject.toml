@@ -5,3 +5,17 @@ pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true
+# 覆蓋率只量「確定性層」——純函式、無外部 SDK 接線,100% 是真的、可達、有意義。
+# server/ 的其餘模組刻意不量:它們混了 ClaudeSDKClient 接線,
+# 硬要 100% 只能靠 mock 演出來,那種測試在 SDK 改版時會集體假綠。
+# 那些模組的正確性靠「行為契約逐條有測」(server/tests/)守,不靠覆蓋率數字。
+#
+# 注意:不能用 --cov=viz —— viz 同時是 viz.py 和 viz/ 目錄(template/css/js),
+# 會被解讀成後者而收不到資料。用 include 指檔案才對。
+include = [
+    "viz.py",
+    "render.py",
+    "index.py",
+    "atomicio.py",
+    "server/ingest.py",
+]
