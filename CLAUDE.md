@@ -28,6 +28,7 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
 - `/story-critique stories/<slug>/source.md` — 跑完整鏈(analyst→引用閘門→criticizer→渲染→viz)。
 - `/story-discuss <slug>` — 就一篇來回討論(出版編輯人格、有據、反諂媚)。
 - `python viz.py <slug>` — 出 viz.html;`python viz.py <slug> --check` — 只驗引用(編排當閘門用)。
+- `server/.venv/bin/python -m pytest` — 跑全部測試(零成本、不燒訂閱)。CI 在 push 時跑同一套。
 - subagent 定義在 `.claude/agents/{analyst,criticizer}.md`;skill 在 `.claude/skills/`。
 - **slash command 與 subagent 綁工作目錄**:必須在 `~/projects/hyenovel` 開的 session 才載入。
 
@@ -38,6 +39,17 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
 - feedback 的 `refs` 綁 analysis 的 node id(viz 靠它把回饋錨定到圖)。
 - 改視覺化動 `viz/{template.html,viz.css,viz.js}`;`viz.py` 只負責驗證+注入。
 - **故事內容(stories/<slug>/)是使用者創作,預設不 commit。** 程式碼才進版控。
+
+## 測試(判準:這行的行為「是誰決定的」)
+- **我們的政策 → 測**(即使長在 LLM 路徑上):重試/分流、閘門決策、slug 白名單、成本換算、
+  fresh 才清孤兒…… SDK 不知道也不管這些。
+- **外部 SDK/lib 的行為 → 不測**:`ClaudeSDKClient` 的 wire 行為、`jsonschema`/`pypdf` 本身。
+  測它等於測自己寫的假 SDK,SDK 一改版會集體假綠(`total_cost_usd` 那個累計值 bug,任何 mock 都測不出來)。
+- **確定性層(viz/render/index/atomicio/ingest)覆蓋門檻 100%**,CI 少一行就紅;
+  `server/` 不設數字門檻,靠行為契約逐條有測。對純函式 100% 是真的,對混了接線的模組是演出來的。
+- **測試絕不碰 `stories/` 真實內容**(不可重現、CI runner 上根本沒有)。用 `tests/fixtures/mini` 合成樣本 + `tmp_path`。
+- 引用閘門是**三層寬鬆匹配**(逐字→標點正規化→忽略空白),不是子字串比對。
+  寫測試前先讀 `viz.py:locate`,否則「非子字串必擋」這種錯性質會抓到一堆假 bug。
 
 ## 視覺化(viz.html)
 - ① 意圖鏈(cytoscape 分欄)② 文本軸解剖(SVG 張力曲線+意象復現+技法/效果打點)。
