@@ -5,9 +5,10 @@
 <br>
 
 ![runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-d97757?style=flat-square)
-![backend](https://img.shields.io/badge/backend-FastAPI-0d8a6a?style=flat-square)
-![frontend](https://img.shields.io/badge/frontend-React%20%2F%20Vite-d97757?style=flat-square)
-![runtime](https://img.shields.io/badge/runtime-localhost%20only-8fb89a?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square)
+![React](https://img.shields.io/badge/React-61DAFB?style=flat-square)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square)
+![runtime](https://img.shields.io/badge/runtime-localhost%20only-6B7280?style=flat-square)
 
 [繁體中文](README.md) · **English**
 
