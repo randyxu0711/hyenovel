@@ -45,7 +45,7 @@ def append(slug, phase, attempt, turn):
         with _usage_path(slug).open("a", encoding="utf-8") as f:
             f.write(line + "\n")
     except OSError as e:
-        log.warning(f"ledger append failed slug={slug} phase={phase}: {type(e).__name__}")
+        log.warning(f"event=ledger-append-fail slug={slug} phase={phase} err={type(e).__name__}")
 
 
 def load(slug):
@@ -57,7 +57,7 @@ def load(slug):
     try:
         text = p.read_text(encoding="utf-8")
     except OSError as e:
-        log.warning(f"ledger load failed slug={slug}: {type(e).__name__}")
+        log.warning(f"event=ledger-load-fail slug={slug} err={type(e).__name__}")
         return []
     out = []
     for ln in text.splitlines():

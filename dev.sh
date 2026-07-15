@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 readonly BACKEND_HOST=127.0.0.1
 readonly BACKEND_PORT=8787       # 與 server/config.py 和 web/vite.config.ts 綁定;改這裡要同步那兩處
 readonly FRONTEND_PORT=5173
-readonly LOG_DIR=server/logs     # server.log / web.log 與 logger 的 critique.log 同窩
+readonly LOG_DIR=logs            # server.log(uvicorn)/ web.log(vite)與 logger 的 app.log 同窩
 
 start_backend=true
 start_frontend=true

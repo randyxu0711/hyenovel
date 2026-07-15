@@ -65,7 +65,7 @@ def turn_cost(client, total_cost_usd: float | None) -> float:
     _COST_SEEN[client] = total
     delta = total - prev
     if delta < 0:                      # 累加器倒退 = 語意變了(或 client 被重用),別瞎猜
-        log.warning(f"cost accumulator went backwards ({prev} → {total}); recording as-is")
+        log.warning(f"event=cost-backwards prev={prev} total={total}")
         return total
     return delta
 
@@ -143,7 +143,7 @@ async def _guard_path(input_data, tool_use_id, context):
     if ok:
         return {}
     who = input_data.get("agent_id", "main")
-    log.warning(f"[guard] deny {tool} {raw!r} (agent={who})")
+    log.warning(f"event=guard-deny tool={tool} path={raw!r} agent={who}")
     return {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
@@ -228,7 +228,7 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
             info = rate_limit_of(m)
             if info is not None:
                 rl = info
-                log.info(f"rate_limit status={info.status} util={info.utilization} "
+                log.info(f"event=rate-limit status={info.status} util={info.utilization} "
                          f"reset={info.resets_at} type={info.rate_limit_type}")
     return TurnResult(text=text, cost=cost, is_error=err,
                       api_error_status=api_status, rate_limit=rl,

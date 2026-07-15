@@ -63,7 +63,7 @@ async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt)
     attempt = 0
     while attempt <= config.MAX_GATE_RETRIES:
         yield ("event", {"event": "phase", "data": {"name": name, "status": "start", "attempt": attempt}})
-        log.info(f"phase={name} status=start attempt={attempt}")
+        log.info(f"event=phase-start phase={name} attempt={attempt}")
         prompt = first_prompt if attempt == 0 else retry_prompt(detail)
         r = await run_one(prompt)
         cost += r.cost
@@ -72,7 +72,7 @@ async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt)
         cap = sdk_runner._capacity_failure(r)
         if cap == "transient" and transient < config.TRANSIENT_MAX_RETRIES:
             transient += 1
-            log.warning(f"phase={name} status=retry attempt={attempt} api_error={r.api_error_status} (overloaded)")
+            log.warning(f"event=capacity-retry phase={name} attempt={attempt} api_error={r.api_error_status}")
             yield ("event", {"event": "phase", "data": {
                 "name": name, "status": "retry", "attempt": attempt,
                 "detail": f"服務過載({r.api_error_status}),退避重試"}})
@@ -80,7 +80,7 @@ async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt)
             continue                                  # 不推進 attempt(不吃 gate 額度)
         if cap is not None:                           # "hard" 或 transient 耗盡
             resets = r.rate_limit.resets_at if r.rate_limit else None
-            log.error(f"phase={name} status=fail reason=usage-limit resets_at={resets}")
+            log.error(f"event=usage-limit phase={name} resets_at={resets}")
             yield ("result", {"ok": False, "cost": cost, "reason": "usage-limit", "resets_at": resets})
             return
 
@@ -88,10 +88,10 @@ async def _drive_phase(name, run_one, gate_fn, slug, first_prompt, retry_prompt)
         if gate_ok:
             ok = True
             yield ("event", {"event": "phase", "data": {"name": name, "status": "ok", "attempt": attempt}})
-            log.info(f"phase={name} status=ok attempt={attempt}")
+            log.info(f"event=phase-ok phase={name} attempt={attempt}")
             break
         # 不把 detail(閘門 stdout)入 log:可能夾帶 analyst 逐字引用/欄位值,守 safe-to-log。
-        log.warning(f"phase={name} status=retry attempt={attempt} (gate-fail)")
+        log.warning(f"event=gate-retry phase={name} attempt={attempt}")
         yield ("event", {"event": "phase", "data": {
             "name": name, "status": "retry", "attempt": attempt, "detail": detail[:800]}})
         attempt += 1
@@ -190,14 +190,14 @@ async def run_critique(slug: str, on_client=None):
             yield _phase_error("criticizer", "feedback", res, total_cost)
             return
     except asyncio.TimeoutError:
-        log.error(f"phase={stage} status=fail reason=timeout (> {config.PHASE_TIMEOUT}s)")
+        log.error(f"event=timeout stage={stage} limit_s={config.PHASE_TIMEOUT}")
         label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]
         yield {"event": "error", "data": {"where": "timeout",
                "message": f"{label}階段逾時(> {config.PHASE_TIMEOUT}s)",
                "recoverable": False, "reason": "timeout", "cost_usd": round(total_cost, 4)}}
         return
     except Exception as e:
-        log.exception("critique 意外失敗 slug=%s stage=%s", slug, stage)
+        log.exception(f"event=unexpected slug={slug} stage={stage}")
         yield {"event": "error", "data": {"where": "sdk", "message": str(e),
                "recoverable": False, "reason": sdk_runner.classify_failure(str(e)),
                "cost_usd": round(total_cost, 4)}}
@@ -210,7 +210,7 @@ async def run_critique(slug: str, on_client=None):
         viz = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
         index = await asyncio.to_thread(_run_py, [str(config.ROOT / "index.py")])
     except subprocess.TimeoutExpired:
-        log.error(f"render status=fail reason=timeout (> {config.SUBPROCESS_TIMEOUT}s)")
+        log.error(f"event=timeout stage=render limit_s={config.SUBPROCESS_TIMEOUT}")
         yield {"event": "error", "data": {"where": "render",
                "message": f"確定性層子行程逾時(> {config.SUBPROCESS_TIMEOUT}s)",
                "recoverable": False, "reason": "timeout", "cost_usd": round(total_cost, 4)}}
@@ -218,8 +218,8 @@ async def run_critique(slug: str, on_client=None):
     for label, proc in (("render", render), ("viz", viz), ("index", index)):
         if proc.returncode != 0:
             # 確定性層失敗=程式碼錯/schema 錯(非故事內容),截斷後入 log 供事後查。
-            log.error(f"deterministic-layer {label} status=fail rc={proc.returncode}: "
-                      + (proc.stdout + proc.stderr).strip()[:500])
+            log.error(f"event=subprocess-fail stage={label} rc={proc.returncode} "
+                      + f"out={(proc.stdout + proc.stderr).strip()[:500]!r}")
             yield {"event": "error", "data": {"where": "render",
                    "message": f"{label}: " + (proc.stdout + proc.stderr)[:800], "recoverable": False}}
             return

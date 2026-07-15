@@ -26,18 +26,14 @@ web/dist/
 # 前端動畫原型(視覺試驗 HTML,dev 直接開;不版控)
 web/public/
 
-# MemPalace per-project files (issue #185)
-mempalace.yaml
-entities.json
-
 # 內部開發文件(設計/現況/計畫)留本地,不進公開 repo
 docs/
 
 # 介紹簡報(HTML deck,本地/Windows 雙擊開;不版控)
 slides/
 
-# 本機 log 全收這:logger 的 critique.log + dev.sh 的 server.log / web.log(不版控)
-server/logs/
+# 本機 log 全收這:logger 的 app.log + dev.sh 的 server.log / web.log(不版控)
+logs/
 
 # 測試覆蓋率報告(本機產物)
 .coverage

@@ -86,7 +86,7 @@ async def _drive(run: Run):
         # 取消會先 disconnect client,使 receive 拋連線錯誤而非 CancelledError;
         # 已標記 cancelled 就別覆蓋成 error(那是取消的預期後果,非意外 → 不記 traceback)。
         if run.status == "running":
-            log.exception("Run 意外失敗 slug=%s", run.slug)
+            log.exception(f"event=unexpected slug={run.slug}")
             run.status = "error"
             _record(run, {"event": "error",
                           "data": {"where": "run", "message": str(e), "recoverable": False,
