@@ -42,3 +42,7 @@ server/logs/
 # 測試覆蓋率報告(本機產物)
 .coverage
 htmlcov/
+
+# Playwright MCP 的截圖/快照(視覺驗證用暫存,不版控)
+.playwright-mcp/
+/*.png

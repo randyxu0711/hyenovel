@@ -124,6 +124,19 @@ export default function BoneStage(
     ribPaths.push({ d: rr.d, color: "var(--c-motif)", w: 1, op: 0.42 });
     motifDots.push({ id: n.id, x: rr.tx, y: rr.ty, label: n.label });
   }
+
+  // 意象每次復現的落點(逐次,依閱讀序落在脊椎上)——hover 該意象時依序脈動,像意象在文本裡呼吸
+  const motifOcc: { mid: string; x: number; y: number; order: number }[] = [];
+  for (const n of motifs) {
+    const occ = n.evidence.filter(e => e.pos != null).sort((a, b) => a.pos! - b.pos!);
+    occ.forEach((e, k) => { const x = PX(e.pos!); motifOcc.push({ mid: n.id, x, y: onSpine(pts, x).y, order: k }); });
+  }
+  // hover 意象時,依閱讀序把它的復現點牽成一條線(讓「這幾點是同一意象的復現序列」秒懂)
+  const occLink = (() => {
+    if (!hover) return null;
+    const hs = motifOcc.filter(o => o.mid === hover).sort((a, b) => a.order - b.order);
+    return hs.length >= 2 ? "M" + hs.map(o => `${o.x},${o.y}`).join(" L") : null;
+  })();
   for (const n of techs) {
     const x = PX(firstPos(n)), s = onSpine(pts, x);
     const rr = rib(x, s.y, 1, 30, techLevel.get(n.id) ?? 0, n.id);            // 往下;群聚→逐層加長
@@ -156,12 +169,31 @@ export default function BoneStage(
   const dim = (id: string) => (focus ? (focus.has(id) ? 1 : 0.14) : 1);
   const selCur = selected ? curById.get(selected) : null;
 
+  // 主題標籤常駐 → 相鄰太近會疊字:把碰撞的往上錯開一層(渲染時補淡引線回節點)。用 axis 落點 themeA 算,穩定不隨 morph 跳。
+  const themeLabelDy = new Map<string, number>();
+  if (mode === "axis" && !focusId) {
+    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+    const items = themes.map(n => ({ n, c: themeA.get(n.id)! })).filter(o => o.c).sort((a, b) => a.c.x - b.c.x);
+    for (const { n, c } of items) {
+      const endSide = c.x > X1 - 150, w = trunc(n.label).length * 13 + 16;
+      const x0 = endSide ? c.x - (r(n) + 6) - w : c.x + r(n) + 6;
+      let dy = 0;
+      for (let guard = 0; guard < 8; guard++) {
+        const y = c.y + 4 + dy, box = { x0, x1: x0 + w, y0: y - 12, y1: y + 4 };
+        if (!placed.some(p => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) { placed.push(box); break; }
+        dy -= 17;
+      }
+      themeLabelDy.set(n.id, dy);
+    }
+  }
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="bonestage" width="100%"
       onMouseLeave={() => onHover(null)} onClick={() => onSelect(null)}>
       <g opacity={1 - eP}>
         <text x={X0} y={H - 12} fill="#7d745c" fontSize={12}>開頭</text>
         <text x={X1} y={H - 12} fill="#7d745c" fontSize={12} textAnchor="end">結尾</text>
+        <text x={X0} y={BONE_TOP - 8} fill="#7d745c" fontSize={12}>張力</text>
       </g>
       <g opacity={eP} style={{ pointerEvents: "none" }}>
         {Object.entries(COLX).map(([t, x]) => (
@@ -196,16 +228,43 @@ export default function BoneStage(
             </g>
           );
         })}
+        {occLink && <path className="motif-link" d={occLink} pathLength={1} fill="none"
+          stroke="var(--c-motif)" strokeWidth={1.2} strokeLinecap="round" opacity={(1 - eP) * 0.5} />}
+        {motifOcc.map((o, i) => {
+          const on = hover === o.mid;
+          return <circle key={`mo${i}`} className={on ? "motif-occ pulse" : "motif-occ"}
+            cx={o.x} cy={o.y} r={2} fill="var(--c-motif)" opacity={(1 - eP) * (on ? 1 : 0.42)}
+            style={{ pointerEvents: "none",
+              ...(on ? { animationDelay: `${o.order * 0.16}s`, filter: "drop-shadow(0 0 5px var(--c-motif))" } : {}) }} />;
+        })}
       </g>
 
-      {/* 因果韌帶 */}
+      {/* 因果韌帶 + 意圖沿因果方向的粒子穿隧(兩層不同速度=景深;底線收淡讓粒子當主角)*/}
       <g opacity={eP} style={{ pointerEvents: "none" }}>
         {chain.edges.map((e, i) => {
           const A = curById.get(e.from), B = curById.get(e.to);
           if (!A || !B) return null;
           const on = hover === e.from || hover === e.to, mid = (A.x + B.x) / 2;
-          return <path key={i} d={`M${A.x},${A.y} C${mid},${A.y} ${mid},${B.y} ${B.x},${B.y}`}
-            fill="none" stroke="var(--amber)" strokeWidth={on ? 1.8 : 1.2} opacity={hover ? (on ? 0.85 : 0.12) : 0.45} />;
+          const d = `M${A.x},${A.y} C${mid},${A.y} ${mid},${B.y} ${B.x},${B.y}`;
+          const base = hover ? (on ? 0.55 : 0.09) : 0.24;
+          const near = hover ? (on ? 1 : 0) : 0.85;
+          const far = hover ? (on ? 0.6 : 0) : 0.52;
+          const dly = (i % 5) * -0.6;
+          return (
+            <g key={i}>
+              <path d={d} fill="none" stroke="var(--amber)" strokeWidth={on ? 1.4 : 1} opacity={base} />
+              {/* 遠層:小、淡、慢 */}
+              <path className="thread-flow" d={d} pathLength={1} fill="none" stroke="var(--amber)"
+                strokeWidth={on ? 2.2 : 1.9} opacity={far}
+                style={{ strokeDasharray: "0.005 0.1", ["--flow"]: "-0.105", animationDuration: "1.9s",
+                  animationDelay: `${dly - 0.4}s` } as React.CSSProperties} />
+              {/* 近層:略大、亮、快 */}
+              <path className="thread-flow" d={d} pathLength={1} fill="none" stroke="var(--amber)"
+                strokeWidth={on ? 3.4 : 2.8} opacity={near}
+                style={{ strokeDasharray: "0.007 0.055", ["--flow"]: "-0.062", animationDuration: "0.95s",
+                  animationDelay: `${dly}s` } as React.CSSProperties} />
+            </g>
+          );
         })}
       </g>
 
@@ -222,6 +281,8 @@ export default function BoneStage(
         const dg = viz.diag?.[n.id] ?? [];
         const over = dg.includes("overloaded"), orphan = dg.includes("orphan"), hollow = dg.includes("hollow");
         const endSide = c.x > X1 - 150;                  // 靠右緣 → 標籤往左,避免切到
+        const ldy = n.type === "theme" ? (themeLabelDy.get(n.id) ?? 0) : 0;   // 主題標籤去疊字的縱向錯開
+        const labelX = endSide ? -(r(n) + 6) : r(n) + 6;
         return (
           <g key={n.id} className="bs-node" transform={`translate(${c.x},${c.y})`} opacity={base * dim(n.id)}
             style={{ cursor: "pointer", transition: "opacity .25s ease" }}
@@ -233,12 +294,13 @@ export default function BoneStage(
             <circle r={r(n) * (on || sel ? 1.35 : 1)} fill={COLOR[n.type]} fillOpacity={hollow ? 0.28 : 1}
               style={{ transition: "r .2s ease", filter: on || sel || n.type === "theme" ? `drop-shadow(0 0 ${sel ? 11 : 7}px ${COLOR[n.type]})` : undefined }} />
             {hollow && <circle r={r(n)} fill="none" stroke={COLOR[n.type]} strokeWidth={1} opacity={0.7} />}
-            {showLabel && (
-              <text x={endSide ? -(r(n) + 6) : r(n) + 6} y={4} fontSize={on || sel ? 13.5 : 12}
+            {showLabel && <>
+              {ldy !== 0 && <line x1={0} y1={0} x2={labelX} y2={4 + ldy} stroke={COLOR.theme} strokeWidth={0.8} opacity={0.3} />}
+              <text x={labelX} y={4 + ldy} fontSize={on || sel ? 13.5 : 12}
                 textAnchor={endSide ? "end" : "start"} fill={on || sel ? "#f6efd9" : "#d6cba6"} style={HALO}>
                 {trunc(n.label)}{dg.length > 0 && <tspan fill={over ? DIAG.over : orphan ? DIAG.orphan : "#b9a88a"}> ⚑</tspan>}
               </text>
-            )}
+            </>}
           </g>
         );
       })}

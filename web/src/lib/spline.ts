@@ -1,10 +1,5 @@
 export type Pt = [number, number];
 
-export function beatsToPoints(values: number[], x0: number, x1: number, yBase: number, amp: number): Pt[] {
-  const n = values.length;
-  return values.map((v, i) => [x0 + ((x1 - x0) * i) / Math.max(1, n - 1), yBase - v * amp]);
-}
-
 export function spline(p: Pt[]): string {
   if (p.length === 0) return "";
   let d = `M${p[0][0]},${p[0][1]}`;

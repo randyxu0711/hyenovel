@@ -204,3 +204,22 @@
 .bonestage .bs-node:nth-of-type(4n){animation-delay:1.08s}
 .bonestage .bs-node:nth-of-type(5n){animation-delay:.6s}
 @keyframes bsNodeIn{from{opacity:0}to{opacity:1}}
+
+/* 意圖沿因果方向的粒子穿隧:一串小粒子沿韌帶 A→B(produces/serves 的向)流動。
+   兩層(近快亮/遠慢淡)疊出景深穿隧感,呼應塵埃宇宙。round cap 讓每段短 dash 成一顆粒。
+   pathLength=1 正規化;--flow=負一個週期 → 無縫循環。 */
+.bonestage .thread-flow{stroke-linecap:round;
+  animation-name:threadFlow;animation-timing-function:linear;animation-iteration-count:infinite}
+@keyframes threadFlow{to{stroke-dashoffset:var(--flow)}}
+@media (prefers-reduced-motion:reduce){.bonestage .thread-flow{animation:none;opacity:0!important}}
+
+/* 意象復現脈動:hover 某意象 → 它在文本裡的每次復現依閱讀序逐一亮起脈動(織體呼吸)。
+   逐次落在脊椎上;平時淡如織體,伸手才活。animation-delay 逐次錯開=閱讀序的波。 */
+.bonestage .motif-occ{transition:opacity .2s ease}
+.bonestage .motif-occ.pulse{animation:motifPulse 1.5s ease-in-out infinite}
+@keyframes motifPulse{0%,55%,100%{opacity:.5;r:2}22%{opacity:1;r:5.6}}
+@media (prefers-reduced-motion:reduce){.bonestage .motif-occ.pulse{animation:none;opacity:1!important}}
+/* hover 意象時牽起復現序列的線,描出以示閱讀方向 */
+.bonestage .motif-link{stroke-dasharray:1;stroke-dashoffset:1;animation:motifLink .5s ease forwards}
+@keyframes motifLink{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.bonestage .motif-link{animation:none;stroke-dashoffset:0}}
