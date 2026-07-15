@@ -5,7 +5,6 @@
     不需 token 串流;run_turn() 把一輪跑完、回成本。
   - discuss:長命 client + token 串流(在 discuss.py 直接消費 receive_response)。
 """
-import sys
 import weakref
 from dataclasses import dataclass
 from pathlib import Path
@@ -144,7 +143,7 @@ async def _guard_path(input_data, tool_use_id, context):
     if ok:
         return {}
     who = input_data.get("agent_id", "main")
-    print(f"[guard] deny {tool} {raw!r} (agent={who})", file=sys.stderr)
+    log.warning(f"[guard] deny {tool} {raw!r} (agent={who})")
     return {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",

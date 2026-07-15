@@ -84,6 +84,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
             sid = session_id
             prompt = message
     except Exception as e:
+        log.exception("discuss connect 失敗 slug=%s", slug)
         yield {"event": "error", "data": {"where": "connect", "message": str(e), "recoverable": True}}
         return
 
@@ -114,6 +115,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
                         log.info(f"discuss rate_limit status={info.status} "
                                  f"reset={info.resets_at} type={info.rate_limit_type}")
         except Exception as e:
+            log.exception("discuss turn 失敗 slug=%s", slug)
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()

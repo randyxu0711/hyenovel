@@ -56,7 +56,8 @@ def load(slug):
         return []
     try:
         text = p.read_text(encoding="utf-8")
-    except OSError:
+    except OSError as e:
+        log.warning(f"ledger load failed slug={slug}: {type(e).__name__}")
         return []
     out = []
     for ln in text.splitlines():

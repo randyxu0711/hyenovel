@@ -15,6 +15,7 @@ import shutil
 import time
 
 from . import config, orchestrator, sdk_runner
+from .log import log
 
 # phase name → 生長階(給 /running 顯示、前端成形動畫對齊)
 _STEP = {"analyst": 1, "criticizer": 2, "render": 3}
@@ -83,8 +84,9 @@ async def _drive(run: Run):
         raise
     except Exception as e:  # noqa: BLE001 —— 任何意外都收斂成 error 事件,不讓 Task 默默死掉
         # 取消會先 disconnect client,使 receive 拋連線錯誤而非 CancelledError;
-        # 已標記 cancelled 就別覆蓋成 error。
+        # 已標記 cancelled 就別覆蓋成 error(那是取消的預期後果,非意外 → 不記 traceback)。
         if run.status == "running":
+            log.exception("Run 意外失敗 slug=%s", run.slug)
             run.status = "error"
             _record(run, {"event": "error",
                           "data": {"where": "run", "message": str(e), "recoverable": False,

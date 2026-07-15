@@ -10,6 +10,7 @@ import io
 import re
 
 from . import config
+from .log import log
 
 
 def extract_text(filename: str, data: bytes) -> str:
@@ -24,6 +25,9 @@ def extract_text(filename: str, data: bytes) -> str:
         else:                   # txt / md / 其餘:當純文字解(_decode 有 fallback,不會拋)
             text = _decode(data)
     except Exception as e:      # pypdf / docx 解析失敗(壞檔 / 加密)→ 友善訊息,不冒成 500
+        # 給使用者的訊息刻意只留型別;真正的 traceback 落 log(否則事後零診斷線索)。
+        # 只記檔名+例外,不記檔案內容(safe-to-log,同 log 模組約定)。
+        log.exception("extract_text 失敗 file=%s ext=%s", filename, ext)
         raise ValueError(f"讀不了這個檔(可能損壞或加密):{type(e).__name__}")
     return _normalize(text)
 

@@ -190,12 +190,14 @@ async def run_critique(slug: str, on_client=None):
             yield _phase_error("criticizer", "feedback", res, total_cost)
             return
     except asyncio.TimeoutError:
+        log.error(f"phase={stage} status=fail reason=timeout (> {config.PHASE_TIMEOUT}s)")
         label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]
         yield {"event": "error", "data": {"where": "timeout",
                "message": f"{label}階段逾時(> {config.PHASE_TIMEOUT}s)",
                "recoverable": False, "reason": "timeout", "cost_usd": round(total_cost, 4)}}
         return
     except Exception as e:
+        log.exception("critique 意外失敗 slug=%s stage=%s", slug, stage)
         yield {"event": "error", "data": {"where": "sdk", "message": str(e),
                "recoverable": False, "reason": sdk_runner.classify_failure(str(e)),
                "cost_usd": round(total_cost, 4)}}
@@ -208,12 +210,16 @@ async def run_critique(slug: str, on_client=None):
         viz = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
         index = await asyncio.to_thread(_run_py, [str(config.ROOT / "index.py")])
     except subprocess.TimeoutExpired:
+        log.error(f"render status=fail reason=timeout (> {config.SUBPROCESS_TIMEOUT}s)")
         yield {"event": "error", "data": {"where": "render",
                "message": f"確定性層子行程逾時(> {config.SUBPROCESS_TIMEOUT}s)",
                "recoverable": False, "reason": "timeout", "cost_usd": round(total_cost, 4)}}
         return
     for label, proc in (("render", render), ("viz", viz), ("index", index)):
         if proc.returncode != 0:
+            # 確定性層失敗=程式碼錯/schema 錯(非故事內容),截斷後入 log 供事後查。
+            log.error(f"deterministic-layer {label} status=fail rc={proc.returncode}: "
+                      + (proc.stdout + proc.stderr).strip()[:500])
             yield {"event": "error", "data": {"where": "render",
                    "message": f"{label}: " + (proc.stdout + proc.stderr)[:800], "recoverable": False}}
             return
