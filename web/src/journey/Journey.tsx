@@ -36,10 +36,14 @@ export default function Journey() {
   const [usageFrom, setUsageFrom] = useState<{ x: number; y: number } | undefined>();
   const [spend, setSpend] = useState<number | null>(null);   // 入口上的累計小數字;讀不到就不顯示
   const [blooming, setBlooming] = useState(false);           // 入口點火後,catalog 真物體(種骨/軌道)綻放入場的一次性窗
+  const [returning, setReturning] = useState<string | null>(null);  // 從單篇退場、正飛回軌道槽位的那篇
+  const [closing, setClosing] = useState(false);             // 單篇 overlay 向中心收合中
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
   const bloomTimer = useRef<number>();
+  const returnTimers = useRef<number[]>([]);
   const orderRef = useRef<string[]>([]);
+  const OVERLAY_OUT_MS = 460;   // overlay 收合時長,與 CSS overlayOut 對齊
 
   const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
   // 誕生:重整列表,並把這篇標成「新成形」→ 柔金暈常駐(閱讀優先);點進或 refresh 後卸下
@@ -62,13 +66,26 @@ export default function Journey() {
   useEffect(() => { if (slug) setEntered(true); }, [slug]);
   // 重整後若還有胚胎在孕育,直接落在 catalog
   useEffect(() => { if (gestations.size) setEntered(true); }, [gestations.size]);
-  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); clearTimeout(bloomTimer.current); }, []);
+  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); clearTimeout(bloomTimer.current); returnTimers.current.forEach(clearTimeout); }, []);
 
   // 入口風化吹淨 → 進 catalog,並開一次性 bloom 窗:真的種骨點火、真的軌道從中心綻放(非替身)
   const onEntered = () => {
     setEntered(true); setBlooming(true);
     clearTimeout(bloomTimer.current);
     bloomTimer.current = window.setTimeout(() => setBlooming(false), 1700);
+  };
+
+  // 單篇退場:overlay 先向中心收合 → nav 回目錄 → 那篇的骨從中心飛回軌道槽位 → 清除
+  const startReturn = () => {
+    if (!slug) { nav("/"); return; }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { nav("/"); return; }
+    const s = slug;
+    setClosing(true);
+    returnTimers.current.forEach(clearTimeout);
+    returnTimers.current = [
+      window.setTimeout(() => { setClosing(false); setReturning(s); nav("/"); }, OVERLAY_OUT_MS),
+      window.setTimeout(() => setReturning(null), OVERLAY_OUT_MS + 1500),   // 蓋過 returnAssemble 1.4s
+    ];
   };
 
   // 點已誕生的星:那具骨飛向中心+放大爆散,飛抵才進單篇
@@ -125,7 +142,7 @@ export default function Journey() {
       <Camera stage={stage} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
-          gestations={gestations} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
+          gestations={gestations} hatching={hatching} fresh={fresh} returning={returning} onPick={pick} onCancel={cancel} />
       </Camera>
       {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}
       {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} igniting={blooming} />}
@@ -144,11 +161,11 @@ export default function Journey() {
           onPick={s => { setUsageOpen(false); nav(`/story/${s}`, { state: { tab: "usage" } }); }} />
       )}
       {stage === "overview" && <Overview onEnter={onEntered} />}
-      {stage === "single" && <div className="single-overlay"><Single /></div>}
+      {stage === "single" && <div className={`single-overlay${closing ? " out" : ""}`}><Single /></div>}
       <AddStory open={adding} initialFile={dropFile}
         onClose={() => { setAdding(false); setDropFile(null); }}
         onCreated={onCreated} />
-      <Chrome stage={stage} title={title} onBack={() => nav("/")} />
+      <Chrome stage={stage} title={title} onBack={startReturn} />
       {usageLimitResetAt !== undefined && (
         <div className="usage-toast" role="status">
           <HyenaSweat />

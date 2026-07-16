@@ -420,3 +420,25 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 @media (prefers-reduced-motion:reduce){
   .orbits.bloom ellipse,.nascent.ignite .nascent-spark{animation:none}
 }
+
+/* ── ① 逆俯衝出場:overlay 向中心收合 → 骨在鏡頭焦點(自己的槽位)重組 → 鏡頭拉遠帶回環上 ── */
+.single-overlay.out{animation:overlayOut .46s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes overlayOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.92)}}
+
+/* 外殼留在自己的軌道槽位(不繞世界中心);退場當下鏡頭正對焦此槽位(single 1.5×),
+   零件就在鏡頭正中對焦重組,鏡頭再拉遠(→catalog)把它帶回環上——運鏡本身就是逆俯衝 */
+.story.returning{z-index:47}
+
+/* 內部零件:從四周(--bx/--by,再被 single 相機 1.5× 放大 → 畫面級)聚回定位;脊椎連線畫回 */
+.skel.reassemble{overflow:visible}
+.skel.reassemble .rib,.skel.reassemble .node{transform-box:fill-box;transform-origin:center;
+  animation:gather .72s cubic-bezier(.2,.55,.25,1) both}
+@keyframes gather{
+  from{transform:translate(var(--bx),var(--by)) scale(1.5);opacity:0}
+  55%{opacity:1}
+  to{transform:translate(0,0) scale(1);opacity:1}}
+.skel.reassemble .spine{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .72s .12s ease both}
+.skel.reassemble .stub{opacity:0;animation:stubIn .5s .32s ease both}
+@keyframes stubIn{to{opacity:.38}}
+
+@media (prefers-reduced-motion:reduce){.single-overlay.out,.story.returning{animation:none}}

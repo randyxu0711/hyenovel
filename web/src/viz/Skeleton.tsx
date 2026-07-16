@@ -5,14 +5,15 @@ const CX = 155, CY = 95; // buildBone 用 W=310,H=190 的中心
 
 // 星骨指紋:脊椎=張力曲線、肋=主題(上)/意象(下)、肋長=復現、亮節=主題。資料驅動,非裝飾。
 // burst=true:飛抵中心後,每個零件朝外(離中心的方向)爆散(見 journey.css 的 .skel.burst)。
-export default function Skeleton({ viz, width, burst }: { viz: VizData; width: number; burst?: boolean }) {
+// reassemble=true:burst 的逆放——零件從四周(--bx/--by)聚回、脊椎連線,重組成骨架(.skel.reassemble)。
+export default function Skeleton({ viz, width, burst, reassemble }: { viz: VizData; width: number; burst?: boolean; reassemble?: boolean }) {
   const W = 310, H = 190;
   const { d, ribs } = buildBone(viz, W, H);
   const shard = (x: number, y: number) =>
     ({ ["--bx"]: `${((x - CX) * 2.6).toFixed(0)}px`, ["--by"]: `${((y - CY) * 2.6).toFixed(0)}px` } as React.CSSProperties);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={width} height={(width * H) / W}
-      className={burst ? "skel burst" : "skel"}
+      className={burst ? "skel burst" : reassemble ? "skel reassemble" : "skel"}
       style={{ filter: "drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))" }}>
       <path className="spine" d={d} pathLength={1} fill="none" stroke="var(--bone)" strokeWidth={2.2} strokeLinecap="round" />
       {ribs.map((b, i) => (
