@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { buildBone } from "../lib/bone";
 import { orderedBeats } from "../lib/axis";
 import type { Pt } from "../lib/spline";
@@ -88,78 +88,84 @@ export default function BoneStage(
   }, [mode]);
   const g = gRef.current, eP = ease(g);
 
-  const { d, pts } = buildBone(viz, W, BONE_H);
-  const beats = orderedBeats(viz);
+  // 與 morph 進度 g 無關的佈局全依 viz 算一次:morph 期間 force() 每幀重渲染時不再重算(只剩下方 curById 的 lerp)
+  const layout = useMemo(() => {
+    const { d, pts } = buildBone(viz, W, BONE_H);
+    const beats = orderedBeats(viz);
 
-  // 各型別在骨上的位置(bone 座標;y 之後 +BONE_TOP 成絕對)
-  const recurOf = (n: VizNode) => Math.max(1, n.evidence.length);
-  const themes = viz.nodes.filter(n => n.type === "theme");
-  const motifs = viz.nodes.filter(n => n.type === "motif");
-  const techs = viz.nodes.filter(n => n.type === "technique");
-  const effects = viz.nodes.filter(n => n.type === "effect");
-  const maxThemeR = Math.max(1, ...themes.map(recurOf));
-  const maxMotifR = Math.max(1, ...motifs.map(recurOf));
+    // 各型別在骨上的位置(bone 座標;y 之後 +BONE_TOP 成絕對)
+    const recurOf = (n: VizNode) => Math.max(1, n.evidence.length);
+    const themes = viz.nodes.filter(n => n.type === "theme");
+    const motifs = viz.nodes.filter(n => n.type === "motif");
+    const techs = viz.nodes.filter(n => n.type === "technique");
+    const effects = viz.nodes.filter(n => n.type === "effect");
+    const maxThemeR = Math.max(1, ...themes.map(recurOf));
+    const maxMotifR = Math.max(1, ...motifs.map(recurOf));
 
-  // 技法往下的肋:同段群聚 → 逐層加長,讓肋尖往下展開不疊
-  const techLevel = new Map<string, number>();
-  { const lastAt: number[] = [];
-    for (const n of [...techs].sort((a, b) => firstPos(a) - firstPos(b))) {
-      const x = PX(firstPos(n)); let lv = 0;
-      while (lastAt[lv] != null && x - lastAt[lv] < 26) lv++;
-      lastAt[lv] = x; techLevel.set(n.id, lv);
-    } }
+    // 技法往下的肋:同段群聚 → 逐層加長,讓肋尖往下展開不疊
+    const techLevel = new Map<string, number>();
+    { const lastAt: number[] = [];
+      for (const n of [...techs].sort((a, b) => firstPos(a) - firstPos(b))) {
+        const x = PX(firstPos(n)); let lv = 0;
+        while (lastAt[lv] != null && x - lastAt[lv] < 26) lv++;
+        lastAt[lv] = x; techLevel.set(n.id, lv);
+      } }
 
-  // rib paths(bone 座標,有機散開)+ 各橋接節點的 A 落點(絕對)
-  const ribPaths: { d: string; color: string; w: number; op: number }[] = [];
-  const motifDots: { id: string; x: number; y: number; label: string }[] = [];   // 意象肋尖端點(非橋接、不飛)
-  const themeA = new Map<string, { x: number; y: number }>();
-  const techA = new Map<string, { x: number; y: number }>();
-  const effA = new Map<string, { x: number; y: number }>();
-  for (const n of themes) {
-    const x = PX(firstPos(n)), s = onSpine(pts, x);
-    const rr = rib(x, s.y, -1, 26 + (recurOf(n) / maxThemeR) * 42, 0, n.id);  // 往上
-    ribPaths.push({ d: rr.d, color: "var(--c-theme)", w: 1.4, op: 0.6 });
-    themeA.set(n.id, { x: rr.tx, y: rr.ty + BONE_TOP });
-  }
-  for (const n of motifs) {
-    const x = PX(firstPos(n)), s = onSpine(pts, x);
-    const rr = rib(x, s.y, -1, 13 + (recurOf(n) / maxMotifR) * 16, 0, n.id);
-    ribPaths.push({ d: rr.d, color: "var(--c-motif)", w: 1, op: 0.42 });
-    motifDots.push({ id: n.id, x: rr.tx, y: rr.ty, label: n.label });
-  }
+    // rib paths(bone 座標,有機散開)+ 各橋接節點的 A 落點(絕對)
+    const ribPaths: { d: string; color: string; w: number; op: number }[] = [];
+    const motifDots: { id: string; x: number; y: number; label: string }[] = [];   // 意象肋尖端點(非橋接、不飛)
+    const themeA = new Map<string, { x: number; y: number }>();
+    const techA = new Map<string, { x: number; y: number }>();
+    const effA = new Map<string, { x: number; y: number }>();
+    for (const n of themes) {
+      const x = PX(firstPos(n)), s = onSpine(pts, x);
+      const rr = rib(x, s.y, -1, 26 + (recurOf(n) / maxThemeR) * 42, 0, n.id);  // 往上
+      ribPaths.push({ d: rr.d, color: "var(--c-theme)", w: 1.4, op: 0.6 });
+      themeA.set(n.id, { x: rr.tx, y: rr.ty + BONE_TOP });
+    }
+    for (const n of motifs) {
+      const x = PX(firstPos(n)), s = onSpine(pts, x);
+      const rr = rib(x, s.y, -1, 13 + (recurOf(n) / maxMotifR) * 16, 0, n.id);
+      ribPaths.push({ d: rr.d, color: "var(--c-motif)", w: 1, op: 0.42 });
+      motifDots.push({ id: n.id, x: rr.tx, y: rr.ty, label: n.label });
+    }
 
-  // 意象每次復現的落點(逐次,依閱讀序落在脊椎上)——hover 該意象時依序脈動,像意象在文本裡呼吸
-  const motifOcc: { mid: string; x: number; y: number; order: number }[] = [];
-  for (const n of motifs) {
-    const occ = n.evidence.filter(e => e.pos != null).sort((a, b) => a.pos! - b.pos!);
-    occ.forEach((e, k) => { const x = PX(e.pos!); motifOcc.push({ mid: n.id, x, y: onSpine(pts, x).y, order: k }); });
-  }
+    // 意象每次復現的落點(逐次,依閱讀序落在脊椎上)——hover 該意象時依序脈動,像意象在文本裡呼吸
+    const motifOcc: { mid: string; x: number; y: number; order: number }[] = [];
+    for (const n of motifs) {
+      const occ = n.evidence.filter(e => e.pos != null).sort((a, b) => a.pos! - b.pos!);
+      occ.forEach((e, k) => { const x = PX(e.pos!); motifOcc.push({ mid: n.id, x, y: onSpine(pts, x).y, order: k }); });
+    }
+    for (const n of techs) {
+      const x = PX(firstPos(n)), s = onSpine(pts, x);
+      const rr = rib(x, s.y, 1, 30, techLevel.get(n.id) ?? 0, n.id);            // 往下;群聚→逐層加長
+      ribPaths.push({ d: rr.d, color: "var(--c-technique)", w: 1, op: 0.5 });
+      techA.set(n.id, { x: rr.tx, y: rr.ty + BONE_TOP });
+    }
+    for (const n of effects) { const x = PX(firstPos(n)), s = onSpine(pts, x); effA.set(n.id, { x, y: s.y + BONE_TOP }); }
+
+    const chain = layoutChain(viz, CHAIN_H);
+    const chainB = new Map(chain.nodes.map(n => [n.id, { x: n.x, y: n.y + CHAIN_TOP }]));
+
+    const bridgeNodes = [...techs, ...effects, ...themes];
+    const sorted = [...bridgeNodes].sort((a, b) => firstPos(a) - firstPos(b));
+    const phaseOf = new Map(sorted.map((n, i) => [n.id, sorted.length > 1 ? i / (sorted.length - 1) : 0]));
+    const aOf = (n: VizNode) => (n.type === "theme" ? themeA.get(n.id) : n.type === "effect" ? effA.get(n.id) : techA.get(n.id));
+    const bridges: Bridge[] = bridgeNodes.map(n => {
+      const b = chainB.get(n.id) ?? { x: 500, y: 300 };
+      const a = aOf(n) ?? b;
+      return { node: n, ax: a.x, ay: a.y, bx: b.x, by: b.y, phase: phaseOf.get(n.id) ?? 0 };
+    });
+    return { d, pts, beats, ribPaths, motifDots, motifOcc, chain, bridges, themeA, themes };
+  }, [viz]);
+  const { d, pts, beats, ribPaths, motifDots, motifOcc, chain, bridges, themeA, themes } = layout;
+
   // hover 意象時,依閱讀序把它的復現點牽成一條線(讓「這幾點是同一意象的復現序列」秒懂)
   const occLink = (() => {
     if (!hover) return null;
     const hs = motifOcc.filter(o => o.mid === hover).sort((a, b) => a.order - b.order);
     return hs.length >= 2 ? "M" + hs.map(o => `${o.x},${o.y}`).join(" L") : null;
   })();
-  for (const n of techs) {
-    const x = PX(firstPos(n)), s = onSpine(pts, x);
-    const rr = rib(x, s.y, 1, 30, techLevel.get(n.id) ?? 0, n.id);            // 往下;群聚→逐層加長
-    ribPaths.push({ d: rr.d, color: "var(--c-technique)", w: 1, op: 0.5 });
-    techA.set(n.id, { x: rr.tx, y: rr.ty + BONE_TOP });
-  }
-  for (const n of effects) { const x = PX(firstPos(n)), s = onSpine(pts, x); effA.set(n.id, { x, y: s.y + BONE_TOP }); }
-
-  const chain = layoutChain(viz, CHAIN_H);
-  const chainB = new Map(chain.nodes.map(n => [n.id, { x: n.x, y: n.y + CHAIN_TOP }]));
-
-  const bridgeNodes = [...techs, ...effects, ...themes];
-  const sorted = [...bridgeNodes].sort((a, b) => firstPos(a) - firstPos(b));
-  const phaseOf = new Map(sorted.map((n, i) => [n.id, sorted.length > 1 ? i / (sorted.length - 1) : 0]));
-  const aOf = (n: VizNode) => (n.type === "theme" ? themeA.get(n.id) : n.type === "effect" ? effA.get(n.id) : techA.get(n.id));
-  const bridges: Bridge[] = bridgeNodes.map(n => {
-    const b = chainB.get(n.id) ?? { x: 500, y: 300 };
-    const a = aOf(n) ?? b;
-    return { node: n, ax: a.x, ay: a.y, bx: b.x, by: b.y, phase: phaseOf.get(n.id) ?? 0 };
-  });
   const STAG = 0.32;
   const curById = new Map(bridges.map(br => {
     const t = ease(clamp((g - br.phase * STAG) / (1 - STAG)));
