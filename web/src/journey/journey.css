@@ -408,6 +408,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   55%{opacity:1}
   to{transform:translate(0,0) scale(1);opacity:1}}
 .skel.reassemble .spine{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .72s .12s ease both}
+@keyframes draw{to{stroke-dashoffset:0}}   /* 脊椎連線畫回(dashoffset 1→0);原長在已刪的 hero 區塊,退場軸靠它 */
 .skel.reassemble .stub{opacity:0;animation:stubIn .5s .32s ease both}
 @keyframes stubIn{to{opacity:.38}}
 
