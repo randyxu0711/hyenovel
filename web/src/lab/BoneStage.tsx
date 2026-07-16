@@ -72,7 +72,10 @@ export default function BoneStage(
   const rafRef = useRef(0);
   const [, force] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
-    const from = gRef.current, to = mode === "chain" ? 1 : 0, start = performance.now(), DUR = 950;
+    const to = mode === "chain" ? 1 : 0;
+    // 元件自守:減動偏好下直接跳目標姿勢,不跑 950ms morph rAF
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { gRef.current = to; force(); return; }
+    const from = gRef.current, start = performance.now(), DUR = 950;
     const tick = (now: number) => {
       const k = clamp((now - start) / DUR);
       gRef.current = from + (to - from) * k; force();
