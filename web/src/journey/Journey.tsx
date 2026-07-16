@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getIndex, getUsageAll } from "../data/client";
-import { worldPos, WORLD, type Stage } from "../lib/camera";
+import { worldPos, WORLD, ringRadii, type Stage } from "../lib/camera";
 import Camera from "./Camera";
 import Chrome from "./Chrome";
 import Dust from "./Dust";
@@ -72,7 +72,11 @@ export default function Journey() {
   const onEntered = () => {
     setEntered(true); setBlooming(true);
     clearTimeout(bloomTimer.current);
-    bloomTimer.current = window.setTimeout(() => setBlooming(false), 1700);
+    // 各圈綻放依圈序 delay 0.13s、單圈 .95s → 末圈結束於 (rings-1)*130+950ms;
+    // 窗口跟著圈數走,故事再多外圈也不會被截成瞬間彈出(下限 1700 保留少篇時的原節奏)
+    const rings = ringRadii(Math.max(1, ordered.length)).length;
+    const bloomMs = Math.max(1700, (rings - 1) * 130 + 950);
+    bloomTimer.current = window.setTimeout(() => setBlooming(false), bloomMs);
   };
 
   // 單篇退場:overlay 先向中心收合 → nav 回目錄 → 那篇的骨從中心飛回軌道槽位 → 清除

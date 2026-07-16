@@ -5,8 +5,10 @@ import { useEffect, useRef } from "react";
 const W = 600, H = 320;
 const SERIF = '52px "Source Han Serif TC","Noto Serif TC","Songti TC",serif';
 const SANS = '15px "Inter","Noto Sans TC",sans-serif';
+// 「進入」pill 的幾何:canvas 畫它、透明命中按鈕貼它,兩處同源避免各抄一份後對不準
+const PILL = { x: 230, y: 222, w: 140, h: 46, r: 23 };
 
-type P = { x: number; y: number; r: number; g: number; b: number; a: number; vx: number; vy: number; delay: number };
+type P = { x: number; y: number; a: number; vx: number; vy: number; delay: number; color: string };
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath(); ctx.moveTo(x + r, y);
@@ -26,7 +28,7 @@ function paintTitle(ctx: CanvasRenderingContext2D) {
   ls("12px"); ctx.fillStyle = "#f3ecd6"; ctx.font = SERIF; ctx.fillText("鬣文", W / 2, 126);
   ls("7.5px"); ctx.fillStyle = "#8c8265"; ctx.font = SANS; ctx.fillText("HYENOVEL", W / 2, 170);
   ls("0px"); ctx.strokeStyle = "rgba(220,200,150,.3)"; ctx.lineWidth = 1;
-  roundRect(ctx, 230, 222, 140, 46, 23); ctx.stroke();
+  roundRect(ctx, PILL.x, PILL.y, PILL.w, PILL.h, PILL.r); ctx.stroke();
   ls("3px"); ctx.fillStyle = "#b9ad88"; ctx.font = SANS; ctx.fillText("進入 ⟶", W / 2, 251);
   ls("0px");
 }
@@ -56,6 +58,8 @@ export default function TitleBurst({ igniting, onEnter }: { igniting: boolean; o
 
   useEffect(() => {
     if (!igniting) return;
+    // 元件自守自身動作:減動偏好下不取樣、不跑 rAF(對稱於 CSS 側的 @media 防護)
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const c = cvs.current; if (!c) return;
     const ctx = get2d(c); if (!ctx || !ctx.getImageData) return;
     const img = ctx.getImageData(0, 0, c.width, c.height).data;
@@ -65,7 +69,8 @@ export default function TitleBurst({ igniting, onEnter }: { igniting: boolean; o
       const i = (Math.floor(y * dpr) * c.width + Math.floor(x * dpr)) * 4;
       const a = img[i + 3];
       if (a > 40) parts.push({
-        x, y, r: img[i], g: img[i + 1], b: img[i + 2], a: a / 255,
+        x, y, a: a / 255,
+        color: `rgb(${img[i]},${img[i + 1]},${img[i + 2]})`,   // 顏色取樣時定死,tick 內不再每幀重組字串
         vx: -(1.2 + Math.random() * 2.6), vy: (Math.random() - 0.5) * 1.1,
         delay: ((W - x) / W) * 450,       // 靠右的先起飛 → 風由右往左
       });
@@ -76,7 +81,7 @@ export default function TitleBurst({ igniting, onEnter }: { igniting: boolean; o
       ctx.clearRect(0, 0, W, H);
       let alive = 0;
       for (const p of parts) {
-        ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+        ctx.fillStyle = p.color;
         if (t < p.delay) { ctx.globalAlpha = p.a; ctx.fillRect(p.x, p.y, 1.6, 1.6); alive++; continue; }
         const dt = (t - p.delay) / 1000;
         const a = p.a * (1 - dt / 1.1);
@@ -100,7 +105,7 @@ export default function TitleBurst({ igniting, onEnter }: { igniting: boolean; o
     <div className={`ov-canvas-wrap${igniting ? " igniting" : ""}`} style={{ position: "relative", width: W, height: H }}>
       <canvas ref={cvs} style={{ width: W, height: H, display: "block" }} aria-hidden />
       <button className="ov-enter-hit" aria-label="進入" onClick={onEnter}
-        style={{ position: "absolute", left: 230, top: 222, width: 140, height: 46 }} />
+        style={{ position: "absolute", left: PILL.x, top: PILL.y, width: PILL.w, height: PILL.h }} />
     </div>
   );
 }
