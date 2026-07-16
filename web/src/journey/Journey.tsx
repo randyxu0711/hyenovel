@@ -35,8 +35,10 @@ export default function Journey() {
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageFrom, setUsageFrom] = useState<{ x: number; y: number } | undefined>();
   const [spend, setSpend] = useState<number | null>(null);   // 入口上的累計小數字;讀不到就不顯示
+  const [blooming, setBlooming] = useState(false);           // 入口點火後,catalog 真物體(種骨/軌道)綻放入場的一次性窗
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
+  const bloomTimer = useRef<number>();
   const orderRef = useRef<string[]>([]);
 
   const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
@@ -60,7 +62,14 @@ export default function Journey() {
   useEffect(() => { if (slug) setEntered(true); }, [slug]);
   // 重整後若還有胚胎在孕育,直接落在 catalog
   useEffect(() => { if (gestations.size) setEntered(true); }, [gestations.size]);
-  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); }, []);
+  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); clearTimeout(bloomTimer.current); }, []);
+
+  // 入口風化吹淨 → 進 catalog,並開一次性 bloom 窗:真的種骨點火、真的軌道從中心綻放(非替身)
+  const onEntered = () => {
+    setEntered(true); setBlooming(true);
+    clearTimeout(bloomTimer.current);
+    bloomTimer.current = window.setTimeout(() => setBlooming(false), 1700);
+  };
 
   // 點已誕生的星:那具骨飛向中心+放大爆散,飛抵才進單篇
   const pick = (s: string) => {
@@ -114,12 +123,12 @@ export default function Journey() {
       <Dust />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
       <Camera stage={stage} focus={focus}>
-        {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} />}
+        {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
           gestations={gestations} hatching={hatching} fresh={fresh} onPick={pick} onCancel={cancel} />
       </Camera>
       {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}
-      {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} />}
+      {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} igniting={blooming} />}
       {stage === "catalog" && (
         // 點它 → 這行小字本身飛到中心、放大成總計(它就是同一個數字)
         <button className="usage-entry" onClick={e => {
@@ -134,7 +143,7 @@ export default function Journey() {
         <UsageMap entries={entries} from={usageFrom} onClose={() => setUsageOpen(false)}
           onPick={s => { setUsageOpen(false); nav(`/story/${s}`, { state: { tab: "usage" } }); }} />
       )}
-      {stage === "overview" && <Overview onEnter={() => setEntered(true)} />}
+      {stage === "overview" && <Overview onEnter={onEntered} />}
       {stage === "single" && <div className="single-overlay"><Single /></div>}
       <AddStory open={adding} initialFile={dropFile}
         onClose={() => { setAdding(false); setDropFile(null); }}

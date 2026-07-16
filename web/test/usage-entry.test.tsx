@@ -43,8 +43,9 @@ const app = () => render(
 );
 
 async function toCatalog(r: ReturnType<typeof app>) {
-  await waitFor(() => expect(r.getByText(/進入/)).toBeTruthy());
-  fireEvent.click(r.getByText(/進入/));
+  // 「進入」現在畫在 canvas 上,DOM 只剩 aria-label 的透明命中鈕 → 用 role 找
+  await waitFor(() => expect(r.getByRole("button", { name: /進入/ })).toBeTruthy());
+  fireEvent.click(r.getByRole("button", { name: /進入/ }));
   await waitFor(() => expect(r.container.querySelector(".field")).toBeTruthy());
 }
 
