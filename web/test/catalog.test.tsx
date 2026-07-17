@@ -59,6 +59,18 @@ describe("Catalog", () => {
         onPick={() => {}} onCancel={() => {}} />);
     expect(getAllByTestId("story")[0].querySelector(".bwave")).toBeNull();
   });
+  it("孕育中 vizReady:象徵骨換成真骨(早出 viz 落檔 → 不再演寫死的 SP)", () => {
+    const g = (vizReady?: boolean): Map<string, Gestation> =>
+      new Map([["egg", { step: 2, status: "running", title: "胚胎", vizReady }]]);
+    const { container, rerender } = render(
+      <Catalog entries={[]} ordered={["egg"]} gestations={g()} onPick={() => {}} onCancel={() => {}} />);
+    expect(container.querySelector('[data-testid="gestating"]'), "還沒資料就該是象徵骨").toBeTruthy();
+
+    rerender(
+      <Catalog entries={[]} ordered={["egg"]} gestations={g(true)} onPick={() => {}} onCancel={() => {}} />);
+    expect(container.querySelector('[data-testid="gestating"]'), "有資料了還在演象徵骨").toBeNull();
+    expect(container.querySelector(".bone-ph"), "該換成真骨(viz 未載入 → 佔位)").toBeTruthy();
+  });
   it("同一 slug 從孕育轉誕生:renderer 由 GestatingStar 換成 Skeleton 佔位", () => {
     const g: Map<string, Gestation> = new Map([["x", { step: 3, status: "running", title: "x" }]]);
     const { container, rerender } = render(

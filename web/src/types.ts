@@ -43,7 +43,9 @@ export interface IndexEntry {
 export interface IndexFile { generated: string; count: number; stories: IndexEntry[]; }
 
 // 孕育中星星的即時狀態(來自 SSE / /running;step 1→4)
-export type Gestation = { step: number; status: string; title: string };
+// vizReady:後端早出 viz 已落檔(analyst 交件)→ 孕育中就能改畫真骨,不再是象徵骨。
+// 與 step 分開:step 是「跑到哪格」,vizReady 是「資料在不在」——preview 不動 step。
+export type Gestation = { step: number; status: string; title: string; vizReady?: boolean };
 
 export type UsagePhase = {
   input: number; output: number; cache_creation: number; cache_read: number;

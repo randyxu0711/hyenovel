@@ -37,6 +37,30 @@ describe("useGestations", () => {
     expect(result.current.gestations.has("b")).toBe(false);
   });
 
+  it("phase preview ok → vizReady,且不動 step(preview 不是一格)", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([
+      { event: "phase", data: { name: "analyst", status: "ok" } },    // → step 2
+      { event: "phase", data: { name: "preview", status: "ok" } },    // 早出 viz 落檔
+    ]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("p", "預覽"));
+    await waitFor(() => expect(result.current.gestations.get("p")?.vizReady).toBe(true));
+    expect(result.current.gestations.get("p")?.step, "preview 不該把 step 推掉").toBe(2);
+  });
+
+  it("phase preview skip(產失敗)→ 不給 vizReady,續用象徵骨", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([
+      { event: "phase", data: { name: "analyst", status: "ok" } },
+      { event: "phase", data: { name: "preview", status: "skip" } },
+    ]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("q", "跳過"));
+    await waitFor(() => expect(result.current.gestations.get("q")?.step).toBe(2));
+    expect(result.current.gestations.get("q")?.vizReady).toBeFalsy();
+  });
+
   it("cancel 呼叫後端並移除", async () => {
     running.mockResolvedValue([]);
     cancel.mockResolvedValue(true);
