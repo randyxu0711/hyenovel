@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { extractStory, createStory } from "../data/client";
 import { spline } from "../lib/spline";
-import { SP, buildRibs } from "./GestatingStar";
+import { SP, buildRibs } from "../lib/symbolic-bone";
 
 type Phase = "pick" | "preview";
 
-// 選檔框裡的淡虛線骨 —— 與孕育星同一副座標,丟進去長成的就是這根骨
+// 選檔框裡的淡虛線骨 —— 純象徵:「丟進來會長出一根骨」。故事根本還不存在,
+// 沒有資料可驅動,所以象徵在這裡是誠實的(孕育中就不行了,那時畫的是真骨)。
 const DROP_D = spline(SP);
 const DROP_RIBS = buildRibs();
 

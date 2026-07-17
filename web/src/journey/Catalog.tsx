@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Skeleton from "../viz/Skeleton";
-import GestatingStar from "./GestatingStar";
+import CloudCollapse from "./CloudCollapse";
 import { getViz } from "../data/client";
 import { worldPos, WORLD } from "../lib/camera";
 import type { IndexEntry, VizData, Gestation } from "../types";
@@ -18,7 +18,14 @@ function StoryBone({ slug, hasViz, burst, reassemble }: { slug: string; hasViz: 
   return <Skeleton viz={viz} width={300} burst={burst} reassemble={reassemble} />;
 }
 
-const WORD = ["", "凝聚", "長出骨架", "秤出輕重", "成形"];
+// 階段詞對齊「後端那格實際在幹嘛」,不是「跑完第幾格」:
+//   step1 = analyst 跑(分鐘級)→ 凝聚:真的還沒有任何資料
+//   step2 = criticizer 跑(分鐘級)→ 秤出輕重:那正是 criticizer 在做的事,骨此時已在場
+//   step3 = render 跑(秒級)、step4 = done → 成形
+// 「長出骨架」不是一格,是 step1→2 的轉場瞬間(真骨 reassemble 現形那一下),
+// 畫面自己會講,不需要字。舊表把每個詞往後掛了一格:criticizer 跑了幾分鐘卻寫著
+// 「長出骨架」(骨老早長出來了),而「秤出輕重」只閃在 render 那一兩秒。
+const WORD = ["", "凝聚", "秤出輕重", "成形", "成形"];
 
 export default function Catalog(
   { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, returning, confirming, onPick, onCancel }:
@@ -65,12 +72,13 @@ export default function Catalog(
             onClick={() => { if (!gest) onPick(slug); }}>
             {/* 誕生確認波:骨真的在場才放(還在孕育就沒有「剛落位」可確認) */}
             {!gest && slug === confirming && <span className="bwave" aria-hidden><i /><i /><i /></span>}
-            {/* 孕育中:早出 viz 落檔前畫象徵骨(真的還沒資料),落檔後直接換上真骨——
-                零件從四周聚回真座標(reassemble),「長出骨架」那一刻骨架真的在磁碟上。 */}
+            {/* 孕育中:早出 viz 落檔前是分子雲塌縮(真的還沒資料 → 不畫骨),落檔後直接換真骨——
+                零件從四周聚回真座標(reassemble)。塵埃聚成骨那一刻,骨架真的在磁碟上。
+                preview 產失敗(skip)也留在塌縮:沒資料就是沒資料,不拿假骨頂替。 */}
             {gest
               ? (gest.vizReady
                   ? <StoryBone slug={slug} hasViz reassemble />
-                  : <GestatingStar step={gest.step} width={300} />)
+                  : <CloudCollapse width={300} />)
               : <StoryBone slug={slug} hasViz={!!entry?.has_viz} burst={isFly && !!bursting} reassemble={isReturn} />}
             <div className="cap">{gest ? gest.title : entry?.title}</div>
             {gest && <div className="gest-word">{WORD[Math.min(4, gest.step)]}</div>}
