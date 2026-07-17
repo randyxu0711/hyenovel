@@ -38,18 +38,26 @@ export default function Journey() {
   const [blooming, setBlooming] = useState(false);           // 入口點火後,catalog 真物體(種骨/軌道)綻放入場的一次性窗
   const [returning, setReturning] = useState<string | null>(null);  // 從單篇退場、正飛回軌道槽位的那篇
   const [closing, setClosing] = useState(false);             // 單篇 overlay 向中心收合中
+  const [confirming, setConfirming] = useState<string | null>(null); // 剛孕育完、正擴一圈確認波的那篇(一次性)
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
+  const confirmTimer = useRef<number>();
   const bloomTimer = useRef<number>();
   const returnTimers = useRef<number[]>([]);
   const orderRef = useRef<string[]>([]);
   const OVERLAY_OUT_MS = 460;   // overlay 收合時長,與 CSS overlayOut 對齊
+  const CONFIRM_MS = 1800;      // 誕生確認波總長,與 CSS bornWave 對齊(1.4s + 第三環 .32s delay,留餘裕)
 
   const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
-  // 誕生:重整列表,並把這篇標成「新成形」→ 柔金暈常駐(閱讀優先);點進或 refresh 後卸下
+  // 誕生:重整列表,並把這篇標成「新成形」→ 柔金暈常駐(閱讀優先);點進或 refresh 後卸下。
+  // 另擴一圈確認波(confirming):柔金暈是「這篇是新的」的狀態,確認波是「它剛落位」的那一刻——
+  // 標記 GestatingStar → StoryBone 這個轉變,一次性,CONFIRM_MS 後自己卸下。
   const onBorn = useCallback(async (s: string) => {
     await refresh();
     setFresh(f => new Set(f).add(s));
+    setConfirming(s);
+    clearTimeout(confirmTimer.current);
+    confirmTimer.current = window.setTimeout(() => setConfirming(null), CONFIRM_MS);
   }, [refresh]);
   const { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit } = useGestations(onBorn);
 
@@ -66,7 +74,7 @@ export default function Journey() {
   useEffect(() => { if (slug) setEntered(true); }, [slug]);
   // 重整後若還有胚胎在孕育,直接落在 catalog
   useEffect(() => { if (gestations.size) setEntered(true); }, [gestations.size]);
-  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); clearTimeout(bloomTimer.current); returnTimers.current.forEach(clearTimeout); }, []);
+  useEffect(() => () => { flyTimers.current.forEach(clearTimeout); clearTimeout(hatchTimer.current); clearTimeout(bloomTimer.current); clearTimeout(confirmTimer.current); returnTimers.current.forEach(clearTimeout); }, []);
 
   // 入口風化吹淨 → 進 catalog,並開一次性 bloom 窗:真的種骨點火、真的軌道從中心綻放(非替身)
   const onEntered = () => {
@@ -146,7 +154,8 @@ export default function Journey() {
       <Camera stage={stage} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
-          gestations={gestations} hatching={hatching} fresh={fresh} returning={returning} onPick={pick} onCancel={cancel} />
+          gestations={gestations} hatching={hatching} fresh={fresh} returning={returning} confirming={confirming}
+          onPick={pick} onCancel={cancel} />
       </Camera>
       {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}
       {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} igniting={blooming} />}

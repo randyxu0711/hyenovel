@@ -21,10 +21,11 @@ function StoryBone({ slug, hasViz, burst, reassemble }: { slug: string; hasViz: 
 const WORD = ["", "凝聚", "長出骨架", "秤出輕重", "成形"];
 
 export default function Catalog(
-  { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, returning, onPick, onCancel }:
+  { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, returning, confirming, onPick, onCancel }:
   {
     entries: IndexEntry[]; ordered: string[]; loading?: boolean; flying?: string | null; bursting?: boolean;
     gestations: Map<string, Gestation>; hatching?: string | null; fresh?: Set<string>; returning?: string | null;
+    confirming?: string | null;
     onPick: (slug: string) => void; onCancel: (slug: string) => void;
   },
 ) {
@@ -62,6 +63,8 @@ export default function Catalog(
         return (
           <div className={cls} data-testid="story" key={slug} style={style}
             onClick={() => { if (!gest) onPick(slug); }}>
+            {/* 誕生確認波:骨真的在場才放(還在孕育就沒有「剛落位」可確認) */}
+            {!gest && slug === confirming && <span className="bwave" aria-hidden><i /><i /><i /></span>}
             {gest
               ? <GestatingStar step={gest.step} width={300} />
               : <StoryBone slug={slug} hasViz={!!entry?.has_viz} burst={isFly && !!bursting} reassemble={isReturn} />}
