@@ -44,7 +44,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0   # v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          # 版本讀 .nvmrc(唯一正本),不在這裡寫死 —— 這是本機工具,CI 的職責就是複製開發機,
+          # 分歧一律是 CI 的 bug 不是保險。寫死過一次 "20" 而開發機是 22,結果 css-keyframes
+          # 守門測試整整三天在 CI 上 TypeError(fs.globSync 是 Node 22+),本機卻一直綠。
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: web/package-lock.json
 
