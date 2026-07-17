@@ -417,4 +417,47 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .skel.reassemble .stub{opacity:0;animation:stubIn .5s .32s ease both}
 @keyframes stubIn{to{opacity:.38}}
 
+/* ── 誕生點火:核心一閃,骨從中心向外亮起(接住 CloudCollapse 收進核心的質量)──
+   **不可共用 reassemble**:那是退場語言,前提是「碎片剛炸開、正在外面」。誕生的前提相反——
+   質量剛塌縮進核心,零件從沒去過外面;從四周飛回來等於憑空多出一個與前一秒畫面矛盾的前提
+   (而且看起來就是「向內 → 瞬移到外面 → 再向內」)。天文上亦然:恆星在核心點火,不從外圍組裝。
+   錯開的 delay 由 Skeleton 依「離核心多遠」給(fromCore),所以光是從中心推出去的。
+   減動由 theme.css 全域 reset 接住:瞬跑完 = 骨直接在終態,不演點火。 */
+.skel.ignite{overflow:visible;animation:igniteFlash .9s ease-out both}
+@keyframes igniteFlash{
+  0%{filter:brightness(2.6) drop-shadow(0 0 18px rgba(246,232,196,.95))}
+  100%{filter:drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))}}
+/* 脊椎從中心往兩端長:dash 長度 0→1,同時把它釘在中點(offset = -(0.5 - L/2))*/
+.skel.ignite .spine{animation:igniteSpine .66s cubic-bezier(.3,0,.2,1) both}
+@keyframes igniteSpine{
+  from{stroke-dasharray:0 1;stroke-dashoffset:-.5}
+  to{stroke-dasharray:1 1;stroke-dashoffset:0}}
+/* 肋:由脊椎往外畫出 */
+.skel.ignite .rib{stroke-dasharray:1;animation:igniteRib .4s ease both}
+@keyframes igniteRib{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+/* 節點:等自己那根肋畫出去了才彈出來 */
+.skel.ignite .node{transform-box:fill-box;transform-origin:center;
+  animation:igniteNode .38s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes igniteNode{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+/* opacity:0 不可省:stub 的 .38 是 SVG 屬性,不壓掉的話 stubIn 會從 .38 淡到 .38(等於沒淡入)*/
+.skel.ignite .stub{opacity:0;animation:stubIn .4s ease both}
+
+/* ── 秤出輕重:criticizer 跑的那幾分鐘 —— 一道光沿脊椎掃過,掃到哪就把那個節點掂亮 ──
+   脊椎 x 軸 = 閱讀順序;肋的 x 來自 evidence.pos(該元素在原文的真實位置)→ 亮起的順序
+   就是讀者真的會遇到它們的順序,不是編出來的節奏。
+   **循環不是進度條**:criticizer 還要跑多久我們無從得知(同 CloudCollapse 的誠實邏輯),
+   所以它只說「還在讀」。掃描段在頭尾之外都是隱形的,迴圈接點不會有跳格。
+   同步靠「同週期」:節點的 animation-delay 由 Skeleton 依肋的 x 給,與掃描同為 READ_CYCLE。
+   減動由 theme.css 全域 reset 接住(這也是不用 SMIL animateMotion 的原因——SMIL 不吃減動)。 */
+.skel.reading .read-sweep{stroke-dasharray:.06 .94;animation:readSweep 4.4s linear infinite;
+  filter:drop-shadow(0 0 5px rgba(248,240,216,.9)) drop-shadow(0 0 12px rgba(236,201,138,.55))}
+@keyframes readSweep{from{stroke-dashoffset:.06}to{stroke-dashoffset:-1}}
+.skel.reading .node{transform-box:fill-box;transform-origin:center;
+  animation:weigh 4.4s ease-out infinite}
+@keyframes weigh{
+  0%{transform:scale(1);filter:none}
+  5%{transform:scale(1.55);filter:drop-shadow(0 0 7px rgba(248,240,216,.95))}
+  20%{transform:scale(1);filter:none}
+  100%{transform:scale(1);filter:none}}
+
 @media (prefers-reduced-motion:reduce){.single-overlay.out,.story.returning{animation:none}}

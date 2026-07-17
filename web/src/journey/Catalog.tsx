@@ -5,17 +5,29 @@ import { getViz } from "../data/client";
 import { worldPos, WORLD } from "../lib/camera";
 import type { IndexEntry, VizData, Gestation } from "../types";
 
+const IGNITE_MS = 1100;   // 點火播完(.skel.ignite 最長 .9s + 錯開)才交棒給「編輯在讀」
+
 // 每篇載入自己的 viz.json,畫出資料驅動的星骨指紋(載入中先留空位)。
-function StoryBone({ slug, hasViz, burst, reassemble }: { slug: string; hasViz: boolean; burst?: boolean; reassemble?: boolean }) {
+// gestating=孕育中的骨(早出 viz 已落檔):點火 → 接力成「編輯在讀」,直到 criticizer 交件。
+// 接力而非並掛:兩者都動 .node,同時掛會被 CSS 疊到只剩一個;而且先點火再讀本來就是敘事順序。
+function StoryBone({ slug, hasViz, burst, reassemble, gestating }:
+  { slug: string; hasViz: boolean; burst?: boolean; reassemble?: boolean; gestating?: boolean }) {
   const [viz, setViz] = useState<VizData | null>(null);
+  const [read, setRead] = useState(false);
   useEffect(() => {
     if (!hasViz) return;
     let live = true;
     getViz(slug).then(v => { if (live) setViz(v); }).catch(() => {});
     return () => { live = false; };
   }, [slug, hasViz]);
+  useEffect(() => {
+    if (!gestating || !viz) return;
+    const t = window.setTimeout(() => setRead(true), IGNITE_MS);
+    return () => clearTimeout(t);
+  }, [gestating, viz]);
   if (!viz) return <div className="bone-ph" style={{ width: 300, height: 184 }} />;
-  return <Skeleton viz={viz} width={300} burst={burst} reassemble={reassemble} />;
+  return <Skeleton viz={viz} width={300} burst={burst} reassemble={reassemble}
+    ignite={gestating && !read} reading={gestating && read} />;
 }
 
 // 階段詞對齊「後端那格實際在幹嘛」,不是「跑完第幾格」:
@@ -72,12 +84,12 @@ export default function Catalog(
             onClick={() => { if (!gest) onPick(slug); }}>
             {/* 誕生確認波:骨真的在場才放(還在孕育就沒有「剛落位」可確認) */}
             {!gest && slug === confirming && <span className="bwave" aria-hidden><i /><i /><i /></span>}
-            {/* 孕育中:早出 viz 落檔前是分子雲塌縮(真的還沒資料 → 不畫骨),落檔後直接換真骨——
-                零件從四周聚回真座標(reassemble)。塵埃聚成骨那一刻,骨架真的在磁碟上。
+            {/* 孕育中:早出 viz 落檔前是分子雲塌縮(真的還沒資料 → 不畫骨),落檔後核心點火、
+                骨從中心向外亮起,接著光沿脊椎掃 = 編輯在讀(見 StoryBone/Skeleton)。
                 preview 產失敗(skip)也留在塌縮:沒資料就是沒資料,不拿假骨頂替。 */}
             {gest
               ? (gest.vizReady
-                  ? <StoryBone slug={slug} hasViz reassemble />
+                  ? <StoryBone slug={slug} hasViz gestating />
                   : <CloudCollapse width={300} />)
               : <StoryBone slug={slug} hasViz={!!entry?.has_viz} burst={isFly && !!bursting} reassemble={isReturn} />}
             <div className="cap">{gest ? gest.title : entry?.title}</div>

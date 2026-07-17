@@ -12,10 +12,14 @@ import { useEffect, useRef } from "react";
 // canvas 不吃 theme.css 的全域減動 reset → 自守 matchMedia(同 TitleBurst 前例)。
 
 const W = 310, H = 190;
-const N = 90;
+const N = 140;
 const R0 = 128;      // 外圈:補進來的半徑
 const CORE = 6;      // 核心:落到這裡就重生
 const XS = 1.5;      // = camera.ts 的 RING_XSCALE
+// 粒子尺寸得撐得住相機縮放:Camera 在 catalog 把 WORLD(2600×1500)縮進視窗,約 0.75×,
+// 而塌縮在 .cam 裡面 → 吃這個縮放(Dust 是 position:fixed,不吃,所以它小也看得見)。
+// 這裡的 px 是 canvas 座標,上螢幕還要再 ×0.75:設 1.6–4.4 → 實得 1.2–3.3,才不會掉進次像素。
+const R_MIN = 1.6, R_MAX = 4.4;
 
 type P = { r: number; a: number; vr: number; z: number };
 
@@ -55,7 +59,8 @@ export default function CloudCollapse({ width = 300 }: { width?: number }) {
         ctx.globalAlpha = Math.min(1, 0.1 + t * 0.85) * p.z;
         ctx.fillStyle = t > 0.72 ? "#f8f0d8" : "#d8c9a4";
         ctx.beginPath();
-        ctx.arc(cx + Math.cos(p.a) * p.r * XS, cy + Math.sin(p.a) * p.r, (0.7 + t * 1.5) * p.z, 0, Math.PI * 2);
+        ctx.arc(cx + Math.cos(p.a) * p.r * XS, cy + Math.sin(p.a) * p.r,
+                (R_MIN + t * (R_MAX - R_MIN)) * p.z, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
