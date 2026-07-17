@@ -65,8 +65,12 @@ export default function Catalog(
             onClick={() => { if (!gest) onPick(slug); }}>
             {/* 誕生確認波:骨真的在場才放(還在孕育就沒有「剛落位」可確認) */}
             {!gest && slug === confirming && <span className="bwave" aria-hidden><i /><i /><i /></span>}
+            {/* 孕育中:早出 viz 落檔前畫象徵骨(真的還沒資料),落檔後直接換上真骨——
+                零件從四周聚回真座標(reassemble),「長出骨架」那一刻骨架真的在磁碟上。 */}
             {gest
-              ? <GestatingStar step={gest.step} width={300} />
+              ? (gest.vizReady
+                  ? <StoryBone slug={slug} hasViz reassemble />
+                  : <GestatingStar step={gest.step} width={300} />)
               : <StoryBone slug={slug} hasViz={!!entry?.has_viz} burst={isFly && !!bursting} reassemble={isReturn} />}
             <div className="cap">{gest ? gest.title : entry?.title}</div>
             {gest && <div className="gest-word">{WORD[Math.min(4, gest.step)]}</div>}

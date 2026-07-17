@@ -34,11 +34,12 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
   const onBornRef = useRef(onBorn);
   onBornRef.current = onBorn;
 
-  const put = (slug: string, title: string, step: number, status = "running") =>
+  const put = (slug: string, title: string, step: number, status = "running", vizReady?: boolean) =>
     setGestations(m => {
       const n = new Map(m);
       const cur = n.get(slug);
-      n.set(slug, { title: title || cur?.title || slug, status, step: Math.max(step, cur?.step ?? 0) });
+      n.set(slug, { title: title || cur?.title || slug, status, step: Math.max(step, cur?.step ?? 0),
+                    vizReady: vizReady ?? cur?.vizReady });   // 一旦 true 就不再回頭(檔案不會消失)
       return n;
     });
   const drop = (slug: string) =>
@@ -55,6 +56,12 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
         for await (const ev of streamCritique(slug, title, born)) {
           if (!fresh()) return;                // 已被 cancel / 新 begin 取代 → 停手
           if (ev.event === "phase") {
+            // preview 不在 STEP 表裡(算 0,被 put 的 Math.max 護住,step 不倒退);
+            // 它只宣告「早出 viz 落檔了」→ 孕育中改畫真骨。skip=產失敗,續用象徵骨。
+            if (ev.data?.name === "preview") {
+              if (ev.data?.status === "ok") put(slug, title, 0, "running", true);
+              continue;
+            }
             const s = (STEP[ev.data?.name] ?? 0) + (ev.data?.status === "ok" ? 1 : 0);
             put(slug, title, s);
           } else if (ev.event === "done") {
