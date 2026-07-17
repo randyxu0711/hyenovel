@@ -4,6 +4,9 @@
 .lab-bar,.lab-stage,.lab-readout{position:relative;z-index:2}
 /* /lab/born 用真 Camera,它的 .stage 是 z-index:3 → 會蓋掉工具列(含點擊)。抬到它之上。 */
 .born-lab .lab-bar{z-index:8}
+/* 當前拍子在幹嘛:讀流程用,不是畫面的一部分 */
+.born-sub{position:relative;z-index:8;text-align:center;margin-top:6px;
+  font-size:13px;letter-spacing:.12em;color:#8f876f}
 
 /* 釘住討論時,骨整體往左退、讓出右側給對話(同一片星空,不切版) */
 .lab-stage{transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}
