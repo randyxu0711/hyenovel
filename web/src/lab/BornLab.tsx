@@ -14,7 +14,7 @@ import "./lab.css";
 // 「整條跑一遍」把分鐘級的真實時長壓成秒——只為看節奏,不代表真實步調。
 
 const CONFIRM_MS = 1800;
-const WORD = ["誕生", "① 凝聚", "② 長出骨架", "③ 秤出輕重", "④ 成形"];
+const WORD = ["誕生", "① 凝聚", "② 秤出輕重", "③ 成形", "④ done"];
 
 export default function BornLab() {
   const [entries, setEntries] = useState<IndexEntry[]>([]);
@@ -69,7 +69,7 @@ export default function BornLab() {
         <div className="lab-slugs">
           {!target && <span className="lab-tag">讀不到 index.json</span>}
           <button className={vizReady ? "on" : ""} onClick={() => setVizReady(v => !v)}>
-            {vizReady ? "真骨(早出 viz 已落檔)" : "象徵骨(還沒資料)"}
+            {vizReady ? "真骨(早出 viz 已落檔)" : "塌縮(還沒資料)"}
           </button>
           <button onClick={runAll}>整條跑一遍</button>
         </div>

@@ -51,7 +51,7 @@ export default function Journey() {
   const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
   // 誕生:重整列表,並把這篇標成「新成形」→ 柔金暈常駐(閱讀優先);點進或 refresh 後卸下。
   // 另擴一圈確認波(confirming):柔金暈是「這篇是新的」的狀態,確認波是「它剛落位」的那一刻——
-  // 標記 GestatingStar → StoryBone 這個轉變,一次性,CONFIRM_MS 後自己卸下。
+  // 標記「孕育 → 誕生」這個轉變,一次性,CONFIRM_MS 後自己卸下。
   const onBorn = useCallback(async (s: string) => {
     await refresh();
     setFresh(f => new Set(f).add(s));
