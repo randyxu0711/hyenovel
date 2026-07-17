@@ -135,6 +135,84 @@ def test_criticizer_uses_the_stricter_gate(story, monkeypatch):
     assert by_name["criticizer"] is orchestrator._gate_feedback
 
 
+# ── 早出 viz:讓孕育動畫畫得出真骨 ───────────────────────────────────
+
+def test_preview_viz_runs_between_analyst_and_criticizer(story, monkeypatch):
+    """analyst 交件後就先產一版 viz.json —— 孕育動畫靠它畫真骨:階段詞「長出骨架」
+    說的那一刻,骨架真的已經在磁碟上。必須落在 criticizer **之前**,否則等於白等一整格
+    (criticizer 是分鐘級的),那條敘事就沒了。"""
+    calls = []
+
+    async def phase(name, first_prompt, retry_prompt, slug, gate_fn=None, on_client=None):
+        calls.append(f"phase:{name}")
+        yield "result", {"ok": True, "cost": 0.1}
+
+    def run_py(args, timeout=None):
+        calls.append(args[0].rsplit("/", 1)[-1])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(orchestrator, "_phase_with_retry", phase)
+    monkeypatch.setattr(orchestrator, "_run_py", run_py)
+    _drain(story)
+
+    assert "viz.py" in calls, f"analyst 之後沒產早出 viz:{calls}"
+    assert calls.index("viz.py") < calls.index("phase:criticizer"), \
+        f"早出 viz 必須在 criticizer 之前,實際順序:{calls}"
+
+
+def test_preview_viz_failure_does_not_abort_the_run(story, monkeypatch):
+    """早出 viz 只餵動畫 → best-effort。它壞了不得砍掉一格已經花掉 ~$0.4 的 analyst;
+    真正的 viz 在確定性層還會再跑一次,那次失敗才該讓整支紅。"""
+    n = {"i": 0}
+
+    def run_py(args, timeout=None):
+        n["i"] += 1
+        rc = 1 if n["i"] == 1 else 0        # 第一次 = 早出 viz,讓它失敗;其餘照常
+        return subprocess.CompletedProcess(args=args, returncode=rc, stdout="炸了", stderr="")
+
+    monkeypatch.setattr(orchestrator, "_phase_with_retry", _fake_phase(ok=True, cost=0.4))
+    monkeypatch.setattr(orchestrator, "_run_py", run_py)
+
+    events = _drain(story)
+    assert events[-1]["event"] == "done", "早出 viz 失敗竟然中斷整支"
+    preview = [e for e in events if e["event"] == "phase" and e["data"]["name"] == "preview"]
+    assert preview[-1]["data"]["status"] == "skip", "失敗的早出 viz 不該回報 ok"
+
+
+def test_preview_viz_exception_does_not_abort_the_run(story, monkeypatch):
+    """早出 viz 拋例外(逾時/子行程炸)同樣只降級——外層的 except 會把它冒成 sdk error,
+    那就等於預覽壞掉害整支紅。"""
+    n = {"i": 0}
+
+    def run_py(args, timeout=None):
+        n["i"] += 1
+        if n["i"] == 1:
+            raise subprocess.TimeoutExpired(cmd=args, timeout=1)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(orchestrator, "_phase_with_retry", _fake_phase(ok=True, cost=0.4))
+    monkeypatch.setattr(orchestrator, "_run_py", run_py)
+
+    events = _drain(story)
+    assert events[-1]["event"] == "done", "早出 viz 拋例外竟然中斷整支"
+
+
+def test_no_preview_viz_when_analyst_fails(story, monkeypatch):
+    """analyst 沒交件就沒有 analysis.json,早出 viz 無事可做(跑了只會噴錯)。"""
+    calls = []
+
+    def run_py(args, timeout=None):
+        calls.append(args[0])
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(orchestrator, "_phase_with_retry",
+                        _fake_phase(ok=False, cost=0.3, reason="usage-limit"))
+    monkeypatch.setattr(orchestrator, "_run_py", run_py)
+    _drain(story)
+
+    assert calls == [], f"analyst 失敗卻還跑了子行程:{calls}"
+
+
 # ── 確定性層段的失敗分流 ─────────────────────────────────────────────
 
 def test_deterministic_layer_nonzero_returncode_is_error(story, monkeypatch):

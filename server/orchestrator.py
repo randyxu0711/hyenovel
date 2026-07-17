@@ -171,6 +171,25 @@ async def run_critique(slug: str, on_client=None):
             yield _phase_error("analyst", "analysis", res, total_cost)
             return
 
+        # ── 早出 viz:analyst 已交件 → 先產一版無回饋的 viz.json ──
+        # 讓孕育動畫從此改畫「真骨」(這篇獨有的形狀),而不是寫死的象徵骨:
+        # 階段詞「長出骨架」說的那一刻,骨架真的在磁碟上了。
+        # viz.py 把 feedback.json 當可選(此時它還不存在)→ feedback:null,前端吃得下。
+        # **best-effort**:失敗只降級記 log、不中斷。這版只餵動畫,真正的 viz 在確定性層
+        # 還會再跑一次(帶 feedback),那次失敗才該讓整支紅 —— 不值得為了預覽畫面,
+        # 砍掉一格已經花掉 ~$0.4 的 analyst。
+        yield {"event": "phase", "data": {"name": "preview", "status": "start"}}
+        preview_ok = False
+        try:
+            pv = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
+            preview_ok = pv.returncode == 0
+            if not preview_ok:
+                log.warning(f"event=preview-viz-fail slug={slug} rc={pv.returncode} "
+                            + f"out={(pv.stdout + pv.stderr).strip()[:300]!r}")
+        except Exception:  # noqa: BLE001 —— 含逾時;預覽壞掉不該波及主流程
+            log.warning(f"event=preview-viz-fail slug={slug} (例外)", exc_info=True)
+        yield {"event": "phase", "data": {"name": "preview", "status": "ok" if preview_ok else "skip"}}
+
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
         stage = "criticizer"
         cri_first = (f"讀 stories/{slug}/analysis.json、source.md、schemas/feedback.schema.json,"
