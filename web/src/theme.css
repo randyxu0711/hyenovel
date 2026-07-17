@@ -7,6 +7,21 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body,#root{height:100%}
+
+/* 減動兜底:使用者要減動時,所有 CSS 動畫/轉場瞬間跑完(停在終態),不留任何裸奔的動畫。
+   承重牆,別刪 —— 刪掉畫面完全正常,只有開減動的人受害(比 @keyframes 懸空更隱形);
+   test/reduced-motion.test.ts 守著它。
+   需要「非終態」語意的個別動畫(要消失、要停在特定幀)仍各自寫 @media 精細規則覆蓋:
+   它們把 animation 的 name 設成 none,此處只改 duration,無 name 即不跑,兩者不衝突。
+   framer-motion 由 App.tsx 的 MotionConfig reducedMotion="user" 管;canvas/rAF 各自查 matchMedia。 */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+}
 body{font-family:var(--sans);color:#e8e3d6;
   background:radial-gradient(120% 90% at 50% 34%, #15140f 0%, #0c0b09 52%, #050504 100%)}
 
