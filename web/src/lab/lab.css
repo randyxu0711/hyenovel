@@ -2,6 +2,8 @@
   background:radial-gradient(120% 90% at 50% 30%,#15140f 0%,#0c0b09 54%,#050504 100%)}
 .lab .dust{position:fixed;inset:0;z-index:0;pointer-events:none}
 .lab-bar,.lab-stage,.lab-readout{position:relative;z-index:2}
+/* /lab/born 用真 Camera,它的 .stage 是 z-index:3 → 會蓋掉工具列(含點擊)。抬到它之上。 */
+.born-lab .lab-bar{z-index:8}
 
 /* 釘住討論時,骨整體往左退、讓出右側給對話(同一片星空,不切版) */
 .lab-stage{transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}

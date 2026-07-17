@@ -24,6 +24,20 @@
   background:radial-gradient(50% 50% at 50% 50%,rgba(236,201,138,.2),transparent 72%);
   animation:freshHalo 3.2s ease-in-out infinite}
 @keyframes freshHalo{0%,100%{opacity:.45}50%{opacity:.95}}
+/* 誕生確認波:孕育完成那一刻,從這篇自己的槽位擴出三層漣漪——「它現在是星空的一部分了」。
+   柔金暈(::before)是「這篇是新的」的狀態,這波是「它剛落位」的那一刻,兩者同時在場。
+   **刻意不與 orbits 同貌**:軌道是虛線的「結構」(常駐、繞世界中心),這是實線的「事件」
+   (一次性、從自己槽位發)。同貌會讀成「又多一條軌道」而非「這篇落位了」。
+   用 amber(同柔金暈)接上誕生語言;三層錯開才有波的動勢——單圈只是個環。
+   保留 1.5:1 橢圓比例(= camera.ts 的 RING_XSCALE),讓它仍屬於這片星空。
+   減動下由 theme.css 全域 reset 瞬跑完到終態(opacity:0)= 不出現,正是要的。 */
+.bwave{position:absolute;left:50%;top:50%;z-index:-1;pointer-events:none}
+.bwave i{position:absolute;left:50%;top:50%;width:280px;height:186px;margin:-93px 0 0 -140px;
+  border:1.5px solid rgba(236,201,138,.55);border-radius:50%;opacity:0;
+  animation:bornWave 1.4s cubic-bezier(.2,.7,.2,1) forwards}
+.bwave i:nth-child(2){animation-delay:.16s}
+.bwave i:nth-child(3){animation-delay:.32s}
+@keyframes bornWave{from{transform:scale(.28);opacity:0}22%{opacity:.75}to{transform:scale(1.5);opacity:0}}
 .stage-overview .field{filter:blur(6px);opacity:.5;transition:.9s}
 .empty-state{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8f876f}
 .es-big{font-family:var(--serif);font-size:28px;color:#cabd92;letter-spacing:.1em}

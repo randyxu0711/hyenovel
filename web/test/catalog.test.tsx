@@ -44,6 +44,21 @@ describe("Catalog", () => {
     eggEl.click(); expect(onPick).not.toHaveBeenCalled();
     bornEl.click(); expect(onPick).toHaveBeenCalledWith("born");
   });
+  it("誕生確認波:只有 confirming 那篇長出波(三層環)", () => {
+    const { getAllByTestId } = render(
+      <Catalog entries={[mk("born", "已生"), mk("other", "另一篇")]} ordered={["born", "other"]}
+        gestations={noGest} confirming="born" onPick={() => {}} onCancel={() => {}} />);
+    const [bornEl, otherEl] = getAllByTestId("story");
+    expect(bornEl.querySelectorAll(".bwave i").length).toBe(3);
+    expect(otherEl.querySelector(".bwave")).toBeNull();
+  });
+  it("誕生確認波:還在孕育的那篇即使被標 confirming 也不放(波確認的是骨已在場)", () => {
+    const g: Map<string, Gestation> = new Map([["egg", { step: 4, status: "running", title: "胚胎" }]]);
+    const { getAllByTestId } = render(
+      <Catalog entries={[]} ordered={["egg"]} gestations={g} confirming="egg"
+        onPick={() => {}} onCancel={() => {}} />);
+    expect(getAllByTestId("story")[0].querySelector(".bwave")).toBeNull();
+  });
   it("同一 slug 從孕育轉誕生:renderer 由 GestatingStar 換成 Skeleton 佔位", () => {
     const g: Map<string, Gestation> = new Map([["x", { step: 3, status: "running", title: "x" }]]);
     const { container, rerender } = render(
