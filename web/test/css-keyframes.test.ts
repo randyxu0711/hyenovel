@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { globSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -17,9 +16,15 @@ const KEYWORDS = new Set([
 const isTime = (t: string) => /^-?[\d.]+m?s$/.test(t);
 const isNum = (t: string) => /^-?[\d.]+$/.test(t);
 
+// 用 readdirSync({recursive}) 而非 fs.globSync:後者是 **Node 22+**,而 CI 跑 Node 20 →
+// 這支測試從 2b8ac93 加進來那天起就在 CI 上 TypeError,本機(Node 22)卻是綠的。
+// 也就是說,這道「防止 @keyframes 被誤刪」的守門測試,在 CI 上從來沒真的守過。
 function cssFiles(): string[] {
   const srcDir = resolve(dirname(fileURLToPath(import.meta.url)), "../src");
-  return globSync("**/*.css", { cwd: srcDir }).map(f => resolve(srcDir, f));
+  return readdirSync(srcDir, { recursive: true })
+    .map(String)
+    .filter(f => f.endsWith(".css"))
+    .map(f => resolve(srcDir, f));
 }
 
 describe("CSS keyframes 完整性", () => {
