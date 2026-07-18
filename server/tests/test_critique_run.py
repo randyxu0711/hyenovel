@@ -8,6 +8,7 @@ import asyncio
 
 import pytest
 
+import runstate
 from server import config, critique
 
 
@@ -164,16 +165,73 @@ def test_drive_converges_unexpected_exception_to_error(monkeypatch):
     assert any(e["event"] == "error" for e in run.events)
 
 
-def test_failed_fresh_birth_discards_orphan(monkeypatch):
-    """fresh 誕生失敗 → 清掉半成品(它是本流程剛 ingest 的,清掉安全)。"""
+def test_failed_fresh_birth_is_kept_and_marked(monkeypatch):
+    """新政策:fresh 誕生失敗 → 不再刪,改寫 run.json 成 failed(可續)。"""
     d = _mk_story()
     monkeypatch.setattr(critique.orchestrator, "run_critique",
                         _fake_critique([{"event": "error",
-                                         "data": {"message": "閘門耗盡", "recoverable": False}}]))
-
+                                         "data": {"message": "閘門耗盡", "recoverable": False,
+                                                  "reason": "gate", "cost_usd": 0.4}}]))
     run = critique.Run("s01", "標題", fresh=True)
     asyncio.run(critique._drive(run))
-    assert not d.exists(), "fresh 誕生失敗該清掉孤兒"
+    assert d.exists(), "新政策:失敗不刪,留著給續跑"
+    rs = runstate.read(d)
+    assert rs["status"] == "failed" and rs["reason"] == "gate"
+
+
+def test_paused_on_usage_limit(monkeypatch):
+    """撞用量上限 → status=paused,帶 resets_at。"""
+    d = _mk_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "error",
+                                         "data": {"message": "撞牆", "recoverable": True,
+                                                  "reason": "usage-limit", "resets_at": 999}}]))
+    run = critique.Run("s01", "標題", fresh=True)
+    asyncio.run(critique._drive(run))
+    rs = runstate.read(d)
+    assert rs["status"] == "paused" and rs["resets_at"] == 999
+
+
+def test_start_persists_running_with_title(monkeypatch):
+    """start 立刻寫 run.json(status=running + title)—— 跨重連可見。"""
+    d = _mk_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        run = critique.start("s01", "我的標題")
+        rs = runstate.read(d)
+        assert rs["status"] == "running" and rs["title"] == "我的標題"
+        run.task.cancel()
+        try:
+            await run.task
+        except BaseException:
+            pass
+
+    asyncio.run(go())
+
+
+def test_scan_crashed_marks_orphan_running_as_failed(monkeypatch):
+    """server 重啟:run.json 是 running 但 _runs 沒有它 → 標 failed/crash。"""
+    d = _mk_story()
+    runstate.write(d, status="running", stage="analyst", title="標題")
+    critique._runs.clear()
+    critique.scan_crashed()
+    rs = runstate.read(d)
+    assert rs["status"] == "failed" and rs["reason"] == "crash"
+
+
+def test_done_writes_run_json_done(monkeypatch):
+    d = _mk_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.9}}]))
+    run = critique.Run("s01", "標題", fresh=True)
+    asyncio.run(critique._drive(run))
+    rs = runstate.read(d)
+    assert rs["status"] == "done" and rs["stage"] == "done"
 
 
 def test_failed_rerun_of_existing_story_keeps_source(monkeypatch):

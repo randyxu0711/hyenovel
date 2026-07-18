@@ -14,11 +14,14 @@ import asyncio
 import shutil
 import time
 
-from . import config, orchestrator, sdk_runner
+import runstate
+
+from . import config, ledger, orchestrator, sdk_runner
 from .log import log
 
 # phase name → 生長階(給 /running 顯示、前端成形動畫對齊)
 _STEP = {"analyst": 1, "criticizer": 2, "render": 3}
+_STAGE_OF_STEP = {1: "analyst", 2: "criticizer", 3: "render", 4: "done"}
 _DONE_TTL = 600   # 已結束的 Run 留多久(秒)讓晚到的重整還接得到 done
 
 
@@ -32,6 +35,9 @@ class Run:
         self.subscribers: set[asyncio.Queue] = set()
         self.status = "running"                       # running|done|error|cancelled
         self.step = 0
+        self.stage_name = "analyst"                   # 給 run.json 的 stage
+        self.reason = None
+        self.resets_at = None
         self.cost = 0.0
         self.task: asyncio.Task | None = None
         self.client = None                            # 當前 ClaudeSDKClient(取消時直接 disconnect)
@@ -47,6 +53,21 @@ def list_running() -> list[dict]:
             for r in _runs.values() if r.status == "running"]
 
 
+def _persist(run: Run) -> None:
+    """把 Run 當前狀態同步寫進 run.json(轉態時呼叫)。cost 以 ledger 累計為準。
+    run.status 維持既有 SSE 詞彙(running|done|error|cancelled);run.json 另外把
+    error 依 reason 映成 paused(usage-limit)/failed(其餘),二者詞彙刻意不同源。"""
+    agg = ledger.aggregate(run.slug)
+    cost = agg.get("last_run_cost_usd", 0.0) if not agg.get("empty") else run.cost
+    if run.status == "error":
+        rj_status = "paused" if run.reason == "usage-limit" else "failed"
+    else:
+        rj_status = run.status          # running | done
+    runstate.write(run.dir, status=rj_status, stage=run.stage_name,
+                   reason=run.reason, resets_at=run.resets_at,
+                   title=run.title, cost_usd=cost)
+
+
 def _record(run: Run, ev: dict):
     """記一個事件:更新狀態/相位,並廣播給所有訂閱者(同步,無 await → 對事件迴圈原子)。"""
     run.events.append(ev)
@@ -57,14 +78,22 @@ def _record(run: Run, ev: dict):
         if data.get("status") == "ok":
             step += 1
         run.step = max(run.step, step)
+        if data.get("status") == "ok":
+            run.stage_name = _STAGE_OF_STEP.get(run.step, run.stage_name)
+            _persist(run)                                   # 推進才寫
     elif kind == "done":
         run.status = "done"
         run.cost = data.get("cost_usd", run.cost)
         run.step = 4
+        run.stage_name = "done"
+        _persist(run)
     elif kind == "error":
         run.cost = data.get("cost_usd", run.cost)   # 失敗也記已花的錢(F3),不讓成本消失
+        run.reason = data.get("reason")
+        run.resets_at = data.get("resets_at")
         if run.status == "running":
             run.status = "error"
+        _persist(run)
     for q in list(run.subscribers):
         q.put_nowait(ev)
 
@@ -96,7 +125,6 @@ async def _drive(run: Run):
                           "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
     finally:
         run.client = None
-        _discard_if_failed_birth(run)   # fresh 誕生失敗 → 清半成品(cancel 走自己的路,不在此)
         run.finished.set()
         for q in list(run.subscribers):
             q.put_nowait(None)   # 串流結束哨兵
@@ -112,6 +140,7 @@ def start(slug: str, title: str, fresh: bool = False) -> Run:
         return cur
     run = Run(slug, title or (cur.title if cur else slug), fresh=fresh)
     _runs[slug] = run
+    _persist(run)                       # 立刻寫 status=running + title(可見性)
     run.task = asyncio.create_task(_drive(run))
     return run
 
@@ -172,12 +201,19 @@ def _discard_story(run: Run) -> None:
     shutil.rmtree(d, ignore_errors=True)
 
 
-def _discard_if_failed_birth(run: Run) -> None:
-    """fresh 誕生以 **error** 收場(撞用量上限 / 閘門耗盡 / 逾時 / 例外)→ 清掉半成品目錄,
-    不留孤兒;使用者用量回血後自己重加即可(不做 resets_at 自動重試)。
-    只認 error:done 不刪、cancelled 由 cancel() 自己處理(避免雙重刪)。"""
-    if run.fresh and run.status == "error":
-        _discard_story(run)
+def scan_crashed() -> None:
+    """server 啟動:in-memory _runs 必空,任何 run.json=running 都是無活 Run 的孤兒
+    → 標 failed/crash(可續)。不依賴 run.json 存在:純孤兒由 resume_point 自然處理。"""
+    if not config.STORIES.is_dir():
+        return
+    for d in config.STORIES.iterdir():
+        if not d.is_dir():
+            continue
+        rs = runstate.read(d)
+        if rs and rs.get("status") == "running" and d.name not in _runs:
+            runstate.write(d, status="failed", stage=rs.get("stage", "analyst"),
+                           reason="crash", title=rs.get("title"),
+                           cost_usd=rs.get("cost_usd", 0.0))
 
 
 async def sweep_runs():
