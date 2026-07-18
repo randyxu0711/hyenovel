@@ -8,6 +8,12 @@
 閘門用「子行程」而非 in-process import:viz.py 內 read_json/load 在壞輸入時 sys.exit,
 直接 import 呼叫會打死 server worker;子行程把失敗隔離成 exit code,順便原封重用閘門。
 
+與 SKILL.md 的關係(別被兩份「執行模型不同」誤導):SKILL.md 是**互動路徑**的權威——在
+Claude Code session 裡主代理用 Task 派 analyst/criticizer subagent。本檔是同一套編排的**後端
+重寫**,刻意**不走 Task 巢狀**:analyst/criticizer 各自直接當主代理跑(見 _phase_with_retry),
+因 Task 子代理預設背景 async 會讓「派工返回=閘門前已完成」的假設破裂(閘門空跑)。兩條路真正
+共享的是 .claude/agents/{analyst,criticizer}.md 定義,不是這段控制流——所以兩邊各自對就好。
+
 對外是 async generator,yield 統一事件信封 {event, data}:
   phase  {name, status:start|ok|retry|fail, attempt, detail?}
   done   {ok, cost_usd, artifacts[]}

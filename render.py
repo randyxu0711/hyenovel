@@ -14,13 +14,12 @@ import sys
 from pathlib import Path
 
 import atomicio
+from viz import NODE_CN  # 中文名單一正本;純常數,import 不觸發 viz 的 CLI 副作用(sys.exit 都在函式內)。
 
 ROOT = Path(__file__).resolve().parent
 
-# 章節順序與中文名(對齊 viz.py 的 NODE_CN)
-SECTIONS = [("theme", "主題"), ("motif", "意象"), ("technique", "技法"),
-            ("effect", "效果"), ("character", "角色"), ("beat", "節拍")]
-NODE_CN = dict(SECTIONS)
+# 章節順序 = viz.NODE_CN 的定義序(t/m/k/e/c/b);中文名不再手抄,加型別只改 viz 一處。
+SECTIONS = list(NODE_CN.items())
 
 
 def read_json(path):
