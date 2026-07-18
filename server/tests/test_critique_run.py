@@ -464,3 +464,58 @@ def test_reanalyze_failure_keeps_prev(monkeypatch):
     asyncio.run(go())
     assert (d / ".prev").exists(), "重新分析失敗竟丟了 .prev——舊版本沒有退路了"
     assert runstate.read(d)["status"] == "failed", "失敗的新狀態該被記下,才能續跑"
+
+
+def test_done_discards_prev_even_when_not_reanalyze_run(monkeypatch):
+    """Fix2 迴歸:resume(Run.reanalyze=False)跑到 done 也該丟棄殘留的 .prev。
+
+    情境鏈:reanalyze 失敗留下 .prev(上一條測試證實)→ 使用者改點『續跑』
+    (開的是 reanalyze=False 的 Run)把故事跑完 → 舊守門只在 run.reanalyze
+    為真才 discard_prev,導致 .prev 永遠留著;下一次 reanalyze 的
+    snapshot_to_prev 會直接覆蓋掉它,真正的原始備份就這樣不見了
+    (never-worse-off 被打破)。done 就該丟棄任何殘留的 .prev,不看
+    這一次 Run 是不是用 reanalyze 開的。
+    """
+    d = _mk_complete_story()
+    (d / ".prev").mkdir()
+    (d / ".prev" / "analysis.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.1}}]))
+
+    run = critique.Run("s01", "標題", fresh=False)
+    run.reanalyze = False
+    asyncio.run(critique._drive(run))
+
+    assert not (d / ".prev").exists(), "resume 跑到 done 沒有清掉殘留的 .prev"
+
+
+def test_reanalyze_refuses_when_run_already_live(monkeypatch):
+    """Fix3:該 slug 已有活的 Run 在跑 → reanalyze 不准 snapshot_to_prev。
+
+    舊行為:reanalyze() 沒檢查就先 snapshot_to_prev 把產物搬走,再呼叫
+    start()——但 start() 見已有 running 的 Run 就直接回既有 Run,不會套用
+    reanalyze 語意。結果是:產物在活的 orchestrator 底下被搬空了,
+    但沒有人在「重新分析」它,活的那個 Run 會在錯誤的空產物狀態下繼續動作。
+    正確行為是搬空之前先擋:已有活 Run → 不搬、直接報錯(app 層轉 409)。
+    """
+    d = _mk_complete_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        live = critique.start("s01", "標題")
+        with pytest.raises(ValueError):
+            critique.reanalyze("s01", "新標題")
+        assert (d / "analysis.json").exists(), "已有活 Run 時 reanalyze 竟把產物搬進 .prev"
+        assert not (d / ".prev").exists()
+        live.task.cancel()
+        try:
+            await live.task
+        except BaseException:
+            pass
+
+    asyncio.run(go())

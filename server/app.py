@@ -43,6 +43,7 @@ def _sse(gen):
 @app.on_event("startup")
 async def _startup():
     log.setup()
+    critique.scan_crashed()     # 同步、便宜:標出無活 Run 卻仍 running 的孤兒
     asyncio.create_task(discuss.sweep_idle())
     asyncio.create_task(critique.sweep_runs())
 

@@ -126,7 +126,11 @@ async def _drive(run: Run):
                           "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
     finally:
         run.client = None
-        if run.reanalyze and run.status == "done":
+        if run.status == "done":
+            # .prev 只可能因 reanalyze 的 snapshot 而存在;不論這次 done 是
+            # reanalyze 本身跑完、還是後續改用 resume(reanalyze=False)跑完,
+            # 都代表那次 reanalyze 已完成 → 該丟棄舊備份(discard_prev 對
+            # .prev 不存在是 no-op,故 unconditional-on-done 安全)。
             runstate.discard_prev(run.dir)    # commit;失敗則保留 .prev(退路)
         run.finished.set()
         for q in list(run.subscribers):
@@ -156,6 +160,10 @@ def reanalyze(slug: str, title: str) -> Run:
     d = config.STORIES / slug
     if not runstate.is_complete(d):
         raise ValueError("只有完整分析過的故事能重新分析;未完成的請用『續跑』。")
+    cur = _runs.get(slug)
+    if cur and cur.status == "running":
+        raise ValueError("已有分析在進行中")   # start() 會回既有 Run、不套 reanalyze 語意,
+                                                # 絕不能先把產物搬空到 .prev 又沒人接手重跑
     runstate.snapshot_to_prev(d)          # 搬空 → resume_point 自然回 analyst
     run = start(slug, title, fresh=False)
     run.reanalyze = True

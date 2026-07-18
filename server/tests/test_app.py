@@ -6,7 +6,7 @@ module-level TestClient(app) 不會觸發 lifespan/startup(那需要 with 區塊
 import pytest
 from fastapi.testclient import TestClient
 
-from server import config, ingest
+from server import config, critique, ingest
 from server.app import app
 
 client = TestClient(app)
@@ -121,3 +121,20 @@ def test_reanalyze_incomplete_story_returns_409(stories):
     (d / "source.md").write_text("他走進門。\n", encoding="utf-8")
     r = client.post("/api/critique/s01", json={"mode": "reanalyze", "title": "標題"})
     assert r.status_code == 409
+
+
+# ── startup:crash 掃描要真的被接上 ───────────────────────────────────
+
+def test_startup_invokes_scan_crashed(monkeypatch):
+    """啟動事件要呼叫 critique.scan_crashed(),不然 production 裡孤兒的
+    run.json status=running 永遠不會被標成 failed/crash——這才是接上,不是
+    只測 scan_crashed 本身能不能動。
+
+    module-level client 不會觸發 startup(見檔案開頭註解),故這裡自己開一個
+    `with TestClient(app)` 區塊來真的驅動 lifespan。
+    """
+    called = []
+    monkeypatch.setattr(critique, "scan_crashed", lambda: called.append(True))
+    with TestClient(app):
+        pass
+    assert called, "startup 沒有呼叫 critique.scan_crashed()"
