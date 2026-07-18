@@ -108,3 +108,16 @@ def test_cancel_unknown_run_returns_false(stories):
     r = client.delete("/api/critique/s99")
     assert r.status_code == 200
     assert r.json() == {"cancelled": False}
+
+
+def test_reanalyze_incomplete_story_returns_409(stories):
+    """mode=reanalyze 對『未完成』故事(缺 feedback/viz)守門失敗 → 409,不是憑空 500。
+
+    守門在 critique.reanalyze() 內用 ValueError 擋,app 層接住轉 409;
+    走不到 orchestrator,純路由測試不碰真的 LLM。
+    """
+    d = stories / "s01"
+    d.mkdir()
+    (d / "source.md").write_text("他走進門。\n", encoding="utf-8")
+    r = client.post("/api/critique/s01", json={"mode": "reanalyze", "title": "標題"})
+    assert r.status_code == 409

@@ -443,3 +443,24 @@ def test_reanalyze_success_discards_prev(monkeypatch):
         assert not (d / ".prev").exists(), "重新分析成功應丟棄 .prev"
 
     asyncio.run(go())
+
+
+def test_reanalyze_failure_keeps_prev(monkeypatch):
+    """never-worse-off:重新分析失敗 → 舊產物留在 .prev,不是憑空消失。
+
+    _drive 收尾只在 reanalyze 且 status=="done" 才 discard_prev(commit);
+    失敗時這個條件不成立,.prev 就該原封不動地留著當退路。
+    """
+    d = _mk_complete_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "error",
+                                         "data": {"message": "閘門耗盡", "recoverable": False,
+                                                  "reason": "gate"}}]))
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        await run.task
+
+    asyncio.run(go())
+    assert (d / ".prev").exists(), "重新分析失敗竟丟了 .prev——舊版本沒有退路了"
+    assert runstate.read(d)["status"] == "failed", "失敗的新狀態該被記下,才能續跑"
