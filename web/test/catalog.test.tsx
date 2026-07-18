@@ -8,9 +8,10 @@ beforeEach(() => {
     Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response)));
 });
 
-// 完整 IndexEntry(8 欄必填);has_viz 預設 true
+// 完整 IndexEntry(11 欄必填);has_viz 預設 true;已完成故事 status=done、resumable=false
 const mk = (slug: string, title: string, has_viz = true): IndexEntry =>
-  ({ slug, title, synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz, updated: "" });
+  ({ slug, title, synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz, updated: "",
+     status: "done", stage: "done", resumable: false });
 
 const entries: IndexEntry[] = [mk("born", "已生")];
 const noGest: Map<string, Gestation> = new Map();

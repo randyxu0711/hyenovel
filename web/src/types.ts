@@ -39,13 +39,22 @@ export interface VizData {
 export interface IndexEntry {
   slug: string; title: string; synopsis: string;
   nodes: number; edges: number; has_feedback: boolean; has_viz: boolean; updated: string;
+  // status 來自 run.json,值域不封閉(可能是 "cancelled" 等未列舉值)——不可窮舉 switch,
+  // 前端一律靠 resumable(乾淨 boolean)判斷「該不該畫續跑星」,不做 status 字串比對。
+  status: string; stage: string; resumable: boolean;
 }
 export interface IndexFile { generated: string; count: number; stories: IndexEntry[]; }
 
 // 孕育中星星的即時狀態(來自 SSE / /running;step 1→4)
 // vizReady:後端早出 viz 已落檔(analyst 交件)→ 孕育中就能改畫真骨,不再是象徵骨。
 // 與 step 分開:step 是「跑到哪格」,vizReady 是「資料在不在」——preview 不動 step。
-export type Gestation = { step: number; status: string; title: string; vizReady?: boolean };
+// status:running=活訂閱中;paused/failed=串流已斷但胚胎保留(可續跑/重新分析)。
+// reason/resetsAt 只在 paused/failed 時有意義,來自後端 error 事件(reason 值域見 server SSE 契約)。
+export type GestationStatus = "running" | "paused" | "failed";
+export type Gestation = {
+  step: number; status: GestationStatus; title: string; vizReady?: boolean;
+  reason?: string; resetsAt?: number | null;
+};
 
 export type UsagePhase = {
   input: number; output: number; cache_creation: number; cache_read: number;

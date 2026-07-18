@@ -75,6 +75,12 @@ async function* sseStream(url: string, body: unknown): AsyncGenerator<SSEEvent> 
 export const streamCritique = (slug: string, title?: string, fresh = false) =>
   sseStream(`/api/critique/${slug}`, { title: title ?? "", fresh });
 
+/** 重新分析已完成故事:同一個 POST 先觸發後端 reanalyze(snapshot 舊產物、resume_point 重置到 analyst),
+ *  再接上同一條 SSE 串流(與 streamCritique 同構,呼叫端一樣 for-await 消費)。
+ *  故事未完整時後端回 409,呼叫端自行接。 */
+export const reanalyzeCritique = (slug: string, title?: string) =>
+  sseStream(`/api/critique/${slug}`, { title: title ?? "", mode: "reanalyze" });
+
 export type RunningCritique = { slug: string; title: string; status: string; step: number };
 
 /** 還在跑的 critique(重整後用來重新接上成形動畫)。 */
