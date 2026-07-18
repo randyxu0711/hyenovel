@@ -75,3 +75,83 @@ def test_is_complete_true_only_with_all_three(tmp_path):
     assert runstate.is_complete(d) is False          # 缺 viz.json
     (d / "viz.json").write_text("{}", encoding="utf-8")
     assert runstate.is_complete(d) is True
+
+
+def _full_story(tmp_path):
+    d = tmp_path / "s01"; d.mkdir()
+    for name in ("analysis.json", "feedback.json", "viz.json",
+                 "analysis.md", "feedback.md"):
+        (d / name).write_text(f"OLD:{name}", encoding="utf-8")
+    (d / "source.md").write_text("原文", encoding="utf-8")
+    (d / "usage.jsonl").write_text("{}\n", encoding="utf-8")
+    return d
+
+
+def test_snapshot_moves_artifacts_keeps_source(tmp_path):
+    d = _full_story(tmp_path)
+    runstate.snapshot_to_prev(d)
+    assert not (d / "analysis.json").exists()          # 搬走了
+    assert (d / ".prev" / "analysis.json").read_text(encoding="utf-8") == "OLD:analysis.json"
+    assert (d / "source.md").exists()                  # 輸入不動
+    assert (d / "usage.jsonl").exists()                # 帳本不動
+
+
+def test_restore_brings_back_and_removes_prev(tmp_path):
+    d = _full_story(tmp_path)
+    runstate.snapshot_to_prev(d)
+    (d / "analysis.json").write_text("NEW", encoding="utf-8")   # 假裝重跑寫了新的
+    runstate.restore_prev(d)
+    assert (d / "analysis.json").read_text(encoding="utf-8") == "OLD:analysis.json"
+    assert not (d / ".prev").exists()
+
+
+def test_restore_is_idempotent_when_no_prev(tmp_path):
+    d = _full_story(tmp_path)
+    runstate.restore_prev(d)                            # 沒有 .prev,不拋
+    assert (d / "analysis.json").exists()
+
+
+def test_discard_prev_removes_it(tmp_path):
+    d = _full_story(tmp_path)
+    runstate.snapshot_to_prev(d)
+    runstate.discard_prev(d)
+    assert not (d / ".prev").exists()
+    assert not (d / "analysis.json").exists()           # discard 不還原(commit 語意)
+
+
+def test_restore_partial_prev(tmp_path):
+    """restore_prev 只還原存在的檔案(partial .prev)"""
+    d = _full_story(tmp_path)
+    runstate.snapshot_to_prev(d)
+    # 刪掉 .prev 中的某些檔案,模擬部分復原情境
+    (d / ".prev" / "feedback.json").unlink()
+    (d / ".prev" / "viz.json").unlink()
+    # 寫入新的 analysis.json
+    (d / "analysis.json").write_text("NEW", encoding="utf-8")
+    # 現在 .prev 只有 analysis.md, feedback.md, analysis.json 沒了
+    # restore 應該只還原存在的檔案
+    runstate.restore_prev(d)
+    assert (d / "analysis.md").read_text(encoding="utf-8") == "OLD:analysis.md"
+    assert (d / "feedback.md").read_text(encoding="utf-8") == "OLD:feedback.md"
+    # analysis.json 被復原了
+    assert (d / "analysis.json").read_text(encoding="utf-8") == "OLD:analysis.json"
+    assert not (d / ".prev").exists()
+
+
+def test_snapshot_skips_missing_artifacts(tmp_path):
+    """snapshot 只搬存在的檔案"""
+    d = tmp_path / "s01"; d.mkdir()
+    # 只創建部分 artifact
+    (d / "analysis.json").write_text("data", encoding="utf-8")
+    (d / "source.md").write_text("原文", encoding="utf-8")
+    (d / "usage.jsonl").write_text("{}\n", encoding="utf-8")
+    # 不創建其他的
+    runstate.snapshot_to_prev(d)
+    # 只有 analysis.json 應該被搬到 .prev
+    assert not (d / "analysis.json").exists()
+    assert (d / ".prev" / "analysis.json").exists()
+    # 其他檔案不應該在 .prev 裡
+    assert not (d / ".prev" / "feedback.json").exists()
+    # 輸入應該還在
+    assert (d / "source.md").exists()
+    assert (d / "usage.jsonl").exists()

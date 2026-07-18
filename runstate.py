@@ -5,12 +5,17 @@
 真的要跳過某格時,orchestrator 會再過一次完整閘門確認(見 orchestrator)。
 """
 import json
+import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 import atomicio
 
 RUN = "run.json"
+PREV = ".prev"
+_ARTIFACTS = ("analysis.json", "feedback.json", "viz.json",
+              "analysis.md", "feedback.md")
 
 
 def _iso_now() -> str:
@@ -76,3 +81,32 @@ def is_complete(story_dir) -> bool:
     """re-analyze 守門用:三個產物都在且 wellformed = 完整故事。"""
     d = Path(story_dir)
     return analysis_wellformed(d) and feedback_wellformed(d) and (d / "viz.json").exists()
+
+
+def snapshot_to_prev(story_dir) -> None:
+    """搬既有 artifact 到 .prev/(re-analyze 的退路)。輸入/帳本/狀態不動。"""
+    d = Path(story_dir)
+    prev = d / PREV
+    prev.mkdir(exist_ok=True)
+    for name in _ARTIFACTS:
+        src = d / name
+        if src.exists():
+            os.replace(src, prev / name)
+
+
+def restore_prev(story_dir) -> None:
+    """.prev/ 搬回覆蓋;全搬回才 rmtree(.prev)。逐檔 os.replace 冪等、crash 安全。"""
+    d = Path(story_dir)
+    prev = d / PREV
+    if not prev.is_dir():
+        return
+    for name in _ARTIFACTS:
+        src = prev / name
+        if src.exists():
+            os.replace(src, d / name)
+    shutil.rmtree(prev, ignore_errors=True)
+
+
+def discard_prev(story_dir) -> None:
+    """commit:重新分析成功,舊版不再需要。"""
+    shutil.rmtree(Path(story_dir) / PREV, ignore_errors=True)
