@@ -9,6 +9,7 @@ import json
 import pytest
 
 import index
+import runstate
 
 
 def test_story_with_analysis_is_listed(story):
@@ -123,3 +124,33 @@ def test_main_check_writes_nothing(story, monkeypatch, capsys):
 
     assert not (base.parent / "index.json").exists(), "--check 不該寫檔"
     assert "未寫檔" in capsys.readouterr().out
+
+
+# ── 未完成故事(run.json 但無 analysis.json)/ status / resumable ──────
+
+def test_incomplete_story_with_runjson_is_listed(story, monkeypatch):
+    """analyst 前就撞牆(無 analysis.json)但有 run.json → 列出降級 entry。"""
+    slug, base = story
+    (base / "analysis.json").unlink()                  # 模擬還沒生出來
+    monkeypatch.setattr(runstate, "write", runstate.write)  # 明確用真 runstate
+    runstate.write(base, status="paused", stage="analyst",
+                   reason="usage-limit", resets_at=999, title="待續的標題")
+
+    e = index.entry(base)
+    assert e["slug"] == "mini" and e["title"] == "待續的標題"
+    assert e["status"] == "paused" and e["resumable"] is True
+    assert e["nodes"] == 0 and e["synopsis"] == ""
+
+
+def test_complete_story_has_done_status(story):
+    slug, base = story
+    e = index.entry(base)
+    assert e["status"] == "done" and e["resumable"] is False and e["stage"] == "done"
+
+
+def test_pure_orphan_without_runjson_still_invisible(story):
+    """無 analysis.json 又無 run.json → 仍隱形(政策不變)。"""
+    slug, base = story
+    orphan = base.parent / "s99"; orphan.mkdir()
+    (orphan / "source.md").write_text("孤兒\n", encoding="utf-8")
+    assert index.entry(orphan) is None

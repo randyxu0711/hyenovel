@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import atomicio
+import runstate
 
 ROOT = Path(__file__).resolve().parent
 STORIES = ROOT / "stories"
@@ -21,11 +22,15 @@ STORIES = ROOT / "stories"
 
 def entry(d):
     """組一篇的列表項;analysis.json 缺/壞則跳過(回 None)。
-    單篇壞掉不該讓整份列表生不出來,故這裡容錯跳過(印警告),不像閘門那樣 sys.exit。"""
+    單篇壞掉不該讓整份列表生不出來,故這裡容錯跳過(印警告),不像閘門那樣 sys.exit。
+    無 analysis.json 但有 run.json → 降級 entry(未完成但可續跑,見 _incomplete_entry)。"""
     slug = d.name
     aj = d / "analysis.json"
+    rs = runstate.read(d)
     if not aj.exists():
-        return None
+        if rs is None:
+            return None                       # 純孤兒:隱形(政策不變)
+        return _incomplete_entry(d, rs)       # 有 run.json:降級列出
     try:
         a = json.loads(aj.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
@@ -36,6 +41,7 @@ def entry(d):
     if fb.exists():
         mtime = max(mtime, fb.stat().st_mtime)  # feedback 較新則以它為準
     iso = datetime.fromtimestamp(mtime, timezone.utc).astimezone().isoformat(timespec="seconds")
+    status = (rs or {}).get("status", "done")
     return {
         "slug": a.get("slug", slug),
         "title": a.get("title") or slug,
@@ -45,6 +51,27 @@ def entry(d):
         "has_feedback": fb.exists(),
         "has_viz": (d / "viz.json").exists(),
         "updated": iso,
+        "status": status,
+        "stage": (rs or {}).get("stage", "done"),
+        "resumable": status in ("paused", "failed"),
+    }
+
+
+def _incomplete_entry(d, rs):
+    """analyst 前就撞牆:無分析欄位可讀,靠 run.json 給最小 shape。"""
+    slug = d.name
+    updated = rs.get("updated") or datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    return {
+        "slug": slug,
+        "title": rs.get("title") or slug,
+        "synopsis": "",
+        "nodes": 0, "edges": 0,
+        "has_feedback": (d / "feedback.json").exists(),
+        "has_viz": (d / "viz.json").exists(),
+        "updated": updated,
+        "status": rs.get("status", "failed"),
+        "stage": rs.get("stage", "analyst"),
+        "resumable": True,
     }
 
 
