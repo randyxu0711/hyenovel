@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import viz from "./fixtures/viz.json";
 import index from "./fixtures/index.json";
-import { getIndex, getStory } from "../src/data/client";
+import { getIndex, getStory, streamCritique, reanalyzeCritique } from "../src/data/client";
 
 function mockFetch(map: Record<string, unknown>) {
   return vi.fn(async (url: string) => {
@@ -10,6 +10,19 @@ function mockFetch(map: Record<string, unknown>) {
     return { ok: true, status: 200,
       json: async () => body, text: async () => String(body) } as Response;
   });
+}
+
+/** 假 fetch:回一個讀一次就 done 的 ReadableStream(SSE reader 不會卡住),並記錄每次呼叫的 url/init。 */
+function mockStreamFetch() {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return {
+      ok: true, status: 200,
+      body: { getReader: () => ({ read: async () => ({ done: true, value: undefined }) }) },
+    } as unknown as Response;
+  });
+  return { fn, calls };
 }
 
 beforeEach(() => vi.restoreAllMocks());
@@ -38,5 +51,25 @@ describe("dataClient", () => {
     const { getUsage } = await import("../src/data/client");
     const r = await getUsage("s02");
     expect(r.slug).toBe("s02");
+  });
+  it("reanalyzeCritique 打 /api/critique/{slug},body 含 mode:reanalyze", async () => {
+    const { fn, calls } = mockStreamFetch();
+    vi.stubGlobal("fetch", fn);
+    for await (const _ of reanalyzeCritique("s01", "T")) { /* drain */ }
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe("/api/critique/s01");
+    expect(calls[0].init?.method).toBe("POST");
+    const body = JSON.parse(calls[0].init?.body as string);
+    expect(body.mode).toBe("reanalyze");
+  });
+  it("streamCritique(resume/normal) body 不含 mode", async () => {
+    const { fn, calls } = mockStreamFetch();
+    vi.stubGlobal("fetch", fn);
+    for await (const _ of streamCritique("s01", "T", false)) { /* drain */ }
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe("/api/critique/s01");
+    const body = JSON.parse(calls[0].init?.body as string);
+    expect("mode" in body).toBe(false);
+    expect(body.mode).toBeUndefined();
   });
 });
