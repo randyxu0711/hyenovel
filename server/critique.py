@@ -39,6 +39,7 @@ class Run:
         self.reason = None
         self.resets_at = None
         self.cost = 0.0
+        self.reanalyze = False                        # 本 Run 是「重新分析」嗎?done 才丟棄 .prev(見 _drive)
         self.task: asyncio.Task | None = None
         self.client = None                            # 當前 ClaudeSDKClient(取消時直接 disconnect)
         self.finished = asyncio.Event()
@@ -125,6 +126,8 @@ async def _drive(run: Run):
                           "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
     finally:
         run.client = None
+        if run.reanalyze and run.status == "done":
+            runstate.discard_prev(run.dir)    # commit;失敗則保留 .prev(退路)
         run.finished.set()
         for q in list(run.subscribers):
             q.put_nowait(None)   # 串流結束哨兵
@@ -142,6 +145,20 @@ def start(slug: str, title: str, fresh: bool = False) -> Run:
     _runs[slug] = run
     _persist(run)                       # 立刻寫 status=running + title(可見性)
     run.task = asyncio.create_task(_drive(run))
+    return run
+
+
+def reanalyze(slug: str, title: str) -> Run:
+    """對『完整』故事再丟一次內文:snapshot 到 .prev 後走同一條 recover。
+    守門看『產物完整』(與 resume_point 同權威),不看 run.json.status。"""
+    if not config.valid_slug(slug):
+        raise ValueError(f"invalid slug: {slug!r}")
+    d = config.STORIES / slug
+    if not runstate.is_complete(d):
+        raise ValueError("只有完整分析過的故事能重新分析;未完成的請用『續跑』。")
+    runstate.snapshot_to_prev(d)          # 搬空 → resume_point 自然回 analyst
+    run = start(slug, title, fresh=False)
+    run.reanalyze = True
     return run
 
 

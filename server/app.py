@@ -62,7 +62,14 @@ def critique_running():
 async def critique_start(slug: str, body: dict = Body(default={})):
     # 開始-或-接上:同一 slug 已在跑就補播+續播,不會重複派工。
     # fresh=新孕育(取消可清孤兒);既有故事再評論預設非 fresh → 取消絕不刪 source.md。
-    return _sse(critique.attach(_slug(slug), body.get("title", ""), fresh=bool(body.get("fresh"))))
+    # mode=reanalyze:先守門 + snapshot 到 .prev,再由 attach 接上同一個 Run 的串流。
+    s = _slug(slug)
+    if body.get("mode") == "reanalyze":
+        try:
+            critique.reanalyze(s, body.get("title", ""))
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+    return _sse(critique.attach(s, body.get("title", ""), fresh=bool(body.get("fresh"))))
 
 
 @app.delete("/api/critique/{slug}")

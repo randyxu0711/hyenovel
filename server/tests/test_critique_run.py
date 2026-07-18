@@ -5,6 +5,7 @@
 刪掉就是永久資料遺失。
 """
 import asyncio
+import json
 
 import pytest
 
@@ -385,5 +386,60 @@ def test_cancel_existing_story_keeps_source(monkeypatch):
         await asyncio.sleep(0)
         await critique.cancel("s01")
         assert (d / "source.md").exists(), "取消重跑竟刪掉使用者無版控退路的 source.md"
+
+    asyncio.run(go())
+
+
+# ── reanalyze():snapshot .prev + done-only 守門 ─────────────────────
+
+def _mk_complete_story(slug="s01"):
+    d = config.STORIES / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "source.md").write_text("他走進門。\n", encoding="utf-8")
+    (d / "analysis.json").write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
+    (d / "feedback.json").write_text(json.dumps({"key_points": []}), encoding="utf-8")
+    (d / "viz.json").write_text("{}", encoding="utf-8")
+    for name in ("analysis.md", "feedback.md"):
+        (d / name).write_text("md", encoding="utf-8")
+    return d
+
+
+def test_reanalyze_snapshots_then_runs(monkeypatch):
+    d = _mk_complete_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        assert (d / ".prev" / "analysis.json").exists(), "重新分析要先把舊 artifact 搬進 .prev"
+        assert not (d / "analysis.json").exists(), "搬走後目錄該空,resume_point 才會回 analyst"
+        assert run.reanalyze is True
+        run.task.cancel()
+        try:
+            await run.task
+        except BaseException:
+            pass
+
+    asyncio.run(go())
+
+
+def test_reanalyze_rejects_incomplete_story():
+    _mk_story()                                  # 只有 source.md,不完整
+    with pytest.raises(ValueError):
+        critique.reanalyze("s01", "標題")
+
+
+def test_reanalyze_success_discards_prev(monkeypatch):
+    d = _mk_complete_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.9}}]))
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        await run.task
+        assert not (d / ".prev").exists(), "重新分析成功應丟棄 .prev"
 
     asyncio.run(go())
