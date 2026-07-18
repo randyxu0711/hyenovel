@@ -17,6 +17,7 @@ include = [
     "render.py",
     "index.py",
     "atomicio.py",
+    "runstate.py",
     "server/ingest.py",
 ]
 
