@@ -198,6 +198,10 @@ async def run_critique(slug: str, on_client=None):
             yield {"event": "phase", "data": {"name": "analyst", "status": "ok",
                                               "attempt": 0, "detail": "resume-skip"}}
         else:
+            # 確認不過就退回重跑:analyst 重跑會產生新 node id,舊 feedback.json 的 refs
+            # 會對不上 → 強制 start_at 不再是 "render",逼下面的 criticizer 也重跑
+            # (不可讓它用 start_at == "render" 誤判成「已完成」而跳過)。
+            start_at = "analyst"
             res = None
             async for kind, payload in _run_analyst(slug, on_client):
                 if kind == "event":

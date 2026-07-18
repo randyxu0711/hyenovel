@@ -388,3 +388,35 @@ def test_resume_reruns_analyst_when_gate_confirm_fails(monkeypatch):
         assert calls["analyst"] == 1, "閘門確認不過就該重跑 analyst"
 
     asyncio.run(go())
+
+
+def test_resume_reruns_criticizer_when_analyst_fallback_reruns(monkeypatch):
+    """analysis.json + feedback.json 都在(resume_point == "render"),但 analyst 的完整
+    閘門確認不過而退回重跑 analyst → feedback.json 的 refs 綁定的是舊 node id,舊
+    feedback 已經對不上新 analysis。criticizer 這格**不得**因為 start_at 仍是 "render"
+    而被跳過,否則就是「新 analysis + 舊 feedback」悄悄當 done 出貨(viz.json 的 ref
+    錨定會爛掉)。"""
+    d = _story_with_analysis()
+    (d / "feedback.json").write_text(json.dumps({"key_points": []}), encoding="utf-8")
+
+    calls = {"analyst": 0, "criticizer": 0}
+
+    async def fake_phase(name, *a, **k):
+        calls[name] += 1
+        yield ("event", {"event": "phase", "data": {"name": name, "status": "ok", "attempt": 0}})
+        yield ("result", {"ok": True, "cost": 0.3, "reason": None})
+
+    monkeypatch.setattr(orchestrator, "_phase_with_retry", fake_phase)
+    # analyst 確認失敗 → 該退回重跑 analyst;_gate_feedback 若被誤用來確認 criticizer
+    # 會回 True,沒有這道修復的話 criticizer 就會被誤判「已完成」而跳過。
+    monkeypatch.setattr(orchestrator, "_gate", lambda slug: (False, "confirm fail"))
+    monkeypatch.setattr(orchestrator, "_gate_feedback", lambda slug: (True, ""))
+    monkeypatch.setattr(orchestrator, "_run_py",
+                        lambda *a, **k: type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})())
+
+    async def go():
+        [ev async for ev in orchestrator.run_critique("s01")]
+        assert calls["analyst"] == 1, "analyst 確認失敗就該重跑"
+        assert calls["criticizer"] == 1, "analyst 重跑後 feedback.refs 已經對不上新 analysis,criticizer 不得被跳過"
+
+    asyncio.run(go())
