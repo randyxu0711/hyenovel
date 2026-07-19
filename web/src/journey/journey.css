@@ -14,7 +14,9 @@
 .field{position:fixed;inset:0}
 .story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter .8s,opacity .8s;
   touch-action:none;user-select:none}
-.story .cap{font-family:var(--serif);font-size:24px;color:#f4eddb;text-align:center;margin-top:4px;opacity:0;transition:.6s}
+/* 標題常駐微光:骨是抽象指紋,全靠 hover 認星=逐星掃描,找篇成本太高。
+   夜空裡星名淡淡在場(.55),hover 才全亮;spotlight(全場退、這顆亮)不變。 */
+.story .cap{font-family:var(--serif);font-size:24px;color:#f4eddb;text-align:center;margin-top:4px;opacity:.55;transition:.6s}
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
 .stage-catalog .story:hover .cap{opacity:1}
@@ -200,7 +202,8 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 
 /* ---- 軌道線:淡淡的同心橢圓,鋪在星骨底下 ---- */
-.orbits{position:absolute;left:0;top:0;pointer-events:none;transition:opacity .6s ease}
+.orbits{position:absolute;left:0;top:0;pointer-events:none;transition:opacity .6s ease;overflow:visible}
+/* ↑ overflow:visible:extents-fit 後世界無邊,3 圈起 R=930 > 世界半高 750,svg viewBox 會裁掉外圈軌道 */
 
 /* ---- 進單篇:被選中的骨自己飛向中心 → 放大 → 發光(不用背景光暈)---- */
 /* 飛行主角:整具骨位移到世界中心、放大、罩上自身輝光(位移/縮放的 transform 由 inline 給,base→中心)*/
