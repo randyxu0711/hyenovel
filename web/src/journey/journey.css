@@ -482,11 +482,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   filter:drop-shadow(0 0 5px rgba(196,122,114,.3)) drop-shadow(0 0 16px rgba(196,122,114,.14))}
 
 /* 停拍狀態句 + 續跑鈕:續跑是主動作 → 常駐可點(非 hover 才出),色隨狀態 */
-.gest-word.dorm{font-size:13px;letter-spacing:.14em}
+.gest-word.dorm{font-size:14.5px;letter-spacing:.14em}
 .story.paused .gest-word.dorm{color:var(--c-technique)}
 .story.failed .gest-word.dorm{color:var(--c-theme)}
-.gest-resume{display:block;margin:7px auto 0;font:inherit;font-size:12.5px;letter-spacing:.12em;
-  padding:3px 14px;border-radius:14px;cursor:pointer;background:rgba(220,200,150,.06);
+.gest-resume{display:block;margin:7px auto 0;font:inherit;font-size:14.5px;letter-spacing:.12em;
+  padding:4px 17px;border-radius:15px;cursor:pointer;background:rgba(220,200,150,.06);
   color:#e7dcc2;transition:background .3s,color .3s,border-color .3s}
 .story.paused .gest-resume{border:1px solid rgba(122,163,189,.5)}
 .story.failed .gest-resume{border:1px solid rgba(196,122,114,.5)}
@@ -494,13 +494,13 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 
 /* 已完成星:hover 才浮出「重新分析」(不佔常駐版面);點了原地二次確認(重跑燒訂閱)*/
 .reanalyze{display:block;margin:6px auto 0;opacity:0;transition:opacity .3s,color .3s,border-color .3s;
-  font:inherit;font-size:12px;letter-spacing:.1em;padding:2px 12px;border-radius:13px;cursor:pointer;
+  font:inherit;font-size:14.5px;letter-spacing:.1em;padding:4px 15px;border-radius:15px;cursor:pointer;
   background:none;border:1px solid rgba(220,200,150,.3);color:#bdb088}
 .story:hover .reanalyze{opacity:.7}
 .reanalyze:hover{opacity:1;color:#f6efd9;border-color:var(--amber)}
-.reanalyze-confirm{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:6px;
-  font-size:12px;letter-spacing:.06em;color:#d8cfb4}
-.reanalyze-confirm button{font:inherit;font-size:12px;padding:2px 9px;border-radius:11px;cursor:pointer;
+.reanalyze-confirm{display:flex;gap:7px;align-items:center;justify-content:center;margin-top:6px;
+  font-size:13.5px;letter-spacing:.06em;color:#d8cfb4}
+.reanalyze-confirm button{font:inherit;font-size:13.5px;padding:3px 12px;border-radius:13px;cursor:pointer;
   background:rgba(220,200,150,.08);border:1px solid rgba(220,200,150,.3);color:#e7dcc2}
 .reanalyze-confirm button:hover{background:rgba(220,200,150,.18);color:#f6efd9}
 
