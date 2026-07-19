@@ -217,8 +217,11 @@ def build_viz_data(slug, analysis, source, diag, feedback=None):
 def build_html(data, source):
     """讀 viz/{template,css,js},把資料契約 dict + source 注入成自包含 viz.html。
     viz.html 與未來前端 app 消費同一個 data 契約(差別只在 app 用 HTTP 取 viz.json)。"""
-    data_json = json.dumps(data, ensure_ascii=False)
-    source_json = json.dumps(source, ensure_ascii=False)
+    # 注入的是 <script> 內文 → 任何 "</script>"（乃至 "</"）都能 break out。
+    # JSON 字串裡 "<\/" 與 "</" 等價(解析後一樣),故對兩份 payload 一律 </ → <\/,
+    # 內容零改變、卻堵死跳出。source_json 不受引用閘門約束,尤其要守。
+    data_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    source_json = json.dumps(source, ensure_ascii=False).replace("</", "<\\/")
     vdir = ROOT / "viz"
     tpl = (vdir / "template.html").read_text(encoding="utf-8")
     css = (vdir / "viz.css").read_text(encoding="utf-8")

@@ -253,11 +253,14 @@ export default function BoneStage(
         {chain.edges.map((e, i) => {
           const A = curById.get(e.from), B = curById.get(e.to);
           if (!A || !B) return null;
-          const on = hover === e.from || hover === e.to, mid = (A.x + B.x) / 2;
+          // 連線跟著 focus(=選取或 hover 的整條意圖鏈)一起亮/暗:兩端都在鏈上才算「在鏈」,
+          // 讓「點一個 node → 整條鏈的節點與連線同亮、其餘同暗」。無 focus 時全數靜息流動(原樣)。
+          const inChain = focus ? (focus.has(e.from) && focus.has(e.to)) : null;
+          const on = inChain === true, mid = (A.x + B.x) / 2;
           const d = `M${A.x},${A.y} C${mid},${A.y} ${mid},${B.y} ${B.x},${B.y}`;
-          const base = hover ? (on ? 0.55 : 0.09) : 0.24;
-          const near = hover ? (on ? 1 : 0) : 0.85;
-          const far = hover ? (on ? 0.6 : 0) : 0.52;
+          const base = inChain === null ? 0.24 : on ? 0.55 : 0.09;
+          const near = inChain === null ? 0.85 : on ? 1 : 0;
+          const far = inChain === null ? 0.52 : on ? 0.6 : 0;
           const dly = (i % 5) * -0.6;
           return (
             <g key={i}>
@@ -285,7 +288,9 @@ export default function BoneStage(
       {/* 橋接節點 + 病灶 + 名字(主題常駐;其餘隨手出;邊界自動翻邊不切) */}
       {bridges.map(br => {
         const n = br.node, c = curById.get(n.id)!, on = hover === n.id, sel = selected === n.id;
-        const showLabel = on || sel || (!focusId && ((mode === "axis" && n.type === "theme") || mode === "chain"));
+        // 焦點鏈上的節點(含被牽連的 k/e/t)也顯示標籤——否則只亮點沒字,讀不出這條鏈是什麼→什麼
+        const showLabel = on || sel || (focus?.has(n.id) ?? false)
+          || (!focusId && ((mode === "axis" && n.type === "theme") || mode === "chain"));
         const base = 1;   // 整具骨所有點都在;calm 與 axis 的差別只在「名字綻不綻放」
         const dg = viz.diag?.[n.id] ?? [];
         const over = dg.includes("overloaded"), orphan = dg.includes("orphan"), hollow = dg.includes("hollow");

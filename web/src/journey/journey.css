@@ -494,13 +494,13 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 
 /* 已完成星:hover 才浮出「重新分析」(不佔常駐版面);點了原地二次確認(重跑燒訂閱)*/
 .reanalyze{display:block;margin:6px auto 0;opacity:0;transition:opacity .3s,color .3s,border-color .3s;
-  font:inherit;font-size:14.5px;letter-spacing:.1em;padding:4px 15px;border-radius:15px;cursor:pointer;
+  font:inherit;font-size:17px;letter-spacing:.1em;padding:4px 15px;border-radius:15px;cursor:pointer;
   background:none;border:1px solid rgba(220,200,150,.3);color:#bdb088}
 .story:hover .reanalyze{opacity:.7}
 .reanalyze:hover{opacity:1;color:#f6efd9;border-color:var(--amber)}
 .reanalyze-confirm{display:flex;gap:7px;align-items:center;justify-content:center;margin-top:6px;
-  font-size:13.5px;letter-spacing:.06em;color:#d8cfb4}
-.reanalyze-confirm button{font:inherit;font-size:13.5px;padding:3px 12px;border-radius:13px;cursor:pointer;
+  font-size:15px;letter-spacing:.06em;color:#d8cfb4}
+.reanalyze-confirm button{font:inherit;font-size:15px;padding:3px 12px;border-radius:13px;cursor:pointer;
   background:rgba(220,200,150,.08);border:1px solid rgba(220,200,150,.3);color:#e7dcc2}
 .reanalyze-confirm button:hover{background:rgba(220,200,150,.18);color:#f6efd9}
 
