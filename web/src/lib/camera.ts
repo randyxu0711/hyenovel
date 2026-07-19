@@ -21,12 +21,19 @@ export function camTransform(
 }
 
 // 同心環佈局:中心留給種骨,故事繞著中心一圈圈排。
-// 內圈先填滿再外擴;每圈容量隨半徑增加(圓周越長塞越多),圈間錯開避免徑向連成直線。
-// 橢圓(x 拉 RING_XSCALE)貼合世界/螢幕的寬高比。常數集中在此,軌道線靠它們對齊卡位。
+// 內圈先填滿再外擴;每圈容量隨半徑增加(圓周越長塞越多)。
+// 橢圓(x 拉 RING_XSCALE)貼合世界/螢幕的寬高比 → y 是緊的維度。
+// 未滿的環走 sparsePhase(新星先落地平線);滿環維持圈間錯開避免徑向連成直線。
 const RING = { R0: 360, dR: 285, arc: 380 };
 export const RING_XSCALE = 1.5;
 const ringR = (ring: number) => RING.R0 + ring * RING.dR;
 const ringCap = (ring: number) => Math.max(4, Math.round((2 * Math.PI * ringR(ring)) / RING.arc));
+
+// 未滿環的相位:均分 occ 顆時,取「最小化 max|sin|」的旋轉最優解(y 緊,新星先落地平線)。
+// 奇數 occ 的角度集 mod π 等距 π/occ,最優相位恰為 0;偶數為 0 或 π/occ,視 (occ-2)/2 奇偶
+//(occ=4 → π/4 成 X 不成 +,與滿環 45° 錯開同理;test/camera-fit 以全相位掃描釘住最優性)。
+export const sparsePhase = (occ: number): number =>
+  occ % 2 ? 0 : ((occ - 2) / 2) % 2 ? Math.PI / occ : 0;
 
 export function worldPos(i: number, world: { w: number; h: number }, total = i + 1): { x: number; y: number } {
   const cx = world.w / 2, cy = world.h / 2;
@@ -36,7 +43,8 @@ export function worldPos(i: number, world: { w: number; h: number }, total = i +
     if (idx < cap) {
       const occ = Math.max(1, Math.min(cap, total - start)); // 這圈實際幾篇 → 均分整圈
       const R = ringR(ring);
-      const a = (idx / occ) * 2 * Math.PI + ring * 0.5 + Math.PI / 4; // 起相位轉 45°:4 篇成 X 而非 +
+      const base = occ === cap ? ring * 0.5 + Math.PI / 4 : sparsePhase(occ);
+      const a = (idx / occ) * 2 * Math.PI + base;
       return { x: cx + Math.cos(a) * R * RING_XSCALE, y: cy + Math.sin(a) * R };
     }
     idx -= cap; start += cap; ring++;
