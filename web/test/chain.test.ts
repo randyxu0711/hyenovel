@@ -25,8 +25,9 @@ describe("chain", () => {
     expect(nodes.find(n => n.id === "k2")!.classes).toContain("orphan");
     expect(t.classes).toContain("overloaded");
   });
-  it("focusSet 取自身 + 鄰居", () => {
-    const s = focusSet(fake.edges, "e1");
-    expect([...s].sort()).toEqual(["e1", "k1", "t1"]);
+  it("focusSet 沿整條意圖鏈(不只 1 跳):k1 也拉到它服務的 t1", () => {
+    expect([...focusSet(fake.edges, "k1")].sort()).toEqual(["e1", "k1", "t1"]);
+    expect([...focusSet(fake.edges, "e1")].sort()).toEqual(["e1", "k1", "t1"]);
+    expect([...focusSet(fake.edges, "t1")].sort()).toEqual(["e1", "k1", "t1"]);
   });
 });

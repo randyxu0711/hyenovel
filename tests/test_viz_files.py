@@ -330,3 +330,17 @@ def test_main_prints_diagnostics_when_present(story, monkeypatch, capsys):
     monkeypatch.setattr(viz.sys, "argv", ["viz.py", slug])
     viz.main()
     assert "診斷:" in capsys.readouterr().out
+
+
+def test_build_html_escapes_script_breakout():
+    """viz.html 把 data/source 注進 <script> 內文 → 任何 </script> 都不得能 break out。
+    修法是 </ → <\\/;要釘住:①原樣 </script> 消失 ②轉義後 JSON parse 回原值(內容零改)。"""
+    evil = "</script><script>alert(1)</script>"
+    data = {"title": "t", "payload": evil}
+    source = "原文 " + evil
+    out = viz.build_html(data, source)
+
+    assert evil not in out                     # 原樣跳出序列不復存在
+    esc = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    assert esc in out                          # 注進去的是轉義版
+    assert json.loads(esc) == data             # <\/ ≡ </:parse 回來一模一樣
