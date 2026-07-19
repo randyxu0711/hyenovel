@@ -1,14 +1,18 @@
 export const WORLD = { w: 2600, h: 1500 };
 export type Stage = "overview" | "catalog" | "single";
 
-const K: Record<Stage, number> = { overview: 0.9, catalog: 1.04, single: 1.5 };
-
 export function fitScale(world: { w: number; h: number }, vw: number, vh: number): number {
   return Math.min(vw / world.w, vh / world.h);
 }
 
-export function zoomFor(stage: Stage, fit: number): number {
-  return fit * K[stage];
+// 三段運鏡的 zoom 分派(spec §5 接線):
+//   catalog  = 家之凝視(extents-fit)
+//   overview = 家 ×0.9(進場前站得更遠,風化後相機「抵達」家)
+//   single   = 固定世界 ×1.5(對焦單篇;WORLD 在此仍是合理基準——單篇不隨篇數變)
+export function stageZoom(stage: Stage, count: number, vw: number, vh: number): number {
+  if (stage === "single") return fitScale(WORLD, vw, vh) * 1.5;
+  const home = fitContent(count, vw, vh);
+  return stage === "catalog" ? home : home * 0.9;
 }
 
 export function camTransform(

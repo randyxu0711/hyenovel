@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
-import { WORLD, fitScale, zoomFor, camTransform, type Stage } from "../lib/camera";
+import { WORLD, stageZoom, camTransform, type Stage } from "../lib/camera";
 import { useViewport } from "../lib/useViewport";
 
 export default function Camera(
-  { stage, focus, children }: { stage: Stage; focus?: { x: number; y: number }; children: React.ReactNode },
+  { stage, count, focus, children }:
+  { stage: Stage; count: number; focus?: { x: number; y: number }; children: React.ReactNode },
 ) {
   const vp = useViewport();
-  const fit = fitScale(WORLD, vp.w, vp.h);
-  const z = zoomFor(stage, fit);
+  const z = stageZoom(stage, count, vp.w, vp.h);
   const t = camTransform(WORLD, vp.w, vp.h, z, stage === "single" ? focus : undefined);
   const blur = stage === "overview" ? 6 : 0;
   return (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WORLD, fitScale, zoomFor, camTransform, worldPos } from "../src/lib/camera";
+import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos } from "../src/lib/camera";
 
 describe("camera math", () => {
   it("WORLD 是 2600x1500", () => {
@@ -8,10 +8,11 @@ describe("camera math", () => {
   it("fitScale 取較小比例", () => {
     expect(fitScale({ w: 1000, h: 500 }, 2000, 2000)).toBe(2); // min(2000/1000,2000/500)=2
   });
-  it("zoomFor 各 stage 乘上對應係數", () => {
-    expect(zoomFor("overview", 2)).toBeCloseTo(1.8);
-    expect(zoomFor("catalog", 2)).toBeCloseTo(2.08);
-    expect(zoomFor("single", 2)).toBeCloseTo(3.0);
+  it("stageZoom:catalog=家構圖、overview=家×0.9、single=固定世界×1.5", () => {
+    const home = fitContent(7, 1920, 1080);
+    expect(stageZoom("catalog", 7, 1920, 1080)).toBe(home);
+    expect(stageZoom("overview", 7, 1920, 1080)).toBeCloseTo(home * 0.9);
+    expect(stageZoom("single", 7, 1920, 1080)).toBeCloseTo(fitScale(WORLD, 1920, 1080) * 1.5);
   });
   it("camTransform 把 focus 置中於視窗", () => {
     const t = camTransform({ w: 1000, h: 1000 }, 800, 600, 2, { x: 100, y: 50 });

@@ -151,7 +151,7 @@ export default function Journey() {
       onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
       <Dust />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
-      <Camera stage={stage} focus={focus}>
+      <Camera stage={stage} count={Math.max(1, ordered.length)} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
           gestations={gestations} hatching={hatching} fresh={fresh} returning={returning} confirming={confirming}
