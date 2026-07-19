@@ -23,6 +23,7 @@ import asyncio
 import subprocess
 import sys
 
+import runstate
 from claude_agent_sdk import ClaudeSDKClient
 
 from . import config, ledger, sdk_runner
@@ -143,6 +144,30 @@ def _phase_error(where: str, gate_noun: str, res: dict, cost: float = 0.0) -> di
     return {"event": "error", "data": data}
 
 
+async def _run_analyst(slug, on_client):
+    """analyst 那格:派工 → 閘門重試(見 _phase_with_retry)。與 run_critique 抽開,
+    好讓「新跑」與「續跑閘門確認不過、退回重跑」共用同一套邏輯。"""
+    ana_first = (f"分析 stories/{slug}/:讀 source.md 與 schemas/analysis.schema.json,"
+                 f"用 Write 工具產出 stories/{slug}/analysis.json。只回報簡短摘要。")
+    ana_retry = lambda d: (f"analysis.json 沒過閘門:\n{d}\n"
+                           f"請修正 stories/{slug}/analysis.json"
+                           f"(逐字引用須對得上 source.md、符合 schema),用 Write 工具寫回。")
+    async for kind, payload in _phase_with_retry("analyst", ana_first, ana_retry, slug, on_client=on_client):
+        yield kind, payload
+
+
+async def _run_criticizer(slug, on_client):
+    """criticizer 那格:另一個 client(觀察/判斷隔離),閘門用 _gate_feedback。"""
+    cri_first = (f"讀 stories/{slug}/analysis.json、source.md、schemas/feedback.schema.json,"
+                 f"用 Write 工具產出 stories/{slug}/feedback.json"
+                 f"(發展性、有輕重、不諂媚,每點掛逐字 quotes、refs 綁 node id)。只回報摘要。")
+    cri_retry = lambda d: (f"feedback.json 沒過閘門:\n{d}\n"
+                           f"請修正 stories/{slug}/feedback.json,用 Write 工具寫回。")
+    async for kind, payload in _phase_with_retry("criticizer", cri_first, cri_retry, slug,
+                                                 gate_fn=_gate_feedback, on_client=on_client):
+        yield kind, payload
+
+
 async def run_critique(slug: str, on_client=None):
     # 縱深防禦:slug 會拼路徑、也會當 argv 餵子行程(viz/render/index)。
     # API 邊界已擋,這裡再守一道(本函式也可被直接呼叫)。
@@ -157,25 +182,36 @@ async def run_critique(slug: str, on_client=None):
         return
 
     setup()
-    total_cost = 0.0
+    total_cost = ledger.aggregate(slug).get("last_run_cost_usd", 0.0)   # 續跑成本結轉(#2)
     stage = "analyst"          # 目前跑到哪格;逾時報錯時標對階段
+    start_at = runstate.resume_point(config.STORIES / slug)  # "analyst"|"criticizer"|"render"
+
+    def _confirm(gate_fn) -> bool:
+        ok, _ = gate_fn(slug)
+        return ok
+
     try:
         # ── 第一格:analyst(自己一個協調者 client)──
-        ana_first = (f"分析 stories/{slug}/:讀 source.md 與 schemas/analysis.schema.json,"
-                     f"用 Write 工具產出 stories/{slug}/analysis.json。只回報簡短摘要。")
-        ana_retry = lambda d: (f"analysis.json 沒過閘門:\n{d}\n"
-                               f"請修正 stories/{slug}/analysis.json"
-                               f"(逐字引用須對得上 source.md、符合 schema),用 Write 工具寫回。")
-        res = None
-        async for kind, payload in _phase_with_retry("analyst", ana_first, ana_retry, slug, on_client=on_client):
-            if kind == "event":
-                yield payload
-            else:
-                res = payload
-        total_cost += res["cost"]
-        if not res["ok"]:
-            yield _phase_error("analyst", "analysis", res, total_cost)
-            return
+        # 續跑且產物看似完整 → 先過一次完整閘門確認才敢跳過;不過就退回正常重跑
+        # (產物「看似在」不代表 gate-valid,例如逐字引用其實對不上)。
+        if start_at != "analyst" and await asyncio.to_thread(_confirm, _gate):
+            yield {"event": "phase", "data": {"name": "analyst", "status": "ok",
+                                              "attempt": 0, "detail": "resume-skip"}}
+        else:
+            # 確認不過就退回重跑:analyst 重跑會產生新 node id,舊 feedback.json 的 refs
+            # 會對不上 → 強制 start_at 不再是 "render",逼下面的 criticizer 也重跑
+            # (不可讓它用 start_at == "render" 誤判成「已完成」而跳過)。
+            start_at = "analyst"
+            res = None
+            async for kind, payload in _run_analyst(slug, on_client):
+                if kind == "event":
+                    yield payload
+                else:
+                    res = payload
+            total_cost += res["cost"]
+            if not res["ok"]:
+                yield _phase_error("analyst", "analysis", res, total_cost)
+                return
 
         # ── 早出 viz:analyst 已交件 → 先產一版無回饋的 viz.json ──
         # 讓孕育動畫從此改畫「真骨」(這篇獨有的形狀),而不是寫死的象徵骨:
@@ -184,36 +220,36 @@ async def run_critique(slug: str, on_client=None):
         # **best-effort**:失敗只降級記 log、不中斷。這版只餵動畫,真正的 viz 在確定性層
         # 還會再跑一次(帶 feedback),那次失敗才該讓整支紅 —— 不值得為了預覽畫面,
         # 砍掉一格已經花掉 ~$0.4 的 analyst。
-        yield {"event": "phase", "data": {"name": "preview", "status": "start"}}
-        preview_ok = False
-        try:
-            pv = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
-            preview_ok = pv.returncode == 0
-            if not preview_ok:
-                log.warning(f"event=preview-viz-fail slug={slug} rc={pv.returncode} "
-                            + f"out={(pv.stdout + pv.stderr).strip()[:300]!r}")
-        except Exception:  # noqa: BLE001 —— 含逾時;預覽壞掉不該波及主流程
-            log.warning(f"event=preview-viz-fail slug={slug} (例外)", exc_info=True)
-        yield {"event": "phase", "data": {"name": "preview", "status": "ok" if preview_ok else "skip"}}
+        # 續跑在 criticizer 起跳時 viz.json 早就在(原跑就產過)→ 不重跑。
+        if not (config.STORIES / slug / "viz.json").exists():
+            yield {"event": "phase", "data": {"name": "preview", "status": "start"}}
+            preview_ok = False
+            try:
+                pv = await asyncio.to_thread(_run_py, [str(config.ROOT / "viz.py"), slug])
+                preview_ok = pv.returncode == 0
+                if not preview_ok:
+                    log.warning(f"event=preview-viz-fail slug={slug} rc={pv.returncode} "
+                                + f"out={(pv.stdout + pv.stderr).strip()[:300]!r}")
+            except Exception:  # noqa: BLE001 —— 含逾時;預覽壞掉不該波及主流程
+                log.warning(f"event=preview-viz-fail slug={slug} (例外)", exc_info=True)
+            yield {"event": "phase", "data": {"name": "preview", "status": "ok" if preview_ok else "skip"}}
 
         # ── 第二格:criticizer(另一個 client,隔離;閘門要求 feedback.json 真的存在)──
         stage = "criticizer"
-        cri_first = (f"讀 stories/{slug}/analysis.json、source.md、schemas/feedback.schema.json,"
-                     f"用 Write 工具產出 stories/{slug}/feedback.json"
-                     f"(發展性、有輕重、不諂媚,每點掛逐字 quotes、refs 綁 node id)。只回報摘要。")
-        cri_retry = lambda d: (f"feedback.json 沒過閘門:\n{d}\n"
-                               f"請修正 stories/{slug}/feedback.json,用 Write 工具寫回。")
-        res = None
-        async for kind, payload in _phase_with_retry("criticizer", cri_first, cri_retry, slug,
-                                                     gate_fn=_gate_feedback, on_client=on_client):
-            if kind == "event":
-                yield payload
-            else:
-                res = payload
-        total_cost += res["cost"]
-        if not res["ok"]:
-            yield _phase_error("criticizer", "feedback", res, total_cost)
-            return
+        if start_at == "render" and await asyncio.to_thread(_confirm, _gate_feedback):
+            yield {"event": "phase", "data": {"name": "criticizer", "status": "ok",
+                                              "attempt": 0, "detail": "resume-skip"}}
+        else:
+            res = None
+            async for kind, payload in _run_criticizer(slug, on_client):
+                if kind == "event":
+                    yield payload
+                else:
+                    res = payload
+            total_cost += res["cost"]
+            if not res["ok"]:
+                yield _phase_error("criticizer", "feedback", res, total_cost)
+                return
     except asyncio.TimeoutError:
         log.error(f"event=timeout stage={stage} limit_s={config.PHASE_TIMEOUT}")
         label = {"analyst": "分析(analyst)", "criticizer": "評論(criticizer)"}[stage]

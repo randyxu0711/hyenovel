@@ -5,9 +5,11 @@
 刪掉就是永久資料遺失。
 """
 import asyncio
+import json
 
 import pytest
 
+import runstate
 from server import config, critique
 
 
@@ -164,16 +166,73 @@ def test_drive_converges_unexpected_exception_to_error(monkeypatch):
     assert any(e["event"] == "error" for e in run.events)
 
 
-def test_failed_fresh_birth_discards_orphan(monkeypatch):
-    """fresh 誕生失敗 → 清掉半成品(它是本流程剛 ingest 的,清掉安全)。"""
+def test_failed_fresh_birth_is_kept_and_marked(monkeypatch):
+    """新政策:fresh 誕生失敗 → 不再刪,改寫 run.json 成 failed(可續)。"""
     d = _mk_story()
     monkeypatch.setattr(critique.orchestrator, "run_critique",
                         _fake_critique([{"event": "error",
-                                         "data": {"message": "閘門耗盡", "recoverable": False}}]))
-
+                                         "data": {"message": "閘門耗盡", "recoverable": False,
+                                                  "reason": "gate", "cost_usd": 0.4}}]))
     run = critique.Run("s01", "標題", fresh=True)
     asyncio.run(critique._drive(run))
-    assert not d.exists(), "fresh 誕生失敗該清掉孤兒"
+    assert d.exists(), "新政策:失敗不刪,留著給續跑"
+    rs = runstate.read(d)
+    assert rs["status"] == "failed" and rs["reason"] == "gate"
+
+
+def test_paused_on_usage_limit(monkeypatch):
+    """撞用量上限 → status=paused,帶 resets_at。"""
+    d = _mk_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "error",
+                                         "data": {"message": "撞牆", "recoverable": True,
+                                                  "reason": "usage-limit", "resets_at": 999}}]))
+    run = critique.Run("s01", "標題", fresh=True)
+    asyncio.run(critique._drive(run))
+    rs = runstate.read(d)
+    assert rs["status"] == "paused" and rs["resets_at"] == 999
+
+
+def test_start_persists_running_with_title(monkeypatch):
+    """start 立刻寫 run.json(status=running + title)—— 跨重連可見。"""
+    d = _mk_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        run = critique.start("s01", "我的標題")
+        rs = runstate.read(d)
+        assert rs["status"] == "running" and rs["title"] == "我的標題"
+        run.task.cancel()
+        try:
+            await run.task
+        except BaseException:
+            pass
+
+    asyncio.run(go())
+
+
+def test_scan_crashed_marks_orphan_running_as_failed(monkeypatch):
+    """server 重啟:run.json 是 running 但 _runs 沒有它 → 標 failed/crash。"""
+    d = _mk_story()
+    runstate.write(d, status="running", stage="analyst", title="標題")
+    critique._runs.clear()
+    critique.scan_crashed()
+    rs = runstate.read(d)
+    assert rs["status"] == "failed" and rs["reason"] == "crash"
+
+
+def test_done_writes_run_json_done(monkeypatch):
+    d = _mk_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.9}}]))
+    run = critique.Run("s01", "標題", fresh=True)
+    asyncio.run(critique._drive(run))
+    rs = runstate.read(d)
+    assert rs["status"] == "done" and rs["stage"] == "done"
 
 
 def test_failed_rerun_of_existing_story_keeps_source(monkeypatch):
@@ -327,5 +386,136 @@ def test_cancel_existing_story_keeps_source(monkeypatch):
         await asyncio.sleep(0)
         await critique.cancel("s01")
         assert (d / "source.md").exists(), "取消重跑竟刪掉使用者無版控退路的 source.md"
+
+    asyncio.run(go())
+
+
+# ── reanalyze():snapshot .prev + done-only 守門 ─────────────────────
+
+def _mk_complete_story(slug="s01"):
+    d = config.STORIES / slug
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "source.md").write_text("他走進門。\n", encoding="utf-8")
+    (d / "analysis.json").write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
+    (d / "feedback.json").write_text(json.dumps({"key_points": []}), encoding="utf-8")
+    (d / "viz.json").write_text("{}", encoding="utf-8")
+    for name in ("analysis.md", "feedback.md"):
+        (d / name).write_text("md", encoding="utf-8")
+    return d
+
+
+def test_reanalyze_snapshots_then_runs(monkeypatch):
+    d = _mk_complete_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        assert (d / ".prev" / "analysis.json").exists(), "重新分析要先把舊 artifact 搬進 .prev"
+        assert not (d / "analysis.json").exists(), "搬走後目錄該空,resume_point 才會回 analyst"
+        assert run.reanalyze is True
+        run.task.cancel()
+        try:
+            await run.task
+        except BaseException:
+            pass
+
+    asyncio.run(go())
+
+
+def test_reanalyze_rejects_incomplete_story():
+    _mk_story()                                  # 只有 source.md,不完整
+    with pytest.raises(ValueError):
+        critique.reanalyze("s01", "標題")
+
+
+def test_reanalyze_success_discards_prev(monkeypatch):
+    d = _mk_complete_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.9}}]))
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        await run.task
+        assert not (d / ".prev").exists(), "重新分析成功應丟棄 .prev"
+
+    asyncio.run(go())
+
+
+def test_reanalyze_failure_keeps_prev(monkeypatch):
+    """never-worse-off:重新分析失敗 → 舊產物留在 .prev,不是憑空消失。
+
+    _drive 收尾只在 reanalyze 且 status=="done" 才 discard_prev(commit);
+    失敗時這個條件不成立,.prev 就該原封不動地留著當退路。
+    """
+    d = _mk_complete_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "error",
+                                         "data": {"message": "閘門耗盡", "recoverable": False,
+                                                  "reason": "gate"}}]))
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        await run.task
+
+    asyncio.run(go())
+    assert (d / ".prev").exists(), "重新分析失敗竟丟了 .prev——舊版本沒有退路了"
+    assert runstate.read(d)["status"] == "failed", "失敗的新狀態該被記下,才能續跑"
+
+
+def test_done_discards_prev_even_when_not_reanalyze_run(monkeypatch):
+    """Fix2 迴歸:resume(Run.reanalyze=False)跑到 done 也該丟棄殘留的 .prev。
+
+    情境鏈:reanalyze 失敗留下 .prev(上一條測試證實)→ 使用者改點『續跑』
+    (開的是 reanalyze=False 的 Run)把故事跑完 → 舊守門只在 run.reanalyze
+    為真才 discard_prev,導致 .prev 永遠留著;下一次 reanalyze 的
+    snapshot_to_prev 會直接覆蓋掉它,真正的原始備份就這樣不見了
+    (never-worse-off 被打破)。done 就該丟棄任何殘留的 .prev,不看
+    這一次 Run 是不是用 reanalyze 開的。
+    """
+    d = _mk_complete_story()
+    (d / ".prev").mkdir()
+    (d / ".prev" / "analysis.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.1}}]))
+
+    run = critique.Run("s01", "標題", fresh=False)
+    run.reanalyze = False
+    asyncio.run(critique._drive(run))
+
+    assert not (d / ".prev").exists(), "resume 跑到 done 沒有清掉殘留的 .prev"
+
+
+def test_reanalyze_refuses_when_run_already_live(monkeypatch):
+    """Fix3:該 slug 已有活的 Run 在跑 → reanalyze 不准 snapshot_to_prev。
+
+    舊行為:reanalyze() 沒檢查就先 snapshot_to_prev 把產物搬走,再呼叫
+    start()——但 start() 見已有 running 的 Run 就直接回既有 Run,不會套用
+    reanalyze 語意。結果是:產物在活的 orchestrator 底下被搬空了,
+    但沒有人在「重新分析」它,活的那個 Run 會在錯誤的空產物狀態下繼續動作。
+    正確行為是搬空之前先擋:已有活 Run → 不搬、直接報錯(app 層轉 409)。
+    """
+    d = _mk_complete_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        live = critique.start("s01", "標題")
+        with pytest.raises(ValueError):
+            critique.reanalyze("s01", "新標題")
+        assert (d / "analysis.json").exists(), "已有活 Run 時 reanalyze 竟把產物搬進 .prev"
+        assert not (d / ".prev").exists()
+        live.task.cancel()
+        try:
+            await live.task
+        except BaseException:
+            pass
 
     asyncio.run(go())

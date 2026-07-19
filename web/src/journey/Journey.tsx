@@ -59,7 +59,7 @@ export default function Journey() {
     clearTimeout(confirmTimer.current);
     confirmTimer.current = window.setTimeout(() => setConfirming(null), CONFIRM_MS);
   }, [refresh]);
-  const { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit } = useGestations(onBorn);
+  const { gestations, begin, cancel, resume, reanalyze, usageLimitResetAt, dismissUsageLimit } = useGestations(onBorn);
 
   useEffect(() => {
     getIndex().then(i => setEntries(i.stories))
@@ -155,7 +155,7 @@ export default function Journey() {
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
           gestations={gestations} hatching={hatching} fresh={fresh} returning={returning} confirming={confirming}
-          onPick={pick} onCancel={cancel} />
+          onPick={pick} onCancel={cancel} onResume={resume} onReanalyze={reanalyze} />
       </Camera>
       {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}
       {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} igniting={blooming} />}

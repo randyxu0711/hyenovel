@@ -4,16 +4,25 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 const running = vi.fn();
 const stream = vi.fn();
 const cancel = vi.fn();
+const idx = vi.fn();
+const reanalyzeStream = vi.fn();
 vi.mock("../src/data/client", () => ({
   getRunningCritiques: () => running(),
   streamCritique: (slug: string, title: string) => stream(slug, title),
   cancelCritique: (slug: string) => cancel(slug),
+  getIndex: () => idx(),
+  reanalyzeCritique: (slug: string, title: string) => reanalyzeStream(slug, title),
 }));
 import { useGestations } from "../src/journey/useGestations";
 
 async function* gen(evs: unknown[]) { for (const e of evs) yield e; }
 
-beforeEach(() => { running.mockReset(); stream.mockReset(); cancel.mockReset(); localStorage.clear(); });
+beforeEach(() => {
+  running.mockReset(); stream.mockReset(); cancel.mockReset(); localStorage.clear();
+  // 預設空 index:大多數測試不關心「初載併入 resumable 故事」這條路徑,只有專門測試會覆寫。
+  idx.mockReset().mockResolvedValue({ generated: "", count: 0, stories: [] });
+  reanalyzeStream.mockReset();
+});
 
 describe("useGestations", () => {
   it("載入時把 /running 併入孕育態", async () => {
@@ -104,30 +113,96 @@ describe("useGestations", () => {
     await waitFor(() => expect(result.current.gestations.has("e")).toBe(false));
   });
 
-  it("error reason=usage-limit(未來 resets_at)→ 設 usageLimitResetAt 供 UI + 持久化;仍移除孕育星;dismiss 清掉", async () => {
+  it("error reason=usage-limit(未來 resets_at)→ 設 usageLimitResetAt 供 UI + 持久化;不 drop、改標 paused;dismiss 清提示", async () => {
     running.mockResolvedValue([]);
     const future = Math.floor(Date.now() / 1000) + 3600;
     stream.mockReturnValue(gen([{ event: "error", data: { reason: "usage-limit", resets_at: future } }]));
     const { result } = renderHook(() => useGestations(() => {}));
     expect(result.current.usageLimitResetAt).toBeUndefined();
     act(() => result.current.begin("f", "己"));
-    await waitFor(() => expect(result.current.gestations.has("f")).toBe(false));
-    expect(result.current.usageLimitResetAt).toBe(future);
+    await waitFor(() => expect(result.current.usageLimitResetAt).toBe(future));
+    expect(result.current.gestations.get("f")?.status).toBe("paused");   // 不 drop:停在原拍,留給使用者續跑
+    expect(result.current.gestations.get("f")?.reason).toBe("usage-limit");
     expect(localStorage.getItem("hy:usageLimit")).toBe(String(future));  // 跨 F5 存下
-    act(() => result.current.dismissUsageLimit());
+    act(() => result.current.dismissUsageLimit());                      // 只清全域提示,胚胎狀態不受影響
     expect(result.current.usageLimitResetAt).toBeUndefined();
     expect(localStorage.getItem("hy:usageLimit")).toBeNull();
+    expect(result.current.gestations.get("f")?.status).toBe("paused");
   });
 
-  it("已過期的 resets_at → 讀取即清、不顯示", async () => {
+  it("已過期的 resets_at → 讀取即清、不顯示(胚胎仍標 paused,不受影響)", async () => {
     running.mockResolvedValue([]);
     const past = Math.floor(Date.now() / 1000) - 10;
     stream.mockReturnValue(gen([{ event: "error", data: { reason: "usage-limit", resets_at: past } }]));
     const { result } = renderHook(() => useGestations(() => {}));
     act(() => result.current.begin("g", "庚"));
-    await waitFor(() => expect(result.current.gestations.has("g")).toBe(false));
+    await waitFor(() => expect(result.current.gestations.get("g")?.status).toBe("paused"));
     await waitFor(() => expect(result.current.usageLimitResetAt).toBeUndefined());
     expect(localStorage.getItem("hy:usageLimit")).toBeNull();
+  });
+
+  it("error reason ∈ timeout/gate/crash → 不 drop,改標 failed(可續跑/重新分析)", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([{ event: "error", data: { reason: "crash" } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("h", "辛"));
+    await waitFor(() => expect(result.current.gestations.get("h")?.status).toBe("failed"));
+    expect(result.current.gestations.get("h")?.reason).toBe("crash");
+  });
+
+  it("初載併入 index 裡 resumable 的故事,標成停住的胎(step 對齊 stage)", async () => {
+    running.mockResolvedValue([]);
+    idx.mockResolvedValue({
+      generated: "", count: 1,
+      stories: [{ slug: "i", title: "壬", synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz: false,
+                  updated: "", status: "paused", stage: "criticizer", resumable: true, reason: null }],
+    });
+    const { result } = renderHook(() => useGestations(() => {}));
+    await waitFor(() => expect(result.current.gestations.get("i")?.status).toBe("paused"));
+    expect(result.current.gestations.get("i")?.step).toBe(2);   // stage=criticizer
+  });
+
+  it("index 的 status 是未列舉值(如 cancelled)但 resumable=true → 容忍,標 failed 不炸掉", async () => {
+    running.mockResolvedValue([]);
+    idx.mockResolvedValue({
+      generated: "", count: 1,
+      stories: [{ slug: "j", title: "癸", synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz: false,
+                  updated: "", status: "cancelled", stage: "analyst", resumable: true, reason: "crash" }],
+    });
+    const { result } = renderHook(() => useGestations(() => {}));
+    await waitFor(() => expect(result.current.gestations.get("j")?.status).toBe("failed"));
+    // reason 跟著 index 併回來(重整後紅星還說得出「為什麼」)
+    expect(result.current.gestations.get("j")?.reason).toBe("crash");
+  });
+
+  it("index 裡非 resumable 的完整故事 → 不併入孕育態", async () => {
+    running.mockResolvedValue([]);
+    idx.mockResolvedValue({
+      generated: "", count: 1,
+      stories: [{ slug: "k", title: "子", synopsis: "", nodes: 1, edges: 1, has_feedback: true, has_viz: true,
+                  updated: "", status: "done", stage: "done", resumable: false, reason: null }],
+    });
+    const { result } = renderHook(() => useGestations(() => {}));
+    await waitFor(() => expect(idx).toHaveBeenCalled());
+    expect(result.current.gestations.has("k")).toBe(false);
+  });
+
+  it("resume() 重新訂閱(不帶 fresh),step 不倒退", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.resume("m", "丑"));
+    expect(stream).toHaveBeenCalledWith("m", "丑");
+    await waitFor(() => expect(result.current.gestations.get("m")?.status).toBe("running"));
+  });
+
+  it("reanalyze() 呼叫 reanalyzeCritique 並訂閱其串流(一次 POST 觸發+接流)", async () => {
+    running.mockResolvedValue([]);
+    reanalyzeStream.mockReturnValue(gen([{ event: "phase", data: { name: "analyst", status: "ok" } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.reanalyze("n", "寅"));
+    expect(reanalyzeStream).toHaveBeenCalledWith("n", "寅");
+    await waitFor(() => expect(result.current.gestations.get("n")?.step).toBe(2));
   });
 
   it("F5:初值讀 localStorage 未過期的 resets_at → 直接顯示(不需重新撞牆)", () => {

@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getRunningCritiques, streamCritique, cancelCritique } from "../data/client";
-import type { Gestation } from "../types";
+import { getRunningCritiques, streamCritique, cancelCritique, getIndex, reanalyzeCritique } from "../data/client";
+import type { Gestation, GestationStatus } from "../types";
 
 const STEP: Record<string, number> = { analyst: 1, criticizer: 2, render: 3 };
+
+// index 的 status 值域不封閉(carried note:可能是 "cancelled" 等)——只有 "paused" 原樣保留,
+// 其餘任何值一律當 "failed"(resumable=true 已保證它值得續跑,只是不知道確切原因)。
+const resumedStatus = (status: string): GestationStatus => status === "paused" ? "paused" : "failed";
 
 // 撞牆提示跨重整記住(F5 不消失):存 resets_at(可 null);到重置時刻或讀取時已過期就清掉。
 const USAGE_KEY = "hy:usageLimit";
@@ -34,18 +38,22 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
   const onBornRef = useRef(onBorn);
   onBornRef.current = onBorn;
 
-  const put = (slug: string, title: string, step: number, status = "running", vizReady?: boolean) =>
+  const put = (slug: string, title: string, step: number, status: GestationStatus = "running",
+               vizReady?: boolean, reason?: string, resetsAt?: number | null) =>
     setGestations(m => {
       const n = new Map(m);
       const cur = n.get(slug);
       n.set(slug, { title: title || cur?.title || slug, status, step: Math.max(step, cur?.step ?? 0),
-                    vizReady: vizReady ?? cur?.vizReady });   // 一旦 true 就不再回頭(檔案不會消失)
+                    vizReady: vizReady ?? cur?.vizReady,      // 一旦 true 就不再回頭(檔案不會消失)
+                    reason, resetsAt });
       return n;
     });
   const drop = (slug: string) =>
     setGestations(m => { const n = new Map(m); n.delete(slug); return n; });
 
-  const subscribe = useCallback((slug: string, title: string, born = false) => {
+  // streamFn 預設 streamCritique(重接既有 Run / 新孕育);reanalyze() 傳 reanalyzeCritique 換掉它,
+  // 讓「觸發 + 接流」共用同一個訂閱迴圈,而不必再開一條各自獨立的 POST。
+  const subscribe = useCallback((slug: string, title: string, born = false, streamFn: typeof streamCritique = streamCritique) => {
     if (epochs.current.has(slug)) return;      // 同一 slug 已有活訂閱 → 不重複派工
     const epoch = ++seq.current;               // 這條訂閱的身分(永不重用)
     epochs.current.set(slug, epoch);
@@ -53,7 +61,7 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     (async () => {
       try {
         // born=新孕育 → 帶 fresh:取消時後端可清孤兒。重整重接的既有 Run 不帶(後端已存原值)。
-        for await (const ev of streamCritique(slug, title, born)) {
+        for await (const ev of streamFn(slug, title, born)) {
           if (!fresh()) return;                // 已被 cancel / 新 begin 取代 → 停手
           if (ev.event === "phase") {
             // preview 不在 STEP 表裡(算 0,被 put 的 Math.max 護住,step 不倒退);
@@ -69,12 +77,17 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
             if (fresh()) drop(slug);            // 再移除孕育態 → Catalog 換真實 Skeleton
           } else if (ev.event === "error") {
             if (fresh()) {
-              if (ev.data?.reason === "usage-limit") {
+              const reason = ev.data?.reason as string | undefined;
+              if (reason === "usage-limit") {
                 const r = (ev.data.resets_at ?? null) as number | null;
                 setUsageLimitResetAt(r);
                 saveUsageLimit(r);
+                put(slug, title, 0, "paused", undefined, reason, r);      // 不 drop:停在原拍,可續跑
+              } else if (reason === "timeout" || reason === "gate" || reason === "crash") {
+                put(slug, title, 0, "failed", undefined, reason);         // 不 drop:同上,可續跑/重新分析
+              } else {
+                drop(slug);                      // cancel 等無可續跑意義:安靜收掉(只有當前這條才動)
               }
-              drop(slug);                        // 取消/失敗:安靜收掉(只有當前這條才動)
             }
           }
         }
@@ -88,6 +101,14 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
 
   useEffect(() => {
     getRunningCritiques().then(rs => rs.forEach(r => { put(r.slug, r.title, r.step); subscribe(r.slug, r.title); }));
+    // 併入 index 裡 resumable 的故事(paused/failed,串流早已斷開):讓停住的星在重整後也畫得出來,
+    // 不必等一條活的 Run。只在初載跑一次(不隨 index 變動重跑,避免覆蓋掉正在進行中的訂閱狀態)。
+    getIndex().then(idx => {
+      for (const e of idx.stories) {
+        if (!e.resumable || epochs.current.has(e.slug)) continue;
+        put(e.slug, e.title, STEP[e.stage] ?? 0, resumedStatus(e.status), undefined, e.reason ?? undefined);
+      }
+    }).catch(() => {});
   }, [subscribe]);
 
   // 到重置時刻自動收掉提示(順手清掉過期持久化);頁面開著跨過 reset 也會自己消失
@@ -106,7 +127,19 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     epochs.current.delete(slug);   // 作廢當前訂閱:其後續事件(含取消 error)不再改狀態
     drop(slug);
   }, []);
+  // 續跑:paused/failed 的胚胎重新 POST(不帶 mode)——後端會補播已發事件、跳過已完成階段。
+  const resume = useCallback((slug: string, title: string) => {
+    put(slug, title, 1, "running");
+    subscribe(slug, title, false);
+  }, [subscribe]);
+  // 重新分析:對已完整的故事重丟一次(帶 mode:"reanalyze");同一個訂閱迴圈換用 reanalyzeCritique
+  // 觸發+接流,避免另開一條打到同一端點的 POST。故事未完整時後端 409,由 sseStream 的 !res.ok 拋出
+  // → catch 分支 drop(slug);此函式本身是 fire-and-forget,呼叫端要另外提示錯誤得自行 try/catch。
+  const reanalyze = useCallback((slug: string, title: string) => {
+    put(slug, title, 1, "running");
+    subscribe(slug, title, false, reanalyzeCritique);
+  }, [subscribe]);
 
   const dismissUsageLimit = useCallback(() => { setUsageLimitResetAt(undefined); saveUsageLimit(undefined); }, []);
-  return { gestations, begin, cancel, usageLimitResetAt, dismissUsageLimit };
+  return { gestations, begin, cancel, resume, reanalyze, usageLimitResetAt, dismissUsageLimit };
 }
