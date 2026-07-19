@@ -1,23 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { worldPos, ringRadii, WORLD, RING_XSCALE, fitScale, zoomFor, camTransform } from "../lib/camera";
+import { worldPos, ringRadii, WORLD, RING_XSCALE, fitScale, camTransform, fitContent, BONE } from "../lib/camera";
 import { useViewport } from "../lib/useViewport";
 import Dust from "../journey/Dust";
 import "./lab.css";
 
 // /lab/catalog — 佈局實驗台。fit-to-content 當「開場/回家」預設構圖;之後可滾輪縮放、拖曳平移。
-// 用真實幾何(camera.ts),假視窗用當下視窗長寬比 → 裁切如實。替身骨=真實尺寸方塊,不打 viz。
-const BONE_W = 300, BONE_H = 184;
+// 幾何同源:fitContent/BONE/MAX_ZOOM 一律 import camera.ts(spec:不許複製再分岔)。
+// 假視窗用當下視窗長寬比 → 裁切如實。替身骨=真實尺寸方塊,不打 viz。
+const BONE_W = BONE.w, BONE_H = BONE.h;
 const COUNTS = [3, 7, 15, 22, 30];
-const MAX_ZOOM = 0.6, ZOOM_MIN = 0.1, ZOOM_MAX = 1.3;
-
-// 提案A 的預設構圖:框「當前篇數實際佔到的半徑」+ 骨半尺寸邊距,上限 MAX_ZOOM(少篇別太巨)。
-function fitContent(count: number, fw: number, fh: number): number {
-  const radii = ringRadii(count);
-  const R = radii[radii.length - 1];
-  const halfW = R * RING_XSCALE + BONE_W / 2;
-  const halfH = R + BONE_H / 2;
-  return Math.min(MAX_ZOOM, Math.min(fw / (2 * halfW), fh / (2 * halfH)));
-}
+const ZOOM_MIN = 0.1, ZOOM_MAX = 1.3;
 
 type Mode = "current" | "fit";
 type View = { s: number; tx: number; ty: number };
@@ -34,7 +26,7 @@ export default function CatalogLab() {
   const FH = Math.round(FW * (vp.h / vp.w));
 
   const baseZoom = mode === "current"
-    ? zoomFor("catalog", fitScale(WORLD, FW, FH))
+    ? fitScale(WORLD, FW, FH) * 1.04   // 舊固定世界模式(被淘汰的 K.catalog),留作 A/B 對照
     : fitContent(count, FW, FH);
   const baseCam = camTransform(WORLD, FW, FH, baseZoom);
   const eff: View = view ?? { s: baseZoom, tx: baseCam.x, ty: baseCam.y };

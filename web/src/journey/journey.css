@@ -200,7 +200,8 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 
 /* ---- 軌道線:淡淡的同心橢圓,鋪在星骨底下 ---- */
-.orbits{position:absolute;left:0;top:0;pointer-events:none;transition:opacity .6s ease}
+.orbits{position:absolute;left:0;top:0;pointer-events:none;transition:opacity .6s ease;overflow:visible}
+/* ↑ overflow:visible:extents-fit 後世界無邊,3 圈起 R=930 > 世界半高 750,svg viewBox 會裁掉外圈軌道 */
 
 /* ---- 進單篇:被選中的骨自己飛向中心 → 放大 → 發光(不用背景光暈)---- */
 /* 飛行主角:整具骨位移到世界中心、放大、罩上自身輝光(位移/縮放的 transform 由 inline 給,base→中心)*/

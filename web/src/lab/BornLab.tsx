@@ -130,7 +130,7 @@ export default function BornLab() {
       {/* stage=single + 對焦那顆槽位:catalog 焦距(~0.75×)下粒子會掉進次像素,看不出動畫。
           真的孕育發生在 catalog 焦距——參數仍以那個尺度為準(見 CloudCollapse 的 R_MIN/R_MAX),
           這裡只是把鏡頭推近好讓人眼判。 */}
-      <Camera stage="single" focus={worldPos(0, WORLD, 1)}>
+      <Camera stage="single" count={Math.max(1, ordered.length)} focus={worldPos(0, WORLD, 1)}>
         <Orbits count={Math.max(1, ordered.length)} />
         <Catalog entries={catalogEntries} ordered={ordered} gestations={gestations} fresh={fresh}
           confirming={confirming} onPick={() => {}} onCancel={() => {}}
