@@ -51,6 +51,30 @@ export function worldPos(i: number, world: { w: number; h: number }, total = i +
   }
 }
 
+// 骨的渲染尺寸(Catalog StoryBone / lab 替身同源;fit 邊距靠它)
+export const BONE = { w: 300, h: 184 };
+// 家構圖 zoom 上限:少篇別太巨。這是「字要大」側的旋鈕(spec D1)。
+export const MAX_ZOOM = 0.75;
+
+// 當前篇數實際落點的包圍盒(含骨半尺寸邊距)。框「真的有星的地方」,
+// 不是最外環半徑——空蕩外環(如第 7 篇的孤星)幾乎不付縮放代價。
+export function contentExtents(count: number, world = WORLD): { halfW: number; halfH: number } {
+  const cx = world.w / 2, cy = world.h / 2, n = Math.max(1, count);
+  let hw = 0, hh = 0;
+  for (let i = 0; i < n; i++) {
+    const p = worldPos(i, world, n);
+    hw = Math.max(hw, Math.abs(p.x - cx));
+    hh = Math.max(hh, Math.abs(p.y - cy));
+  }
+  return { halfW: hw + BONE.w / 2, halfH: hh + BONE.h / 2 };
+}
+
+// 家之凝視:相機站在「剛好把全部作品收進一眼」的距離(spec 概念§2)。
+export function fitContent(count: number, vw: number, vh: number): number {
+  const { halfW, halfH } = contentExtents(count);
+  return Math.min(MAX_ZOOM, vw / (2 * halfW), vh / (2 * halfH));
+}
+
 // 容納 count 篇需要的各圈半徑(給軌道線用,跟 worldPos 同源)
 export function ringRadii(count: number): number[] {
   const rs: number[] = [];
