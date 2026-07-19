@@ -14,7 +14,9 @@
 .field{position:fixed;inset:0}
 .story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter .8s,opacity .8s;
   touch-action:none;user-select:none}
-.story .cap{font-family:var(--serif);font-size:24px;color:#f4eddb;text-align:center;margin-top:4px;opacity:0;transition:.6s}
+/* 標題常駐微光:骨是抽象指紋,全靠 hover 認星=逐星掃描,找篇成本太高。
+   夜空裡星名淡淡在場(.55),hover 才全亮;spotlight(全場退、這顆亮)不變。 */
+.story .cap{font-family:var(--serif);font-size:24px;color:#f4eddb;text-align:center;margin-top:4px;opacity:.55;transition:.6s}
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
 .stage-catalog .story:hover .cap{opacity:1}
