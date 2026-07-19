@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import Catalog from "../src/journey/Catalog";
 import type { IndexEntry, Gestation } from "../src/types";
 
@@ -8,10 +8,10 @@ beforeEach(() => {
     Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response)));
 });
 
-// 完整 IndexEntry(11 欄必填);has_viz 預設 true;已完成故事 status=done、resumable=false
+// 完整 IndexEntry(12 欄必填);has_viz 預設 true;已完成故事 status=done、resumable=false、reason=null
 const mk = (slug: string, title: string, has_viz = true): IndexEntry =>
   ({ slug, title, synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz, updated: "",
-     status: "done", stage: "done", resumable: false });
+     status: "done", stage: "done", resumable: false, reason: null });
 
 const entries: IndexEntry[] = [mk("born", "已生")];
 const noGest: Map<string, Gestation> = new Map();
@@ -81,6 +81,42 @@ describe("Catalog", () => {
       <Catalog entries={[]} ordered={["egg"]} gestations={g(true)} onPick={() => {}} onCancel={() => {}} />);
     expect(container.querySelector('[data-testid="collapsing"]'), "有資料了還在塌縮").toBeNull();
     expect(container.querySelector(".bone-ph"), "該換成真骨(viz 未載入 → 佔位)").toBeTruthy();
+  });
+  it("停拍 paused:標 .paused,點續跑觸發 onResume;點星身不進單篇(onPick 不動)", () => {
+    const g: Map<string, Gestation> = new Map([["egg", { step: 2, status: "paused", title: "胚胎", vizReady: true }]]);
+    const onPick = vi.fn(), onResume = vi.fn();
+    const { container } = render(
+      <Catalog entries={[]} ordered={["egg"]} gestations={g} onPick={onPick} onCancel={() => {}} onResume={onResume} />);
+    const el = container.querySelector<HTMLElement>('[data-testid="story"]')!;
+    expect(el.className).toContain("paused");
+    el.querySelector<HTMLButtonElement>(".gest-resume")!.click();
+    expect(onResume).toHaveBeenCalledWith("egg", "胚胎");
+    el.click();
+    expect(onPick).not.toHaveBeenCalled();
+  });
+  it("停拍 failed:標 .failed + 原因翻成友善字(gate → 未通過檢核)", () => {
+    const g: Map<string, Gestation> = new Map([["egg", { step: 2, status: "failed", title: "胚胎", vizReady: true, reason: "gate" }]]);
+    const { container, getByText } = render(
+      <Catalog entries={[]} ordered={["egg"]} gestations={g} onPick={() => {}} onCancel={() => {}} />);
+    expect(container.querySelector('[data-testid="story"]')!.className).toContain("failed");
+    expect(getByText(/未通過檢核/)).toBeTruthy();
+  });
+  it("重新分析:完整星才有鈕,且二次確認——確定才觸發 onReanalyze", () => {
+    const onReanalyze = vi.fn();
+    const complete: IndexEntry = { ...mk("done1", "成篇"), has_feedback: true, has_viz: true };
+    const { container, getByText } = render(
+      <Catalog entries={[complete]} ordered={["done1"]} gestations={noGest}
+        onPick={() => {}} onCancel={() => {}} onReanalyze={onReanalyze} />);
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".reanalyze")!);
+    expect(onReanalyze, "第一下只進確認態,不觸發").not.toHaveBeenCalled();
+    fireEvent.click(getByText("確定"));
+    expect(onReanalyze).toHaveBeenCalledWith("done1", "成篇");
+  });
+  it("重新分析:不完整故事(mk 的 has_feedback=false)不給鈕", () => {
+    const { container } = render(
+      <Catalog entries={[mk("v", "只有viz")]} ordered={["v"]} gestations={noGest}
+        onPick={() => {}} onCancel={() => {}} onReanalyze={() => {}} />);
+    expect(container.querySelector(".reanalyze")).toBeNull();
   });
   it("同一 slug 從孕育轉誕生:renderer 由塌縮換成 Skeleton 佔位", () => {
     const g: Map<string, Gestation> = new Map([["x", { step: 3, status: "running", title: "x" }]]);

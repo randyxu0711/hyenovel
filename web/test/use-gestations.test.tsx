@@ -155,7 +155,7 @@ describe("useGestations", () => {
     idx.mockResolvedValue({
       generated: "", count: 1,
       stories: [{ slug: "i", title: "壬", synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz: false,
-                  updated: "", status: "paused", stage: "criticizer", resumable: true }],
+                  updated: "", status: "paused", stage: "criticizer", resumable: true, reason: null }],
     });
     const { result } = renderHook(() => useGestations(() => {}));
     await waitFor(() => expect(result.current.gestations.get("i")?.status).toBe("paused"));
@@ -167,10 +167,12 @@ describe("useGestations", () => {
     idx.mockResolvedValue({
       generated: "", count: 1,
       stories: [{ slug: "j", title: "癸", synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz: false,
-                  updated: "", status: "cancelled", stage: "analyst", resumable: true }],
+                  updated: "", status: "cancelled", stage: "analyst", resumable: true, reason: "crash" }],
     });
     const { result } = renderHook(() => useGestations(() => {}));
     await waitFor(() => expect(result.current.gestations.get("j")?.status).toBe("failed"));
+    // reason 跟著 index 併回來(重整後紅星還說得出「為什麼」)
+    expect(result.current.gestations.get("j")?.reason).toBe("crash");
   });
 
   it("index 裡非 resumable 的完整故事 → 不併入孕育態", async () => {
@@ -178,7 +180,7 @@ describe("useGestations", () => {
     idx.mockResolvedValue({
       generated: "", count: 1,
       stories: [{ slug: "k", title: "子", synopsis: "", nodes: 1, edges: 1, has_feedback: true, has_viz: true,
-                  updated: "", status: "done", stage: "done", resumable: false }],
+                  updated: "", status: "done", stage: "done", resumable: false, reason: null }],
     });
     const { result } = renderHook(() => useGestations(() => {}));
     await waitFor(() => expect(idx).toHaveBeenCalled());

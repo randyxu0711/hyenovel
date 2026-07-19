@@ -21,9 +21,12 @@ const NODE_LAG = 0.3;       // 節點等自己那根肋畫出去了才浮現
 const READ_CYCLE = 4.4;     // 掃一趟的秒數,與 journey.css 的 readSweep/weigh 同值(靠這個永遠同步)
 const X0 = 18;              // = buildBone 的左緣;肋的 t 靠它換算
 
+// dormant=停拍(paused/failed 卡在 criticizer,骨已在):不點火不掃描 —— 靜止的骨,
+//   顏色由 CSS(.skel.paused/.failed)接手(冷藍睡著 / 鏽紅熄火),故此時不給 inline 輝光免得蓋掉。
 export default function Skeleton(
-  { viz, width, burst, reassemble, ignite, reading }:
-  { viz: VizData; width: number; burst?: boolean; reassemble?: boolean; ignite?: boolean; reading?: boolean },
+  { viz, width, burst, reassemble, ignite, reading, dormant }:
+  { viz: VizData; width: number; burst?: boolean; reassemble?: boolean; ignite?: boolean;
+    reading?: boolean; dormant?: "paused" | "failed" },
 ) {
   const W = 310, H = 190;
   const { d, ribs } = buildBone(viz, W, H);
@@ -42,8 +45,8 @@ export default function Skeleton(
   };
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={width} height={(width * H) / W}
-      className={`skel${burst ? " burst" : reassemble ? " reassemble" : ignite ? " ignite" : reading ? " reading" : ""}`}
-      style={{ filter: "drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))" }}>
+      className={`skel${burst ? " burst" : reassemble ? " reassemble" : ignite ? " ignite" : reading ? " reading" : dormant ? ` ${dormant}` : ""}`}
+      style={dormant ? undefined : { filter: "drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))" }}>
       <path className="spine" d={d} pathLength={1} fill="none" stroke="var(--bone)" strokeWidth={2.2} strokeLinecap="round" />
       {/* 掃描光:同一條脊椎再描一次,只讓一小段亮著跑(dash 掃描,非 SMIL —— SMIL 不吃減動) */}
       {reading && <path className="read-sweep" d={d} pathLength={1} fill="none"

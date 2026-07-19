@@ -42,6 +42,8 @@ export interface IndexEntry {
   // status 來自 run.json,值域不封閉(可能是 "cancelled" 等未列舉值)——不可窮舉 switch,
   // 前端一律靠 resumable(乾淨 boolean)判斷「該不該畫續跑星」,不做 status 字串比對。
   status: string; stage: string; resumable: boolean;
+  // failed 的原因(timeout/gate/crash);paused/done 為 null。前端翻成友善字顯示在紅星上。
+  reason: string | null;
 }
 export interface IndexFile { generated: string; count: number; stories: IndexEntry[]; }
 

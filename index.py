@@ -54,6 +54,7 @@ def entry(d):
         "status": status,
         "stage": (rs or {}).get("stage", "done"),
         "resumable": status in ("paused", "failed"),
+        "reason": (rs or {}).get("reason"),   # 失敗原因(前端翻成友善字);無則 None
     }
 
 
@@ -72,6 +73,7 @@ def _incomplete_entry(d, rs):
         "status": rs.get("status", "failed"),
         "stage": rs.get("stage", "analyst"),
         "resumable": True,
+        "reason": rs.get("reason"),           # 失敗原因(前端翻成友善字);無則 None
     }
 
 

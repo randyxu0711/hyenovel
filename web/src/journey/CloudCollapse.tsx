@@ -21,6 +21,14 @@ const XS = 1.5;      // = camera.ts 的 RING_XSCALE
 // 這裡的 px 是 canvas 座標,上螢幕還要再 ×0.75:設 1.6–4.4 → 實得 1.2–3.3,才不會掉進次像素。
 const R_MIN = 1.6, R_MAX = 4.4;
 
+// 停拍色調:paused=冷藍(睡著)、failed=鏽紅(熄了),對齊 theme.css 的 --c-technique/--c-theme。
+// [核心亮塵, 外圍暗塵, 核心微光]。running 維持既有奶油金。
+type Tone = "paused" | "failed";
+const TONES: Record<Tone, [string, string, string]> = {
+  paused: ["#bcd3e2", "#7aa3bd", "170,198,218"],
+  failed: ["#dcaaa2", "#c47a72", "212,150,142"],
+};
+
 type P = { r: number; a: number; vr: number; z: number };
 
 const spawn = (r = CORE + Math.random() * R0): P => ({
@@ -30,7 +38,11 @@ const spawn = (r = CORE + Math.random() * R0): P => ({
   z: 0.35 + Math.random() * 0.65,     // 每顆的亮度/大小權重
 });
 
-export default function CloudCollapse({ width = 300 }: { width?: number }) {
+// frozen=停拍(paused/failed 卡在 analyst,還沒骨):塵雲凍在當下、不轉不聚 —— 停就是停,
+//   跟減動走同一條「畫一張靜幀」的路。tone 給停拍色(顏色才是這尺度下真正讓人一眼認出狀態的線索)。
+export default function CloudCollapse(
+  { width = 300, frozen, tone }: { width?: number; frozen?: boolean; tone?: Tone },
+) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -42,6 +54,7 @@ export default function CloudCollapse({ width = 300 }: { width?: number }) {
     cv.width = W * dpr; cv.height = H * dpr;
     ctx.scale(dpr, dpr);
 
+    const [hot, cold, coreRGB] = tone ? TONES[tone] : ["#f8f0d8", "#d8c9a4", "248,240,216"];
     const cx = W / 2, cy = H / 2;
     const ps = Array.from({ length: N }, () => spawn());
 
@@ -49,15 +62,15 @@ export default function CloudCollapse({ width = 300 }: { width?: number }) {
       ctx.clearRect(0, 0, W, H);
       // 核心微光:重力中心,讓塵埃有個「朝著誰去」
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 30);
-      g.addColorStop(0, "rgba(248,240,216,.34)");
-      g.addColorStop(1, "rgba(248,240,216,0)");
+      g.addColorStop(0, `rgba(${coreRGB},.34)`);
+      g.addColorStop(1, `rgba(${coreRGB},0)`);
       ctx.fillStyle = g;
       ctx.fillRect(cx - 34, cy - 34, 68, 68);
 
       for (const p of ps) {
         const t = 1 - Math.min(1, p.r / R0);          // 越近核心越亮越大
         ctx.globalAlpha = Math.min(1, 0.1 + t * 0.85) * p.z;
-        ctx.fillStyle = t > 0.72 ? "#f8f0d8" : "#d8c9a4";
+        ctx.fillStyle = t > 0.72 ? hot : cold;
         ctx.beginPath();
         ctx.arc(cx + Math.cos(p.a) * p.r * XS, cy + Math.sin(p.a) * p.r,
                 (R_MIN + t * (R_MAX - R_MIN)) * p.z, 0, Math.PI * 2);
@@ -66,8 +79,8 @@ export default function CloudCollapse({ width = 300 }: { width?: number }) {
       ctx.globalAlpha = 1;
     };
 
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      paint();                                // 減動:一張靜止的雲,不轉不聚
+    if (frozen || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      paint();                                // 停拍 / 減動:一張靜止的雲,不轉不聚
       return;
     }
 
@@ -84,8 +97,9 @@ export default function CloudCollapse({ width = 300 }: { width?: number }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [frozen, tone]);
 
-  return <canvas ref={ref} data-testid="collapsing" className="cloud-collapse" aria-hidden
+  return <canvas ref={ref} data-testid="collapsing" aria-hidden
+    className={`cloud-collapse${tone ? ` ${tone}` : ""}`}
     style={{ width, height: (width * H) / W }} />;
 }

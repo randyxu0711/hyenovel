@@ -154,3 +154,25 @@ def test_pure_orphan_without_runjson_still_invisible(story):
     orphan = base.parent / "s99"; orphan.mkdir()
     (orphan / "source.md").write_text("孤兒\n", encoding="utf-8")
     assert index.entry(orphan) is None
+
+
+def test_failed_entry_surfaces_reason(story):
+    """failed@criticizer(有 analysis.json)→ entry 帶 run.json 的 reason,重整後紅星還說得出為什麼。"""
+    slug, base = story
+    runstate.write(base, status="failed", stage="criticizer", reason="gate")
+    e = index.entry(base)
+    assert e["status"] == "failed" and e["reason"] == "gate"
+
+
+def test_incomplete_failed_entry_surfaces_reason(story):
+    """failed@analyst(無 analysis.json)→ 降級 entry 也帶 reason。"""
+    slug, base = story
+    (base / "analysis.json").unlink()
+    runstate.write(base, status="failed", stage="analyst", reason="crash")
+    assert index.entry(base)["reason"] == "crash"
+
+
+def test_done_entry_reason_is_none(story):
+    """完成的故事沒有失敗原因 → reason=None(不硬掰)。"""
+    slug, base = story
+    assert index.entry(base)["reason"] is None

@@ -106,7 +106,7 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
     getIndex().then(idx => {
       for (const e of idx.stories) {
         if (!e.resumable || epochs.current.has(e.slug)) continue;
-        put(e.slug, e.title, STEP[e.stage] ?? 0, resumedStatus(e.status));
+        put(e.slug, e.title, STEP[e.stage] ?? 0, resumedStatus(e.status), undefined, e.reason ?? undefined);
       }
     }).catch(() => {});
   }, [subscribe]);

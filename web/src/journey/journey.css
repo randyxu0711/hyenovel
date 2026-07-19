@@ -460,4 +460,48 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   20%{transform:scale(1);filter:none}
   100%{transform:scale(1);filter:none}}
 
+/* ── 停拍(paused / failed):停就是停,色為主 ──
+   在 catalog 尺度星很小,真正讓人一眼認出狀態的是「色」不是「動」→ 沿慣例的色軸擺:
+   paused=冷藍(睡著、會醒,慢呼吸)、failed=鏽紅(熄了、待推,全靜)。兩者都不是報錯——原料都在、可續。
+   色沿用內容視覺化既有的 --c-technique(藍)/--c-theme(紅),不引新 hue、不破單色外框。
+   骨已在(卡 criticizer)→ 靜止的骨,strokes/fills 由此接手覆蓋(CSS 蓋 SVG presentation 屬性);
+   沒骨(卡 analyst)→ 凍住的雲(CloudCollapse frozen,顏色在 canvas 內給)。
+   減動:全域 * reset 讓 dormBreath 停 → paused 也變全靜,誠實降級。 */
+.skel.paused,.skel.failed{overflow:visible}
+.skel.paused{filter:drop-shadow(0 0 5px rgba(122,163,189,.4)) drop-shadow(0 0 16px rgba(122,163,189,.16));
+  animation:dormBreath 4.6s ease-in-out infinite}
+.skel.paused .spine,.skel.paused .rib,.skel.paused .stub{stroke:var(--c-technique)}
+.skel.paused .node{fill:var(--c-technique)}
+.skel.failed{filter:drop-shadow(0 0 4px rgba(196,122,114,.3));opacity:.5}
+.skel.failed .spine,.skel.failed .rib,.skel.failed .stub{stroke:var(--c-theme)}
+.skel.failed .node{fill:var(--c-theme)}
+@keyframes dormBreath{0%,100%{opacity:.6}50%{opacity:.92}}
+.cloud-collapse.paused{animation:dormBreath 4.6s ease-in-out infinite;
+  filter:drop-shadow(0 0 6px rgba(122,163,189,.34)) drop-shadow(0 0 20px rgba(122,163,189,.16))}
+.cloud-collapse.failed{opacity:.55;
+  filter:drop-shadow(0 0 5px rgba(196,122,114,.3)) drop-shadow(0 0 16px rgba(196,122,114,.14))}
+
+/* 停拍狀態句 + 續跑鈕:續跑是主動作 → 常駐可點(非 hover 才出),色隨狀態 */
+.gest-word.dorm{font-size:13px;letter-spacing:.14em}
+.story.paused .gest-word.dorm{color:var(--c-technique)}
+.story.failed .gest-word.dorm{color:var(--c-theme)}
+.gest-resume{display:block;margin:7px auto 0;font:inherit;font-size:12.5px;letter-spacing:.12em;
+  padding:3px 14px;border-radius:14px;cursor:pointer;background:rgba(220,200,150,.06);
+  color:#e7dcc2;transition:background .3s,color .3s,border-color .3s}
+.story.paused .gest-resume{border:1px solid rgba(122,163,189,.5)}
+.story.failed .gest-resume{border:1px solid rgba(196,122,114,.5)}
+.gest-resume:hover{background:rgba(220,200,150,.16);color:#f6efd9}
+
+/* 已完成星:hover 才浮出「重新分析」(不佔常駐版面);點了原地二次確認(重跑燒訂閱)*/
+.reanalyze{display:block;margin:6px auto 0;opacity:0;transition:opacity .3s,color .3s,border-color .3s;
+  font:inherit;font-size:12px;letter-spacing:.1em;padding:2px 12px;border-radius:13px;cursor:pointer;
+  background:none;border:1px solid rgba(220,200,150,.3);color:#bdb088}
+.story:hover .reanalyze{opacity:.7}
+.reanalyze:hover{opacity:1;color:#f6efd9;border-color:var(--amber)}
+.reanalyze-confirm{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:6px;
+  font-size:12px;letter-spacing:.06em;color:#d8cfb4}
+.reanalyze-confirm button{font:inherit;font-size:12px;padding:2px 9px;border-radius:11px;cursor:pointer;
+  background:rgba(220,200,150,.08);border:1px solid rgba(220,200,150,.3);color:#e7dcc2}
+.reanalyze-confirm button:hover{background:rgba(220,200,150,.18);color:#f6efd9}
+
 @media (prefers-reduced-motion:reduce){.single-overlay.out,.story.returning{animation:none}}
