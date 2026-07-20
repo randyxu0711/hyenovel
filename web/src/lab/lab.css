@@ -1,5 +1,5 @@
 .lab{min-height:100vh;position:relative;overflow:hidden;font-family:var(--serif);color:#cabd92;
-  background:radial-gradient(120% 90% at 50% 30%,#15140f 0%,#0c0b09 54%,#050504 100%)}
+  background:var(--sky)}
 .lab .dust{position:fixed;inset:0;z-index:0;pointer-events:none}
 .lab-bar,.lab-stage,.lab-readout{position:relative;z-index:2}
 /* /lab/born 用真 Camera,它的 .stage 是 z-index:3 → 會蓋掉工具列(含點擊)。抬到它之上。 */
@@ -103,7 +103,7 @@
 
 /* ── 畢業版 Single(骨舞台 + 沉浸討論 + 甲式文字覆蓋)── */
 .sb{min-height:100vh;position:relative;overflow:hidden;font-family:var(--serif);color:#cabd92;
-  background:radial-gradient(120% 90% at 50% 30%,#15140f 0%,#0c0b09 54%,#050504 100%)}
+  background:var(--sky)}
 .sb .dust{position:fixed;inset:0;z-index:0;pointer-events:none}
 .sb-msg{padding:90px;text-align:center;color:#8a8068;font-size:var(--t-body)}
 /* 控制列置中(左上標題、右上退鍵歸 Chrome 管,避免對撞);z 高於覆蓋層才關得掉 */

@@ -132,8 +132,8 @@ button.q-seed:hover{background:rgba(220,200,150,.14);color:#f3ecd6}
   background:var(--amber);border:0;border-radius:9px;padding:9px 14px}
 .dock-send:disabled{background:rgba(220,200,150,.22);color:#7c7560;cursor:default}
 .dock-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;background:rgba(220,200,150,.1);border:1px solid rgba(220,200,150,.2);border-right:0;border-radius:8px 0 0 8px;padding:14px 7px;color:#cabd92;cursor:pointer;letter-spacing:.3em}
-/* 與目錄/body 同一張漸層,全站背景一致 */
-.single{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 34%,#15140f 0%,#0c0b09 52%,#050504 100%);display:flex;flex-direction:column}
+/* 與 body 同一張天(--sky 正本在 theme.css) */
+.single{position:fixed;inset:0;background:var(--sky);display:flex;flex-direction:column}
 /* 飄塵帶進單篇:position:fixed 讓 .single 成獨立堆疊脈絡,z-index:-1 → 漸層之上、文字之下 */
 .single .dust{z-index:-1}
 .single-top{display:flex;justify-content:space-between;align-items:center;padding:46px 46px 0}

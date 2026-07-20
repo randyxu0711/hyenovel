@@ -8,6 +8,13 @@
   --bone:#efe6cf; --bg:#0c0b09;
   --c-theme:#c47a72; --c-motif:#a98bb8; --c-technique:#7aa3bd; --c-effect:#c9a45e;
   --c-character:#8fb89a; --c-beat:#9a9488; --amber:#ecc98a;
+  /* 冷夜裡的暖光(spec art-immersion §3B):整片天的單一正本。
+     最底=墨青冷底(夜空不是棕色的),中低處=暖核心(原 #15140f 縮成光源),最外=vignette。
+     色相系統不動——冷底只是讓 amber/骨色從「染色」變成「光」。 */
+  --sky:
+    radial-gradient(140% 120% at 50% 118%, transparent 58%, rgba(3,4,6,.55) 100%),
+    radial-gradient(88% 64% at 50% 68%, rgba(27,23,15,.9) 0%, rgba(17,15,11,.38) 52%, transparent 76%),
+    radial-gradient(130% 105% at 50% -6%, #0c1118 0%, #0a0e12 44%, #070a0d 100%);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body,#root{height:100%}
@@ -26,8 +33,7 @@ html,body,#root{height:100%}
     scroll-behavior:auto!important;
   }
 }
-body{font-family:var(--sans);color:#e8e3d6;
-  background:radial-gradient(120% 90% at 50% 34%, #15140f 0%, #0c0b09 52%, #050504 100%)}
+body{font-family:var(--sans);color:#e8e3d6;background:var(--sky)}
 
 /* themed thin scrollbars (取代醜的原生捲軸) */
 *{scrollbar-width:thin;scrollbar-color:rgba(220,200,150,.28) transparent}
