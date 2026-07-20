@@ -5,9 +5,22 @@
      破階要同行掛 t-ok pragma 註解 —— test/type-scale.test.ts 守著。 */
   --t-micro:11px; --t-caption:13px; --t-body:15px; --t-lead:17px;
   --t-title:21px; --t-display:27px; --t-hero:34px; --t-total:46px;
+  /* 運鏡家法(spec art-immersion §3C):全站一種口音。
+     簽名緩動 = Camera 運鏡的 cubic-bezier;時長族 quick(微互動)/soft(浮現)/scene(場景)/cam(運鏡)。
+     事件動畫的專屬曲線(bornWave、ucFly、hatchIn…)不在此列——家法管口音,不抹台詞。
+     framer-motion 的 TS 鏡像在 lib/motion.ts,test/motion-tokens.test.ts 釘兩邊同步。 */
+  --ease-house:cubic-bezier(.66,0,.2,1);
+  --d-quick:.3s; --d-soft:.6s; --d-scene:.9s; --d-cam:1.4s;
   --bone:#efe6cf; --bg:#0c0b09;
   --c-theme:#c47a72; --c-motif:#a98bb8; --c-technique:#7aa3bd; --c-effect:#c9a45e;
   --c-character:#8fb89a; --c-beat:#9a9488; --amber:#ecc98a;
+  /* 冷夜裡的暖光(spec art-immersion §3B):整片天的單一正本。
+     最底=墨青冷底(夜空不是棕色的),中低處=暖核心(原 #15140f 縮成光源),最外=vignette。
+     色相系統不動——冷底只是讓 amber/骨色從「染色」變成「光」。 */
+  --sky:
+    radial-gradient(140% 120% at 50% 118%, transparent 58%, rgba(3,4,6,.55) 100%),
+    radial-gradient(88% 64% at 50% 68%, rgba(27,23,15,.9) 0%, rgba(17,15,11,.38) 52%, transparent 76%),
+    radial-gradient(130% 105% at 50% -6%, #0c1118 0%, #0a0e12 44%, #070a0d 100%);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body,#root{height:100%}
@@ -26,8 +39,14 @@ html,body,#root{height:100%}
     scroll-behavior:auto!important;
   }
 }
-body{font-family:var(--sans);color:#e8e3d6;
-  background:radial-gradient(120% 90% at 50% 34%, #15140f 0%, #0c0b09 52%, #050504 100%)}
+body{font-family:var(--sans);color:#e8e3d6;background:var(--sky)}
+
+/* 微顆粒:殺平面感 + 治 gradient banding(spec §3B)。SVG feTurbulence 內嵌,零外部資產。
+   z-index 90:蓋過所有層(.umap 40 / add-scrim 60 / toast 80),opacity 低到只剩質感。
+   靜態無動畫 → 減動天然安全。 */
+.grain{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/></svg>");
+  background-size:180px 180px}
 
 /* themed thin scrollbars (取代醜的原生捲軸) */
 *{scrollbar-width:thin;scrollbar-color:rgba(220,200,150,.28) transparent}

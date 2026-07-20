@@ -5,27 +5,31 @@
 .ov-enter-hit{position:absolute;background:transparent;border:0;padding:0;cursor:pointer;border-radius:999px}
 .ov-enter-hit:focus-visible{outline:1px solid rgba(236,201,138,.6);outline-offset:3px}
 .viz{width:100%;max-width:1000px;background:transparent} /* 通透:讓統一的背景透出來,如目錄 */
-.thread{stroke:#cbbd96;stroke-width:1.4;opacity:.45;transition:.3s}
+.thread{stroke:#cbbd96;stroke-width:1.4;opacity:.45;transition:var(--d-quick)}
 .thread.dim{opacity:.06}.thread.hot{stroke:var(--amber);opacity:.95;stroke-width:1.9}
-.cnode{transition:opacity .3s}
+.cnode{transition:opacity var(--d-quick)}
 .viz text{font-family:var(--sans)}
 
 /* ---- catalog stage ---- */
 .field{position:fixed;inset:0}
-.story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter .8s,opacity .8s;
+.story{position:absolute;transform:translate(-50%,-50%);cursor:pointer;transition:filter var(--d-scene),opacity var(--d-scene);
   touch-action:none;user-select:none}
 /* 標題常駐微光:骨是抽象指紋,全靠 hover 認星=逐星掃描,找篇成本太高。
    夜空裡星名淡淡在場(.55),hover 才全亮;spotlight(全場退、這顆亮)不變。
    cap 吃 --t-display(24→27 平手往上):catalog Phase 2 可讀地板 = 14 / 27(spec catalog-gaze D3),兩邊同步改、不得寫死。 */
-.story .cap{font-family:var(--serif);font-size:var(--t-display);color:#f4eddb;text-align:center;margin-top:4px;opacity:.55;transition:.6s}
+.story .cap{font-family:var(--serif);font-size:var(--t-display);color:#f4eddb;text-align:center;margin-top:4px;opacity:.55;transition:var(--d-soft)}
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
 .stage-catalog .story:hover .cap{opacity:1}
+/* 星暈(spec §3B):每具骨後極淡 radial 暈——星是光源,不是貼紙。靜態、z 在 fresh 柔金暈(-1)之下 */
+.story::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:420px;height:260px;z-index:-2;pointer-events:none;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(236,201,138,.07),transparent 70%)}
 /* 新成形的故事:柔金暈常駐(閱讀優先);點進或 refresh 後卸下 */
 .story.fresh::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:360px;height:220px;z-index:-1;pointer-events:none;
   background:radial-gradient(50% 50% at 50% 50%,rgba(236,201,138,.2),transparent 72%);
-  animation:freshHalo 3.2s ease-in-out infinite}
+  animation:freshHalo 3.2s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 @keyframes freshHalo{0%,100%{opacity:.45}50%{opacity:.95}}
 /* 誕生確認波:孕育完成那一刻,從這篇自己的槽位擴出三層漣漪——「它現在是星空的一部分了」。
    柔金暈(::before)是「這篇是新的」的狀態,這波是「它剛落位」的那一刻,兩者同時在場。
@@ -37,11 +41,11 @@
 .bwave{position:absolute;left:50%;top:50%;z-index:-1;pointer-events:none}
 .bwave i{position:absolute;left:50%;top:50%;width:280px;height:186px;margin:-93px 0 0 -140px;
   border:1.5px solid rgba(236,201,138,.55);border-radius:50%;opacity:0;
-  animation:bornWave 1.4s cubic-bezier(.2,.7,.2,1) forwards}
+  animation:bornWave var(--d-cam) cubic-bezier(.2,.7,.2,1) forwards}
 .bwave i:nth-child(2){animation-delay:.16s}
 .bwave i:nth-child(3){animation-delay:.32s}
 @keyframes bornWave{from{transform:scale(.28);opacity:0}22%{opacity:.75}to{transform:scale(1.5);opacity:0}}
-.stage-overview .field{filter:blur(6px);opacity:.5;transition:.9s}
+.stage-overview .field{filter:blur(6px);opacity:.5;transition:var(--d-scene)}
 .empty-state{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8f876f}
 .es-big{font-family:var(--serif);font-size:var(--t-display);color:#cabd92;letter-spacing:.1em}
 .es-sub{margin-top:12px;font-size:var(--t-body);letter-spacing:.18em;color:#7c745e}
@@ -50,30 +54,36 @@
 .nascent{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:42;
   display:flex;flex-direction:column;align-items:center;gap:11px;
   background:transparent;border:0;cursor:pointer;padding:10px}
+/* 種骨常駐呼吸暈(spec §3B):非點火時也有極緩的光——爐火不熄。減動由全域 reset 停拍 */
+.nascent::before{content:"";position:absolute;left:50%;top:14px;transform:translate(-50%,-50%);
+  width:150px;height:150px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(236,201,138,.12),transparent 70%);
+  animation:nascentHalo 7s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
+@keyframes nascentHalo{0%,100%{opacity:.5}50%{opacity:1}}
 .nascent-spark{width:7px;height:7px;border-radius:999px;background:#f3ead2;
   box-shadow:0 0 10px 3px rgba(236,201,138,.5),0 0 26px 8px rgba(236,201,138,.18);
-  animation:nascentBreath 3.4s ease-in-out infinite}
+  animation:nascentBreath 3.4s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 @keyframes nascentBreath{0%,100%{opacity:.42;transform:scale(.82)}50%{opacity:1;transform:scale(1.18)}}
 .nascent-whisper{font-family:var(--serif);font-size:var(--t-body);letter-spacing:.22em;color:#bdb088;
-  opacity:0;transform:translateY(-3px);transition:.5s}
+  opacity:0;transform:translateY(-3px);transition:var(--d-soft) var(--ease-house)}
 .nascent:hover .nascent-whisper{opacity:1;transform:none}
 .nascent:hover .nascent-spark{opacity:1;box-shadow:0 0 14px 4px rgba(236,201,138,.7),0 0 34px 12px rgba(236,201,138,.26)}
 
 /* ---- 拖檔進星空:整片微微亮起 ---- */
 .journey.drop-active::after{content:"";position:fixed;inset:0;z-index:41;pointer-events:none;
   background:radial-gradient(60% 50% at 50% 78%,rgba(236,201,138,.16),transparent 70%);
-  box-shadow:inset 0 0 0 1px rgba(236,201,138,.25);animation:dropGlow .4s ease}
+  box-shadow:inset 0 0 0 1px rgba(236,201,138,.25);animation:dropGlow var(--d-quick) ease}
 @keyframes dropGlow{from{opacity:0}to{opacity:1}}
 
 /* ---- 擲入面板 ---- */
 /* 新增故事:不是對話框,是種骨在星空裡張開 —— 背後只壓暗不消失,卡從中心長開 */
 .add-scrim{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
   background:radial-gradient(ellipse at center, rgba(10,11,15,.72), rgba(6,7,10,.9));backdrop-filter:blur(2px);
-  animation:addScrimIn .28s ease}
+  animation:addScrimIn var(--d-quick) ease}
 @keyframes addScrimIn{from{opacity:0}to{opacity:1}}
 .add-card{position:relative;width:min(640px,90vw);max-height:88vh;display:flex;flex-direction:column;
   background:transparent;border:none;box-shadow:none;overflow:hidden;
-  animation:addCardIn .34s cubic-bezier(.22,1,.36,1) both}
+  animation:addCardIn var(--d-quick) cubic-bezier(.22,1,.36,1) both}
 @keyframes addCardIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
 .add-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px 0;border:none}
 .add-body{padding:18px 24px 24px;overflow:auto;display:flex;flex-direction:column}
@@ -90,17 +100,17 @@
 .add-drop{position:relative;align-self:stretch;margin:6px 0;min-height:286px;overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:10px;padding:0 0 38px;
   border:1px dashed rgba(220,200,150,.3);background:transparent;border-radius:16px;
-  color:#cabd92;font:inherit;font-size:var(--t-body);letter-spacing:.12em;cursor:pointer;transition:.35s}
+  color:#cabd92;font:inherit;font-size:var(--t-body);letter-spacing:.12em;cursor:pointer;transition:var(--d-quick)}
 .add-drop:hover:not(:disabled){background:rgba(220,200,150,.05);border-color:rgba(236,201,138,.5);color:#f3ecd6}
 .add-drop:disabled{opacity:.5;cursor:default}
 /* 骨浮在上半,別壓到底下文字 */
-.drop-bone{position:absolute;left:0;right:0;top:22px;width:100%;height:172px;opacity:.26;pointer-events:none;transition:opacity .4s}
+.drop-bone{position:absolute;left:0;right:0;top:22px;width:100%;height:172px;opacity:.26;pointer-events:none;transition:opacity var(--d-quick)}
 .add-drop:hover:not(:disabled) .drop-bone{opacity:.44}
 .add-drop-t{position:relative;z-index:1}
 .add-hint{position:relative;z-index:1;font-size:var(--t-micro);letter-spacing:.24em;color:#8a8267}
 .add-actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px}
 .add-go{margin-left:auto;background:transparent;border:1px solid rgba(220,200,150,.4);color:#e8dcbd;
-  font:inherit;font-size:var(--t-body);letter-spacing:.12em;padding:10px 24px;border-radius:999px;cursor:pointer;transition:.3s}
+  font:inherit;font-size:var(--t-body);letter-spacing:.12em;padding:10px 24px;border-radius:999px;cursor:pointer;transition:var(--d-quick)}
 .add-go:hover:not(:disabled){background:rgba(220,200,150,.14);color:#f3ecd6}
 .add-go:disabled{opacity:.5;cursor:default}
 .add-ghost{background:transparent;border:0;color:#9a8f6e;font:inherit;font-size:var(--t-caption);cursor:pointer}
@@ -132,8 +142,8 @@ button.q-seed:hover{background:rgba(220,200,150,.14);color:#f3ecd6}
   background:var(--amber);border:0;border-radius:9px;padding:9px 14px}
 .dock-send:disabled{background:rgba(220,200,150,.22);color:#7c7560;cursor:default}
 .dock-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;background:rgba(220,200,150,.1);border:1px solid rgba(220,200,150,.2);border-right:0;border-radius:8px 0 0 8px;padding:14px 7px;color:#cabd92;cursor:pointer;letter-spacing:.3em}
-/* 與目錄/body 同一張漸層,全站背景一致 */
-.single{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 34%,#15140f 0%,#0c0b09 52%,#050504 100%);display:flex;flex-direction:column}
+/* 與 body 同一張天(--sky 正本在 theme.css) */
+.single{position:fixed;inset:0;background:var(--sky);display:flex;flex-direction:column}
 /* 飄塵帶進單篇:position:fixed 讓 .single 成獨立堆疊脈絡,z-index:-1 → 漸層之上、文字之下 */
 .single .dust{z-index:-1}
 .single-top{display:flex;justify-content:space-between;align-items:center;padding:46px 46px 0}
@@ -181,7 +191,7 @@ button.q-seed:hover{background:rgba(220,200,150,.14);color:#f3ecd6}
   cursor:pointer;font-family:var(--serif);font-size:var(--t-lead);color:#e7dcc0;padding:14px 0;letter-spacing:.02em}
 .acc-mk{color:#c2a35a;font-size:var(--t-body);flex:none}
 .acc.on .acc-h,.acc-h:hover{color:#f3ecd6}
-.acc-b{padding:0 0 16px;animation:accIn .3s ease}
+.acc-b{padding:0 0 16px;animation:accIn var(--d-quick) var(--ease-house)}
 @keyframes accIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
 
 /* ---- source evidence / highlight ---- */
@@ -194,39 +204,39 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 
 /* 星骨載入前的留位(微弱呼吸,不搶眼)*/
 .bone-ph{border-radius:12px;background:radial-gradient(60% 50% at 50% 50%,rgba(220,200,150,.05),transparent 70%);
-  animation:phPulse 1.8s ease-in-out infinite}
+  animation:phPulse 1.8s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 @keyframes phPulse{0%,100%{opacity:.4}50%{opacity:.8}}
 
 /* ---- catalog 星骨慢慢亮起來 ---- */
-.story.skel-in{animation:skelIn 1.1s ease backwards}
+.story.skel-in{animation:skelIn var(--d-scene) var(--ease-house) backwards}
 @keyframes skelIn{from{opacity:0;transform:translate(-50%,-50%) scale(.9)}
   to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 
 /* ---- 軌道線:淡淡的同心橢圓,鋪在星骨底下 ---- */
-.orbits{position:absolute;left:0;top:0;pointer-events:none;transition:opacity .6s ease;overflow:visible}
+.orbits{position:absolute;left:0;top:0;pointer-events:none;transition:opacity var(--d-soft) ease;overflow:visible}
 /* ↑ overflow:visible:extents-fit 後世界無邊,3 圈起 R=930 > 世界半高 750,svg viewBox 會裁掉外圈軌道 */
 
 /* ---- 進單篇:被選中的骨自己飛向中心 → 放大 → 發光(不用背景光暈)---- */
 /* 飛行主角:整具骨位移到世界中心、放大、罩上自身輝光(位移/縮放的 transform 由 inline 給,base→中心)*/
 .story.flying{z-index:50;
-  transition:transform 1.15s cubic-bezier(.45,0,.15,1),filter .9s ease;
+  transition:transform 1.15s cubic-bezier(.45,0,.15,1),filter var(--d-scene) ease; /* transform 部分:事件曲線/週期,家法不抹(與 pick timers 1150ms 對齊) */
   filter:drop-shadow(0 0 12px rgba(236,201,138,.6)) drop-shadow(0 0 44px rgba(236,201,138,.34))}
 /* 其餘星骨往外退+淡出,把舞台清給主角 */
-.flying .field .story:not(.flying){opacity:0;filter:blur(4px);transition:opacity .6s ease,filter .6s ease}
+.flying .field .story:not(.flying){opacity:0;filter:blur(4px);transition:opacity var(--d-soft) ease,filter var(--d-soft) ease}
 /* 中心種骨讓位、軌道線退淡 */
-.flying .nascent{opacity:0;transition:opacity .5s ease}
+.flying .nascent{opacity:0;transition:opacity var(--d-soft) ease}
 .flying .orbits{opacity:.2}
 /* 飛抵中心後:骨的零件朝外爆散 + 整具亮閃(A:爆開)。碎片要能飛出 svg 邊界 */
-.skel.burst{overflow:visible;animation:burstFlash .6s ease-out both}
+.skel.burst{overflow:visible;animation:burstFlash var(--d-soft) ease-out both}
 @keyframes burstFlash{0%{filter:brightness(1)}28%{filter:brightness(2.3) drop-shadow(0 0 12px rgba(246,232,196,.95))}100%{filter:brightness(1.3);opacity:0}}
 .skel.burst .rib,.skel.burst .node{transform-box:fill-box;transform-origin:center;
-  animation:shard .55s cubic-bezier(.2,.55,.25,1) forwards}
-.skel.burst .stub,.skel.burst .spine{animation:shardFade .4s ease forwards}
+  animation:shard var(--d-soft) cubic-bezier(.2,.55,.25,1) forwards}
+.skel.burst .stub,.skel.burst .spine{animation:shardFade var(--d-quick) ease forwards}
 @keyframes shard{to{transform:translate(var(--bx),var(--by)) scale(1.5);opacity:0}}
 @keyframes shardFade{to{opacity:0}}
 
 /* 單篇 overlay 掛載即淡入+凝定落位,接住爆散後重組成文本軸(深連結也順)*/
-.single-overlay{animation:overlayIn .75s cubic-bezier(.4,0,.2,1)}
+.single-overlay{animation:overlayIn var(--d-scene) var(--ease-house)}
 @keyframes overlayIn{from{opacity:0;transform:scale(1.05)}to{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.single-overlay{animation:none}}
 
@@ -239,11 +249,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .story.gestating{cursor:default}
 .gest-word{font-family:var(--serif);font-size:var(--t-lead);letter-spacing:.2em;color:var(--amber);text-align:center;margin-top:6px}
 .gest-x{position:absolute;top:-6px;left:50%;transform:translateX(-50%);opacity:0;
-  background:none;border:none;color:#bdb088;font-size:var(--t-caption);letter-spacing:.1em;cursor:pointer;transition:opacity .3s}
+  background:none;border:none;color:#bdb088;font-size:var(--t-caption);letter-spacing:.1em;cursor:pointer;transition:opacity var(--d-quick)}
 .story.gestating:hover .gest-x{opacity:.75}
 .gest-x:hover{opacity:1;color:#f6efd9}
 /* 胚胎從中心飛到軌道空位(誕生運鏡);與 .flying 同機制,反向 */
-.story.hatching{z-index:48;animation:hatchIn 1.1s cubic-bezier(.35,0,.15,1) both}
+.story.hatching{z-index:48;animation:hatchIn 1.1s cubic-bezier(.35,0,.15,1) both} /* 事件曲線/週期,家法不抹(與 hatchTimer 1200ms 對齊) */
 @keyframes hatchIn{
   0%{opacity:0;transform:translate(-50%,-50%) translate(var(--hx,0),var(--hy,0)) scale(1.5);
     filter:drop-shadow(0 0 16px rgba(236,201,138,.7)) drop-shadow(0 0 40px rgba(236,201,138,.35))}
@@ -257,7 +267,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   background:rgba(12,11,9,.92);border:1px solid rgba(220,200,150,.25);
   line-height:1.5;color:#e8ddc2;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 .usage-toast-hyena{flex:none;width:28px;height:28px;align-self:center}
-.hy-sweat{transform-box:fill-box;transform-origin:center;animation:hy-drip 2.6s ease-in-out infinite}
+.hy-sweat{transform-box:fill-box;transform-origin:center;animation:hy-drip 2.6s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 @keyframes hy-drip{0%,68%{transform:translateY(0);opacity:1}84%{transform:translateY(1.5px);opacity:.8}100%{transform:translateY(0);opacity:1}}
 @media (prefers-reduced-motion:reduce){.hy-sweat{animation:none}}
 .usage-toast-body{display:flex;flex-direction:column;gap:1px;min-width:0}
@@ -273,7 +283,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
    hover 綻成那具骨 + 浮出每節點單價。全數 scope 在 .umap 底下。 */
 .umap{position:fixed;inset:0;z-index:40;overflow:hidden;
   background:radial-gradient(85% 70% at 50% 46%, #14130e 0%, #08080799 70%, #050504 100%);
-  backdrop-filter:blur(2px);animation:umapIn .5s ease}
+  backdrop-filter:blur(2px);animation:umapIn var(--d-soft) ease}
 @keyframes umapIn{from{opacity:0}}
 .umap-x{position:absolute;top:22px;right:26px;z-index:3;background:none;border:0;cursor:pointer;
   color:#8d8674;font-size:var(--t-title);padding:6px}
@@ -281,6 +291,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;color:#c7bea4;font-size:var(--t-lead);line-height:2;text-align:center}
 
+/* U1:軌道現在吃 px 座標(usageLayout 算好的真半徑),不再是 viewBox 0-100 的裝飾橢圓 */
 .umap .umap-orbits{position:absolute;inset:0;width:100%;height:100%}
 .umap .umap-orbits ellipse{fill:none;stroke:rgba(220,200,150,.10);vector-effect:non-scaling-stroke}
 
@@ -301,22 +312,36 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap .ustar:focus-visible{outline:1px solid rgba(236,201,138,.6);outline-offset:8px;border-radius:8px}
 .umap .ucore-wrap{position:relative;height:56px;display:flex;align-items:center;justify-content:center}
 .umap .udot{position:absolute;border-radius:50%;background:#efe6cf;
-  box-shadow:0 0 14px rgba(240,228,200,.35);transition:opacity .3s ease;
-  animation:uMeasure .9s cubic-bezier(.2,.7,.2,1) backwards}
+  box-shadow:0 0 14px rgba(240,228,200,.35);transition:opacity var(--d-quick) ease;
+  animation:uMeasure var(--d-scene) cubic-bezier(.2,.7,.2,1) backwards}
 .umap .uring,.umap .uscar{position:absolute;border-radius:50%;border:1px solid rgba(236,201,138,.20);
-  animation:uFade .7s ease backwards}
+  animation:uFade var(--d-soft) ease backwards}
 .umap .uscar{border-color:rgba(201,146,140,.45)}
-.umap .ubone{position:absolute;opacity:0;transition:opacity .35s ease;pointer-events:none}
+.umap .ubone{position:absolute;opacity:0;transition:opacity var(--d-quick) ease;pointer-events:none}
 .umap .ustar:hover .udot,.umap .ustar:focus-visible .udot{opacity:0}
 .umap .ustar:hover .ubone,.umap .ustar:focus-visible .ubone{opacity:1}
 .umap .uname{font-family:var(--serif);font-size:var(--t-lead);color:#cfc6ac;margin-top:8px;
-  transition:color .25s}
+  transition:color var(--d-quick)}
 .umap .ustar:hover .uname{color:#f8efd2}
 .umap .ucost{font-size:var(--t-lead);color:var(--amber);font-variant-numeric:tabular-nums;font-weight:600;
   margin-top:3px}
 .umap .uunit{font-size:var(--t-caption);color:#8d8674;font-variant-numeric:tabular-nums;letter-spacing:.04em;
-  margin-top:3px;opacity:0;transition:opacity .3s ease}
+  margin-top:3px;opacity:0;transition:opacity var(--d-quick) ease}
 .umap .ustar:hover .uunit,.umap .ustar:focus-visible .uunit{opacity:1}
+
+/* 冷星(usage-sky U3):餘燼點。hover 才浮篇名+「尚未跑過」(與熱星 spotlight 同語言) */
+.umap .cdot{display:block;margin:0 auto;width:6px;height:6px;border-radius:50%;
+  background:#9a9488;opacity:.4;box-shadow:0 0 6px rgba(220,200,150,.18)}
+.umap .ustar.cold.inert{cursor:default}
+.umap .ustar.cold .uname,.umap .ucold-note{opacity:0;transition:opacity var(--d-quick) ease}
+.umap .ustar.cold:hover .uname,.umap .ustar.cold:focus-visible .uname,
+.umap .ustar.cold:hover .ucold-note,.umap .ustar.cold:focus-visible .ucold-note{opacity:1}
+.umap .ucold-note{font-size:var(--t-caption);color:#8d8674;letter-spacing:.08em;margin-top:3px}
+
+/* 標籤分層(usage-sky U2):zoom 低於可讀地板 → uname/ucost 退 hover(與目錄 spotlight 同語言) */
+.umap.tight .uname,.umap.tight .ucost{opacity:0;transition:opacity var(--d-quick) ease}
+.umap.tight .ustar:hover .uname,.umap.tight .ustar:focus-visible .uname,
+.umap.tight .ustar:hover .ucost,.umap.tight .ustar:focus-visible .ucost{opacity:1}
 
 /* 進場:星從中心「量」出來——與單篇長條的丈量同一種動作語言 */
 @keyframes uMeasure{from{transform:scale(0)}}
@@ -349,9 +374,9 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .usage-entry{position:absolute;right:26px;bottom:24px;z-index:5;background:none;border:0;
   cursor:pointer;font-family:var(--serif);font-size:var(--t-body);letter-spacing:.16em;
   color:#8d8674;display:flex;align-items:baseline;gap:9px;padding:6px 4px;
-  transition:color .3s ease,bottom .4s cubic-bezier(.3,.7,.2,1)}
+  transition:color var(--d-quick) ease,bottom var(--d-quick) cubic-bezier(.3,.7,.2,1)}
 .usage-entry b{font-family:var(--sans);font-size:var(--t-lead);font-weight:600;color:#b9ab84;
-  font-variant-numeric:tabular-nums;letter-spacing:0;transition:color .3s ease}
+  font-variant-numeric:tabular-nums;letter-spacing:0;transition:color var(--d-quick) ease}
 .usage-entry:hover,.usage-entry:focus-visible{color:#cfc6ac;outline:none}
 .usage-entry:hover b,.usage-entry:focus-visible b{color:var(--amber)}
 /* 用量上限 toast 也住右下角(bottom:22 + 約 63px 高)且 z-index 80 → 會整個蓋掉入口。
@@ -363,7 +388,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 /* ── 進場過場:入口那行小字「飛進來、變成」中心的大數字 ──
    與目錄→單篇「骨飛向中心+爆散重組」同一套文法:你點的那個東西,變成你正在看的東西。
    節奏:數字落定(.62s)→ 光暈亮起 → 軌道與星塵浮現 → 星從中心量出來 → 年輪最後。 */
-.umap .ucenter.flyin{animation:ucFly .62s cubic-bezier(.2,.7,.2,1) backwards}
+.umap .ucenter.flyin{animation:ucFly var(--d-soft) cubic-bezier(.2,.7,.2,1) backwards}
 @keyframes ucFly{
   from{transform:translate(-50%,-50%) translate(var(--fx),var(--fy)) scale(.34);opacity:.75}
   to  {transform:translate(-50%,-50%) scale(1);opacity:1}
@@ -372,11 +397,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
    .ucenter 有 transform → 自成 stacking context,z-index:-1 只沉到自家文字底下 */
 .umap .uc-halo{position:absolute;inset:0;z-index:-1;border-radius:50%;
   background:rgba(236,201,138,.04);border:1px solid rgba(236,201,138,.28)}
-.umap .ucenter.flyin .uc-halo{animation:ucHalo .5s ease .5s backwards}
+.umap .ucenter.flyin .uc-halo{animation:ucHalo var(--d-soft) var(--ease-house) .5s backwards}
 @keyframes ucHalo{from{opacity:0;transform:scale(.72)}}
 /* 軌道與星塵:等數字落定才浮現 */
-.umap .umap-orbits{animation:uFade .8s ease .45s backwards}
-.umap .udust{animation:uFade .8s ease .55s backwards}
+.umap .umap-orbits{animation:uFade var(--d-scene) ease .45s backwards}
+.umap .udust{animation:uFade var(--d-scene) ease .55s backwards}
 @media (prefers-reduced-motion:reduce){
   .umap .ucenter.flyin,.umap .ucenter.flyin .uc-halo,
   .umap .umap-orbits,.umap .udust{animation:none}
@@ -386,11 +411,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 /* 標題吹散改由 canvas 粒子做(見 TitleBurst.tsx):真的一顆顆往左飛散,非 mask 黑幕。 */
 
 /* 真軌道從中心一圈圈綻放(delay 由 Orbits 依圈序給) */
-.orbits.bloom ellipse{transform-box:fill-box;transform-origin:center;animation:orbitBloom .95s cubic-bezier(.2,.7,.2,1) backwards}
+.orbits.bloom ellipse{transform-box:fill-box;transform-origin:center;animation:orbitBloom var(--d-scene) cubic-bezier(.2,.7,.2,1) backwards}
 @keyframes orbitBloom{0%{opacity:0;transform:scale(.08)}55%{opacity:.55}100%{opacity:1;transform:scale(1)}}
 
 /* 真種骨(NascentStar)入場點火那一下:亮起爆一下再收斂成呼吸 */
-.nascent.ignite .nascent-spark{animation:nascentIgnite 1.5s ease-out}
+.nascent.ignite .nascent-spark{animation:nascentIgnite var(--d-cam) ease-out}
 @keyframes nascentIgnite{
   0%{opacity:.15;transform:scale(.5);box-shadow:0 0 5px 2px rgba(236,201,138,.25)}
   40%{opacity:1;transform:scale(2.6);box-shadow:0 0 26px 10px rgba(246,232,196,.95),0 0 66px 24px rgba(236,201,138,.5)}
@@ -401,7 +426,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 }
 
 /* ── ① 逆俯衝出場:overlay 向中心收合 → 骨在鏡頭焦點(自己的槽位)重組 → 鏡頭拉遠帶回環上 ── */
-.single-overlay.out{animation:overlayOut .46s cubic-bezier(.4,0,.2,1) forwards}
+.single-overlay.out{animation:overlayOut .46s var(--ease-house) forwards} /* 事件曲線/週期,家法不抹(時長與 OVERLAY_OUT_MS 對齊,不換) */
 @keyframes overlayOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.92)}}
 
 /* 外殼留在自己的軌道槽位(不繞世界中心);退場當下鏡頭正對焦此槽位(single 1.5×),
@@ -411,14 +436,14 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 /* 內部零件:從四周(--bx/--by,再被 single 相機 1.5× 放大 → 畫面級)聚回定位;脊椎連線畫回 */
 .skel.reassemble{overflow:visible}
 .skel.reassemble .rib,.skel.reassemble .node{transform-box:fill-box;transform-origin:center;
-  animation:gather .72s cubic-bezier(.2,.55,.25,1) both}
+  animation:gather var(--d-soft) cubic-bezier(.2,.55,.25,1) both}
 @keyframes gather{
   from{transform:translate(var(--bx),var(--by)) scale(1.5);opacity:0}
   55%{opacity:1}
   to{transform:translate(0,0) scale(1);opacity:1}}
-.skel.reassemble .spine{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .72s .12s ease both}
+.skel.reassemble .spine{stroke-dasharray:1;stroke-dashoffset:1;animation:draw var(--d-soft) .12s ease both}
 @keyframes draw{to{stroke-dashoffset:0}}   /* 脊椎連線畫回(dashoffset 1→0);原長在已刪的 hero 區塊,退場軸靠它 */
-.skel.reassemble .stub{opacity:0;animation:stubIn .5s .32s ease both}
+.skel.reassemble .stub{opacity:0;animation:stubIn var(--d-soft) .32s ease both}
 @keyframes stubIn{to{opacity:.38}}
 
 /* ── 誕生點火:核心一閃,骨從中心向外亮起(接住 CloudCollapse 收進核心的質量)──
@@ -427,24 +452,24 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
    (而且看起來就是「向內 → 瞬移到外面 → 再向內」)。天文上亦然:恆星在核心點火,不從外圍組裝。
    錯開的 delay 由 Skeleton 依「離核心多遠」給(fromCore),所以光是從中心推出去的。
    減動由 theme.css 全域 reset 接住:瞬跑完 = 骨直接在終態,不演點火。 */
-.skel.ignite{overflow:visible;animation:igniteFlash .9s ease-out both}
+.skel.ignite{overflow:visible;animation:igniteFlash var(--d-scene) ease-out both}
 @keyframes igniteFlash{
   0%{filter:brightness(2.6) drop-shadow(0 0 18px rgba(246,232,196,.95))}
   100%{filter:drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))}}
 /* 脊椎從中心往兩端長:dash 長度 0→1,同時把它釘在中點(offset = -(0.5 - L/2))*/
-.skel.ignite .spine{animation:igniteSpine .66s cubic-bezier(.3,0,.2,1) both}
+.skel.ignite .spine{animation:igniteSpine var(--d-soft) cubic-bezier(.3,0,.2,1) both}
 @keyframes igniteSpine{
   from{stroke-dasharray:0 1;stroke-dashoffset:-.5}
   to{stroke-dasharray:1 1;stroke-dashoffset:0}}
 /* 肋:由脊椎往外畫出 */
-.skel.ignite .rib{stroke-dasharray:1;animation:igniteRib .4s ease both}
+.skel.ignite .rib{stroke-dasharray:1;animation:igniteRib var(--d-quick) ease both}
 @keyframes igniteRib{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
 /* 節點:等自己那根肋畫出去了才彈出來 */
 .skel.ignite .node{transform-box:fill-box;transform-origin:center;
-  animation:igniteNode .38s cubic-bezier(.2,1.5,.4,1) both}
+  animation:igniteNode var(--d-quick) cubic-bezier(.2,1.5,.4,1) both}
 @keyframes igniteNode{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
 /* opacity:0 不可省:stub 的 .38 是 SVG 屬性,不壓掉的話 stubIn 會從 .38 淡到 .38(等於沒淡入)*/
-.skel.ignite .stub{opacity:0;animation:stubIn .4s ease both}
+.skel.ignite .stub{opacity:0;animation:stubIn var(--d-quick) ease both}
 
 /* ── 秤出輕重:criticizer 跑的那幾分鐘 —— 一道光沿脊椎掃過,掃到哪就把那個節點掂亮 ──
    脊椎 x 軸 = 閱讀順序;肋的 x 來自 evidence.pos(該元素在原文的真實位置)→ 亮起的順序
@@ -453,11 +478,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
    所以它只說「還在讀」。掃描段在頭尾之外都是隱形的,迴圈接點不會有跳格。
    同步靠「同週期」:節點的 animation-delay 由 Skeleton 依肋的 x 給,與掃描同為 READ_CYCLE。
    減動由 theme.css 全域 reset 接住(這也是不用 SMIL animateMotion 的原因——SMIL 不吃減動)。 */
-.skel.reading .read-sweep{stroke-dasharray:.06 .94;animation:readSweep 4.4s linear infinite;
+.skel.reading .read-sweep{stroke-dasharray:.06 .94;animation:readSweep 4.4s linear infinite; /* 事件曲線/週期,家法不抹(與 READ_CYCLE 同步) */
   filter:drop-shadow(0 0 5px rgba(248,240,216,.9)) drop-shadow(0 0 12px rgba(236,201,138,.55))}
 @keyframes readSweep{from{stroke-dashoffset:.06}to{stroke-dashoffset:-1}}
 .skel.reading .node{transform-box:fill-box;transform-origin:center;
-  animation:weigh 4.4s ease-out infinite}
+  animation:weigh 4.4s ease-out infinite} /* 事件曲線/週期,家法不抹(與 READ_CYCLE 同步) */
 @keyframes weigh{
   0%{transform:scale(1);filter:none}
   5%{transform:scale(1.55);filter:drop-shadow(0 0 7px rgba(248,240,216,.95))}
@@ -473,14 +498,14 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
    減動:全域 * reset 讓 dormBreath 停 → paused 也變全靜,誠實降級。 */
 .skel.paused,.skel.failed{overflow:visible}
 .skel.paused{filter:drop-shadow(0 0 5px rgba(122,163,189,.4)) drop-shadow(0 0 16px rgba(122,163,189,.16));
-  animation:dormBreath 4.6s ease-in-out infinite}
+  animation:dormBreath 4.6s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 .skel.paused .spine,.skel.paused .rib,.skel.paused .stub{stroke:var(--c-technique)}
 .skel.paused .node{fill:var(--c-technique)}
 .skel.failed{filter:drop-shadow(0 0 4px rgba(196,122,114,.3));opacity:.5}
 .skel.failed .spine,.skel.failed .rib,.skel.failed .stub{stroke:var(--c-theme)}
 .skel.failed .node{fill:var(--c-theme)}
 @keyframes dormBreath{0%,100%{opacity:.6}50%{opacity:.92}}
-.cloud-collapse.paused{animation:dormBreath 4.6s ease-in-out infinite;
+.cloud-collapse.paused{animation:dormBreath 4.6s ease-in-out infinite; /* 事件曲線/週期,家法不抹 */
   filter:drop-shadow(0 0 6px rgba(122,163,189,.34)) drop-shadow(0 0 20px rgba(122,163,189,.16))}
 .cloud-collapse.failed{opacity:.55;
   filter:drop-shadow(0 0 5px rgba(196,122,114,.3)) drop-shadow(0 0 16px rgba(196,122,114,.14))}
@@ -491,13 +516,13 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .story.failed .gest-word.dorm{color:var(--c-theme)}
 .gest-resume{display:block;margin:7px auto 0;font:inherit;font-size:var(--t-body);letter-spacing:.12em;
   padding:4px 17px;border-radius:15px;cursor:pointer;background:rgba(220,200,150,.06);
-  color:#e7dcc2;transition:background .3s,color .3s,border-color .3s}
+  color:#e7dcc2;transition:background var(--d-quick),color var(--d-quick),border-color var(--d-quick)}
 .story.paused .gest-resume{border:1px solid rgba(122,163,189,.5)}
 .story.failed .gest-resume{border:1px solid rgba(196,122,114,.5)}
 .gest-resume:hover{background:rgba(220,200,150,.16);color:#f6efd9}
 
 /* 已完成星:hover 才浮出「重新分析」(不佔常駐版面);點了原地二次確認(重跑燒訂閱)*/
-.reanalyze{display:block;margin:6px auto 0;opacity:0;transition:opacity .3s,color .3s,border-color .3s;
+.reanalyze{display:block;margin:6px auto 0;opacity:0;transition:opacity var(--d-quick),color var(--d-quick),border-color var(--d-quick);
   font:inherit;font-size:var(--t-lead);letter-spacing:.1em;padding:4px 15px;border-radius:15px;cursor:pointer;
   background:none;border:1px solid rgba(220,200,150,.3);color:#bdb088}
 .story:hover .reanalyze{opacity:.7}

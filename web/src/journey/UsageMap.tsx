@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import Skeleton from "../viz/Skeleton";
 import { getUsageAll, getViz } from "../data/client";
+import { usageLayout, ringRadii, RING_XSCALE, labelsResident } from "../lib/camera";
+import { useViewport } from "../lib/useViewport";
 import type { IndexEntry, UsageAll, UsageStory, VizData } from "../types";
 
 // 用量星圖:獨立一層。星的大小 = 花費(面積正比);年輪 = 重跑次數;暖紅 = 機器重試過。
 // hover 綻開成那具骨 + 浮出每節點單價。點星 → 進該篇用量。
+// U1(usage-sky):星落在目錄的真槽位(worldPos),不是自己的花費排序橢圓——
+// 兩片天用同一組幾何,使用者才能把「哪顆星在哪」和目錄記憶對上。
 const R_MIN = 7, R_MAX = 19;
 
 function fmtUsd(n: number) { return "$" + n.toFixed(2); }
@@ -17,15 +21,15 @@ function radius(cost: number, max: number) {
   return Math.max(R_MIN, R_MAX * Math.sqrt(cost / max));
 }
 
-// 均分一圈(橢圓,呼應軌道);起相位朝上
-function pos(i: number, n: number) {
-  const a = (i / Math.max(1, n)) * 2 * Math.PI - Math.PI / 2;
-  return { left: `${50 + Math.cos(a) * 36}%`, top: `${50 + Math.sin(a) * 31}%` };
+// 槽位一律 ordered(目錄 orderRef)為準;帳本有、目錄已刪的孤兒排最後,不搶既有位
+export function slots(ordered: string[], stories: { slug: string }[]): string[] {
+  const extra = stories.map(s => s.slug).filter(s => !ordered.includes(s)).sort();
+  return [...ordered, ...extra];
 }
 
 function Star(
-  { s, entry, maxCost, i, n, onPick }:
-  { s: UsageStory; entry?: IndexEntry; maxCost: number; i: number; n: number;
+  { s, entry, maxCost, pt, delay, onPick }:
+  { s: UsageStory; entry?: IndexEntry; maxCost: number; pt: { x: number; y: number }; delay: number;
     onPick: (slug: string) => void },
 ) {
   const [viz, setViz] = useState<VizData | null>(null);
@@ -38,7 +42,7 @@ function Star(
   const bloom = () => { if (!viz) getViz(s.slug).then(v => v && setViz(v)).catch(() => {}); };
 
   return (
-    <div className="ustar" data-slug={s.slug} style={pos(i, n)} onClick={() => onPick(s.slug)}
+    <div className="ustar" data-slug={s.slug} style={{ left: pt.x, top: pt.y }} onClick={() => onPick(s.slug)}
       onMouseEnter={bloom} role="button" tabIndex={0} onFocus={bloom}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(s.slug); } }}>
       <div className="ucore-wrap">
@@ -56,7 +60,7 @@ function Star(
         )}
         {/* 星:大小 = 花費 */}
         <span className="udot" style={{ width: `${r * 2}px`, height: `${r * 2}px`,
-                                        animationDelay: `${0.62 + i * 0.09}s` }} />
+                                        animationDelay: `${0.62 + delay * 0.09}s` }} />
         {/* hover:綻成那具骨 */}
         {viz && <span className="ubone"><Skeleton viz={viz} width={120} /></span>}
       </div>
@@ -70,13 +74,33 @@ function Star(
   );
 }
 
+// 冷星(U3):有槽位、沒燒過錢——極暗餘燼,不消失(「哪幾篇還沒跑過」免費可見)。
+// 未完成的不可導航(T8:主動線不進半殘單篇);完成而零用量的(舊 ingest)可點。
+function ColdStar({ slug, entry, pt, onPick }:
+  { slug: string; entry?: IndexEntry; pt: { x: number; y: number }; onPick: (s: string) => void }) {
+  const go = !!(entry?.has_viz && entry?.has_feedback);
+  return (
+    <div className={`ustar cold${go ? "" : " inert"}`} data-slug={slug} style={{ left: pt.x, top: pt.y }}
+      {...(go ? {
+        role: "button", tabIndex: 0, onClick: () => onPick(slug),
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(slug); } },
+      } : {})}>
+      <div className="ucore-wrap"><span className="cdot" /></div>
+      <div className="uname">{entry?.title ?? slug}</div>
+      <div className="ucold-note">尚未跑過</div>
+    </div>
+  );
+}
+
 export default function UsageMap(
-  { entries, onPick, onClose, from }:
-  { entries: IndexEntry[]; onPick: (slug: string) => void; onClose: () => void;
+  { entries, ordered, onPick, onClose, from }:
+  { entries: IndexEntry[]; ordered: string[]; onPick: (slug: string) => void; onClose: () => void;
     from?: { x: number; y: number } },   // 入口那行小字的位置 → 它飛進來、變成中心的大數字
 ) {
   const [all, setAll] = useState<UsageAll | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const vp = useViewport();
 
   useEffect(() => {
     let live = true;
@@ -85,8 +109,8 @@ export default function UsageMap(
   }, []);
 
   const byslug = new Map(entries.map(e => [e.slug, e]));
-  const shell = (body: React.ReactNode) => (
-    <div className="umap" data-testid="usage-map">
+  const shell = (body: React.ReactNode, cls = "") => (
+    <div className={`umap${cls}`} data-testid="usage-map">
       <button className="umap-x" onClick={onClose} aria-label="關閉">✕</button>
       {body}
     </div>
@@ -99,8 +123,10 @@ export default function UsageMap(
 
   const t = all.total;
   const tokens = t.input + t.output + t.cache_creation + t.cache_read;
-  const maxCost = Math.max(...all.stories.map(s => s.cost_usd), 0.0001);
-  const stars = [...all.stories].sort((a, b) => b.cost_usd - a.cost_usd);
+  const hot = new Map(all.stories.map(s => [s.slug, s]));
+  const slotList = slots(ordered, all.stories);
+  const { z, pts } = usageLayout(slotList.length, vp.w, vp.h);
+  const maxCost = Math.max(...all.stories.map(s => s.cost_usd), 0.0001);   // 冷星無帳,天然不參與
   const ph = (k: string) => all.phases[k];
   const maxPhase = Math.max(...Object.values(all.phases).map(p => p.cost_usd), 0.0001);
   const discuss = ph("discuss");
@@ -114,9 +140,10 @@ export default function UsageMap(
     : undefined;
 
   return shell(<>
-    <svg className="umap-orbits" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <ellipse cx="50" cy="50" rx="36" ry="31" />
-      <ellipse cx="50" cy="50" rx="22" ry="19" />
+    <svg className="umap-orbits" aria-hidden="true">
+      {ringRadii(slotList.length).map((R, k) => (
+        <ellipse key={k} cx={vp.w / 2} cy={vp.h / 2} rx={R * RING_XSCALE * z} ry={R * z} />
+      ))}
     </svg>
 
     <div className={`ucenter${from ? " flyin" : ""}`} style={fly}>
@@ -127,10 +154,13 @@ export default function UsageMap(
     </div>
 
     <div className="ufield">
-      {stars.map((s, i) => (
-        <Star key={s.slug} s={s} entry={byslug.get(s.slug)} maxCost={maxCost}
-          i={i} n={stars.length} onPick={onPick} />
-      ))}
+      {slotList.map((slug, i) => {
+        const s = hot.get(slug);
+        return s
+          ? <Star key={slug} s={s} entry={byslug.get(slug)} maxCost={maxCost}
+              pt={pts[i]} delay={i} onPick={onPick} />
+          : <ColdStar key={slug} slug={slug} entry={byslug.get(slug)} pt={pts[i]} onPick={onPick} />;
+      })}
     </div>
 
     {/* ── 星塵:散在黑暗裡,不裝盒子 ── */}
@@ -174,5 +204,5 @@ export default function UsageMap(
       <div className="ud-lab">cache 命中</div>
       <div className="ud-big">{Math.round(all.cache_read_ratio * 100)}%</div>
     </div>
-  </>);
+  </>, labelsResident(z) ? "" : " tight");
 }

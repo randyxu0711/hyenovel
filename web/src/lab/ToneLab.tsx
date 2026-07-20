@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import Dust from "../journey/Dust";
 import "./lab.css";
 
 // /lab/tone — 字的家法樣張:左欄「舊」用 inline 硬字級重現映射前(不受 type-scale
@@ -30,7 +32,48 @@ const ROWS: Row[] = [
     old: { px: 46, family: SERIF }, neo: { family: SERIF } },
 ];
 
+// 舊天(映射前)參考值——僅樣張對照用,正本已改 --sky
+const OLD_SKY = "radial-gradient(120% 90% at 50% 34%, #15140f 0%, #0c0b09 52%, #050504 100%)";
+
+// 視差預覽:模擬相機緩慢巡航(sine),讓分層深度看得見;減動不巡航
+function useSwayCam(on: boolean) {
+  const [cam, setCam] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    if (!on || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setCam({ x: 0, y: 0 }); return; }
+    let raf = 0; const t0 = performance.now();
+    const loop = (t: number) => {
+      const p = ((t - t0) / 6000) * 2 * Math.PI;
+      setCam({ x: Math.sin(p) * 700, y: Math.cos(p) * 160 });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [on]);
+  return cam;
+}
+
+function SkyPane({ label, sky, cam, grain, halo }:
+  { label: string; sky?: string; cam?: { x: number; y: number }; grain: boolean; halo: boolean }) {
+  return (
+    <div className="tone-sky" style={sky ? { background: sky } : undefined}>
+      <Dust cam={cam} />
+      {halo && <>
+        <span className="tone-star" style={{ left: "30%", top: "40%" }} />
+        <span className="tone-star" style={{ left: "68%", top: "58%" }} />
+      </>}
+      {grain && <div className="grain" aria-hidden />}
+      <span className="tone-sky-cap">海口的暗暝</span>
+      <span className="tone-sky-lab">{label}</span>
+    </div>
+  );
+}
+
 export default function ToneLab() {
+  const [cold, setCold] = useState(true);
+  const [par, setPar] = useState(true);
+  const [grain, setGrain] = useState(true);
+  const [halo, setHalo] = useState(true);
+  const cam = useSwayCam(par);
   return (
     <div className="lab tone">
       <div className="lab-top"><span className="lab-tag">/lab/tone · 字的家法樣張 · 左舊右新,目測拍板</span></div>
@@ -48,6 +91,17 @@ export default function ToneLab() {
             <div className="tone-cell" style={{ fontSize: `var(${r.tok})`, fontFamily: r.neo.family, letterSpacing: r.neo.ls }}>{r.text}</div>
           </div>
         ))}
+      </div>
+      <div className="tone-sky-bar">
+        {([["冷底", cold, setCold], ["視差塵埃", par, setPar],
+           ["grain", grain, setGrain], ["星暈", halo, setHalo]] as const).map(([name, v, set]) => (
+          <label key={name}><input type="checkbox" checked={v} onChange={e => set(e.target.checked)} />{name}</label>
+        ))}
+      </div>
+      <div className="tone-sky-row">
+        <SkyPane label="前(暖 radial)" sky={OLD_SKY} grain={false} halo={false} />
+        <SkyPane label="後(冷夜裡的暖光)" sky={cold ? undefined : OLD_SKY}
+          cam={par ? cam : undefined} grain={grain} halo={halo} />
       </div>
     </div>
   );
