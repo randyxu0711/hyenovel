@@ -228,3 +228,12 @@
 .bonestage .motif-link{stroke-dasharray:1;stroke-dashoffset:1;animation:motifLink .5s ease forwards}
 @keyframes motifLink{to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.bonestage .motif-link{animation:none;stroke-dashoffset:0}}
+
+/* /lab/tone 字階樣張 */
+.tone-grid{display:grid;grid-template-columns:1fr 220px 1fr;gap:18px 28px;align-items:center;
+  max-width:1080px;margin:40px auto;padding:0 30px;position:relative;z-index:1}
+.tone-h{font-size:var(--t-caption);letter-spacing:.16em;color:#7d745c;text-align:center}
+.tone-cell{color:#e7dcbb;text-align:center;line-height:1.7}
+.tone-mid{text-align:center;border-left:1px solid rgba(220,200,150,.14);border-right:1px solid rgba(220,200,150,.14);padding:2px 8px}
+.tone-tok{font-size:var(--t-caption);color:var(--amber);font-variant-numeric:tabular-nums}
+.tone-role{font-size:var(--t-micro);color:#8a8068;margin-top:3px}
