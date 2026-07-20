@@ -203,7 +203,7 @@
 
 /* ── 進單篇入場:文本軸就地重組(接住目錄骨爆散)──
    脊椎像心電圖描出、節點一顆顆錯開浮現。掛載即播一次;換 tab 不重播(元素不重掛) */
-.bonestage .bs-spine{stroke-dasharray:1;stroke-dashoffset:1;animation:bsDraw var(--d-scene) var(--ease-house) .12s forwards}
+.bonestage .bs-spine{stroke-dasharray:1;stroke-dashoffset:1;animation:bsDraw var(--d-scene) cubic-bezier(.4,0,.2,1) .12s forwards}
 @keyframes bsDraw{to{stroke-dashoffset:0}}
 .bonestage .bs-node{animation:bsNodeIn var(--d-soft) ease backwards}
 .bonestage .bs-node:nth-of-type(2n){animation-delay:.72s}
