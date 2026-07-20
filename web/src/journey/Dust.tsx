@@ -48,19 +48,23 @@ export default function Dust({ cam }: { cam?: { x: number; y: number } }) {
         off[i] = reduce ? t : { x: off[i].x + (t.x - off[i].x) * 0.055, y: off[i].y + (t.y - off[i].y) * 0.055 };
       });
     };
+    // resize 必須連帶重畫:init() 對 cv.width 賦值會清空畫布點陣(canvas 規格行為),
+    // 非減動模式下下一個 rAF 幀會蓋掉這張靜態幀、無感;但減動模式沒有 rAF loop,
+    // 若只 init() 不重畫,畫面會停在「清空後沒人畫」的空白 —— 減動使用者看到的塵埃層會消失。
+    const onResize = () => { init(); settle(); paint(true); };
     init();
-    window.addEventListener("resize", init);
+    window.addEventListener("resize", onResize);
     if (reduce) { settle(); paint(true); }
     else {
       const loop = () => { settle(); paint(false); raf = requestAnimationFrame(loop); };
       raf = requestAnimationFrame(loop);
     }
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", init); };
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); };
   }, []);
   // 減動模式下相機換場(prop 變)→ 直接重畫一張定格(位移到位,不動畫)
   useEffect(() => {
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    // init effect 的閉包負責畫;這裡只需觸發:透過 resize 事件重初始化最省事且冪等
+    // 觸發 onResize(見上):它會 init+settle+paint,新位移的靜態幀才會真的畫出來
     window.dispatchEvent(new Event("resize"));
   }, [cam?.x, cam?.y]);
   return <canvas ref={ref} className="dust" />;
