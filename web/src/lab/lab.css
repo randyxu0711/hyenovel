@@ -9,7 +9,7 @@
   font-size:var(--t-caption);letter-spacing:.12em;color:#8f876f}
 
 /* 釘住討論時,骨整體往左退、讓出右側給對話(同一片星空,不切版) */
-.lab-stage{transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}
+.lab-stage{transition:transform var(--d-soft) var(--ease-house),opacity var(--d-soft) ease}
 .lab.discussing .lab-stage{transform:translateX(-16%) scale(.9);opacity:.82}
 .lab-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:18px;
   padding:14px 26px;background:rgba(8,7,6,.55);backdrop-filter:blur(4px);
@@ -19,7 +19,7 @@
 .lab-slugs{display:flex;gap:6px}
 .lab-seg button,.lab-slugs button{font:inherit;font-size:var(--t-caption);letter-spacing:.1em;color:#cabd92;
   background:rgba(10,9,7,.5);border:1px solid rgba(220,200,150,.24);padding:6px 14px;
-  border-radius:999px;cursor:pointer;transition:.2s}
+  border-radius:999px;cursor:pointer;transition:var(--d-quick)}
 .lab-seg button:hover,.lab-slugs button:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
 .lab-seg button.on{background:rgba(236,201,138,.2);border-color:var(--amber);color:#f6efd9}
 .lab-slugs button.on{background:rgba(122,163,189,.16);border-color:var(--c-technique);color:#dfeaf2}
@@ -29,14 +29,14 @@
 .lab-msg{text-align:center;color:#8a8068;padding:80px 0;font-size:var(--t-body)}
 .bonestage{display:block}
 @keyframes diagPulse{0%,100%{opacity:.12}50%{opacity:.5}}
-.bonestage .diag-pulse{animation:diagPulse 1.9s ease-in-out infinite}
+.bonestage .diag-pulse{animation:diagPulse 1.9s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 
 /* 固定讀出條:hover 節點細節 */
 .lab-readout{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);
   display:flex;align-items:center;gap:14px;max-width:min(880px,92vw);
   padding:11px 20px;border-radius:14px;
   background:rgba(12,11,9,.82);border:1px solid rgba(220,200,150,.16);backdrop-filter:blur(7px);
-  font-family:var(--serif);opacity:0;pointer-events:none;transition:opacity .1s ease;z-index:6}
+  font-family:var(--serif);opacity:0;pointer-events:none;transition:opacity var(--d-quick) ease;z-index:6}
 .lab-readout.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .ro-type{font-size:var(--t-micro);letter-spacing:.18em;padding:3px 9px;border-radius:999px;
   border:1px solid currentColor;opacity:.92;white-space:nowrap}
@@ -57,7 +57,7 @@
   backdrop-filter:blur(2px);
   border-left:1px solid rgba(236,201,138,.16);
   box-shadow:-30px 0 60px -30px rgba(0,0,0,.7);
-  animation:talkIn .5s cubic-bezier(.3,0,.2,1)}
+  animation:talkIn var(--d-soft) var(--ease-house)}
 @keyframes talkIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 .talk-head{display:flex;align-items:center;gap:11px;padding-bottom:14px;
   border-bottom:1px solid rgba(220,200,150,.12);margin-bottom:8px}
@@ -111,14 +111,14 @@
   gap:22px;padding:14px 160px}
 .sb-bar button{font:inherit;font-size:var(--t-caption);letter-spacing:.1em;color:#cabd92;
   background:rgba(10,9,7,.5);border:1px solid rgba(220,200,150,.24);padding:6px 14px;
-  border-radius:999px;cursor:pointer;transition:.2s}
+  border-radius:999px;cursor:pointer;transition:var(--d-quick)}
 .sb-bar button:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
 .sb-seg{display:flex;gap:6px}
 .sb-seg button.on{background:rgba(236,201,138,.2);border-color:var(--amber);color:#f6efd9}
 .sb-textabs{display:flex;gap:6px}
 .sb-textabs button.on{background:rgba(122,163,189,.16);border-color:var(--c-technique);color:#dfeaf2}
 .sb-stage{position:relative;z-index:2;max-width:1180px;margin:0 auto;padding:6px 24px 40px;
-  transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}
+  transition:transform var(--d-soft) var(--ease-house),opacity var(--d-soft) ease}
 .sb.discussing .sb-stage{transform:translateX(-16%) scale(.9);opacity:.82}
 .sb-overview{position:fixed;left:30px;bottom:26px;max-width:44%;z-index:3;
   font-size:var(--t-caption);line-height:1.8;color:#9a9079;pointer-events:none}
@@ -127,8 +127,8 @@
 /* 半透明宇宙景深:讓底層 Dust 星塵透上來(模糊化成景深),不是死黑板 */
 .sb-textview{position:fixed;inset:0;z-index:9;overflow:auto;padding:96px 8vw 60px;
   background:radial-gradient(130% 100% at 50% 20%,rgba(20,19,14,.8) 0%,rgba(11,10,8,.89) 55%,rgba(4,4,3,.93) 100%);
-  backdrop-filter:blur(5px);animation:talkIn .3s ease;cursor:zoom-out;
-  transition:padding-right .6s cubic-bezier(.4,0,.2,1)}
+  backdrop-filter:blur(5px);animation:talkIn var(--d-quick) var(--ease-house);cursor:zoom-out;
+  transition:padding-right var(--d-soft) var(--ease-house)}
 .sb-textview-inner{cursor:auto}
 .sb-textview .src{font-size:var(--t-lead);line-height:2.3;color:#ddd3b8;max-width:720px;margin:0 auto;white-space:pre-wrap}
 .sb-textview .src .hl{background:rgba(236,201,138,.24);color:#fff;border-radius:2px}
@@ -152,7 +152,7 @@
 .src-annot .ann{background:none;color:inherit;cursor:pointer;text-underline-offset:.32em;
   text-decoration-line:underline;text-decoration-thickness:2px;
   text-decoration-color:color-mix(in srgb,var(--dot) 42%,transparent);
-  transition:text-decoration-color .15s,color .15s}
+  transition:text-decoration-color var(--d-quick),color var(--d-quick)}
 .src-annot .ann:hover{color:#f6efd9;text-decoration-color:var(--dot);text-decoration-thickness:2.5px}
 .src-annot .ann.hl{color:#f6efd9;text-decoration-color:var(--amber);text-decoration-thickness:2.5px}
 
@@ -167,10 +167,10 @@
 .sb-textview .fb-lead.one{font-size:var(--t-lead);color:#f4ecd4;background:rgba(236,201,138,.06);
   border-left:3px solid var(--amber);padding:14px 18px;border-radius:0 8px 8px 0;margin-top:2px}
 .sb-textview .acc{background:rgba(250,244,228,.02);border:1px solid rgba(220,200,150,.1);
-  border-radius:10px;margin-bottom:9px;padding:0 17px;transition:.2s}
+  border-radius:10px;margin-bottom:9px;padding:0 17px;transition:var(--d-quick)}
 .sb-textview .acc.on{background:rgba(236,201,138,.055);border-color:rgba(236,201,138,.3)}
 .sb-textview .acc-h{display:flex;gap:12px;align-items:baseline;width:100%;text-align:left;
-  background:none;border:none;cursor:pointer;padding:15px 0;color:#e7dcc2;font:inherit;transition:color .15s}
+  background:none;border:none;cursor:pointer;padding:15px 0;color:#e7dcc2;font:inherit;transition:color var(--d-quick)}
 .sb-textview .acc-h:hover{color:#f6efd9}
 .sb-textview .acc-mk{color:var(--amber);font-size:var(--t-lead);width:15px;flex:none;line-height:1.4;font-weight:500}
 .sb-textview .acc-tt{font-size:var(--t-lead);letter-spacing:.02em;line-height:1.5}
@@ -195,7 +195,7 @@
 .sb-textview .u .prow .pv{font-size:var(--t-lead);text-align:right;font-variant-numeric:tabular-nums;color:var(--amber);font-weight:600}
 .sb-textview .u .track{height:10px;background:rgba(220,200,150,.08);border-radius:5px;position:relative;overflow:hidden}
 .sb-textview .u .fill{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,#8a6d2e,#ecc98a);
-  transform-origin:left;transition:transform .85s cubic-bezier(.2,.7,.2,1)}
+  transform-origin:left;transition:transform var(--d-scene) cubic-bezier(.2,.7,.2,1)}
 @media (prefers-reduced-motion:reduce){.sb-textview .u .fill{transition:none}}
 .sb-textview .u .u-eff{display:flex;gap:40px;align-items:baseline}
 .sb-textview .u .u-eff .u-lab{color:#9a9488;font-size:var(--t-caption);display:block;margin-bottom:5px;letter-spacing:.06em}
@@ -203,9 +203,9 @@
 
 /* ── 進單篇入場:文本軸就地重組(接住目錄骨爆散)──
    脊椎像心電圖描出、節點一顆顆錯開浮現。掛載即播一次;換 tab 不重播(元素不重掛) */
-.bonestage .bs-spine{stroke-dasharray:1;stroke-dashoffset:1;animation:bsDraw 1s cubic-bezier(.4,0,.2,1) .12s forwards}
+.bonestage .bs-spine{stroke-dasharray:1;stroke-dashoffset:1;animation:bsDraw var(--d-scene) var(--ease-house) .12s forwards}
 @keyframes bsDraw{to{stroke-dashoffset:0}}
-.bonestage .bs-node{animation:bsNodeIn .5s ease backwards}
+.bonestage .bs-node{animation:bsNodeIn var(--d-soft) ease backwards}
 .bonestage .bs-node:nth-of-type(2n){animation-delay:.72s}
 .bonestage .bs-node:nth-of-type(3n){animation-delay:.9s}
 .bonestage .bs-node:nth-of-type(4n){animation-delay:1.08s}
@@ -216,18 +216,18 @@
    兩層(近快亮/遠慢淡)疊出景深穿隧感,呼應塵埃宇宙。round cap 讓每段短 dash 成一顆粒。
    pathLength=1 正規化;--flow=負一個週期 → 無縫循環。 */
 .bonestage .thread-flow{stroke-linecap:round;
-  animation-name:threadFlow;animation-timing-function:linear;animation-iteration-count:infinite}
+  animation-name:threadFlow;animation-timing-function:linear;animation-iteration-count:infinite} /* 事件曲線/週期,家法不抹 */
 @keyframes threadFlow{to{stroke-dashoffset:var(--flow)}}
 @media (prefers-reduced-motion:reduce){.bonestage .thread-flow{animation:none;opacity:0!important}}
 
 /* 意象復現脈動:hover 某意象 → 它在文本裡的每次復現依閱讀序逐一亮起脈動(織體呼吸)。
    逐次落在脊椎上;平時淡如織體,伸手才活。animation-delay 逐次錯開=閱讀序的波。 */
-.bonestage .motif-occ{transition:opacity .2s ease}
-.bonestage .motif-occ.pulse{animation:motifPulse 1.5s ease-in-out infinite}
+.bonestage .motif-occ{transition:opacity var(--d-quick) ease}
+.bonestage .motif-occ.pulse{animation:motifPulse 1.5s ease-in-out infinite} /* 事件曲線/週期,家法不抹 */
 @keyframes motifPulse{0%,55%,100%{opacity:.5;r:2}22%{opacity:1;r:5.6}}
 @media (prefers-reduced-motion:reduce){.bonestage .motif-occ.pulse{animation:none;opacity:1!important}}
 /* hover 意象時牽起復現序列的線,描出以示閱讀方向 */
-.bonestage .motif-link{stroke-dasharray:1;stroke-dashoffset:1;animation:motifLink .5s ease forwards}
+.bonestage .motif-link{stroke-dasharray:1;stroke-dashoffset:1;animation:motifLink var(--d-soft) ease forwards}
 @keyframes motifLink{to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.bonestage .motif-link{animation:none;stroke-dashoffset:0}}
 
