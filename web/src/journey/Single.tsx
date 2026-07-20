@@ -32,14 +32,20 @@ export default function Single() {
   const [text, setText] = useState<null | "source" | "feedback" | "usage">(
     wantTab === "usage" ? "usage" : null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
-  // 回饋點 = 討論啟動器:點標題直接開該節點的討論框(NodeTalk 會把判斷+提問+原文+對話都帶出)
+  // 回饋頁是「讀」的層:判斷內文+首條原文證據直接在場(舊版只列標題,判斷要逐張點進
+  // 討論才看得到=回饋頁淪為目錄)。點標題仍是討論啟動器:開該節點的沉浸討論。
   const accItems = (prefix: string, pts: FeedbackPoint[]) => pts.map((p, i) => {
     const active = !!selected && p.refs.includes(selected);
+    const q = p.quotes[0]?.quote;
     return (
       <div className={`acc ${active ? "on" : ""}`} key={`${prefix}${i}`}>
         <button className="acc-h" onClick={() => p.refs.length && setSelected(p.refs[0])}>
           <span className="acc-mk">{active ? "💬" : "＋"}</span><span className="acc-tt">{p.title}</span>
         </button>
+        <div className="acc-b">
+          <p>{p.body}</p>
+          {q && <p className="q">「{q}」</p>}
+        </div>
       </div>
     );
   });
@@ -102,13 +108,17 @@ export default function Single() {
           {text === "source" && <SourceAnnotated source={source} viz={viz} highlight={hl}
             onDiscuss={setSelected} />}
           {text === "feedback" && (fb ? (
-            <div className="fb" style={{ maxWidth: 720, margin: "0 auto" }}>
+            <div className="fb">
               <h3 className="fb-sec">這篇在做什麼</h3>
               <p className="fb-lead">{fb.read}</p>
               {fb.key_points.length > 0 && <h3 className="fb-sec">最關鍵的 {fb.key_points.length} 件</h3>}
               {accItems("kp", fb.key_points)}
               {fb.strengths.length > 0 && <h3 className="fb-sec">這篇的強處</h3>}
               {accItems("st", fb.strengths)}
+              {fb.minor.length > 0 && <>
+                <h3 className="fb-sec">枝節</h3>
+                <ul className="fb-minor">{fb.minor.map((m, i) => <li key={i}>{m}</li>)}</ul>
+              </>}
               <h3 className="fb-sec">如果只能改一件事</h3>
               <p className="fb-lead one">{fb.one_line}</p>
             </div>

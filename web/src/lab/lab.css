@@ -6,7 +6,7 @@
 .born-lab .lab-bar{z-index:8}
 /* 當前拍子在幹嘛:讀流程用,不是畫面的一部分 */
 .born-sub{position:relative;z-index:8;text-align:center;margin-top:6px;
-  font-size:13px;letter-spacing:.12em;color:#8f876f}
+  font-size:var(--t-caption);letter-spacing:.12em;color:#8f876f}
 
 /* 釘住討論時,骨整體往左退、讓出右側給對話(同一片星空,不切版) */
 .lab-stage{transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}
@@ -14,10 +14,10 @@
 .lab-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:18px;
   padding:14px 26px;background:rgba(8,7,6,.55);backdrop-filter:blur(4px);
   border-bottom:1px solid rgba(220,200,150,.1)}
-.lab-tag{font-size:12px;letter-spacing:.16em;color:#7d745c}
+.lab-tag{font-size:var(--t-caption);letter-spacing:.16em;color:#7d745c}
 .lab-seg{display:flex;gap:6px;margin-left:auto}
 .lab-slugs{display:flex;gap:6px}
-.lab-seg button,.lab-slugs button{font:inherit;font-size:12.5px;letter-spacing:.1em;color:#cabd92;
+.lab-seg button,.lab-slugs button{font:inherit;font-size:var(--t-caption);letter-spacing:.1em;color:#cabd92;
   background:rgba(10,9,7,.5);border:1px solid rgba(220,200,150,.24);padding:6px 14px;
   border-radius:999px;cursor:pointer;transition:.2s}
 .lab-seg button:hover,.lab-slugs button:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
@@ -25,8 +25,8 @@
 .lab-slugs button.on{background:rgba(122,163,189,.16);border-color:var(--c-technique);color:#dfeaf2}
 
 .lab-stage{max-width:1100px;margin:0 auto;padding:30px 24px 60px;position:relative}
-.lab-title{font-size:22px;color:#e7dcbb;text-align:center;margin-bottom:8px;letter-spacing:.04em}
-.lab-msg{text-align:center;color:#8a8068;padding:80px 0;font-size:14px}
+.lab-title{font-size:var(--t-title);color:#e7dcbb;text-align:center;margin-bottom:8px;letter-spacing:.04em}
+.lab-msg{text-align:center;color:#8a8068;padding:80px 0;font-size:var(--t-body)}
 .bonestage{display:block}
 @keyframes diagPulse{0%,100%{opacity:.12}50%{opacity:.5}}
 .bonestage .diag-pulse{animation:diagPulse 1.9s ease-in-out infinite}
@@ -38,13 +38,13 @@
   background:rgba(12,11,9,.82);border:1px solid rgba(220,200,150,.16);backdrop-filter:blur(7px);
   font-family:var(--serif);opacity:0;pointer-events:none;transition:opacity .1s ease;z-index:6}
 .lab-readout.on{opacity:1;transform:translateX(-50%) translateY(0)}
-.ro-type{font-size:11px;letter-spacing:.18em;padding:3px 9px;border-radius:999px;
+.ro-type{font-size:var(--t-micro);letter-spacing:.18em;padding:3px 9px;border-radius:999px;
   border:1px solid currentColor;opacity:.92;white-space:nowrap}
-.ro-label{font-size:18px;color:#f0e7cf;white-space:nowrap}
+.ro-label{font-size:var(--t-lead);color:#f0e7cf;white-space:nowrap}
 .ro-meter{width:74px;height:4px;border-radius:2px;background:rgba(220,200,150,.14);flex:none}
 .ro-meter i{display:block;height:100%;border-radius:2px}
-.ro-quote{font-size:13.5px;color:#9c937a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ro-flag,.talk-flag{font-size:11px;letter-spacing:.1em;color:#e0625a;
+.ro-quote{font-size:var(--t-caption);color:#9c937a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ro-flag,.talk-flag{font-size:var(--t-micro);letter-spacing:.1em;color:#e0625a;
   border:1px solid rgba(224,98,90,.5);border-radius:999px;padding:2px 8px;white-space:nowrap;flex:none}
 .talk-label{min-width:0}
 
@@ -61,31 +61,31 @@
 @keyframes talkIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 .talk-head{display:flex;align-items:center;gap:11px;padding-bottom:14px;
   border-bottom:1px solid rgba(220,200,150,.12);margin-bottom:8px}
-.talk-type{font-size:11px;letter-spacing:.18em;padding:3px 9px;border-radius:999px;border:1px solid currentColor;flex:none}
-.talk-label{font-size:18px;color:#f0e7cf;flex:1;text-shadow:0 0 12px rgba(236,201,138,.25)}
-.talk-x{background:none;border:none;color:#8a8068;font-size:15px;cursor:pointer;padding:4px}
+.talk-type{font-size:var(--t-micro);letter-spacing:.18em;padding:3px 9px;border-radius:999px;border:1px solid currentColor;flex:none}
+.talk-label{font-size:var(--t-lead);color:#f0e7cf;flex:1;text-shadow:0 0 12px rgba(236,201,138,.25)}
+.talk-x{background:none;border:none;color:#8a8068;font-size:var(--t-body);cursor:pointer;padding:4px}
 .talk-x:hover{color:#e7dcbb}
 .talk-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:10px 2px}
-.talk-seed{color:#928871;font-size:13.5px;line-height:1.9}
+.talk-seed{color:#928871;font-size:var(--t-caption);line-height:1.9}
 /* 編輯對這顆已寫好的判斷(選中即見) */
 .talk-standing{padding:4px 2px 12px;border-bottom:1px dashed rgba(220,200,150,.14);margin-bottom:4px}
-.talk-kp-h{font-size:11px;letter-spacing:.16em;color:#9c8c5e;margin-bottom:6px}
-.talk-kp-b{font-size:14.5px;line-height:1.95;color:#ddd0b2}
+.talk-kp-h{font-size:var(--t-micro);letter-spacing:.16em;color:#9c8c5e;margin-bottom:6px}
+.talk-kp-b{font-size:var(--t-body);line-height:1.95;color:#ddd0b2}
 .talk-kp-b.dim{color:#8a8068}
-.talk-quote{font-size:13px;line-height:1.85;color:#9c937a;margin-top:8px;
+.talk-quote{font-size:var(--t-caption);line-height:1.85;color:#9c937a;margin-top:8px;
   border-left:2px solid rgba(236,201,138,.3);padding-left:10px}
 /* 討論裡附帶的原文段:引用句高亮,前後文淡出 */
-.talk-passage{font-size:13.5px;line-height:1.95;color:#8b8268;margin-top:10px;
+.talk-passage{font-size:var(--t-caption);line-height:1.95;color:#8b8268;margin-top:10px;
   border-left:2px solid rgba(236,201,138,.28);padding:2px 0 2px 11px}
 .talk-passage mark{background:rgba(236,201,138,.16);color:#efe6cd;border-radius:2px;padding:0 1px}
 .talk-qseed{margin-top:12px;display:block;width:100%;text-align:left;cursor:pointer;
-  font:inherit;font-size:13.5px;line-height:1.7;color:#e6d3a6;
+  font:inherit;font-size:var(--t-caption);line-height:1.7;color:#e6d3a6;
   background:rgba(236,201,138,.08);border:1px solid rgba(236,201,138,.22);border-radius:10px;padding:9px 12px}
 .talk-qseed:hover{background:rgba(236,201,138,.16);color:#f6efd9}
-.talk-jump{margin-top:8px;display:inline-block;font:inherit;font-size:12.5px;color:#9fb6c8;
+.talk-jump{margin-top:8px;display:inline-block;font:inherit;font-size:var(--t-caption);color:#9fb6c8;
   background:none;border:none;cursor:pointer;padding:2px 0}
 .talk-jump:hover{color:#dfeaf2}
-.talk-line{font-size:15px;line-height:1.95;white-space:pre-wrap;max-width:92%}
+.talk-line{font-size:var(--t-body);line-height:1.95;white-space:pre-wrap;max-width:92%}
 .talk-line.me{align-self:flex-end;color:#cdd6e2;text-align:right;
   border-right:2px solid rgba(150,180,220,.4);padding-right:12px}
 .talk-line.ed{align-self:flex-start;color:#e7dcc2;
@@ -93,11 +93,11 @@
 .talk-typing{opacity:.6;letter-spacing:.14em}
 .talk-compose{display:flex;align-items:flex-end;gap:10px;padding-top:12px;
   border-top:1px solid rgba(236,201,138,.18)}
-.talk-compose textarea{flex:1;resize:none;font:inherit;font-size:14.5px;color:#ece3c8;
+.talk-compose textarea{flex:1;resize:none;font:inherit;font-size:var(--t-body);color:#ece3c8;
   background:none;border:none;outline:none;line-height:1.7;max-height:120px}
 .talk-compose textarea::placeholder{color:#6f6753}
 .talk-compose button{flex:none;width:34px;height:34px;border-radius:999px;cursor:pointer;
-  background:rgba(236,201,138,.16);border:1px solid var(--amber);color:var(--amber);font-size:15px}
+  background:rgba(236,201,138,.16);border:1px solid var(--amber);color:var(--amber);font-size:var(--t-body)}
 .talk-compose button:disabled{opacity:.4;cursor:default}
 .talk-compose button:not(:disabled):hover{background:rgba(236,201,138,.3)}
 
@@ -105,11 +105,11 @@
 .sb{min-height:100vh;position:relative;overflow:hidden;font-family:var(--serif);color:#cabd92;
   background:radial-gradient(120% 90% at 50% 30%,#15140f 0%,#0c0b09 54%,#050504 100%)}
 .sb .dust{position:fixed;inset:0;z-index:0;pointer-events:none}
-.sb-msg{padding:90px;text-align:center;color:#8a8068;font-size:14px}
+.sb-msg{padding:90px;text-align:center;color:#8a8068;font-size:var(--t-body)}
 /* 控制列置中(左上標題、右上退鍵歸 Chrome 管,避免對撞);z 高於覆蓋層才關得掉 */
 .sb-bar{position:relative;z-index:12;display:flex;justify-content:center;align-items:center;
   gap:22px;padding:14px 160px}
-.sb-bar button{font:inherit;font-size:12.5px;letter-spacing:.1em;color:#cabd92;
+.sb-bar button{font:inherit;font-size:var(--t-caption);letter-spacing:.1em;color:#cabd92;
   background:rgba(10,9,7,.5);border:1px solid rgba(220,200,150,.24);padding:6px 14px;
   border-radius:999px;cursor:pointer;transition:.2s}
 .sb-bar button:hover{background:rgba(220,200,150,.12);color:#f3ecd6}
@@ -121,7 +121,7 @@
   transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .7s ease}
 .sb.discussing .sb-stage{transform:translateX(-16%) scale(.9);opacity:.82}
 .sb-overview{position:fixed;left:30px;bottom:26px;max-width:44%;z-index:3;
-  font-size:13px;line-height:1.8;color:#9a9079;pointer-events:none}
+  font-size:var(--t-caption);line-height:1.8;color:#9a9079;pointer-events:none}
 .sb-overview b{color:var(--amber);font-weight:500;letter-spacing:.06em}
 /* 甲:文字把骨換掉;點暗背景可關 */
 /* 半透明宇宙景深:讓底層 Dust 星塵透上來(模糊化成景深),不是死黑板 */
@@ -130,7 +130,7 @@
   backdrop-filter:blur(5px);animation:talkIn .3s ease;cursor:zoom-out;
   transition:padding-right .6s cubic-bezier(.4,0,.2,1)}
 .sb-textview-inner{cursor:auto}
-.sb-textview .src{font-size:17px;line-height:2.3;color:#ddd3b8;max-width:720px;margin:0 auto;white-space:pre-wrap}
+.sb-textview .src{font-size:var(--t-lead);line-height:2.3;color:#ddd3b8;max-width:720px;margin:0 auto;white-space:pre-wrap}
 .sb-textview .src .hl{background:rgba(236,201,138,.24);color:#fff;border-radius:2px}
 /* 討論開啟時:原文/回饋讓出右側給討論欄,內容重新置中到左半,兩者並置不重疊。
    關閉靠上排「原文/回饋」再按一次(或點背景),不另設關閉鍵 */
@@ -142,11 +142,11 @@
 
 /* ── 原文可討論點:不畫底線、不螢光。只在句尾綴一顆類型色小星,hover/命中才淡淡一亮 ── */
 /* 原文直排:傳統中文 vertical-rl 右起;英文一小段預設側躺(text-orientation:mixed),同實體書排法 */
-.src-annot{writing-mode:vertical-rl;font-size:18px;line-height:2.75;color:#ddd3b8;white-space:pre-wrap;
+.src-annot{writing-mode:vertical-rl;font-size:var(--t-lead);line-height:2.75;color:#ddd3b8;white-space:pre-wrap;
   max-height:calc(100vh - 160px);margin:0 auto}
 /* 提示行固定在頂,右起捲動時不會被帶走 */
 .src-hint{position:fixed;top:22px;left:0;right:0;text-align:center;margin:0;z-index:10;
-  font-size:12px;letter-spacing:.04em;color:#726a55}
+  font-size:var(--t-caption);letter-spacing:.04em;color:#726a55}
 /* 可討論段落:標記只用「欄側細線」(直排下 text-decoration 天然畫在欄側),
    完全不佔字身、零版面位移;<mark> 預設黃底務必蓋掉。靜置很淡,hover/高亮才亮 */
 .src-annot .ann{background:none;color:inherit;cursor:pointer;text-underline-offset:.32em;
@@ -156,13 +156,15 @@
 .src-annot .ann:hover{color:#f6efd9;text-decoration-color:var(--dot);text-decoration-thickness:2.5px}
 .src-annot .ann.hl{color:#f6efd9;text-decoration-color:var(--amber);text-decoration-thickness:2.5px}
 
-/* ── 回饋:卡片式層級,一件事一塊,層級清楚 ── */
-.sb-textview .fb{color:#cfc6ac}
-.sb-textview .fb-sec{font-size:12px;letter-spacing:.2em;color:var(--amber);font-weight:500;
+/* ── 回饋:卡片式層級,一件事一塊,層級清楚;判斷內文常駐(點標題=開討論,不是展開)── */
+.sb-textview .fb{color:#cfc6ac;max-width:720px;margin:0 auto}
+.sb-textview .fb-minor{margin:0;padding-left:1.3em;color:#a89f88}
+.sb-textview .fb-minor li{font-size:var(--t-body);line-height:2;margin-bottom:12px}
+.sb-textview .fb-sec{font-size:var(--t-caption);letter-spacing:.2em;color:var(--amber);font-weight:500;
   margin:46px 0 16px;padding-bottom:8px;border-bottom:1px solid rgba(236,201,138,.16)}
 .sb-textview .fb-sec:first-child{margin-top:0}
-.sb-textview .fb-lead{font-size:16px;line-height:2.1;color:#e6ddc6;margin:0 0 6px}
-.sb-textview .fb-lead.one{font-size:17px;color:#f4ecd4;background:rgba(236,201,138,.06);
+.sb-textview .fb-lead{font-size:var(--t-lead);line-height:2.1;color:#e6ddc6;margin:0 0 6px}
+.sb-textview .fb-lead.one{font-size:var(--t-lead);color:#f4ecd4;background:rgba(236,201,138,.06);
   border-left:3px solid var(--amber);padding:14px 18px;border-radius:0 8px 8px 0;margin-top:2px}
 .sb-textview .acc{background:rgba(250,244,228,.02);border:1px solid rgba(220,200,150,.1);
   border-radius:10px;margin-bottom:9px;padding:0 17px;transition:.2s}
@@ -170,34 +172,34 @@
 .sb-textview .acc-h{display:flex;gap:12px;align-items:baseline;width:100%;text-align:left;
   background:none;border:none;cursor:pointer;padding:15px 0;color:#e7dcc2;font:inherit;transition:color .15s}
 .sb-textview .acc-h:hover{color:#f6efd9}
-.sb-textview .acc-mk{color:var(--amber);font-size:16px;width:15px;flex:none;line-height:1.4;font-weight:500}
-.sb-textview .acc-tt{font-size:16px;letter-spacing:.02em;line-height:1.5}
+.sb-textview .acc-mk{color:var(--amber);font-size:var(--t-lead);width:15px;flex:none;line-height:1.4;font-weight:500}
+.sb-textview .acc-tt{font-size:var(--t-lead);letter-spacing:.02em;line-height:1.5}
 .sb-textview .acc-b{padding:0 0 17px 27px}
-.sb-textview .acc-b p{font-size:14.5px;line-height:2.1;color:#c7bea4;margin:0}
-.sb-textview .acc-b .q{margin-top:14px;color:#e0cb8f;font-size:14px;line-height:1.9;
+.sb-textview .acc-b p{font-size:var(--t-body);line-height:2.1;color:#c7bea4;margin:0}
+.sb-textview .acc-b .q{margin-top:14px;color:#e0cb8f;font-size:var(--t-body);line-height:1.9;
   border-left:2px solid rgba(236,201,138,.35);padding-left:13px}
 
 /* ── 用量帳本面板(usage tab)── */
 .sb-textview .u{max-width:580px;margin:0 auto;color:#cfc6ac;font-family:var(--sans)}
-.sb-textview .u-msg{max-width:580px;margin:0 auto;font-size:16px;color:#c7bea4;line-height:2}
-.sb-textview .u-sec{font-family:var(--serif);font-size:12px;letter-spacing:.2em;color:var(--amber);
+.sb-textview .u-msg{max-width:580px;margin:0 auto;font-size:var(--t-lead);color:#c7bea4;line-height:2}
+.sb-textview .u-sec{font-family:var(--serif);font-size:var(--t-caption);letter-spacing:.2em;color:var(--amber);
   font-weight:500;margin:34px 0 16px;padding-bottom:8px;border-bottom:1px solid rgba(236,201,138,.16)}
 .sb-textview .u-sec:first-child{margin-top:0}
 .sb-textview .u .u-hero{display:flex;align-items:baseline;gap:14px}
-.sb-textview .u .u-hero .big{font-size:60px;font-weight:600;color:#f8efd2;font-variant-numeric:tabular-nums;line-height:1;
+.sb-textview .u .u-hero .big{font-size:60px;/* t-ok: 單篇用量 hero,展示級之上;usage-sky 輪整頁重排時再併入字階 */font-weight:600;color:#f8efd2;font-variant-numeric:tabular-nums;line-height:1;
   text-shadow:0 0 26px rgba(236,201,138,.18)}
-.sb-textview .u .u-hero .sub{margin-left:auto;font-size:14px;color:#9a9488;font-variant-numeric:tabular-nums;
+.sb-textview .u .u-hero .sub{margin-left:auto;font-size:var(--t-body);color:#9a9488;font-variant-numeric:tabular-nums;
   text-align:right;line-height:1.7}
 .sb-textview .u .prow{display:grid;grid-template-columns:120px 1fr 72px;align-items:center;gap:16px;padding:12px 0}
-.sb-textview .u .prow .pk{font-size:16px;color:#e6ddc6}
-.sb-textview .u .prow .pv{font-size:18px;text-align:right;font-variant-numeric:tabular-nums;color:var(--amber);font-weight:600}
+.sb-textview .u .prow .pk{font-size:var(--t-lead);color:#e6ddc6}
+.sb-textview .u .prow .pv{font-size:var(--t-lead);text-align:right;font-variant-numeric:tabular-nums;color:var(--amber);font-weight:600}
 .sb-textview .u .track{height:10px;background:rgba(220,200,150,.08);border-radius:5px;position:relative;overflow:hidden}
 .sb-textview .u .fill{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,#8a6d2e,#ecc98a);
   transform-origin:left;transition:transform .85s cubic-bezier(.2,.7,.2,1)}
 @media (prefers-reduced-motion:reduce){.sb-textview .u .fill{transition:none}}
 .sb-textview .u .u-eff{display:flex;gap:40px;align-items:baseline}
-.sb-textview .u .u-eff .u-lab{color:#9a9488;font-size:13px;display:block;margin-bottom:5px;letter-spacing:.06em}
-.sb-textview .u .u-eff .n{font-size:26px;color:#f4ecd4;font-variant-numeric:tabular-nums;font-weight:600}
+.sb-textview .u .u-eff .u-lab{color:#9a9488;font-size:var(--t-caption);display:block;margin-bottom:5px;letter-spacing:.06em}
+.sb-textview .u .u-eff .n{font-size:var(--t-display);color:#f4ecd4;font-variant-numeric:tabular-nums;font-weight:600}
 
 /* ── 進單篇入場:文本軸就地重組(接住目錄骨爆散)──
    脊椎像心電圖描出、節點一顆顆錯開浮現。掛載即播一次;換 tab 不重播(元素不重掛) */
@@ -228,3 +230,12 @@
 .bonestage .motif-link{stroke-dasharray:1;stroke-dashoffset:1;animation:motifLink .5s ease forwards}
 @keyframes motifLink{to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.bonestage .motif-link{animation:none;stroke-dashoffset:0}}
+
+/* /lab/tone 字階樣張 */
+.tone-grid{display:grid;grid-template-columns:1fr 220px 1fr;gap:18px 28px;align-items:center;
+  max-width:1080px;margin:40px auto;padding:0 30px;position:relative;z-index:1}
+.tone-h{font-size:var(--t-caption);letter-spacing:.16em;color:#7d745c;text-align:center}
+.tone-cell{color:#e7dcbb;text-align:center;line-height:1.7}
+.tone-mid{text-align:center;border-left:1px solid rgba(220,200,150,.14);border-right:1px solid rgba(220,200,150,.14);padding:2px 8px}
+.tone-tok{font-size:var(--t-caption);color:var(--amber);font-variant-numeric:tabular-nums}
+.tone-role{font-size:var(--t-micro);color:#8a8068;margin-top:3px}
