@@ -24,6 +24,15 @@ export function camTransform(
   return { x: vw / 2 - cx * zoom, y: vh / 2 - cy * zoom, scale: zoom };
 }
 
+// 相機落點單一正本:stage+viewport → Camera 的動畫目標。
+// Dust 視差(跟隨 .cam 位移)與 Camera 必須同源,否則天空跟星空各走各的。
+export function cameraPose(
+  stage: Stage, count: number, vw: number, vh: number, focus?: { x: number; y: number },
+): { x: number; y: number; scale: number } {
+  const z = stageZoom(stage, count, vw, vh);
+  return camTransform(WORLD, vw, vh, z, stage === "single" ? focus : undefined);
+}
+
 // 同心環佈局:中心留給種骨,故事繞著中心一圈圈排。
 // 內圈先填滿再外擴;每圈容量隨半徑增加(圓周越長塞越多)。
 // 橢圓(x 拉 RING_XSCALE)貼合世界/螢幕的寬高比 → y 是緊的維度。

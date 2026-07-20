@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { WORLD, stageZoom, camTransform, type Stage } from "../lib/camera";
+import { WORLD, cameraPose, type Stage } from "../lib/camera";
 import { useViewport } from "../lib/useViewport";
 
 export default function Camera(
@@ -7,8 +7,7 @@ export default function Camera(
   { stage: Stage; count: number; focus?: { x: number; y: number }; children: React.ReactNode },
 ) {
   const vp = useViewport();
-  const z = stageZoom(stage, count, vp.w, vp.h);
-  const t = camTransform(WORLD, vp.w, vp.h, z, stage === "single" ? focus : undefined);
+  const t = cameraPose(stage, count, vp.w, vp.h, focus);
   const blur = stage === "overview" ? 6 : 0;
   return (
     <div className="stage">

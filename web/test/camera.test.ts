@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos } from "../src/lib/camera";
+import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos, cameraPose } from "../src/lib/camera";
 
 describe("camera math", () => {
   it("WORLD 是 2600x1500", () => {
@@ -30,5 +30,12 @@ describe("camera math", () => {
     expect(a).toEqual(b);
     expect(a.x).toBeGreaterThan(0); expect(a.x).toBeLessThan(WORLD.w);
     expect(a.y).toBeGreaterThan(0); expect(a.y).toBeLessThan(WORLD.h);
+  });
+  it("cameraPose:非 single 忽略 focus;single 才對焦(與 Camera 分派一致)", () => {
+    expect(cameraPose("catalog", 7, 1920, 1080, { x: 9, y: 9 }))
+      .toEqual(cameraPose("catalog", 7, 1920, 1080));
+    const t = cameraPose("single", 7, 1920, 1080, { x: 100, y: 50 });
+    expect(t.x).toBeCloseTo(1920 / 2 - 100 * t.scale);
+    expect(t.y).toBeCloseTo(1080 / 2 - 50 * t.scale);
   });
 });
