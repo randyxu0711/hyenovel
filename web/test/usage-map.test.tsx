@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor, fireEvent } from "@testing-library/react";
 import type { IndexEntry } from "../src/types";
+import { usageLayout, ringRadii } from "../src/lib/camera";
 
 const ALL = {
   empty: false,
@@ -19,9 +20,9 @@ const ALL = {
 };
 
 const ENTRIES = [
-  { slug: "s02", title: "鬣狗的傷春悲秋", nodes: 38 },
-  { slug: "s07", title: "長夜", nodes: 33 },
-  { slug: "s06", title: "犁過亡者的骨骸", nodes: 28 },
+  { slug: "s02", title: "鬣狗的傷春悲秋", nodes: 38, has_viz: true, has_feedback: true },
+  { slug: "s07", title: "長夜", nodes: 33, has_viz: true, has_feedback: true },
+  { slug: "s06", title: "犁過亡者的骨骸", nodes: 28, has_viz: true, has_feedback: true },
 ] as IndexEntry[];
 
 const getUsageAll = vi.fn();
@@ -29,7 +30,7 @@ vi.mock("../src/data/client", () => ({
   getUsageAll: () => getUsageAll(),
   getViz: () => Promise.resolve(null),
 }));
-import UsageMap from "../src/journey/UsageMap";
+import UsageMap, { slots } from "../src/journey/UsageMap";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -38,7 +39,10 @@ beforeEach(() => {
 
 const setup = (all: unknown = ALL, onPick = vi.fn()) => {
   getUsageAll.mockResolvedValue(all);
-  return { onPick, ...render(<UsageMap entries={ENTRIES} onPick={onPick} onClose={vi.fn()} />) };
+  return {
+    onPick,
+    ...render(<UsageMap entries={ENTRIES} ordered={["s02", "s07", "s06"]} onPick={onPick} onClose={vi.fn()} />),
+  };
 };
 
 describe("UsageMap", () => {
@@ -110,5 +114,43 @@ describe("UsageMap", () => {
       phases: {}, retry_cost_usd: 0, retry_count: 0, duration_ms: 0, cache_read_ratio: 0, stories: [],
     });
     await waitFor(() => expect(getByText(/還沒有用量/)).toBeTruthy());
+  });
+
+  it("星落在目錄槽位(ordered 順序),不依花費排位", async () => {
+    const { container } = setup();
+    await waitFor(() => expect(container.querySelectorAll(".ustar").length).toBe(3));
+    const { pts } = usageLayout(3, window.innerWidth, window.innerHeight);
+    const at = (slug: string) => {
+      const el = container.querySelector(`.ustar[data-slug="${slug}"]`) as HTMLElement;
+      return { x: parseFloat(el.style.left), y: parseFloat(el.style.top) };
+    };
+    expect(at("s07").x).toBeCloseTo(pts[1].x);   // ordered[1],即使它不是最貴
+    expect(at("s07").y).toBeCloseTo(pts[1].y);
+  });
+
+  it("軌道畫真的:環數 = ringRadii(槽位數)", async () => {
+    const { container } = setup();
+    await waitFor(() => expect(container.querySelectorAll(".umap-orbits ellipse").length)
+      .toBe(ringRadii(3).length));
+  });
+
+  it("冷星:有槽位沒用量 → 餘燼點;完成的可點進、未完成的不可導航(T8 政策)", async () => {
+    const entries = [...ENTRIES,
+      { slug: "s01", title: "舊完成篇", nodes: 20, has_viz: true, has_feedback: true },
+      { slug: "s99", title: "孕育中", nodes: 0 }] as IndexEntry[];
+    const onPick = vi.fn();
+    getUsageAll.mockResolvedValue(ALL);
+    const { container } = render(<UsageMap entries={entries}
+      ordered={["s02", "s07", "s06", "s01", "s99"]} onPick={onPick} onClose={vi.fn()} />);
+    await waitFor(() => expect(container.querySelectorAll(".ustar.cold").length).toBe(2));
+    expect(container.querySelectorAll(".ustar").length).toBe(5);   // 槽位一一對應,冷星不消失
+    fireEvent.click(container.querySelector('.ustar.cold[data-slug="s01"]')!);
+    expect(onPick).toHaveBeenCalledWith("s01");
+    fireEvent.click(container.querySelector('.ustar.cold[data-slug="s99"]')!);
+    expect(onPick).not.toHaveBeenCalledWith("s99");
+  });
+
+  it("帳本孤兒(有用量、目錄已刪)排在既有槽位之後,不搶位", () => {
+    expect(slots(["a", "b"], [{ slug: "b" }, { slug: "zz" }])).toEqual(["a", "b", "zz"]);
   });
 });

@@ -176,7 +176,7 @@ export default function Journey() {
         </button>
       )}
       {usageOpen && (
-        <UsageMap entries={entries} from={usageFrom} onClose={() => setUsageOpen(false)}
+        <UsageMap entries={entries} ordered={ordered} from={usageFrom} onClose={() => setUsageOpen(false)}
           onPick={s => { setUsageOpen(false); nav(`/story/${s}`, { state: { tab: "usage" } }); }} />
       )}
       {stage === "overview" && <Overview onEnter={onEntered} />}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos, cameraPose } from "../src/lib/camera";
+import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos, cameraPose, usageLayout } from "../src/lib/camera";
 
 describe("camera math", () => {
   it("WORLD 是 2600x1500", () => {
@@ -37,5 +37,12 @@ describe("camera math", () => {
     const t = cameraPose("single", 7, 1920, 1080, { x: 100, y: 50 });
     expect(t.x).toBeCloseTo(1920 / 2 - 100 * t.scale);
     expect(t.y).toBeCloseTo(1080 / 2 - 50 * t.scale);
+  });
+  it("usageLayout:目錄槽位以 overlay 視窗靜態 fit(count=1 落地平線右端、y 置中)", () => {
+    const { z, pts } = usageLayout(1, 1024, 768);
+    // count=1:worldPos(0)=(cx+540, cy) → halfW=540+150,halfH=0+92
+    expect(z).toBeCloseTo(Math.min(0.75, 1024 / (2 * 690), 768 / (2 * 92)));
+    expect(pts[0].y).toBeCloseTo(384);
+    expect(pts[0].x).toBeCloseTo(512 + 540 * z);
   });
 });

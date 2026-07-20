@@ -95,3 +95,15 @@ export function ringRadii(count: number): number[] {
   while (acc < Math.max(1, count)) { rs.push(ringR(ring)); acc += ringCap(ring); ring++; }
   return rs;
 }
+
+// 用量頁(usage-sky U1):同一片天換一種光——星用目錄槽位,以 overlay 視窗為框算靜態 fit。
+// 無相機(儀表不是閱讀面);幾何與目錄同源(worldPos/fitContent),不許複製分岔。
+export function usageLayout(count: number, vw: number, vh: number): { z: number; pts: { x: number; y: number }[] } {
+  const z = fitContent(count, vw, vh);
+  const cx = WORLD.w / 2, cy = WORLD.h / 2;
+  const pts = Array.from({ length: Math.max(1, count) }, (_, i) => {
+    const p = worldPos(i, WORLD, count);
+    return { x: vw / 2 + (p.x - cx) * z, y: vh / 2 + (p.y - cy) * z };
+  });
+  return { z, pts };
+}

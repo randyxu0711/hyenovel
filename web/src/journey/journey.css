@@ -291,6 +291,7 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;color:#c7bea4;font-size:var(--t-lead);line-height:2;text-align:center}
 
+/* U1:軌道現在吃 px 座標(usageLayout 算好的真半徑),不再是 viewBox 0-100 的裝飾橢圓 */
 .umap .umap-orbits{position:absolute;inset:0;width:100%;height:100%}
 .umap .umap-orbits ellipse{fill:none;stroke:rgba(220,200,150,.10);vector-effect:non-scaling-stroke}
 
@@ -327,6 +328,15 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap .uunit{font-size:var(--t-caption);color:#8d8674;font-variant-numeric:tabular-nums;letter-spacing:.04em;
   margin-top:3px;opacity:0;transition:opacity .3s ease}
 .umap .ustar:hover .uunit,.umap .ustar:focus-visible .uunit{opacity:1}
+
+/* 冷星(usage-sky U3):餘燼點。hover 才浮篇名+「尚未跑過」(與熱星 spotlight 同語言) */
+.umap .cdot{display:block;margin:0 auto;width:6px;height:6px;border-radius:50%;
+  background:#9a9488;opacity:.4;box-shadow:0 0 6px rgba(220,200,150,.18)}
+.umap .ustar.cold.inert{cursor:default}
+.umap .ustar.cold .uname,.umap .ucold-note{opacity:0;transition:opacity .3s ease}
+.umap .ustar.cold:hover .uname,.umap .ustar.cold:focus-visible .uname,
+.umap .ustar.cold:hover .ucold-note,.umap .ustar.cold:focus-visible .ucold-note{opacity:1}
+.umap .ucold-note{font-size:var(--t-caption);color:#8d8674;letter-spacing:.08em;margin-top:3px}
 
 /* 進場:星從中心「量」出來——與單篇長條的丈量同一種動作語言 */
 @keyframes uMeasure{from{transform:scale(0)}}
