@@ -156,8 +156,10 @@
 .src-annot .ann:hover{color:#f6efd9;text-decoration-color:var(--dot);text-decoration-thickness:2.5px}
 .src-annot .ann.hl{color:#f6efd9;text-decoration-color:var(--amber);text-decoration-thickness:2.5px}
 
-/* ── 回饋:卡片式層級,一件事一塊,層級清楚 ── */
-.sb-textview .fb{color:#cfc6ac}
+/* ── 回饋:卡片式層級,一件事一塊,層級清楚;判斷內文常駐(點標題=開討論,不是展開)── */
+.sb-textview .fb{color:#cfc6ac;max-width:720px;margin:0 auto}
+.sb-textview .fb-minor{margin:0;padding-left:1.3em;color:#a89f88}
+.sb-textview .fb-minor li{font-size:var(--t-body);line-height:2;margin-bottom:12px}
 .sb-textview .fb-sec{font-size:var(--t-caption);letter-spacing:.2em;color:var(--amber);font-weight:500;
   margin:46px 0 16px;padding-bottom:8px;border-bottom:1px solid rgba(236,201,138,.16)}
 .sb-textview .fb-sec:first-child{margin-top:0}
