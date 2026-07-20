@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 // 每顆各自往左飛散 + 淡出(靠右的先起飛=風由右往左)。不用 mask/SVG 濾鏡 —— 真的一顆顆飛走。
 const W = 600, H = 320;
 const SERIF = '52px "Source Han Serif TC","Noto Serif TC","Songti TC",serif';
-const SANS = '15px "Inter","Noto Sans TC",sans-serif';
+const SANS = '15px "Noto Sans TC","PingFang TC",sans-serif';
 // 「進入」pill 的幾何:canvas 畫它、透明命中按鈕貼它,兩處同源避免各抄一份後對不準
 const PILL = { x: 230, y: 222, w: 140, h: 46, r: 23 };
 

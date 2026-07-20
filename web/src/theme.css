@@ -1,6 +1,10 @@
 :root{
   --serif:"Source Han Serif TC","Noto Serif TC","Songti TC",serif;
-  --sans:"Inter","Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  --sans:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  /* 字階單一正本(spec art-immersion §3A):全站 font-size 一律吃 --t-*,
+     破階要同行掛 t-ok pragma 註解 —— test/type-scale.test.ts 守著。 */
+  --t-micro:11px; --t-caption:13px; --t-body:15px; --t-lead:17px;
+  --t-title:21px; --t-display:27px; --t-hero:34px; --t-total:46px;
   --bone:#efe6cf; --bg:#0c0b09;
   --c-theme:#c47a72; --c-motif:#a98bb8; --c-technique:#7aa3bd; --c-effect:#c9a45e;
   --c-character:#8fb89a; --c-beat:#9a9488; --amber:#ecc98a;
