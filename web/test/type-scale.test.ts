@@ -28,4 +28,23 @@ describe("字的家法", () => {
     const hits = files.filter(p => readFileSync(p, "utf8").includes('"Inter"'));
     expect(hits, `還掛著 Inter:${hits.join(", ")}`).toEqual([]);
   });
+
+  it("CSS 不得出現裸 font-size(破階要同行 t-ok pragma)", () => {
+    const files = srcFiles(".css");
+    expect(files.length).toBeGreaterThanOrEqual(3); // theme/journey/lab 至少三支
+    const bad: string[] = [];
+    for (const p of files) {
+      readFileSync(p, "utf8").split("\n").forEach((line, i) => {
+        if (/font-size\s*:\s*[\d.]+px/.test(line) && !line.includes("t-ok"))
+          bad.push(`${p.split("/src/")[1]}:${i + 1}  ${line.trim()}`);
+      });
+    }
+    expect(bad, `裸字級(映射到 --t-* 或同行加 /* t-ok: 理由 */):\n${bad.join("\n")}`).toEqual([]);
+  });
+
+  it("text-transform:uppercase 絕跡(微標籤走疏排中文,拉丁套路不留)", () => {
+    const files = srcFiles(".css");
+    const hits = files.filter(p => /text-transform\s*:\s*uppercase/.test(readFileSync(p, "utf8")));
+    expect(hits, `還有 uppercase:${hits.join(", ")}`).toEqual([]);
+  });
 });
