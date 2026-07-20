@@ -21,6 +21,10 @@
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
 .stage-catalog .story:hover .cap{opacity:1}
+/* 星暈(spec §3B):每具骨後極淡 radial 暈——星是光源,不是貼紙。靜態、z 在 fresh 柔金暈(-1)之下 */
+.story::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:420px;height:260px;z-index:-2;pointer-events:none;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(236,201,138,.07),transparent 70%)}
 /* 新成形的故事:柔金暈常駐(閱讀優先);點進或 refresh 後卸下 */
 .story.fresh::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:360px;height:220px;z-index:-1;pointer-events:none;
@@ -50,6 +54,12 @@
 .nascent{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:42;
   display:flex;flex-direction:column;align-items:center;gap:11px;
   background:transparent;border:0;cursor:pointer;padding:10px}
+/* 種骨常駐呼吸暈(spec §3B):非點火時也有極緩的光——爐火不熄。減動由全域 reset 停拍 */
+.nascent::before{content:"";position:absolute;left:50%;top:14px;transform:translate(-50%,-50%);
+  width:150px;height:150px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(236,201,138,.12),transparent 70%);
+  animation:nascentHalo 7s ease-in-out infinite}
+@keyframes nascentHalo{0%,100%{opacity:.5}50%{opacity:1}}
 .nascent-spark{width:7px;height:7px;border-radius:999px;background:#f3ead2;
   box-shadow:0 0 10px 3px rgba(236,201,138,.5),0 0 26px 8px rgba(236,201,138,.18);
   animation:nascentBreath 3.4s ease-in-out infinite}

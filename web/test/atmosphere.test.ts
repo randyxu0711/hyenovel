@@ -19,4 +19,13 @@ describe("冷夜大氣", () => {
     for (const f of ["journey/journey.css", "lab/lab.css"])
       expect(src(f), `${f} 還有整片天的複本`).not.toMatch(/radial-gradient\(120% 90%/);
   });
+  it("grain 覆層存在:tiled noise、pointer-events:none、極低 opacity", () => {
+    const theme = src("theme.css");
+    const m = /\.grain\{([^}]*)\}/s.exec(theme);
+    expect(m, "theme.css 缺 .grain").not.toBeNull();
+    expect(m![1]).toMatch(/pointer-events:\s*none/);
+    expect(m![1]).toMatch(/feTurbulence/);
+    const op = /opacity:\s*(0?\.\d+)/.exec(m![1]);
+    expect(parseFloat(op![1]), "grain 該是質感不是雜訊").toBeLessThanOrEqual(0.08);
+  });
 });

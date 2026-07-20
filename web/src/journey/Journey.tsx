@@ -150,6 +150,7 @@ export default function Journey() {
     <div className={`journey stage-${stage} ${dropping ? "drop-active" : ""} ${flying ? "flying" : ""} ${usageLimitResetAt !== undefined ? "toasting" : ""}`} data-testid="home"
       onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
       <Dust />
+      <div className="grain" aria-hidden />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
       <Camera stage={stage} count={Math.max(1, ordered.length)} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
