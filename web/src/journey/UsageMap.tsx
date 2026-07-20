@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Skeleton from "../viz/Skeleton";
 import { getUsageAll, getViz } from "../data/client";
-import { usageLayout, ringRadii, RING_XSCALE } from "../lib/camera";
+import { usageLayout, ringRadii, RING_XSCALE, labelsResident } from "../lib/camera";
 import { useViewport } from "../lib/useViewport";
 import type { IndexEntry, UsageAll, UsageStory, VizData } from "../types";
 
@@ -109,8 +109,8 @@ export default function UsageMap(
   }, []);
 
   const byslug = new Map(entries.map(e => [e.slug, e]));
-  const shell = (body: React.ReactNode) => (
-    <div className="umap" data-testid="usage-map">
+  const shell = (body: React.ReactNode, cls = "") => (
+    <div className={`umap${cls}`} data-testid="usage-map">
       <button className="umap-x" onClick={onClose} aria-label="關閉">✕</button>
       {body}
     </div>
@@ -204,5 +204,5 @@ export default function UsageMap(
       <div className="ud-lab">cache 命中</div>
       <div className="ud-big">{Math.round(all.cache_read_ratio * 100)}%</div>
     </div>
-  </>);
+  </>, labelsResident(z) ? "" : " tight");
 }

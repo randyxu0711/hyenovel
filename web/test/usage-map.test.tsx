@@ -153,4 +153,17 @@ describe("UsageMap", () => {
   it("帳本孤兒(有用量、目錄已刪)排在既有槽位之後,不搶位", () => {
     expect(slots(["a", "b"], [{ slug: "b" }, { slug: "zz" }])).toEqual(["a", "b", "zz"]);
   });
+
+  it("星多到 zoom 低於可讀地板 → .umap.tight(標籤退 hover)", async () => {
+    const many = Array.from({ length: 22 }, (_, i) => `m${i}`);
+    getUsageAll.mockResolvedValue({ ...ALL,
+      stories: many.map(slug => ({ slug, cost_usd: 0.5, tokens: 1, runs: 1, retry_count: 0, last_run_cost_usd: 0.5 })) });
+    const { container } = render(<UsageMap entries={[]} ordered={many}
+      onPick={vi.fn()} onClose={vi.fn()} />);
+    await waitFor(() => expect(container.querySelector(".umap.tight")).toBeTruthy());
+    // 3 篇時(既有 setup)不 tight
+    const { container: few } = setup();
+    await waitFor(() => expect(few.querySelectorAll(".ustar").length).toBe(3));
+    expect(few.querySelector(".umap.tight")).toBeNull();
+  });
 });

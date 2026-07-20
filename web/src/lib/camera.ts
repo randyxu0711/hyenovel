@@ -69,6 +69,11 @@ export const BONE = { w: 300, h: 184 };
 // 家構圖 zoom 上限:少篇別太巨。這是「字要大」側的旋鈕(spec D1)。
 export const MAX_ZOOM = 0.75;
 
+// 可讀地板(catalog-gaze D3 / usage-sky U2):螢幕字 14px ÷ 目錄標題字級(--t-display:27px)。
+// ⚠ 與 theme.css 的 --t-display 是同一件事的兩面:改字階必須同步改這裡(journey.css .cap 註解同款提醒)。
+export const ZOOM_FLOOR = 14 / 27;
+export const labelsResident = (z: number): boolean => z >= ZOOM_FLOOR;
+
 // 當前篇數實際落點的包圍盒(含骨半尺寸邊距)。框「真的有星的地方」,
 // 不是最外環半徑——空蕩外環(如第 7 篇的孤星)幾乎不付縮放代價。
 export function contentExtents(count: number, world = WORLD): { halfW: number; halfH: number } {

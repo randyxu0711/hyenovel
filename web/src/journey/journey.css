@@ -338,6 +338,11 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
 .umap .ustar.cold:hover .ucold-note,.umap .ustar.cold:focus-visible .ucold-note{opacity:1}
 .umap .ucold-note{font-size:var(--t-caption);color:#8d8674;letter-spacing:.08em;margin-top:3px}
 
+/* 標籤分層(usage-sky U2):zoom 低於可讀地板 → uname/ucost 退 hover(與目錄 spotlight 同語言) */
+.umap.tight .uname,.umap.tight .ucost{opacity:0;transition:opacity .3s ease}
+.umap.tight .ustar:hover .uname,.umap.tight .ustar:focus-visible .uname,
+.umap.tight .ustar:hover .ucost,.umap.tight .ustar:focus-visible .ucost{opacity:1}
+
 /* 進場:星從中心「量」出來——與單篇長條的丈量同一種動作語言 */
 @keyframes uMeasure{from{transform:scale(0)}}
 @keyframes uFade{from{opacity:0}}

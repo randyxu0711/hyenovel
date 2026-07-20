@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos, cameraPose, usageLayout } from "../src/lib/camera";
+import { WORLD, fitScale, stageZoom, fitContent, camTransform, worldPos, cameraPose, usageLayout, ZOOM_FLOOR, labelsResident } from "../src/lib/camera";
 
 describe("camera math", () => {
   it("WORLD 是 2600x1500", () => {
@@ -44,5 +44,10 @@ describe("camera math", () => {
     expect(z).toBeCloseTo(Math.min(0.75, 1024 / (2 * 690), 768 / (2 * 92)));
     expect(pts[0].y).toBeCloseTo(384);
     expect(pts[0].x).toBeCloseTo(512 + 540 * z);
+  });
+  it("可讀地板:14px 螢幕字 ÷ cap 字級(--t-display 27px);地板上常駐、下退 hover", () => {
+    expect(ZOOM_FLOOR).toBeCloseTo(14 / 27);
+    expect(labelsResident(ZOOM_FLOOR)).toBe(true);
+    expect(labelsResident(0.5)).toBe(false);
   });
 });
