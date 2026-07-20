@@ -66,6 +66,11 @@ export function worldPos(i: number, world: { w: number; h: number }, total = i +
 
 // 骨的渲染尺寸(Catalog StoryBone / lab 替身同源;fit 邊距靠它)
 export const BONE = { w: 300, h: 184 };
+// 標題 footprint:fit 要替「字」留位,不只替「骨」。cap 夾到骨寬(journey.css .cap
+// max-width=BONE.w)→ 橫向不吃新位子;縱向替最多兩行標題留位(27px × line-height 1.3
+// × 2 行 + margin-top 4 ≈ 74,取 76 留餘)。截斷本病 = fit 只照骨算、字比骨寬又無界溢出。
+// ⚠ 與 journey.css .cap 的 max-width / -webkit-line-clamp / line-height 是同一件事兩面,改一邊改兩邊。
+export const CAP_H = 76;
 // 家構圖 zoom 上限:少篇別太巨。這是「字要大」側的旋鈕(spec D1)。
 export const MAX_ZOOM = 0.75;
 
@@ -84,7 +89,9 @@ export function contentExtents(count: number, world = WORLD): { halfW: number; h
     hw = Math.max(hw, Math.abs(p.x - cx));
     hh = Math.max(hh, Math.abs(p.y - cy));
   }
-  return { halfW: hw + BONE.w / 2, halfH: hh + BONE.h / 2 };
+  // 縱向多留兩行標題(cap 夾到骨寬 → 橫向仍是 BONE.w/2)。整具 .story 盒
+  //(骨 + cap)由 translate(-50%,-50%) 置中於落點 → 半盒高 = (BONE.h + CAP_H)/2。
+  return { halfW: hw + BONE.w / 2, halfH: hh + (BONE.h + CAP_H) / 2 };
 }
 
 // 家之凝視:相機站在「剛好把全部作品收進一眼」的距離(spec 概念§2)。

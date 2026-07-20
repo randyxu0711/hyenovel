@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { worldPos, ringRadii, WORLD, RING_XSCALE, fitScale, camTransform, fitContent, BONE } from "../lib/camera";
+import { worldPos, ringRadii, WORLD, RING_XSCALE, fitScale, camTransform, fitContent, BONE, CAP_H } from "../lib/camera";
 import { useViewport } from "../lib/useViewport";
 import Dust from "../journey/Dust";
 import "./lab.css";
@@ -73,7 +73,7 @@ export default function CatalogLab() {
   const bones = Array.from({ length: count }, (_, i) => {
     const p = worldPos(i, WORLD, count);
     const sx = eff.tx + p.x * eff.s, sy = eff.ty + p.y * eff.s;
-    const hw = (BONE_W / 2) * eff.s, hh = (BONE_H / 2) * eff.s;
+    const hw = (BONE_W / 2) * eff.s, hh = ((BONE_H + CAP_H) / 2) * eff.s; // 含標題兩行 footprint
     const cut = sx - hw < 0 || sx + hw > FW || sy - hh < 0 || sy + hh > FH;
     if (cut) clipped++;
     return { i, p, cut };
@@ -135,7 +135,7 @@ export default function CatalogLab() {
             {bones.map(({ i, p, cut }) => (
               <div key={i} style={{
                 position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)",
-                width: BONE_W, height: BONE_H, borderRadius: 8,
+                width: BONE_W, height: BONE_H + CAP_H, borderRadius: 8, // 骨 + 標題兩行 footprint(fit 邊距的真依據)
                 border: `1px solid ${cut ? "rgba(255,140,140,0.9)" : "rgba(180,200,255,0.35)"}`,
                 background: cut ? "rgba(120,40,40,0.28)" : "rgba(40,48,72,0.4)",
                 display: "flex", alignItems: "center", justifyContent: "center",
