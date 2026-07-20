@@ -12,6 +12,7 @@ export default function Dust({ cam }: { cam?: { x: number; y: number } }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const camRef = useRef(cam);
   camRef.current = cam;
+  const repaintRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const cv = ref.current; if (!cv) return;
@@ -52,6 +53,7 @@ export default function Dust({ cam }: { cam?: { x: number; y: number } }) {
     // 非減動模式下下一個 rAF 幀會蓋掉這張靜態幀、無感;但減動模式沒有 rAF loop,
     // 若只 init() 不重畫,畫面會停在「清空後沒人畫」的空白 —— 減動使用者看到的塵埃層會消失。
     const onResize = () => { init(); settle(); paint(true); };
+    repaintRef.current = onResize;
     init();
     window.addEventListener("resize", onResize);
     if (reduce) { settle(); paint(true); }
@@ -61,15 +63,16 @@ export default function Dust({ cam }: { cam?: { x: number; y: number } }) {
     }
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); };
   }, []);
-  // 減動模式下相機換場(prop 變)→ 直接重畫一張定格(位移到位,不動畫)
+  // 減動模式下相機換場(prop 變)→ 直接重畫一張定格(位移到位,不動畫)。
+  // 呼叫 repaintRef(掛好的 onResize 本體),不發真的 window resize 事件——
+  // 全站的 useViewport() 也聽 resize,發假事件會連帶讓每個消費者重渲染。
   useEffect(() => {
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    // 觸發 onResize(見上):它會 init+settle+paint,新位移的靜態幀才會真的畫出來
-    window.dispatchEvent(new Event("resize"));
+    repaintRef.current();
   }, [cam?.x, cam?.y]);
   return <canvas ref={ref} className="dust" />;
 }
 
-// ⚠️ 減動分支的重畫走 resize 事件會重灑粒子——可接受(靜態幀,使用者看不到「跳」以外的東西,
+// ⚠️ 減動分支的重畫走 repaintRef 直呼會重灑粒子——可接受(靜態幀,使用者看不到「跳」以外的東西,
 // 且減動本來就不演)。canvas 座標是螢幕空間(.dust 在 .cam 外),不乘 0.75
 //(memory 那條「.cam 內吃 0.75× 縮放」的雷是 .cam 內限定,.dust 在外不適用)。
