@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getIndex, getUsageAll } from "../data/client";
-import { worldPos, WORLD, ringRadii, type Stage } from "../lib/camera";
+import { worldPos, WORLD, ringRadii, cameraPose, type Stage } from "../lib/camera";
+import { useViewport } from "../lib/useViewport";
 import Camera from "./Camera";
 import Chrome from "./Chrome";
 import Dust from "./Dust";
@@ -45,6 +46,7 @@ export default function Journey() {
   const bloomTimer = useRef<number>();
   const returnTimers = useRef<number[]>([]);
   const orderRef = useRef<string[]>([]);
+  const vp = useViewport();
   const OVERLAY_OUT_MS = 460;   // overlay 收合時長,與 CSS overlayOut 對齊
   const CONFIRM_MS = 1800;      // 誕生確認波總長,與 CSS bornWave 對齊(1.4s + 第三環 .32s delay,留餘裕)
 
@@ -134,6 +136,9 @@ export default function Journey() {
   const focus = oidx >= 0 ? worldPos(oidx, WORLD, ordered.length) : undefined;
   const title = slug ? entries.find(e => e.slug === slug)?.title : undefined;
 
+  // 天空跟著相機走(分層視差);pose 與 Camera 同源(cameraPose 單一正本)
+  const pose = cameraPose(stage, Math.max(1, ordered.length), vp.w, vp.h, focus);
+
   const canDrop = stage === "catalog";
   const onDragOver = (e: React.DragEvent) => {
     if (!canDrop || !Array.from(e.dataTransfer.types).includes("Files")) return;
@@ -149,7 +154,7 @@ export default function Journey() {
   return (
     <div className={`journey stage-${stage} ${dropping ? "drop-active" : ""} ${flying ? "flying" : ""} ${usageLimitResetAt !== undefined ? "toasting" : ""}`} data-testid="home"
       onDragOver={onDragOver} onDragLeave={() => setDropping(false)} onDrop={onDrop}>
-      <Dust />
+      <Dust cam={{ x: pose.x, y: pose.y }} />
       <div className="grain" aria-hidden />
       <div className={`fog ${stage === "overview" ? "thick" : ""}`} />
       <Camera stage={stage} count={Math.max(1, ordered.length)} focus={focus}>
