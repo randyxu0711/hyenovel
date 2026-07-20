@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { WORLD, RING_XSCALE, worldPos, sparsePhase, camTransform, contentExtents, fitContent, BONE, MAX_ZOOM } from "../src/lib/camera";
+import { WORLD, RING_XSCALE, worldPos, sparsePhase, camTransform, contentExtents, fitContent, BONE, CAP_H, MAX_ZOOM } from "../src/lib/camera";
 
 const cx = WORLD.w / 2, cy = WORLD.h / 2;
 const R1 = 645; // 環1半徑(camera.ts RING.R0 + 1*dR)
@@ -48,7 +48,7 @@ describe("extents-fit(spec D1)", () => {
   it("1 篇:被 MAX_ZOOM 夾住(少篇別太巨)", () => {
     expect(fitContent(1, 1920, 1080)).toBe(MAX_ZOOM);
   });
-  it("不變量:任何篇數×常見視窗,家構圖下所有骨完整在框內(lab 出框計數器=0)", () => {
+  it("不變量:任何篇數×常見視窗,家構圖下整具 .story(骨+兩行標題)在框內(lab 出框計數器=0)", () => {
     for (const [vw, vh] of [[1920, 1080], [1366, 768], [2560, 1440], [1280, 1024]]) {
       for (let n = 1; n <= 40; n++) {
         const z = fitContent(n, vw, vh);
@@ -56,7 +56,8 @@ describe("extents-fit(spec D1)", () => {
         for (let i = 0; i < n; i++) {
           const p = worldPos(i, WORLD, n);
           const sx = t.x + p.x * z, sy = t.y + p.y * z;
-          const hw = (BONE.w / 2) * z, hh = (BONE.h / 2) * z;
+          // 縱向含 cap 兩行(截斷本病:字比骨低,底部星的標題被視窗底切掉)
+          const hw = (BONE.w / 2) * z, hh = ((BONE.h + CAP_H) / 2) * z;
           expect(sx - hw).toBeGreaterThanOrEqual(-0.5);
           expect(sx + hw).toBeLessThanOrEqual(vw + 0.5);
           expect(sy - hh).toBeGreaterThanOrEqual(-0.5);

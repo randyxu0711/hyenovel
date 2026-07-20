@@ -17,7 +17,10 @@
 /* 標題常駐微光:骨是抽象指紋,全靠 hover 認星=逐星掃描,找篇成本太高。
    夜空裡星名淡淡在場(.55),hover 才全亮;spotlight(全場退、這顆亮)不變。
    cap 吃 --t-display(24→27 平手往上):catalog Phase 2 可讀地板 = 14 / 27(spec catalog-gaze D3),兩邊同步改、不得寫死。 */
-.story .cap{font-family:var(--serif);font-size:var(--t-display);color:#f4eddb;text-align:center;margin-top:4px;opacity:.55;transition:var(--d-soft)}
+/* 夾到骨寬(300=camera.ts BONE.w)+ 最多兩行 + …:長標題原本無界一行,置中後溢出被 .stage
+   overflow:hidden 沿視窗邊截斷。夾寬 → 橫向不再溢出;兩行縱向由 camera.ts CAP_H 一起算進 fit。 */
+.story .cap{font-family:var(--serif);font-size:var(--t-display);line-height:1.3;color:#f4eddb;text-align:center;margin-top:4px;opacity:.55;transition:var(--d-soft);
+  max-width:300px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .stage-catalog .field:hover .story{opacity:.34;filter:blur(2px)}
 .stage-catalog .field:hover .story:hover{opacity:1;filter:none}
 .stage-catalog .story:hover .cap{opacity:1}
