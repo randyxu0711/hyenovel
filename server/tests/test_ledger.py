@@ -357,3 +357,15 @@ def test_aggregate_all_carries_starmap_fields():
         assert abs(by["s01"]["last_run_cost_usd"] - 0.75) < 1e-9, "每節點單價的分子"
 
 
+def test_last_run_cost_excludes_distill():
+    """distill 跟 discuss 一樣不屬於任何一次 critique —— 算進去會虛報每節點單價。"""
+    from server import ledger
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        ledger.append("s99", "analyst", 0, _fake_turn(cost=1.0))
+        ledger.append("s99", "criticizer", 0, _fake_turn(cost=0.5))
+        ledger.append("s99", "discuss", 0, _fake_turn(cost=0.2))
+        ledger.append("s99", "distill", 0, _fake_turn(cost=0.3))
+        assert ledger.aggregate("s99")["last_run_cost_usd"] == 1.5
+
+

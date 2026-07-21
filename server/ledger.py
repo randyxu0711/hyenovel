@@ -83,13 +83,13 @@ def _round_cost(d):
 
 def _last_run_cost(rows):
     """最後一次 critique 的花費(每節點單價的分子——分母是最新那具骨的節點數,兩者要對齊)。
-    一次 critique 從 analyst attempt=0 起算;discuss 不屬於任何一次 critique,排除。"""
+    一次 critique 從 analyst attempt=0 起算;discuss / distill 不屬於任何一次 critique,排除。"""
     starts = [i for i, r in enumerate(rows)
               if r.get("phase") == "analyst" and not (r.get("attempt", 0) or 0)]
     if not starts:
         return 0.0
     return sum(r.get("cost_usd", 0.0) or 0.0
-               for r in rows[starts[-1]:] if r.get("phase") != "discuss")
+               for r in rows[starts[-1]:] if r.get("phase") not in ("discuss", "distill"))
 
 
 def aggregate(slug):

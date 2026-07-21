@@ -103,6 +103,12 @@ async def discuss_close(slug: str, session_id: str):
     return {"closed": await discuss.close_session(session_id)}
 
 
+@app.post("/api/discuss/{slug}/{session_id}/distill")
+async def discuss_distill(slug: str, session_id: str):
+    """把這一局討論收束成結論正本。LLM 只吐 JSON 文字,確定性層驗過才落地。"""
+    return await discuss.distill(_slug(slug), session_id)
+
+
 # ── 新故事 ingestion ─────────────────────────────────────────────────
 @app.post("/api/stories/extract")
 async def stories_extract(file: UploadFile):

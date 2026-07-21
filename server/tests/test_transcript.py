@@ -197,3 +197,92 @@ def test_discuss_records_anchors(monkeypatch):
         rows = transcript.load("s99")
         assert rows[0]["anchors"] == ["m2"], "user 行要帶錨定"
         assert rows[1]["anchors"] == ["m2"], "assistant 行也要帶 —— 它回的就是這顆"
+
+
+# ── Task 5:收束 ────────────────────────────────────────────────────
+def _fixture_source():
+    """用合成樣本,絕不碰真實 stories/。"""
+    return (Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "mini" / "source.md").read_text(encoding="utf-8")
+
+
+def _prime_session(monkeypatch, S, reply):
+    """造一個活著的 session,並讓下一次 run_turn 回傳指定文字。"""
+    import conclusions
+    from server import discuss
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+            yield AssistantMessage(content=[TextBlock(text=reply)], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
+    monkeypatch.setattr(conclusions, "STORIES", S)
+    return discuss
+
+
+def test_distill_writes_conclusions(monkeypatch):
+    import asyncio
+    import conclusions
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text('{"nodes":[]}', encoding="utf-8")
+        (S / "s99" / "source.md").write_text(_fixture_source(), encoding="utf-8")
+        drafts = '[{"kind":"judgment","text":"收尾太快","refs":["e1"],"quotes":["他把燈關了。"]}]'
+        discuss = _prime_session(monkeypatch, S, drafts)
+
+        async def go():
+            sid = None
+            async for ev in discuss.run_discuss("s99", None, "聊聊結尾"):
+                if ev["event"] == "done":
+                    sid = ev["data"]["session_id"]
+            return await discuss.distill("s99", sid)
+
+        res = asyncio.run(go())
+        assert res["written"] == 1 and res["errors"] == []
+        rows = conclusions.load("s99")
+        assert rows[0]["kind"] == "judgment"
+        assert rows[0]["provenance"]["turns"] == [0, 1], "涵蓋這一局的 transcript 行"
+
+
+def test_distill_rejects_hallucinated_quote(monkeypatch):
+    """收束不是免死金牌 —— 引文照樣要過閘門。"""
+    import asyncio
+    import conclusions
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text('{"nodes":[]}', encoding="utf-8")
+        (S / "s99" / "source.md").write_text(_fixture_source(), encoding="utf-8")
+        drafts = '[{"kind":"judgment","text":"x","refs":[],"quotes":["這句原文裡根本沒有"]}]'
+        discuss = _prime_session(monkeypatch, S, drafts)
+
+        async def go():
+            sid = None
+            async for ev in discuss.run_discuss("s99", None, "聊聊"):
+                if ev["event"] == "done":
+                    sid = ev["data"]["session_id"]
+            return await discuss.distill("s99", sid)
+
+        res = asyncio.run(go())
+        assert res["written"] == 0 and res["errors"], "幻覺引文要被擋"
+        assert conclusions.load("s99") == []
+
+
+def test_distill_needs_live_session(monkeypatch):
+    import asyncio
+    from server import discuss
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        res = asyncio.run(discuss.distill("s99", "not-a-session"))
+        assert res["written"] == 0 and "session" in res["errors"][0]
