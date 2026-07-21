@@ -299,6 +299,18 @@ def test_analysis_fp_missing_file(base):
     assert conclusions.analysis_fp(slug) == "", "沒有 analysis 就沒有指紋,不炸"
 
 
+def test_analysis_fp_survives_read_failure(base):
+    """fix pass 2 / important 1:analysis.json 存在但讀不了(換成目錄 → read_bytes()
+    炸 IsADirectoryError)—— 這個函式現在同時掛在 conclusions.append 與
+    transcript.append 兩條明文承諾絕不拋例外的熱路徑上,不能真的炸出去。
+    沒有指紋跟『沒有 analysis.json』一樣,是『無從指紋』,不是錯誤。"""
+    slug, b = base
+    p = b / "analysis.json"
+    p.unlink()
+    p.mkdir()
+    assert conclusions.analysis_fp(slug) == ""
+
+
 # ── append:全過才寫 ─────────────────────────────────────────────────
 def test_append_writes_and_load_reads(base):
     slug, b = base
@@ -315,6 +327,18 @@ def test_append_ids_continue_across_calls(base):
     conclusions.append(slug, [_draft()], session="a", turns=[0, 0])
     conclusions.append(slug, [_draft()], session="b", turns=[1, 1])
     assert [r["id"] for r in conclusions.load(slug)] == ["c0001", "c0002"]
+
+
+def test_append_survives_unreadable_analysis_json(base):
+    """fix pass 2 / important 1 端到端:analysis.json 讀不了不該讓 append() 炸例外——
+    沒有指紋不是全過才寫的『過不了』,只是這條結論的 analysis_fp 是空字串。"""
+    slug, b = base
+    p = b / "analysis.json"
+    p.unlink()
+    p.mkdir()
+    n, errs = conclusions.append(slug, [_draft()], session="a", turns=[0, 0])
+    assert n == 1 and errs == []
+    assert conclusions.load(slug)[0]["provenance"]["analysis_fp"] == ""
 
 
 def test_append_ids_do_not_collide_after_bad_line(base):
@@ -339,7 +363,7 @@ def test_append_ids_do_not_collide_after_bad_line(base):
 
 def test_append_id_derivation_ignores_malformed_id_shapes(base):
     """推導下一個 id 時,既有行裡形狀不對的 id(非字串/缺欄位/尾巴非數字)要被忽略、
-    不炸也不誤算 —— 覆蓋 max() generator 裡 isinstance/isdigit 兩層過濾各自的假分支。"""
+    不炸也不誤算 —— 覆蓋 max() generator 裡 isinstance/isdecimal 兩層過濾各自的假分支。"""
     slug, b = base
     conclusions.append(slug, [_draft()], session="a", turns=[0, 0])   # c0001
     with (b / "conclusions.jsonl").open("a", encoding="utf-8") as f:
@@ -348,6 +372,21 @@ def test_append_id_derivation_ignores_malformed_id_shapes(base):
         f.write(json.dumps({"id": "cXYZ"}) + "\n")               # id 尾巴非數字
 
     conclusions.append(slug, [_draft()], session="b", turns=[1, 1])
+    proper_ids = [r["id"] for r in conclusions.load(slug) if isinstance(r.get("id"), str)]
+    assert proper_ids[-1] == "c0002", f"該從既有最大合法 id(c0001)往下推,實際 {proper_ids}"
+
+
+def test_append_id_derivation_ignores_superscript_digit(base):
+    """fix pass 2 / minor 3:"c²" 這種 id ——"²".isdigit() 回 True 但 int("²") 拒收,
+    用 isdigit() 篩選會讓這個『不炸也不誤算』的 guard 自己拋出未捕捉的 ValueError。
+    上一版的 test_append_id_derivation_ignores_malformed_id_shapes 用的是 "cXYZ",
+    那條走 isdigit()==False 分支,並沒有釘住這個洞 —— 這裡專門補上標數字的變體。"""
+    slug, b = base
+    conclusions.append(slug, [_draft()], session="a", turns=[0, 0])   # c0001
+    with (b / "conclusions.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"id": "c²"}) + "\n")   # "c²":isdigit()==True,isdecimal()==False
+
+    conclusions.append(slug, [_draft()], session="b", turns=[1, 1])   # 不該炸 ValueError
     proper_ids = [r["id"] for r in conclusions.load(slug) if isinstance(r.get("id"), str)]
     assert proper_ids[-1] == "c0002", f"該從既有最大合法 id(c0001)往下推,實際 {proper_ids}"
 

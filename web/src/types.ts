@@ -68,7 +68,7 @@ export type UsageTotal = {
 export type UsageAggregate = {
   slug: string;
   empty: boolean;
-  phases: Record<string, UsagePhase>;   // key ∈ analyst | criticizer | discuss
+  phases: Record<string, UsagePhase>;   // key ∈ analyst | criticizer | discuss | distill
   total: UsageTotal;
   cache_read_ratio: number;
   retry_cost_usd: number;

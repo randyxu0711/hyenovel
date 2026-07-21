@@ -128,6 +128,21 @@ def test_append_stamps_empty_analysis_fp_when_missing():
         assert transcript.load("s99")[0]["analysis_fp"] == ""
 
 
+def test_append_survives_unreadable_analysis_json():
+    """fix pass 2 / important 1:analysis.json 存在但讀不了(換成目錄 →
+    read_bytes() 炸 IsADirectoryError)—— conclusions.analysis_fp() 這行邏輯現在
+    掛在 run_discuss 的 try 之外(:99 之前、:135 之後都不在 try 區塊內),炸出去
+    會逃出 _sse(app.py 沒有 catch-all)讓 SSE 串流當場中斷,還讓這輪的
+    ledger.append 整個蒸發。transcript.append 承諾『記錄失敗不該打斷使用者正在
+    進行的對話』,這裡不能真的炸。"""
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").mkdir()   # 換成目錄,read_bytes() 會 IsADirectoryError
+        transcript.append("s99", "abc", "user", "hi")   # 不該炸
+        row = transcript.load("s99")[0]
+        assert row["analysis_fp"] == ""
+
+
 def test_record_of_does_not_explode_scalar_anchors():
     """minor 5:anchors 給成純量字串(如 "t1")不能被 list() 拆成 ['t','1'] ——
     目前 app._anchors 在 HTTP 邊界擋著只會送 list,但這正是 Task 4 那道閘門被攻破過

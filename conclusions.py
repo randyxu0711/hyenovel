@@ -59,9 +59,17 @@ def load(slug):
 
 def analysis_fp(slug):
     """當時 analysis.json 的 sha1。日後它變了 → 這條結論可能已經懸空。
-    沒有 analysis.json 就回空字串:不是錯誤,是「無從指紋」。"""
+    沒有 analysis.json 就回空字串:不是錯誤,是「無從指紋」。
+    讀取 I/O 失敗(TOCTOU 被 rmtree/換成目錄)也視同「無從指紋」,不炸 ——
+    這個函式現在同時掛在 conclusions.append 與 transcript.append 兩條
+    明文承諾絕不拋例外的熱路徑上,炸例外會讓一次付費討論回合直接蒸發。"""
     p = STORIES / slug / "analysis.json"
-    return hashlib.sha1(p.read_bytes()).hexdigest() if p.exists() else ""
+    if not p.exists():
+        return ""
+    try:
+        return hashlib.sha1(p.read_bytes()).hexdigest()
+    except OSError:
+        return ""
 
 
 def parse_drafts(text):
@@ -165,8 +173,10 @@ def append(slug, drafts, session, turns):
     # id 從既有 id 的最大值往下推,不數 load() 回傳的行數 —— load() 會跳過壞行,
     # 用行數當起點會在中間有壞行時撞號(c0003 重複發兩次),而 P2 的 invalidated_at
     # 是以 id 為 handle,撞號代表作廢一筆會靜默作廢到錯的那筆。
+    # 用 isdecimal() 不用 isdigit():isdigit() 對上標數字(如 "²")也回 True,
+    # 但 int() 拒收,會讓這個「不炸也不誤算」的 guard 自己拋出 ValueError。
     start = max((int(r["id"][1:]) for r in load(slug)
-                 if isinstance(r.get("id"), str) and r["id"][1:].isdigit()), default=0)
+                 if isinstance(r.get("id"), str) and r["id"][1:].isdecimal()), default=0)
     ts = round(time.time(), 3)
     fp = analysis_fp(slug)
     records = [stamp(d, start + i + 1, ts, session, turns, fp) for i, d in enumerate(drafts)]
