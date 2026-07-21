@@ -45,7 +45,7 @@ export default function NodeTalk(
     const patchLast = (fn: (t: string) => string) =>
       setMsgs(m => { const c = [...m]; c[c.length - 1] = { role: "ed", text: fn(c[c.length - 1].text) }; return c; });
     try {
-      for await (const ev of streamDiscuss(slug, sessionId.current, toSend)) {
+      for await (const ev of streamDiscuss(slug, sessionId.current, toSend, [node.id])) {
         if (ev.event === "token") patchLast(t => t + (ev.data.text ?? ""));
         else if (ev.event === "message") { if (ev.data.session_id) sessionId.current = ev.data.session_id; if (ev.data.text) patchLast(t => t || ev.data.text); }
         else if (ev.event === "done") { if (ev.data.session_id) sessionId.current = ev.data.session_id; }

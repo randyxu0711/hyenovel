@@ -49,7 +49,7 @@ export default function Dock(
     const patchLast = (fn: (t: string) => string) =>
       setMsgs(m => { const c = [...m]; c[c.length - 1] = { role: "ed", text: fn(c[c.length - 1].text) }; return c; });
     try {
-      for await (const ev of streamDiscuss(slug, sessionId.current, toSend)) {
+      for await (const ev of streamDiscuss(slug, sessionId.current, toSend, selected ? [selected] : [])) {
         if (ev.event === "token") {
           patchLast(t => t + (ev.data.text ?? ""));
         } else if (ev.event === "message") {

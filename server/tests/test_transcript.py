@@ -162,3 +162,38 @@ def test_discuss_skips_empty_user_message(monkeypatch):
 
         rows = transcript.load("s99")
         assert [r["role"] for r in rows] == ["assistant"], "只有開場白,沒有空的 user 行"
+
+
+# ── Task 3:anchors 端到端 ──────────────────────────────────────────
+def test_discuss_records_anchors(monkeypatch):
+    """節點錨定要落成結構化欄位,不能只塞在散文裡 —— P2 的 recall 靠它。"""
+    import asyncio
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+    from server import discuss
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="嗯。")], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
+
+        async def go():
+            return [ev async for ev in discuss.run_discuss("s99", None, "這顆呢", anchors=["m2"])]
+
+        asyncio.run(go())
+
+        rows = transcript.load("s99")
+        assert rows[0]["anchors"] == ["m2"], "user 行要帶錨定"
+        assert rows[1]["anchors"] == ["m2"], "assistant 行也要帶 —— 它回的就是這顆"

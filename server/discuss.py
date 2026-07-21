@@ -60,7 +60,7 @@ async def sweep_idle():
             await close_session(sid)
 
 
-async def run_discuss(slug: str, session_id: str | None, message: str):
+async def run_discuss(slug: str, session_id: str | None, message: str, anchors=()):
     if not (config.STORIES / slug / "analysis.json").exists():
         yield {"event": "error", "data": {"where": "input",
                "message": f"{slug} 還沒分析,先跑 critique", "recoverable": False}}
@@ -94,7 +94,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
         # 寫 message 而非 prompt:新 session 的 prompt 前面接了 /story-discuss 的引導,
         # 那是系統加的,不是使用者說的話。
         if message.strip():
-            transcript.append(slug, sid, "user", message)
+            transcript.append(slug, sid, "user", message, anchors)
         final, cost = "", 0.0
         res_usage = res_model = res_dur = res_nt = None
         try:
@@ -124,7 +124,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()
-        transcript.append(slug, sid, "assistant", final)
+        transcript.append(slug, sid, "assistant", final, anchors)
         ledger.append(slug, "discuss", 0, sdk_runner.TurnResult(
             text=final, cost=cost, is_error=False, usage=res_usage,
             model_usage=res_model, duration_ms=res_dur, num_turns=res_nt))
