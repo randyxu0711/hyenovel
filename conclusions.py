@@ -115,6 +115,11 @@ def validate(records, source):
         if not isinstance(quotes, list):
             continue  # 型別錯已經由上面的 schema 檢查擋下;這裡不逐字迭代非陣列值
         for q in quotes:
+            if not isinstance(q, str):
+                # list 裡混了非字串元素(如 [123]):schema 會擋,但這裡不能拿它去
+                # 呼叫 viz.locate 而炸例外 —— 誠實記一筆型別錯,不悄悄跳過。
+                errors.append(f"{rid}: quotes 裡有非字串元素「{q!r}」")
+                continue
             if viz.locate(q, source) is None:
                 errors.append(f"{rid}: 原文中找不到這句引用「{q[:20]}」")
     return errors

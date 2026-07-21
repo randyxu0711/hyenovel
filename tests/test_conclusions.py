@@ -167,6 +167,19 @@ def test_validate_does_not_crash_on_malformed_quotes(base):
     assert errs, "quotes 型別錯,schema 閘門要有意見"
 
 
+def test_validate_rejects_non_string_quote_element(base):
+    """quotes 是 list 但裡面混了非字串元素(如 [123])—— LLM 自由文字輸出完全可能吐出
+    這種形狀。viz.locate 需要字串,拿非字串去呼叫會炸 AttributeError;validate() 必須
+    在呼叫前擋下,誠實記一筆錯誤,而不是讓 append() 炸穿到呼叫者(下一個 task 是
+    server/discuss.py 的 distill())。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    r["quotes"] = [123]
+    errs = conclusions.validate([r], src)  # 不炸就是過
+    assert errs and any("非字串" in e for e in errs)
+
+
 def test_validate_allows_empty_quotes(base):
     """有些結論(尤其 question)本來就沒有可引的句子 —— 不強迫湊。"""
     slug, b = base
