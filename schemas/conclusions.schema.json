@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyenovel/conclusions.schema.json",
+  "title": "hyenovel discussion conclusion",
+  "description": "討論蒸餾出的單筆結論(conclusions.jsonl 一行一筆)。kind 驅動觀察/判斷隔離閘門:observation 可餵 analyst 層,judgment/question 只能餵 criticizer/discuss。欄位叫 kind 不叫 type 是刻意的 —— type 已是 analysis node/edge 的欄位名。refs 綁 analysis.json 的 node id,quotes 為逐字原文(必須能在 source.md 定位)。id/ts/provenance/valid_from 由確定性層蓋章,LLM 不得自填。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "ts", "kind", "text", "refs", "quotes", "provenance", "valid_from", "invalidated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^c[0-9]{4,}$"},
+    "ts": {"type": "number"},
+    "kind": {"enum": ["observation", "judgment", "question"]},
+    "text": {"type": "string", "minLength": 1},
+    "refs": {"type": "array", "items": {"type": "string"}},
+    "quotes": {"type": "array", "items": {"type": "string"}},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session", "turns", "analysis_fp"],
+      "properties": {
+        "session": {"type": "string"},
+        "turns": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+        "analysis_fp": {"type": "string"}
+      }
+    },
+    "valid_from": {"type": "number"},
+    "invalidated_at": {"type": ["number", "null"]}
+  }
+}
