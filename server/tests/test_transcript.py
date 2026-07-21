@@ -6,21 +6,29 @@ import logging
 import tempfile
 from pathlib import Path
 
+import conclusions
+
 from server import config, transcript
 
 logging.getLogger("hyenovel").addHandler(logging.NullHandler())
 
 
 class _tmp_stories:
-    """把 config.STORIES 指到臨時空目錄,離開還原;transcript 於呼叫時讀 config.STORIES,故生效。"""
+    """把 config.STORIES 指到臨時空目錄,離開還原;transcript 於呼叫時讀 config.STORIES,故生效。
+    同時把 conclusions.STORIES 指到同一個目錄 —— transcript.append() 現在會呼叫
+    conclusions.analysis_fp(slug) 幫每一行蓋指紋,兩邊沒指到同一處,測試看到的
+    analysis.json 就會是別的東西(甚至是真實 stories/ 底下的),而不是這個臨時故事的。"""
     def __enter__(self):
         self._t = tempfile.TemporaryDirectory()
         self._orig = config.STORIES
+        self._orig_c = conclusions.STORIES
         config.STORIES = Path(self._t.name)
+        conclusions.STORIES = Path(self._t.name)
         return config.STORIES
 
     def __exit__(self, *a):
         config.STORIES = self._orig
+        conclusions.STORIES = self._orig_c
         self._t.cleanup()
 
 
@@ -89,7 +97,43 @@ def test_session_range_picks_that_session_only():
     rows = [{"session": "a"}, {"session": "b"}, {"session": "a"}, {"session": "b"}]
     assert transcript.session_range(rows, "a") == [0, 2]
     assert transcript.session_range(rows, "b") == [1, 3]
-    assert transcript.session_range(rows, "zzz") == [0, 0], "沒有該 session 回退化區間"
+    assert transcript.session_range(rows, "zzz") == [-1, -1], (
+        "minor 6:沒有該 session 要回自明為空的 [-1,-1],不能是 [0,0] —— "
+        "[0,0] 跟『這個 session 剛好只涵蓋第 0 行』無法區分")
+
+
+def test_record_of_includes_analysis_fp():
+    """important 3:transcript 每一行都要帶當時 analysis.json 的指紋,不能只有裸的 node id ——
+    node id 會在每次 re-analyze 被重鑄,沒有指紋就無從偵測『這個錨定已經懸空』。"""
+    r = transcript.record_of("s", "user", "text", ["t1"], "deadbeef")
+    assert r["analysis_fp"] == "deadbeef"
+
+
+def test_append_stamps_analysis_fp_from_conclusions():
+    """端到端:append() 要重用 conclusions.analysis_fp(),不是自己重算一份指紋邏輯。"""
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text('{"nodes":[]}', encoding="utf-8")
+        transcript.append("s99", "abc", "user", "hi")
+        row = transcript.load("s99")[0]
+        assert row["analysis_fp"] == conclusions.analysis_fp("s99")
+        assert row["analysis_fp"] != "", "有 analysis.json 就該有非空指紋"
+
+
+def test_append_stamps_empty_analysis_fp_when_missing():
+    """還沒跑過 critique(沒有 analysis.json)—— 指紋是空字串,不是錯誤也不炸。"""
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        transcript.append("s99", "abc", "user", "hi")
+        assert transcript.load("s99")[0]["analysis_fp"] == ""
+
+
+def test_record_of_does_not_explode_scalar_anchors():
+    """minor 5:anchors 給成純量字串(如 "t1")不能被 list() 拆成 ['t','1'] ——
+    目前 app._anchors 在 HTTP 邊界擋著只會送 list,但這正是 Task 4 那道閘門被攻破過
+    三次的同一個形狀:第二個呼叫端(終端機捕獲、P2)一出現就會直接餵純量。"""
+    r = transcript.record_of("s", "user", "text", "t1", "fp")
+    assert r["anchors"] == "t1", "原樣照抄,不被拆成單字元陣列"
 
 
 # ── Task 2:接線 discuss ────────────────────────────────────────────
@@ -129,6 +173,48 @@ def test_discuss_captures_both_sides(monkeypatch):
         assert rows[0]["text"] == "結尾收太快了", "使用者原話要留原話,不是加工過的 prompt"
         assert rows[1]["text"] == "關燈那句確實收得急。"
         assert rows[0]["session"] == rows[1]["session"], "同一輪同一個 session id"
+
+
+def test_discuss_captures_all_text_blocks_in_a_turn(monkeypatch):
+    """important 2:一輪可能有不只一個 AssistantMessage(discuss client 是
+    allowed_tools=["Read"],開場的 /story-discuss skill 會讀 analysis/feedback/source,
+    讀檔前後常各自帶一段文字)。原本『final = b.text』是覆寫不是累積,只有最後一個
+    TextBlock 進得了 transcript —— 但使用者透過 token 串流兩句都看到了,逐字正本卻
+    悄悄丟掉前面那句。"""
+    import asyncio
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+    from server import discuss
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="我先讀一下原文。")], model="m")
+            yield AssistantMessage(content=[TextBlock(text="關燈那句確實收得急。")], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
+
+        async def go():
+            return [ev async for ev in discuss.run_discuss("s99", None, "結尾如何")]
+
+        asyncio.run(go())
+
+        rows = transcript.load("s99")
+        assistant_rows = [r for r in rows if r["role"] == "assistant"]
+        assert len(assistant_rows) == 1, "還是一輪一行,不是每個 block 各起一行"
+        text = assistant_rows[0]["text"]
+        assert "我先讀一下原文。" in text, "第一個 TextBlock 不能被第二個悄悄覆寫掉"
+        assert "關燈那句確實收得急。" in text
 
 
 def test_discuss_skips_empty_user_message(monkeypatch):

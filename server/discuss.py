@@ -97,7 +97,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
         # 那是系統加的,不是使用者說的話。
         if message.strip():
             transcript.append(slug, sid, "user", message, anchors)
-        final, cost = "", 0.0
+        final_parts, cost = [], 0.0
         res_usage = res_model = res_dur = res_nt = None
         try:
             await sess.client.query(prompt)
@@ -107,9 +107,14 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
                     if txt:
                         yield {"event": "token", "data": {"text": txt}}
                 elif isinstance(m, AssistantMessage):
+                    # 收集全部 TextBlock 再串接 —— 一輪可能有超過一個 AssistantMessage
+                    # (討論 client 是 allowed_tools=["Read"],開場的 /story-discuss skill
+                    # 會先讀 analysis/feedback/source,讀檔前後常各自帶一段文字)。
+                    # 只留最後一個會讓「逐字捕獲」名不符實:使用者透過 token 串流全看到了,
+                    # 正本卻悄悄丟掉前面幾句。
                     for b in m.content:
                         if isinstance(b, TextBlock):
-                            final = b.text
+                            final_parts.append(b.text)
                 elif isinstance(m, ResultMessage):
                     cost = sdk_runner.turn_cost(sess.client, m.total_cost_usd)
                     res_usage, res_model = m.usage, m.model_usage
@@ -126,6 +131,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()
+        final = "".join(final_parts)
         transcript.append(slug, sid, "assistant", final, anchors)
         ledger.append(slug, "discuss", 0, sdk_runner.TurnResult(
             text=final, cost=cost, is_error=False, usage=res_usage,
