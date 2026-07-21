@@ -166,7 +166,7 @@ export default function UsageMap(
     {/* ── 星塵:散在黑暗裡,不裝盒子 ── */}
     <div className="udust ud-tl">
       <div className="ud-lab">花在哪格</div>
-      {["analyst", "criticizer"].filter(k => ph(k)).map(k => (
+      {["analyst", "criticizer", "distill"].filter(k => ph(k)).map(k => (
         <div className="ud-row" key={k}>
           <span className="ud-key">{k}</span>
           <span className="ud-track">

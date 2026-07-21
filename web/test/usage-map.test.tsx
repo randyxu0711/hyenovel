@@ -100,6 +100,17 @@ describe("UsageMap", () => {
     expect(getByText("71%")).toBeTruthy();                            // cache
   });
 
+  it("important 4:distill 有花費時也要上星塵『花在哪格』,不能只算進中心總額", async () => {
+    const withDistill = {
+      ...ALL,
+      phases: { ...ALL.phases, distill: { input: 1, output: 200, cache_creation: 0, cache_read: 0, cost_usd: 0.09, turns: 2 } },
+    };
+    const { getByText } = setup(withDistill);
+    await waitFor(() => expect(getByText("$2.71")).toBeTruthy());
+    expect(getByText("distill")).toBeTruthy();
+    expect(getByText("$0.09")).toBeTruthy();
+  });
+
   it("還沒討論過 → 不秀 0%,秀零態", async () => {
     const noDiscuss = { ...ALL, phases: { analyst: ALL.phases.analyst, criticizer: ALL.phases.criticizer } };
     const { getByText, queryByText } = setup(noDiscuss);
