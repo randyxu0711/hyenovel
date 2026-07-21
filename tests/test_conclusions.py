@@ -82,6 +82,22 @@ def test_stamp_tolerates_missing_draft_fields():
     assert r["kind"] is None and r["refs"] == [] and r["quotes"] == []
 
 
+def test_stamp_does_not_explode_scalar_quotes():
+    """critical:quotes 給成純量字串(LLM 格式失手)不能被 list() 拆成單字元陣列 ——
+    那樣每個單字元都會輕易通過 viz.locate,一句捏造引文就混進正本。
+    形狀錯要原樣照抄,讓 schema 閘門(quotes 必須是 array)誠實地擋下。"""
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": ["e1"],
+                            "quotes": "他等他。"}, idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    assert r["quotes"] == "他等他。", "原樣照抄,不被 list() 拆成 ['他','等','他','。']"
+
+
+def test_stamp_does_not_explode_scalar_refs():
+    """important:refs 給成純量字串同樣不能被 list() 拆成單字元 node id。"""
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": "e1",
+                            "quotes": []}, idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    assert r["refs"] == "e1", "原樣照抄,不被 list() 拆成 ['e','1']"
+
+
 # ── validate:兩道閘門 ───────────────────────────────────────────────
 def test_validate_accepts_good_record(base):
     slug, b = base
@@ -106,6 +122,49 @@ def test_validate_rejects_hallucinated_quote(base):
                           session="a", turns=[0, 0], fp="f")
     errs = conclusions.validate([r], src)
     assert errs and "找不到" in errs[0]
+
+
+def test_validate_rejects_scalar_quotes(base):
+    """critical 端到端:quotes 給成純量字串,經 stamp() 誠實照抄後,要被 schema 閘門擋下 ——
+    而不是被拆成單字元陣列後每個字都通過 viz.locate。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": ["e1"], "quotes": "他等他。"},
+                          idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs, "純量字串 quotes 必須被擋下,不能悄悄放行"
+    assert not any("找不到" in e for e in errs), "不該退化成逐字比對,應該是型別錯"
+
+
+def test_validate_rejects_scalar_refs(base):
+    """important 端到端:refs 給成純量字串,經 stamp() 誠實照抄後要被 schema 擋下。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": "e1", "quotes": []},
+                          idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs and any("refs" in e for e in errs)
+
+
+def test_validate_rejects_empty_quote_string(base):
+    """minor 1:schema 對 quotes 的每一項要求 minLength 1 ——
+    否則 "" 會因為 viz.locate("", source) 永遠回 (0,0) 而被誤判定位成功。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(quotes=("",)), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs and any("quotes" in e for e in errs)
+
+
+def test_validate_does_not_crash_on_malformed_quotes(base):
+    """minor 2:validate() 是公開介面,下一個呼叫者(server/discuss.py)不一定會先過 stamp()。
+    餵進畸形 quotes(None)不該讓 for 迴圈拋未捕捉的 TypeError,應該回一份錯誤清單。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    r["quotes"] = None
+    errs = conclusions.validate([r], src)  # 不炸就是過
+    assert errs, "quotes 型別錯,schema 閘門要有意見"
 
 
 def test_validate_allows_empty_quotes(base):

@@ -70,17 +70,31 @@ def parse_drafts(text):
     return data, None
 
 
+def _as_list(v):
+    """草稿裡本該是陣列的欄位(refs/quotes)正規化用。
+    是 list/tuple 才轉成 list;沒給(None)補空陣列;其餘型別(尤其是字串)原樣照抄,
+    丟給 schema 閘門去擋 —— 絕不用 list() 硬轉,那會把字串拆成單字元陣列,
+    讓一句捏造的引文悄悄變成看起來合法的東西。"""
+    if v is None:
+        return []
+    if isinstance(v, (list, tuple)):
+        return list(v)
+    return v
+
+
 def stamp(draft, idx, ts, session, turns, fp):
     """把四欄草稿蓋成完整 record(純函式)。
-    草稿缺欄位不在這裡炸 —— 留給 schema 閘門去報一個看得懂的錯。"""
+    草稿缺欄位不在這裡炸 —— 留給 schema 閘門去報一個看得懂的錯。
+    但「形狀錯」(比如 quotes 給成純量字串)也一樣留給 schema 閘門去擋,
+    不在這裡悄悄重塑成看起來合法的陣列。"""
     d = draft if isinstance(draft, dict) else {}
     return {
         "id": f"c{idx:04d}",
         "ts": ts,
         "kind": d.get("kind"),
         "text": d.get("text"),
-        "refs": list(d.get("refs") or []),
-        "quotes": list(d.get("quotes") or []),
+        "refs": _as_list(d.get("refs")),
+        "quotes": _as_list(d.get("quotes")),
         "provenance": {"session": session, "turns": list(turns), "analysis_fp": fp},
         "valid_from": ts,
         "invalidated_at": None,
@@ -97,7 +111,10 @@ def validate(records, source):
         for e in sorted(validator.iter_errors(r), key=lambda x: list(x.path)):
             path = "/".join(str(p) for p in e.path) or "(root)"
             errors.append(f"{rid} [{path}]: {e.message}")
-        for q in r.get("quotes", []):
+        quotes = r.get("quotes", [])
+        if not isinstance(quotes, list):
+            continue  # 型別錯已經由上面的 schema 檢查擋下;這裡不逐字迭代非陣列值
+        for q in quotes:
             if viz.locate(q, source) is None:
                 errors.append(f"{rid}: 原文中找不到這句引用「{q[:20]}」")
     return errors
