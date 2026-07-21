@@ -156,6 +156,28 @@ def test_validate_rejects_empty_quote_string(base):
     assert errs and any("quotes" in e for e in errs)
 
 
+def test_validate_rejects_whitespace_only_quote(base):
+    """important(Fix pass 3):minLength 1 擋得住字面空字串,但擋不住 " " 這種
+    全是空白字元的引文 —— viz.locate 的第三層(忽略空白)把非空白字元組 pattern,
+    引文全是空白時 generator 為空 → 組出空 pattern → 在位置 0 無條件命中,等於
+    「定位成功」。schema 補 pattern: \\S(至少一個非空白字元)在這道之前擋下。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(quotes=(" ",)), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs and any("quotes" in e for e in errs)
+    assert not any("找不到" in e for e in errs), "不該退化成逐字比對後才發現,應該是 schema 型別/格式錯"
+
+
+def test_validate_rejects_fullwidth_whitespace_quote(base):
+    """同上,全形空白(U+3000)也是空白字元,一樣要被擋。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(quotes=("　",)), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs and any("quotes" in e for e in errs)
+
+
 def test_validate_does_not_crash_on_malformed_quotes(base):
     """minor 2:validate() 是公開介面,下一個呼叫者(server/discuss.py)不一定會先過 stamp()。
     餵進畸形 quotes(None)不該讓 for 迴圈拋未捕捉的 TypeError,應該回一份錯誤清單。"""
@@ -178,6 +200,62 @@ def test_validate_rejects_non_string_quote_element(base):
     r["quotes"] = [123]
     errs = conclusions.validate([r], src)  # 不炸就是過
     assert errs and any("非字串" in e for e in errs)
+
+
+def test_validate_rejects_mixed_type_quotes_list(base):
+    """quotes 是 list,裡面一個合法引文混一個非字串 —— 確認不會因為前面有合法元素
+    就整批誤放行,也不會在處理到非字串元素時炸例外。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    r["quotes"] = [SOURCE_QUOTE, 123]
+    errs = conclusions.validate([r], src)  # 不炸就是過
+    assert errs and any("非字串" in e for e in errs)
+
+
+def test_validate_rejects_nested_list_quotes(base):
+    """quotes 裡的元素本身是 list(如 [["他把燈關了。"]])—— 巢狀形狀一樣不是字串,
+    不能被拿去呼叫 viz.locate,要被誠實地記一筆型別錯,不能被輕易「定位成功」。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    r["quotes"] = [[SOURCE_QUOTE]]
+    errs = conclusions.validate([r], src)  # 不炸就是過
+    assert errs and any("非字串" in e for e in errs)
+    assert not any("找不到" in e for e in errs), "不該退化成逐字比對"
+
+
+def test_validate_rejects_dict_shaped_quotes(base):
+    """quotes 給成 dict(形狀完全錯,既不是純量也不是陣列)—— stamp() 的 _as_list()
+    對非 list/tuple 原樣照抄,dict 會抵達這裡,schema 的 array 型別要擋下。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": ["e1"],
+                            "quotes": {"q": SOURCE_QUOTE}},
+                          idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)  # 不炸就是過
+    assert errs and any("quotes" in e for e in errs)
+
+
+def test_validate_rejects_nested_list_refs(base):
+    """refs 同根因:元素是 list(如 [["e1"]])一樣要被 schema 擋下,不是被 list()
+    拆開或悄悄接受。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": [["e1"]], "quotes": []},
+                          idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs and any("refs" in e for e in errs)
+
+
+def test_validate_rejects_dict_shaped_refs(base):
+    """refs 給成 dict —— 同樣原樣照抄後由 schema 擋下。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp({"kind": "judgment", "text": "x", "refs": {"r": "e1"}, "quotes": []},
+                          idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src)
+    assert errs and any("refs" in e for e in errs)
 
 
 def test_validate_allows_empty_quotes(base):

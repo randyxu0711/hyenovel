@@ -133,6 +133,8 @@ def append(slug, drafts, session, turns):
     if not (base / "source.md").exists():
         return 0, [f"{slug} 不存在或沒有 source.md"]
     source = (base / "source.md").read_text(encoding="utf-8")
+    # read-then-write 配 id,無鎖:假設單一 session 循序呼叫(目前唯一呼叫者)。
+    # Task 5 接線 server/discuss.py 後若出現並發呼叫,這裡需要重新設計。
     start = len(load(slug))
     ts = round(time.time(), 3)
     fp = analysis_fp(slug)
