@@ -21,7 +21,7 @@ export default function Dock(
 
   // 換故事 → 整局重置(舊 session 由後端 sweep_idle 回收)
   useEffect(() => {
-    setMsgs([]); setInput(""); setBusy(false);
+    setMsgs([]); setInput(""); setBusy(false); setKept("");
     sessionId.current = null; anchored.current = null;
   }, [slug]);
 
