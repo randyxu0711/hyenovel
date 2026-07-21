@@ -17,7 +17,7 @@ from claude_agent_sdk import (
     ClaudeSDKClient, AssistantMessage, TextBlock, StreamEvent, ResultMessage,
 )
 
-from . import config, ledger, sdk_runner
+from . import config, ledger, sdk_runner, transcript
 from .log import log
 
 
@@ -90,6 +90,11 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
 
     async with sess.lock:
         sess.last_active = time.time()
+        # 逐輪寫,不等 session 結束 —— sweep_idle 是把它掃掉,沒有結束事件可以掛。
+        # 寫 message 而非 prompt:新 session 的 prompt 前面接了 /story-discuss 的引導,
+        # 那是系統加的,不是使用者說的話。
+        if message.strip():
+            transcript.append(slug, sid, "user", message)
         final, cost = "", 0.0
         res_usage = res_model = res_dur = res_nt = None
         try:
@@ -119,6 +124,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()
+        transcript.append(slug, sid, "assistant", final)
         ledger.append(slug, "discuss", 0, sdk_runner.TurnResult(
             text=final, cost=cost, is_error=False, usage=res_usage,
             model_usage=res_model, duration_ms=res_dur, num_turns=res_nt))

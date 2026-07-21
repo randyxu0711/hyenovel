@@ -90,3 +90,75 @@ def test_session_range_picks_that_session_only():
     assert transcript.session_range(rows, "a") == [0, 2]
     assert transcript.session_range(rows, "b") == [1, 3]
     assert transcript.session_range(rows, "zzz") == [0, 0], "沒有該 session 回退化區間"
+
+
+# ── Task 2:接線 discuss ────────────────────────────────────────────
+def test_discuss_captures_both_sides(monkeypatch):
+    """跑一輪討論 → transcript 同時有 user 與 assistant。
+    這是接線前最大的洞:ledger 只留 assistant 的成本,使用者說了什麼完全沒保存。"""
+    import asyncio
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+    from server import discuss
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            self.prompt = prompt
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="關燈那句確實收得急。")], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
+
+        async def go():
+            return [ev async for ev in discuss.run_discuss("s99", None, "結尾收太快了")]
+
+        asyncio.run(go())
+
+        rows = transcript.load("s99")
+        roles = [r["role"] for r in rows]
+        assert roles == ["user", "assistant"], f"該一問一答各一行,實際 {roles}"
+        assert rows[0]["text"] == "結尾收太快了", "使用者原話要留原話,不是加工過的 prompt"
+        assert rows[1]["text"] == "關燈那句確實收得急。"
+        assert rows[0]["session"] == rows[1]["session"], "同一輪同一個 session id"
+
+
+def test_discuss_skips_empty_user_message(monkeypatch):
+    """開場沒帶訊息(只點開討論)不該產生一行空的 user 記錄。"""
+    import asyncio
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+    from server import discuss
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="我們從孤兒技法聊起?")], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
+
+        async def go():
+            return [ev async for ev in discuss.run_discuss("s99", None, "")]
+
+        asyncio.run(go())
+
+        rows = transcript.load("s99")
+        assert [r["role"] for r in rows] == ["assistant"], "只有開場白,沒有空的 user 行"
