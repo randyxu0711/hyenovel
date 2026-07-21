@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { streamDiscuss } from "../data/client";
+import { distillDiscuss, streamDiscuss } from "../data/client";
 import type { VizData } from "../types";
 
 const CN: Record<string, string> = { technique: "技法", effect: "效果", theme: "主題", motif: "意象", beat: "節拍", character: "角色" };
@@ -14,6 +14,7 @@ export default function Dock(
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kept, setKept] = useState<string>("");     // 收束結果的一行回報
   const sessionId = useRef<string | null>(null);   // 後端在 done/message 回傳,續局用
   const anchored = useRef<string | null>(null);     // 上次已對後端聲明的節點,避免每輪重貼
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -68,6 +69,19 @@ export default function Dock(
     }
   }
 
+  // 明示收束:蒸餾時機是判斷題,v1 由使用者說「這段聊完了」,不自動猜。
+  async function keep() {
+    if (!sessionId.current || busy) return;
+    setBusy(true);
+    setKept("收束中…");
+    try {
+      const r = await distillDiscuss(slug, sessionId.current);
+      setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
+    } catch (e) {
+      setKept(`收束失敗:${String(e instanceof Error ? e.message : e)}`);
+    } finally { setBusy(false); }
+  }
+
   if (!open) return <button className="dock-tab" onClick={() => setOpen(true)}>編輯 · 討論</button>;
 
   return (
@@ -112,6 +126,13 @@ export default function Dock(
             </div>
           ))}
         </div>}
+
+        {msgs.length > 0 && (
+          <div className="dock-keep">
+            <button type="button" onClick={keep} disabled={busy || !sessionId.current}>留下結論</button>
+            {kept && <span className="dock-kept">{kept}</span>}
+          </div>
+        )}
       </div>
 
       <form className="dock-compose" onSubmit={e => { e.preventDefault(); send(); }}>
