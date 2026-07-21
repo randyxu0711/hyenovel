@@ -66,6 +66,20 @@ def test_parse_drafts_rejects_non_array():
     assert got == [] and err is not None and "陣列" in err
 
 
+def test_parse_drafts_strips_leading_preamble():
+    """minor 9:LLM 有時會在 JSON 陣列前加一句開場白(「以下是結論:」)——
+    跟圍欄一樣可以預期會發生,不該燒一次付費回合換回一句「不是合法 JSON」。"""
+    got, err = conclusions.parse_drafts('以下是結論:\n[{"kind":"judgment","text":"x"}]')
+    assert err is None and got == [{"kind": "judgment", "text": "x"}]
+
+
+def test_parse_drafts_rejects_non_json_even_with_brackets():
+    """退化保護:就算文字裡剛好有 [ ] ,切出來的東西還是壞 JSON 就老實回錯,
+    不能半信半疑放行成看起來合法的東西。"""
+    got, err = conclusions.parse_drafts("我覺得 [這篇] 收尾太快了。")
+    assert got == [] and err is not None and "JSON" in err
+
+
 # ── stamp:確定性層蓋章 ──────────────────────────────────────────────
 def test_stamp_fills_all_derived_fields():
     r = conclusions.stamp(_draft(), idx=3, ts=100.0, session="abc", turns=[0, 4], fp="deadbeef")
@@ -303,6 +317,41 @@ def test_append_ids_continue_across_calls(base):
     assert [r["id"] for r in conclusions.load(slug)] == ["c0001", "c0002"]
 
 
+def test_append_ids_do_not_collide_after_bad_line(base):
+    """important 1 核心重現:append-only 正本原本用『可解析行數』當下一個 id 的起點——
+    但 load() 會刻意跳過壞行,兩者自相矛盾。實測:c0001/c0002/c0003 寫好後,
+    中間那行(c0002)壞掉,下一次 append 若照行數推算會再吐一次 c0003,跟既有的撞號。
+    P2 的 invalidated_at 是以 id 為 handle,撞號代表作廢一筆會靜默作廢到錯的那筆。"""
+    slug, b = base
+    conclusions.append(slug, [_draft()], session="a", turns=[0, 0])   # c0001
+    conclusions.append(slug, [_draft()], session="a", turns=[0, 0])   # c0002
+    conclusions.append(slug, [_draft()], session="a", turns=[0, 0])   # c0003
+
+    p = b / "conclusions.jsonl"
+    lines = p.read_text(encoding="utf-8").splitlines()
+    lines[1] = "{壞掉的第二行"     # 讓 c0002 那行壞掉(load() 會跳過它)
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    conclusions.append(slug, [_draft()], session="b", turns=[1, 1])
+    ids = [r["id"] for r in conclusions.load(slug)]
+    assert ids == ["c0001", "c0003", "c0004"], f"id 不能撞號,實際 {ids}"
+
+
+def test_append_id_derivation_ignores_malformed_id_shapes(base):
+    """推導下一個 id 時,既有行裡形狀不對的 id(非字串/缺欄位/尾巴非數字)要被忽略、
+    不炸也不誤算 —— 覆蓋 max() generator 裡 isinstance/isdigit 兩層過濾各自的假分支。"""
+    slug, b = base
+    conclusions.append(slug, [_draft()], session="a", turns=[0, 0])   # c0001
+    with (b / "conclusions.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"id": 123, "other": "id 非字串"}) + "\n")
+        f.write(json.dumps({"note": "缺 id 欄位"}) + "\n")
+        f.write(json.dumps({"id": "cXYZ"}) + "\n")               # id 尾巴非數字
+
+    conclusions.append(slug, [_draft()], session="b", turns=[1, 1])
+    proper_ids = [r["id"] for r in conclusions.load(slug) if isinstance(r.get("id"), str)]
+    assert proper_ids[-1] == "c0002", f"該從既有最大合法 id(c0001)往下推,實際 {proper_ids}"
+
+
 def test_append_all_or_nothing(base):
     """一筆壞 → 整批不寫。半套寫入的正本比沒寫更難救。"""
     slug, b = base
@@ -346,3 +395,43 @@ def test_non_ascii_not_escaped(base):
     conclusions.append(slug, [_draft(text="月光反覆出現")], session="a", turns=[0, 0])
     raw = (b / "conclusions.jsonl").read_text(encoding="utf-8")
     assert "月光反覆出現" in raw, "中文不該被轉義 —— 這份檔人也會打開看"
+
+
+# ── minor 8:I/O 失敗要吞掉,不能讓磁碟錯誤冒成 500(與 ledger/transcript 同款一致性)──
+def test_load_survives_read_failure(base):
+    """把檔案路徑換成目錄 → read_text() 炸 IsADirectoryError(OSError 子類);
+    load() 要跟壞行一樣吞掉,回 []。"""
+    slug, b = base
+    (b / "conclusions.jsonl").mkdir()
+    assert conclusions.load(slug) == []
+
+
+def test_validate_survives_schema_read_failure(base):
+    """schema 檔本身讀不到(磁碟錯誤/被換成目錄)不該讓 validate() 炸例外,
+    要老實回一筆錯誤 —— 全過才寫的語意下,這等於這批全部不放行。"""
+    slug, b = base
+    root = b.parent.parent   # 對應 base fixture monkeypatch 的 conclusions.ROOT
+    schema_path = root / "schemas" / "conclusions.schema.json"
+    schema_path.unlink()
+    schema_path.mkdir()
+    errs = conclusions.validate([], "隨便的原文")
+    assert errs and "schema" in errs[0]
+
+
+def test_append_survives_source_read_failure(base):
+    """source.md 存在(exists() 為真)但讀不了(換成目錄)—— 跟『不存在』是不同分支,
+    也要老實回錯,不能讓 IsADirectoryError 冒穿到呼叫端(server/discuss.py 的 distill)。"""
+    slug, b = base
+    src = b / "source.md"
+    src.unlink()
+    src.mkdir()
+    n, errs = conclusions.append(slug, [_draft()], session="a", turns=[0, 0])
+    assert n == 0 and errs and "source.md" in errs[0]
+
+
+def test_append_survives_write_failure(base):
+    """寫入那一步(open('a') 落地)失敗也要老實回錯,不炸例外 —— 磁碟滿/權限的情境。"""
+    slug, b = base
+    (b / "conclusions.jsonl").mkdir()   # open("a") 對目錄會炸 IsADirectoryError
+    n, errs = conclusions.append(slug, [_draft()], session="a", turns=[0, 0])
+    assert n == 0 and errs and "寫入失敗" in errs[0]

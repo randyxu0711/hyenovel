@@ -14,6 +14,7 @@ LLM 只交出 kind/text/refs/quotes 四欄草稿,id / ts / provenance / valid_fr
 """
 import hashlib
 import json
+import logging
 import time
 from pathlib import Path
 
@@ -24,18 +25,28 @@ import viz
 ROOT = Path(__file__).resolve().parent
 STORIES = ROOT / "stories"
 
+# 用跟 server/log.py 一樣的 logger 名字("hyenovel")—— logging 用全域名字查表,
+# 不需要真的 import server 套件(conclusions.py 是根層模組,server/ 才反過來 import 它)。
+log = logging.getLogger("hyenovel")
+
 
 def _path(slug):
     return STORIES / slug / "conclusions.jsonl"
 
 
 def load(slug):
-    """讀該篇所有結論;檔不存在回 [];壞行跳過(一行壞不讓整份讀不了)。"""
+    """讀該篇所有結論;檔不存在回 [];壞行跳過(一行壞不讓整份讀不了)。
+    讀取 I/O 失敗(TOCTOU 被 rmtree/換成目錄)也吞掉,回 []。"""
     p = _path(slug)
     if not p.exists():
         return []
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError as e:
+        log.warning(f"event=conclusions-load-fail slug={slug} err={type(e).__name__}")
+        return []
     out = []
-    for ln in p.read_text(encoding="utf-8").splitlines():
+    for ln in text.splitlines():
         ln = ln.strip()
         if not ln:
             continue
@@ -64,7 +75,17 @@ def parse_drafts(text):
     try:
         data = json.loads(s)
     except json.JSONDecodeError:
-        return [], "收束回應不是合法 JSON"
+        # 圍欄之外,LLM 偶爾會加一句開場白(「以下是結論:」)才接 JSON 陣列——
+        # 跟圍欄一樣可以預期會發生,不該燒掉一次付費回合換來一句「不是合法 JSON」。
+        # 退而求其次:切出第一個 [ 到最後一個 ] 再試一次;安全性零損失,
+        # schema 與引文閘門照樣會跑在切出來的東西上。
+        i, j = s.find("["), s.rfind("]")
+        if i == -1 or j == -1 or j <= i:
+            return [], "收束回應不是合法 JSON"
+        try:
+            data = json.loads(s[i:j + 1])
+        except json.JSONDecodeError:
+            return [], "收束回應不是合法 JSON"
     if not isinstance(data, list):
         return [], "收束回應必須是 JSON 陣列"
     return data, None
@@ -103,7 +124,10 @@ def stamp(draft, idx, ts, session, turns, fp):
 
 def validate(records, source):
     """兩道閘門。回錯誤清單(空 = 放行)。純函式。"""
-    schema = json.loads((ROOT / "schemas" / "conclusions.schema.json").read_text(encoding="utf-8"))
+    try:
+        schema = json.loads((ROOT / "schemas" / "conclusions.schema.json").read_text(encoding="utf-8"))
+    except OSError as e:
+        return [f"讀不到 schema:{type(e).__name__}"]
     validator = Draft202012Validator(schema)
     errors = []
     for r in records:
@@ -132,17 +156,28 @@ def append(slug, drafts, session, turns):
     base = STORIES / slug
     if not (base / "source.md").exists():
         return 0, [f"{slug} 不存在或沒有 source.md"]
-    source = (base / "source.md").read_text(encoding="utf-8")
+    try:
+        source = (base / "source.md").read_text(encoding="utf-8")
+    except OSError as e:
+        return 0, [f"讀不到 source.md:{type(e).__name__}"]
     # read-then-write 配 id,無鎖:假設單一 session 循序呼叫(目前唯一呼叫者)。
     # Task 5 接線 server/discuss.py 後若出現並發呼叫,這裡需要重新設計。
-    start = len(load(slug))
+    # id 從既有 id 的最大值往下推,不數 load() 回傳的行數 —— load() 會跳過壞行,
+    # 用行數當起點會在中間有壞行時撞號(c0003 重複發兩次),而 P2 的 invalidated_at
+    # 是以 id 為 handle,撞號代表作廢一筆會靜默作廢到錯的那筆。
+    start = max((int(r["id"][1:]) for r in load(slug)
+                 if isinstance(r.get("id"), str) and r["id"][1:].isdigit()), default=0)
     ts = round(time.time(), 3)
     fp = analysis_fp(slug)
     records = [stamp(d, start + i + 1, ts, session, turns, fp) for i, d in enumerate(drafts)]
     errors = validate(records, source)
     if errors:
         return 0, errors
-    with _path(slug).open("a", encoding="utf-8") as f:
-        for r in records:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    try:
+        with _path(slug).open("a", encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    except OSError as e:
+        log.warning(f"event=conclusions-append-fail slug={slug} err={type(e).__name__}")
+        return 0, [f"寫入失敗:{type(e).__name__}"]
     return len(records), []
