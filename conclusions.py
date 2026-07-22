@@ -5,10 +5,13 @@
 LLM 只交出 kind/text/refs/quotes 四欄草稿,id / ts / provenance / valid_from
 一律由這裡蓋章。讓 LLM 自己填 transcript 行號跟 sha1 只會得到看起來很像的幻覺。
 
-兩道閘門,缺一不可:
+三道閘門,缺一不可:
   ① schema      —— 結構對不對(schemas/conclusions.schema.json)
   ② 逐字引文    —— quotes 必須能在 source.md 定位(走 viz.locate 的三層寬鬆匹配)
+  ③ refs 落點   —— refs 的 node id 必須存在於該篇 analysis.json
 第二道是整個記憶系統的存亡關鍵:記憶若能挾帶不存在的原文,它就是污染源而非資產。
+第三道是它在圖上的另一半(一句話驗原文、一個 id 驗圖),而且**只能在寫入時驗**:
+這是 append-only 正本,壞 refs 寫進去就改不掉(P2 的 invalidated_at 只能作廢整條結論)。
 
 寫入語意:全過才寫(all-or-nothing)。半套落地的正本比沒寫更難救。
 """
@@ -72,6 +75,20 @@ def analysis_fp(slug):
         return ""
 
 
+def node_ids(slug):
+    """該篇 analysis.json 的 node id 集合;無從得知時回 None。
+    None(讀不到/形狀不對)與 set()(圖真的沒有節點)不能混:前者要放行 refs 檢查,
+    後者代表「驗過了,一個都對不上」。把前者當後者會讓讀檔失敗變成整局結論被擋掉。"""
+    try:
+        data = json.loads((STORIES / slug / "analysis.json").read_bytes())
+    except (OSError, json.JSONDecodeError):
+        return None
+    nodes = data.get("nodes") if isinstance(data, dict) else None
+    if not isinstance(nodes, list):
+        return None
+    return {n["id"] for n in nodes if isinstance(n, dict) and isinstance(n.get("id"), str)}
+
+
 def parse_drafts(text):
     """把 LLM 吐的文字解析成草稿陣列,回 (drafts, error)。純函式。
     會剝掉 ``` 圍欄 —— LLM 幾乎一定會包,那不是它的錯,是我們該接住。"""
@@ -130,8 +147,9 @@ def stamp(draft, idx, ts, session, turns, fp):
     }
 
 
-def validate(records, source):
-    """兩道閘門。回錯誤清單(空 = 放行)。純函式。"""
+def validate(records, source, known_ids=None):
+    """三道閘門。回錯誤清單(空 = 放行)。純函式。
+    known_ids=None → 跳過 refs 落點檢查(無從得知,見 node_ids)。"""
     try:
         schema = json.loads((ROOT / "schemas" / "conclusions.schema.json").read_text(encoding="utf-8"))
     except OSError as e:
@@ -154,6 +172,14 @@ def validate(records, source):
                 continue
             if viz.locate(q, source) is None:
                 errors.append(f"{rid}: 原文中找不到這句引用「{q[:20]}」")
+        refs = r.get("refs", [])
+        if known_ids is None or not isinstance(refs, list):
+            continue  # 無從得知,或型別錯(已由 schema 記過一筆,不重複報也不逐字元檢查)
+        for ref in refs:
+            # 只檢查字串:非字串的形狀錯 schema 已擋,而 list 這種不可雜湊的值
+            # 拿去做集合查找會炸 TypeError —— 閘門自己炸掉等於沒有閘門。
+            if isinstance(ref, str) and ref not in known_ids:
+                errors.append(f"{rid}: analysis 裡沒有這個 node id「{ref}」")
     return errors
 
 
@@ -180,7 +206,7 @@ def append(slug, drafts, session, turns):
     ts = round(time.time(), 3)
     fp = analysis_fp(slug)
     records = [stamp(d, start + i + 1, ts, session, turns, fp) for i, d in enumerate(drafts)]
-    errors = validate(records, source)
+    errors = validate(records, source, node_ids(slug))
     if errors:
         return 0, errors
     try:

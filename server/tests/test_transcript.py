@@ -336,7 +336,10 @@ def test_distill_writes_conclusions(monkeypatch):
 
     with _tmp_stories() as S:
         (S / "s99").mkdir()
-        (S / "s99" / "analysis.json").write_text('{"nodes":[]}', encoding="utf-8")
+        # 圖裡要真的有 e1 —— 結論的 refs 落點也是閘門(conclusions 第三道),
+        # 空圖配 refs:["e1"] 會被正確擋下,那測到的就不是「收束能寫入」了。
+        (S / "s99" / "analysis.json").write_text(
+            '{"nodes":[{"id":"e1","type":"effect","label":"空缺感"}]}', encoding="utf-8")
         (S / "s99" / "source.md").write_text(_fixture_source(), encoding="utf-8")
         drafts = '[{"kind":"judgment","text":"收尾太快","refs":["e1"],"quotes":["他把燈關了。"]}]'
         discuss = _prime_session(monkeypatch, S, drafts)

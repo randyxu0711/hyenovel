@@ -281,6 +281,109 @@ def test_validate_allows_empty_quotes(base):
     assert conclusions.validate([r], src) == []
 
 
+# ── refs 落點:結論指到的 node 真的存在嗎 ────────────────────────────
+# 引文閘門驗「這句話原文裡有」,這道驗「這個 node id 圖裡有」。同一個問題的兩半。
+# 刻意在**寫入時**驗而不是等 P2 檢索時驗:conclusions.jsonl 是 append-only 正本,
+# 寫進去的壞 refs 之後改不掉(P2 的 invalidated_at 只能作廢整條結論,不能修欄位)。
+def test_validate_rejects_unknown_ref(base):
+    """LLM 完全可能吐出一個看起來很合理但圖裡不存在的 node id(如 t9)。
+    P2 的 anchor-expand 沿 refs 走邊 BFS,壞 refs 會靜默落空 —— 那時已經來不及。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(refs=("e1", "t9")), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    errs = conclusions.validate([r], src, {"b1", "k1", "e1"})
+    assert errs and any("t9" in e for e in errs)
+    assert not any("e1" in e for e in errs), "存在的那個不該被連坐"
+
+
+def test_validate_accepts_known_refs(base):
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(refs=("e1", "k1")), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    assert conclusions.validate([r], src, {"b1", "k1", "e1"}) == []
+
+
+def test_validate_skips_ref_check_when_ids_unknown(base):
+    """known_ids=None = 「無從得知」(沒有 analysis.json / 讀不了),不是「一個都沒有」。
+    這種時候放行 —— 不會因為讀不到圖就把一整局討論的結論全擋掉。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    r = conclusions.stamp(_draft(refs=("t9",)), idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    assert conclusions.validate([r], src) == []
+
+
+def test_validate_ref_check_survives_malformed_refs(base):
+    """refs 形狀壞掉(純量字串 / 元素是 list)時,這道檢查不能自己炸:
+    純量字串會被逐字元檢查、巢狀 list 拿去做集合查找會炸 unhashable TypeError。
+    形狀錯本來就有 schema 擋,這裡只要「不炸、不誤報」。"""
+    slug, b = base
+    src = (b / "source.md").read_text(encoding="utf-8")
+    scalar = conclusions.stamp({"kind": "judgment", "text": "x", "refs": "e1", "quotes": []},
+                               idx=1, ts=1.0, session="a", turns=[0, 0], fp="f")
+    nested = conclusions.stamp({"kind": "judgment", "text": "x", "refs": [["e1"]], "quotes": []},
+                               idx=2, ts=1.0, session="a", turns=[0, 0], fp="f")
+    for r in (scalar, nested):
+        errs = conclusions.validate([r], src, {"e1"})   # 不炸就是過
+        assert errs and any("refs" in e for e in errs), "由 schema 擋下型別錯"
+        assert not any("沒有這個 node id" in e for e in errs), "形狀錯不該退化成落點錯"
+
+
+def test_node_ids_reads_analysis(base):
+    slug, b = base
+    assert conclusions.node_ids(slug) == {"b1", "k1", "e1", "t1"}
+
+
+def test_node_ids_missing_analysis(base):
+    """沒有 analysis.json → None(無從得知),不是 set()(驗了但一個都沒有)。
+    兩者混用會讓「還沒分析的篇」的結論被整批擋掉。"""
+    slug, b = base
+    (b / "analysis.json").unlink()
+    assert conclusions.node_ids(slug) is None
+
+
+def test_node_ids_survives_read_failure(base):
+    """analysis.json 被換成目錄(TOCTOU)—— 同 analysis_fp,無從得知不是錯誤。"""
+    slug, b = base
+    p = b / "analysis.json"
+    p.unlink()
+    p.mkdir()
+    assert conclusions.node_ids(slug) is None
+
+
+def test_node_ids_survives_broken_json(base):
+    slug, b = base
+    (b / "analysis.json").write_text("{壞掉的 JSON", encoding="utf-8")
+    assert conclusions.node_ids(slug) is None
+
+
+def test_node_ids_survives_wrong_shape(base):
+    """analysis.json 是合法 JSON 但形狀不對(頂層是陣列 / 沒有 nodes)——
+    一樣是「無從得知」,不能當成「圖是空的」而把所有 refs 打成壞落點。"""
+    slug, b = base
+    p = b / "analysis.json"
+    p.write_text("[]", encoding="utf-8")
+    assert conclusions.node_ids(slug) is None
+    p.write_text('{"slug":"mini"}', encoding="utf-8")
+    assert conclusions.node_ids(slug) is None
+
+
+def test_node_ids_skips_malformed_nodes(base):
+    """nodes 裡混了非物件、或 id 不是字串的項 —— 跳過就好,不炸。"""
+    slug, b = base
+    p = b / "analysis.json"
+    p.write_text(json.dumps({"nodes": ["不是物件", {"type": "theme"}, {"id": 123}, {"id": "t1"}]}),
+                 encoding="utf-8")
+    assert conclusions.node_ids(slug) == {"t1"}
+
+
+def test_append_rejects_unknown_ref_all_or_nothing(base):
+    """端到端:refs 指到圖裡沒有的 node → 整批不寫。"""
+    slug, b = base
+    n, errs = conclusions.append(slug, [_draft(), _draft(refs=("t9",))], session="a", turns=[0, 0])
+    assert n == 0 and errs and any("t9" in e for e in errs)
+    assert conclusions.load(slug) == [], "好的那筆也不該落地"
+
+
 # ── analysis_fp ─────────────────────────────────────────────────────
 def test_analysis_fp_stable_and_changes(base):
     slug, b = base
