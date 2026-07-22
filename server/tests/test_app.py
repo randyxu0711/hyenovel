@@ -138,3 +138,13 @@ def test_startup_invokes_scan_crashed(monkeypatch):
     with TestClient(app):
         pass
     assert called, "startup 沒有呼叫 critique.scan_crashed()"
+
+
+def test_anchors_boundary_guard():
+    """anchors 來自 HTTP body,會被寫進磁碟上的正本 —— 邊界就該把型別與數量夾住。"""
+    from server import app
+    assert app._anchors(["t1", "m2"]) == ["t1", "m2"]
+    assert app._anchors(None) == [], "沒帶就是空"
+    assert app._anchors("t1") == [], "不是陣列一律當沒帶"
+    assert app._anchors(["t1", 7, None, "m2"]) == ["t1", "m2"], "非字串濾掉"
+    assert len(app._anchors([f"n{i}" for i in range(50)])) == 16, "夾上限,不讓 body 灌爆正本"

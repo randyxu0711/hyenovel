@@ -136,6 +136,8 @@ button.bubble{display:block;width:100%;text-align:left;cursor:pointer;font:inher
 button.q-seed:hover{background:rgba(220,200,150,.14);color:#f3ecd6}
 .dock-thread{margin-top:14px;border-top:1px solid rgba(220,200,150,.1);padding-top:6px}
 .dock-typing{opacity:.6;letter-spacing:.12em}
+.dock-keep{display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem}
+.dock-kept{font-size:var(--t-caption);opacity:.7}
 .dock-compose{display:flex;gap:8px;align-items:flex-end;margin:8px 22px 22px}
 .dock-compose textarea{flex:1;resize:none;font:inherit;font-size:var(--t-body);line-height:1.7;color:#e8ddc2;
   background:rgba(0,0,0,.25);border:1px solid rgba(220,200,150,.2);border-radius:11px;padding:9px 12px}

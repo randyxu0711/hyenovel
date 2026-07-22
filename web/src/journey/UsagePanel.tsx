@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getUsage } from "../data/client";
 import type { UsageAggregate } from "../types";
 
-const PHASE_ORDER = ["analyst", "criticizer", "discuss"] as const;
+const PHASE_ORDER = ["analyst", "criticizer", "discuss", "distill"] as const;
 
 function fmtK(n: number) { return n < 1000 ? String(n) : (n / 1000).toFixed(1).replace(/\.0$/, "") + "k"; }
 function fmtUsd(n: number) { return "$" + n.toFixed(2); }

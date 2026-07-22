@@ -100,9 +100,17 @@ export async function cancelCritique(slug: string): Promise<boolean> {
   } catch { return false; }
 }
 
-/** 討論一輪;sessionId 為 null = 開新 session(後端在 done.data.session_id 回傳)。 */
-export const streamDiscuss = (slug: string, sessionId: string | null, message: string) =>
-  sseStream(`/api/discuss/${slug}`, { session_id: sessionId, message });
+/** 討論一輪;sessionId 為 null = 開新 session(後端在 done.data.session_id 回傳)。
+ *  anchors = 這輪在談的 node id;後端落進 transcript.jsonl,將來的召回靠它定位。 */
+export const streamDiscuss = (slug: string, sessionId: string | null, message: string, anchors: string[] = []) =>
+  sseStream(`/api/discuss/${slug}`, { session_id: sessionId, message, anchors });
+
+/** 收束這一局討論成結論正本。只在 session 還活著時有效(後端會誠實回報收不了)。 */
+export async function distillDiscuss(slug: string, sessionId: string): Promise<{ written: number; errors: string[] }> {
+  const res = await fetch(`/api/discuss/${slug}/${sessionId}/distill`, { method: "POST" });
+  if (!res.ok) throw new Error(`收束失敗(${res.status})`);
+  return res.json();
+}
 
 /** 上傳檔案抽文字(只抽不寫,給前端預覽改字)。 */
 export async function extractStory(file: File): Promise<{ filename: string; text: string; chars: number }> {

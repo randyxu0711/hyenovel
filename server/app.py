@@ -27,6 +27,14 @@ def _slug(slug: str) -> str:
     return slug
 
 
+def _anchors(raw) -> list[str]:
+    """守門:anchors 來自 HTTP body,會被寫進磁碟上的正本。
+    只收字串、夾 16 個上限 —— 不是安全漏洞,是不讓一個手滑的 body 灌爆逐字檔。"""
+    if not isinstance(raw, list):
+        return []
+    return [a for a in raw if isinstance(a, str)][:16]
+
+
 def _sse(gen):
     """把 {event,data} 的 async generator 轉成 text/event-stream。"""
     async def stream():
@@ -81,7 +89,8 @@ async def critique_cancel(slug: str):
 # ── 3. 討論服務 ──────────────────────────────────────────────────────
 @app.post("/api/discuss/{slug}")
 async def discuss_turn(slug: str, body: dict = Body(default={})):
-    return _sse(discuss.run_discuss(_slug(slug), body.get("session_id"), body.get("message", "")))
+    return _sse(discuss.run_discuss(_slug(slug), body.get("session_id"),
+                                    body.get("message", ""), _anchors(body.get("anchors"))))
 
 
 @app.get("/api/discuss/{slug}/sessions")
@@ -92,6 +101,12 @@ def discuss_sessions(slug: str):
 @app.delete("/api/discuss/{slug}/{session_id}")
 async def discuss_close(slug: str, session_id: str):
     return {"closed": await discuss.close_session(session_id)}
+
+
+@app.post("/api/discuss/{slug}/{session_id}/distill")
+async def discuss_distill(slug: str, session_id: str):
+    """把這一局討論收束成結論正本。LLM 只吐 JSON 文字,確定性層驗過才落地。"""
+    return await discuss.distill(_slug(slug), session_id)
 
 
 # ── 新故事 ingestion ─────────────────────────────────────────────────

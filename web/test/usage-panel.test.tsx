@@ -45,6 +45,21 @@ describe("UsagePanel", () => {
     expect(getByText("$0.60")).toBeTruthy();
   });
 
+  it("important 4:distill 也要上『花在哪格』,不能只在總額裡默默算進去", async () => {
+    // ledger.aggregate 的 total 本來就含 distill;PHASE_ORDER 沒把它列進來的話,
+    // 「花了多少」的總數跟「花在哪格」的分項條就會靜默對不起來。
+    getUsage.mockResolvedValue({
+      ...AGG,
+      phases: { ...AGG.phases, distill: { input: 10, output: 5, cache_creation: 0, cache_read: 0, cost_usd: 0.05, turns: 1 } },
+      total: { ...AGG.total, cost_usd: 1.45 },
+    });
+    const { getByText, container } = render(<UsagePanel slug="s02" />);
+    await waitFor(() => expect(getByText("$1.45")).toBeTruthy());
+    expect(getByText("distill")).toBeTruthy();
+    expect(getByText("$0.05")).toBeTruthy();
+    expect(container.querySelectorAll(".prow").length).toBe(4);
+  });
+
   it("空態顯示提示", async () => {
     getUsage.mockResolvedValue({ slug: "s02", empty: true, phases: {}, total: { input:0,output:0,cache_creation:0,cache_read:0,cost_usd:0 }, cache_read_ratio: 0, retry_cost_usd: 0, retry_count: 0 });
     const { getByText } = render(<UsagePanel slug="s02" />);

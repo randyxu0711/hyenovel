@@ -17,7 +17,9 @@ from claude_agent_sdk import (
     ClaudeSDKClient, AssistantMessage, TextBlock, StreamEvent, ResultMessage,
 )
 
-from . import config, ledger, sdk_runner
+import conclusions
+
+from . import config, ledger, sdk_runner, transcript
 from .log import log
 
 
@@ -60,7 +62,7 @@ async def sweep_idle():
             await close_session(sid)
 
 
-async def run_discuss(slug: str, session_id: str | None, message: str):
+async def run_discuss(slug: str, session_id: str | None, message: str, anchors=()):
     if not (config.STORIES / slug / "analysis.json").exists():
         yield {"event": "error", "data": {"where": "input",
                "message": f"{slug} 還沒分析,先跑 critique", "recoverable": False}}
@@ -90,7 +92,12 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
 
     async with sess.lock:
         sess.last_active = time.time()
-        final, cost = "", 0.0
+        # 逐輪寫,不等 session 結束 —— sweep_idle 是把它掃掉,沒有結束事件可以掛。
+        # 寫 message 而非 prompt:新 session 的 prompt 前面接了 /story-discuss 的引導,
+        # 那是系統加的,不是使用者說的話。
+        if message.strip():
+            transcript.append(slug, sid, "user", message, anchors)
+        final_parts, cost = [], 0.0
         res_usage = res_model = res_dur = res_nt = None
         try:
             await sess.client.query(prompt)
@@ -100,9 +107,14 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
                     if txt:
                         yield {"event": "token", "data": {"text": txt}}
                 elif isinstance(m, AssistantMessage):
+                    # 收集全部 TextBlock 再串接 —— 一輪可能有超過一個 AssistantMessage
+                    # (討論 client 是 allowed_tools=["Read"],開場的 /story-discuss skill
+                    # 會先讀 analysis/feedback/source,讀檔前後常各自帶一段文字)。
+                    # 只留最後一個會讓「逐字捕獲」名不符實:使用者透過 token 串流全看到了,
+                    # 正本卻悄悄丟掉前面幾句。
                     for b in m.content:
                         if isinstance(b, TextBlock):
-                            final = b.text
+                            final_parts.append(b.text)
                 elif isinstance(m, ResultMessage):
                     cost = sdk_runner.turn_cost(sess.client, m.total_cost_usd)
                     res_usage, res_model = m.usage, m.model_usage
@@ -119,8 +131,55 @@ async def run_discuss(slug: str, session_id: str | None, message: str):
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()
+        final = "".join(final_parts)
+        transcript.append(slug, sid, "assistant", final, anchors)
         ledger.append(slug, "discuss", 0, sdk_runner.TurnResult(
             text=final, cost=cost, is_error=False, usage=res_usage,
             model_usage=res_model, duration_ms=res_dur, num_turns=res_nt))
         yield {"event": "message", "data": {"role": "assistant", "text": final, "session_id": sid}}
         yield {"event": "done", "data": {"ok": True, "cost_usd": round(cost, 4), "session_id": sid}}
+
+
+_DISTILL_PROMPT = """把我們這輪討論收束成結論,輸出**單一 JSON 陣列**,不要任何其他文字。
+
+每個元素只有四個欄位:
+  kind    observation(對文本的觀察)/ judgment(編輯判斷)/ question(仍未解的提問)
+  text    一句話講完這條結論,且**能獨立成立** —— 日後它會在沒有這段對話的情況下被撈出來
+  refs    相關的 analysis node id 陣列(如 ["t3","m1"]);**必須是圖裡真有的 id**,
+          編一個不存在的會被閘門擋掉。不確定就給 []
+  quotes  支撐這條結論的**逐字原文**陣列;一字不改,改了會被閘門擋掉。沒有就給 []
+
+只收真的有結論的東西 —— 沒有就回 []。不要複述剛才說過的話,不要客套。"""
+
+
+async def distill(slug: str, session_id: str):
+    """把一局討論收束成 conclusions.jsonl。回 {"written", "errors"}。
+
+    只在**活著的** session 裡收束:那裡的語境最完整,而我們沒有 resume。
+    session 被 sweep_idle 收掉就收束不了 —— 誠實回報,不假裝能從 transcript 重建當時的思路。
+
+    LLM 全程碰不到檔案(討論 client 是 allowed_tools=["Read"]):
+    它把 JSON 當文字吐出來,由 conclusions.py 解析、驗證、寫入。
+    """
+    sess = _sessions.get(session_id)
+    if not sess or sess.slug != slug:
+        return {"written": 0, "errors": ["session 不存在或已被回收 —— 結論只能在活著的討論裡收束"]}
+
+    async with sess.lock:
+        sess.last_active = time.time()
+        try:
+            r = await sdk_runner.run_turn(sess.client, _DISTILL_PROMPT)
+        except Exception as e:
+            log.exception(f"event=distill-turn-fail slug={slug}")
+            return {"written": 0, "errors": [str(e)]}
+        sess.last_active = time.time()
+    ledger.append(slug, "distill", 0, r)
+
+    drafts, err = conclusions.parse_drafts(r.text)
+    if err:
+        log.warning(f"event=distill-parse-fail slug={slug}")
+        return {"written": 0, "errors": [err]}
+    turns = transcript.session_range(transcript.load(slug), session_id)
+    written, errors = conclusions.append(slug, drafts, session_id, turns)
+    log.info(f"event=distill slug={slug} written={written} errors={len(errors)}")
+    return {"written": written, "errors": errors}

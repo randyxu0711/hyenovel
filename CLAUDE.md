@@ -39,6 +39,10 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
 - feedback 的 `refs` 綁 analysis 的 node id(viz 靠它把回饋錨定到圖)。
 - 改視覺化動 `viz/{template.html,viz.css,viz.js}`;`viz.py` 只負責驗證+注入。
 - **故事內容(stories/<slug>/)是使用者創作,預設不 commit。** 程式碼才進版控。
+- **討論兩份正本**:`transcript.jsonl`(逐字,`server/transcript.py` 逐輪寫)、
+  `conclusions.jsonl`(蒸餾結論,`conclusions.py` 是唯一寫入者與閘門)。
+  結論的型別欄位叫 `kind` 不叫 `type`(`type` 已被 analysis node/edge 佔用)。
+- 討論的 LLM 全程唯讀(`allowed_tools=["Read"]`):結論由它吐 JSON 文字、確定性層驗過才落地。
 
 ## 測試(判準:這行的行為「是誰決定的」)
 - **我們的政策 → 測**(即使長在 LLM 路徑上):重試/分流、閘門決策、slug 白名單、成本換算、

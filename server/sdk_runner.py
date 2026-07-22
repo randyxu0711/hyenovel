@@ -213,6 +213,10 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
         if isinstance(m, AssistantMessage):
             for b in m.content:
                 if isinstance(b, TextBlock):
+                    # 已知形狀:多個 TextBlock/AssistantMessage 時只留最後一個(覆寫而非累積)。
+                    # critique 流程(analyst/criticizer/distill)目前能運作是因為要交的 JSON
+                    # 通常是最後一個 block —— 不要為了「逐字捕獲」的 discuss 需求改這裡,
+                    # 這段是 critique 共用路徑,改了會動到所有跑過 run_turn 的呼叫端。
                     text = b.text
                     if contains_async_dispatch(text):
                         raise AsyncDispatchError(text[:200])

@@ -1,7 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Dock from "../src/dock/Dock";
 import type { VizData } from "../src/types";
+
+const distillDiscuss = vi.fn();
+vi.mock("../src/data/client", () => ({
+  streamDiscuss: async function* () {
+    yield { event: "message", data: { role: "assistant", text: "好", session_id: "sid-1" } };
+    yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };
+  },
+  distillDiscuss: (...a: unknown[]) => distillDiscuss(...a),
+}));
 
 const viz = {
   slug: "x", title: "x", colors: {}, cn: {}, diag: {}, edges: [],
@@ -30,5 +39,30 @@ describe("Dock", () => {
     expect(screen.getByText(/披上層層雲幕/)).toBeTruthy();
     fireEvent.click(container.querySelector(".dock-jump")!);
     expect(onJump).toHaveBeenCalledWith(12, 21);
+  });
+
+  it("minor 10:換故事要清掉上一篇的收束回報,不能帶到新故事裡", async () => {
+    // fix pass 2 空包彈教訓:kept 只在 msgs.length>0 時才算繪,slug 的 effect 會清掉
+    // msgs,所以 rerender 之後那塊本來就沒掛載 —— 拿掉 setKept("") 這條測試照樣綠。
+    // 要在 rerender 之後、斷言之前於新故事送一則訊息,逼那塊重新掛載,才真的驗到 kept。
+    distillDiscuss.mockResolvedValue({ written: 2, errors: [] });
+    const { rerender } = render(<Dock slug="a" viz={viz} selected={null} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/寫下你的想法/), { target: { value: "測試訊息" } });
+    fireEvent.click(screen.getByText("送出"));
+    await waitFor(() => expect(screen.getByText("留下結論")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("留下結論"));
+    await waitFor(() => expect(screen.getByText(/留下 2 條結論/)).toBeTruthy());
+
+    // 換故事(同一顆 Dock 元件,slug 變了)
+    rerender(<Dock slug="b" viz={viz} selected={null} />);
+
+    // 在新故事送一則訊息,讓 dock-keep 那塊重新掛載 —— 若 kept 沒被清掉,
+    // 舊故事的收束回報會在這裡重新冒出來(甚至還沒點過這次的「留下結論」)。
+    fireEvent.change(screen.getByPlaceholderText(/寫下你的想法/), { target: { value: "故事 B 的話" } });
+    fireEvent.click(screen.getByText("送出"));
+    await waitFor(() => expect(screen.getByText("留下結論")).toBeTruthy());
+    expect(screen.queryByText(/留下 2 條結論/)).toBeNull();
   });
 });
