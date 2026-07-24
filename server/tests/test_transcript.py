@@ -390,3 +390,90 @@ def test_distill_needs_live_session(monkeypatch):
         (S / "s99").mkdir()
         res = asyncio.run(discuss.distill("s99", "not-a-session"))
         assert res["written"] == 0 and "session" in res["errors"][0]
+
+
+# ── Task 6:討論開場注入 recall ─────────────────────────────────────
+def test_new_session_injects_recall_into_opening(monkeypatch):
+    """開新 session → 開場 prompt 帶入過去結論;續局不重注入。"""
+    import asyncio
+    import conclusions
+    import recall
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+    from server import discuss
+
+    seen = []
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            seen.append(prompt)
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="好。")], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "source.md").write_text("他把燈關了。", encoding="utf-8")
+        (S / "s99" / "analysis.json").write_text(
+            '{"nodes":[{"id":"e1","type":"effect","label":"空缺感"}],"edges":[]}', encoding="utf-8")
+        # recall/conclusions 各有自己的 STORIES,_tmp_stories 只接管 config.STORIES ——
+        # 不一起 patch,recall() 會去讀真實 stories/(違規且撈不到 s99)。
+        monkeypatch.setattr(recall, "STORIES", S)
+        monkeypatch.setattr(conclusions, "STORIES", S)
+        conc = {"id": "c1", "ts": 1.0, "kind": "judgment", "text": "結尾收得太急",
+                "refs": ["e1"], "quotes": [],
+                "provenance": {"session": "old", "turns": [0, 0],
+                               "analysis_fp": conclusions.analysis_fp("s99")},
+                "valid_from": 1.0, "invalidated_at": None}
+        import json as J
+        (S / "s99" / "conclusions.jsonl").write_text(J.dumps(conc, ensure_ascii=False), encoding="utf-8")
+        monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
+
+        async def go():
+            return [ev async for ev in discuss.run_discuss("s99", None, "聊結尾", anchors=["e1"])]
+
+        asyncio.run(go())
+
+    assert "結尾收得太急" in seen[0], "開場 prompt 要注入過去結論"
+
+
+def test_continuing_session_does_not_reinject_recall(monkeypatch):
+    """續局(帶既有 session_id)的 prompt 就是使用者訊息本身,不夾召回。"""
+    import asyncio
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+    from server import discuss
+
+    seen = []
+
+    class FakeClient:
+        async def connect(self):
+            pass
+
+        async def query(self, prompt):
+            seen.append(prompt)
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="嗯。")], model="m")
+            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
+                                is_error=False, num_turns=1, session_id="sdk-1",
+                                total_cost_usd=0.01, usage={}, model_usage={})
+
+    with _tmp_stories() as S:
+        (S / "s99").mkdir()
+        (S / "s99" / "analysis.json").write_text('{"nodes":[],"edges":[]}', encoding="utf-8")
+        client = FakeClient()
+        discuss._sessions["live1"] = discuss.Session("s99", client)
+        try:
+            async def go():
+                return [ev async for ev in discuss.run_discuss("s99", "live1", "第二句")]
+
+            asyncio.run(go())
+        finally:
+            discuss._sessions.pop("live1", None)
+
+    assert seen[0] == "第二句", "續局 prompt 就是使用者訊息,不注入召回"

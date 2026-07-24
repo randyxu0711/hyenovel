@@ -180,3 +180,18 @@ def recall(slug, *, anchors=(), layer="judgment", hops=1, budget_tokens=6000, no
         "feedback": fb_points,
         "truncated": truncated,
     }
+
+
+def format_recall(payload):
+    """把 recall payload 攤成注入討論開場的文字。無可召回結論 → 空字串。純函式。
+    只攤結論(討論本就會讀 analysis/feedback,節點細節不重複塞)。"""
+    cs = payload.get("conclusions") or []
+    if not cs:
+        return ""
+    lines = ["【這篇過去討論留下的結論(供參考,標記者可能已隨改稿懸空)】"]
+    for c in cs:
+        tag = "⚠可能懸空 " if c.get("stale") else ""
+        refs = "、".join(r for r in (c.get("refs") or []) if isinstance(r, str))
+        suffix = f"({refs})" if refs else ""
+        lines.append(f"- {tag}{c.get('text')}{suffix}")
+    return "\n".join(lines)

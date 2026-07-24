@@ -274,3 +274,17 @@ def test_recall_feedback_filters_non_intersecting_key_points(tmp_path, monkeypat
     out = recall.recall("s01", anchors=["e1"], layer="judgment")
     titles = {f["title"] for f in out["feedback"]}
     assert titles == {"kp1"}, "不命中 reached 的 key_point 應被濾掉"
+
+
+def test_format_recall_empty_when_no_conclusions():
+    assert recall.format_recall({"conclusions": []}) == ""
+
+
+def test_format_recall_lists_conclusions_and_marks_stale():
+    payload = {"conclusions": [
+        {"id": "c1", "kind": "judgment", "text": "收尾太快", "refs": ["e1"], "stale": False},
+        {"id": "c2", "kind": "observation", "text": "舊觀察", "refs": ["t1"], "stale": True},
+    ]}
+    s = recall.format_recall(payload)
+    assert "收尾太快" in s and "(e1)" in s
+    assert "舊觀察" in s and "懸空" in s, "懸空結論要帶警示"
