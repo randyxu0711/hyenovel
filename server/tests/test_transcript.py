@@ -477,3 +477,16 @@ def test_continuing_session_does_not_reinject_recall(monkeypatch):
             discuss._sessions.pop("live1", None)
 
     assert seen[0] == "第二句", "續局 prompt 就是使用者訊息,不注入召回"
+
+
+def test_distill_dead_session_reports_reason():
+    """session 死 → distill 回 reason=session_gone,前端據此 disable 鈕(不靠比對中文字串)。"""
+    import asyncio
+    from server import discuss
+
+    async def go():
+        return await discuss.distill("s99", "no-such-session")
+
+    r = asyncio.run(go())
+    assert r["written"] == 0
+    assert r["reason"] == "session_gone", "session 死要有結構化 reason,不能只有中文 errors"

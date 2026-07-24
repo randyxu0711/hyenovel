@@ -169,7 +169,8 @@ async def distill(slug: str, session_id: str):
     """
     sess = _sessions.get(session_id)
     if not sess or sess.slug != slug:
-        return {"written": 0, "errors": ["session 不存在或已被回收 —— 結論只能在活著的討論裡收束"]}
+        return {"written": 0, "reason": "session_gone",
+                "errors": ["session 不存在或已被回收 —— 結論只能在活著的討論裡收束"]}
 
     async with sess.lock:
         sess.last_active = time.time()
