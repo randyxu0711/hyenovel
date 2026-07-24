@@ -71,3 +71,45 @@ def _expand(anchors, edges, hops):
         if not added:
             break
     return reached
+
+
+def _rank(conclusions_list, reached, anchors, nodes, cur_fp):
+    """依 spec §3 排序訊號排序,回 [(conclusion, stale), ...]。純函式。
+    key(全部化成「小者優先」):
+      0. stale(invalidated / fp 不符)—— True 一律排最後
+      1. 精確命中錨點(refs∩anchors 非空)—— 命中優先
+      2. 最小 hop 距離 —— 近者優先
+      3. 最大邊權 —— 重者優先
+      4. ref 節點最大 intensity —— 強者優先
+      5. ts —— 新者優先
+    """
+    anchor_set = set(anchors)
+    scored = []
+    for c in conclusions_list:
+        refs = [r for r in (c.get("refs") or []) if isinstance(r, str)]
+        st = _stale(c, cur_fp)
+        exact = 1 if anchor_set.intersection(refs) else 0
+        hopdists = [reached[r][0] for r in refs if r in reached]
+        best_hop = min(hopdists) if hopdists else 10 ** 9
+        weights = [reached[r][1] for r in refs if r in reached]
+        best_w = max(weights) if weights else 0.0
+        intens = [nodes[r].get("intensity") or 0.0 for r in refs if r in nodes]
+        best_i = max(intens) if intens else 0.0
+        key = (st, -exact, best_hop, -best_w, -best_i, -(c.get("ts") or 0.0))
+        scored.append((key, c, st))
+    scored.sort(key=lambda x: x[0])
+    return [(c, st) for _, c, st in scored]
+
+
+def _truncate(ranked, budget_tokens):
+    """依序累加 est_tokens(text) 到超過 budget_tokens。純函式。
+    回 (保留清單, truncated)。至少放行第一條 —— 空手而回比超一點點更無用。"""
+    out, used, truncated = [], 0, False
+    for c, st in ranked:
+        cost = est_tokens(c.get("text"))
+        if out and used + cost > budget_tokens:
+            truncated = True
+            break
+        out.append((c, st))
+        used += cost
+    return out, truncated

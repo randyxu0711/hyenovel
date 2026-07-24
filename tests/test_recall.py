@@ -79,3 +79,54 @@ def test_expand_unknown_edge_type_weight_zero():
 def test_expand_stops_when_no_new_nodes():
     r = recall._expand(["e1"], _edges(), hops=99)
     assert set(r) == {"e1", "k1", "t1"}, "走完就停,不無限跑"
+
+
+def _nodes():
+    return {"e1": {"id": "e1", "type": "effect", "intensity": 0.6},
+            "t1": {"id": "t1", "type": "theme"}}
+
+
+def _c(cid, refs, ts, fp="fp1", inval=None, text="x"):
+    return {"id": cid, "kind": "judgment", "text": text, "refs": refs, "ts": ts,
+            "provenance": {"analysis_fp": fp}, "invalidated_at": inval}
+
+
+def test_rank_exact_anchor_hit_wins():
+    reached = recall._expand(["e1"], _edges(), hops=1)
+    exact = _c("c1", ["e1"], ts=1.0)      # 命中錨點 e1
+    far = _c("c2", ["t1"], ts=9.0)        # 只是被擴張到,ts 更新
+    out = recall._rank([far, exact], reached, ["e1"], _nodes(), "fp1")
+    assert [c["id"] for c, _ in out] == ["c1", "c2"], "精確命中錨點排最前,壓過 ts"
+
+
+def test_rank_stale_sorts_last_and_flagged():
+    reached = recall._expand(["e1"], _edges(), hops=1)
+    fresh = _c("c1", ["t1"], ts=1.0, fp="fp1")
+    stale = _c("c2", ["e1"], ts=9.0, fp="OLD")   # 精確命中但 fp 不符 → 懸空
+    out = recall._rank([stale, fresh], reached, ["e1"], _nodes(), "fp1")
+    assert out[-1][0]["id"] == "c2" and out[-1][1] is True, "懸空排最後且標記"
+    assert out[0][1] is False
+
+
+def test_rank_closer_hop_beats_farther():
+    reached = recall._expand(["k1"], _edges(), hops=2)   # e1=1跳, t1=2跳
+    near = _c("c1", ["e1"], ts=1.0)
+    far = _c("c2", ["t1"], ts=1.0)
+    out = recall._rank([far, near], reached, ["k1"], _nodes(), "fp1")
+    assert [c["id"] for c, _ in out] == ["c1", "c2"], "近跳優先於遠跳"
+
+
+def test_truncate_keeps_under_budget_and_flags():
+    ranked = [(_c("c1", [], 1.0, text="12345"), False),
+              (_c("c2", [], 1.0, text="67890"), False),
+              (_c("c3", [], 1.0, text="XXXXX"), False)]
+    kept, truncated = recall._truncate(ranked, budget_tokens=10)
+    assert [c["id"] for c, _ in kept] == ["c1", "c2"], "5+5=10 剛好,第三條溢出"
+    assert truncated is True
+
+
+def test_truncate_always_keeps_first_even_if_over():
+    ranked = [(_c("c1", [], 1.0, text="超過預算的一長串文字"), False)]
+    kept, truncated = recall._truncate(ranked, budget_tokens=1)
+    assert [c["id"] for c, _ in kept] == ["c1"], "空手而回更無用,至少放第一條"
+    assert truncated is False, "只有一條且放了,不算截斷"
