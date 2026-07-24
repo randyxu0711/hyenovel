@@ -147,7 +147,11 @@ def recall(slug, *, anchors=(), layer="judgment", hops=1, budget_tokens=6000, no
              if isinstance(n, dict) and isinstance(n.get("id"), str)}
     edges = [e for e in analysis.get("edges", []) if isinstance(e, dict)]
 
-    anchor_list = [a for a in anchors if isinstance(a, str)] or _default_anchors(feedback)
+    # 隔離:observation 層不得靠 feedback 的節點選擇當預設錨點——那是 criticizer 的
+    # 注意力型態(哪些節點被評過),屬判斷層的回音。只有 judgment 層 fall back 到
+    # feedback key_points 的 refs。
+    explicit = [a for a in anchors if isinstance(a, str)]
+    anchor_list = explicit or (_default_anchors(feedback) if layer != "observation" else [])
     reached = _expand(anchor_list, edges, hops)
 
     allowed = [c for c in rows if _layer_allows(c.get("kind"), layer)]

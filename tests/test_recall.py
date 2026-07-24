@@ -288,3 +288,13 @@ def test_format_recall_lists_conclusions_and_marks_stale():
     s = recall.format_recall(payload)
     assert "收尾太快" in s and "(e1)" in s
     assert "舊觀察" in s and "懸空" in s, "懸空結論要帶警示"
+
+
+def test_recall_observation_layer_no_default_anchors_from_feedback(tmp_path, monkeypatch):
+    """隔離:observation 層 anchors=() 時不得從 feedback 取預設錨點(判斷層的回音也不行)。"""
+    _seed(tmp_path, monkeypatch, [
+        {"id": "c1", "kind": "observation", "text": "觀察", "refs": ["e1"], "quotes": []},
+    ], feedback={"slug": "s01", "read": "r", "one_line": "o",
+                 "key_points": [{"title": "kp", "body": "b", "refs": ["e1"], "quotes": ["他把燈關了。"]}]})
+    out = recall.recall("s01", layer="observation")   # 不給 anchors
+    assert out["anchors"] == [], "observation 層不從 feedback 借錨點"
