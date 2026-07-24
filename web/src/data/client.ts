@@ -106,7 +106,7 @@ export const streamDiscuss = (slug: string, sessionId: string | null, message: s
   sseStream(`/api/discuss/${slug}`, { session_id: sessionId, message, anchors });
 
 /** 收束這一局討論成結論正本。只在 session 還活著時有效(後端會誠實回報收不了)。 */
-export async function distillDiscuss(slug: string, sessionId: string): Promise<{ written: number; errors: string[] }> {
+export async function distillDiscuss(slug: string, sessionId: string): Promise<{ written: number; errors: string[]; reason?: string }> {
   const res = await fetch(`/api/discuss/${slug}/${sessionId}/distill`, { method: "POST" });
   if (!res.ok) throw new Error(`收束失敗(${res.status})`);
   return res.json();

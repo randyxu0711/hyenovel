@@ -18,6 +18,7 @@ from claude_agent_sdk import (
 )
 
 import conclusions
+import recall
 
 from . import config, ledger, sdk_runner, transcript
 from .log import log
@@ -80,6 +81,11 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
             _sessions[sid] = sess
             # 新 session 開場:引 story-discuss skill(讀 analysis/feedback/source,提切入點)
             prompt = f"/story-discuss {slug}"
+            # 喚燼:注入這篇過去討論的結論(討論走判斷層,看得到 observation+judgment+question)。
+            # 只開場注入一次;續局的既有 session 不重注入。recall 為純函式讀檔,失敗回空。
+            recalled = recall.format_recall(recall.recall(slug, anchors=anchors, layer="judgment"))
+            if recalled:
+                prompt += f"\n\n{recalled}"
             if message.strip():
                 prompt += f"\n\n{message}"
         else:
@@ -163,7 +169,8 @@ async def distill(slug: str, session_id: str):
     """
     sess = _sessions.get(session_id)
     if not sess or sess.slug != slug:
-        return {"written": 0, "errors": ["session 不存在或已被回收 —— 結論只能在活著的討論裡收束"]}
+        return {"written": 0, "reason": "session_gone",
+                "errors": ["session 不存在或已被回收 —— 結論只能在活著的討論裡收束"]}
 
     async with sess.lock:
         sess.last_active = time.time()

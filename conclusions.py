@@ -5,10 +5,11 @@
 LLM 只交出 kind/text/refs/quotes 四欄草稿,id / ts / provenance / valid_from
 一律由這裡蓋章。讓 LLM 自己填 transcript 行號跟 sha1 只會得到看起來很像的幻覺。
 
-三道閘門,缺一不可:
+四道閘門,缺一不可:
   ① schema      —— 結構對不對(schemas/conclusions.schema.json)
   ② 逐字引文    —— quotes 必須能在 source.md 定位(走 viz.locate 的三層寬鬆匹配)
   ③ refs 落點   —— refs 的 node id 必須存在於該篇 analysis.json
+  ④ 雙空防呆   —— refs 與 quotes 不可同時為空(無錨結論 = 純浮空主張)
 第二道是整個記憶系統的存亡關鍵:記憶若能挾帶不存在的原文,它就是污染源而非資產。
 第三道是它在圖上的另一半(一句話驗原文、一個 id 驗圖),而且**只能在寫入時驗**:
 這是 append-only 正本,壞 refs 寫進去就改不掉(P2 的 invalidated_at 只能作廢整條結論)。
@@ -148,7 +149,7 @@ def stamp(draft, idx, ts, session, turns, fp):
 
 
 def validate(records, source, known_ids=None):
-    """三道閘門。回錯誤清單(空 = 放行)。純函式。
+    """四道閘門。回錯誤清單(空 = 放行)。純函式。
     known_ids=None → 跳過 refs 落點檢查(無從得知,見 node_ids)。"""
     try:
         schema = json.loads((ROOT / "schemas" / "conclusions.schema.json").read_text(encoding="utf-8"))
@@ -158,6 +159,12 @@ def validate(records, source, known_ids=None):
     errors = []
     for r in records:
         rid = r.get("id", "?")
+        # 第四道閘門(跨欄):refs 與 quotes 不可同時為空。
+        # 雙空 = 既無逐字文本根據、又掛不上 analysis 圖 = 純浮空 LLM 主張,
+        # P2 recall 也無從錨定它。單邊空是合法的:有 refs 無 quotes(可移用判準)、
+        # 有 quotes 無 refs(純文本觀察)。schema 兩欄仍各自可空,這道是跨欄語意 guard。
+        if not r.get("refs") and not r.get("quotes"):
+            errors.append(f"{rid}: refs 與 quotes 不可同時為空(無錨結論)")
         for e in sorted(validator.iter_errors(r), key=lambda x: list(x.path)):
             path = "/".join(str(p) for p in e.path) or "(root)"
             errors.append(f"{rid} [{path}]: {e.message}")
