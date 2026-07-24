@@ -577,3 +577,35 @@ def test_append_survives_write_failure(base):
     (b / "conclusions.jsonl").mkdir()   # open("a") 對目錄會炸 IsADirectoryError
     n, errs = conclusions.append(slug, [_draft()], session="a", turns=[0, 0])
     assert n == 0 and errs and "寫入失敗" in errs[0]
+
+
+# ── 第四道閘門:refs 與 quotes 不可雙空 ────────────────────────────
+def test_gate_rejects_both_refs_and_quotes_empty():
+    """第四道閘門:refs 與 quotes 同時為空 = 純浮空主張,擋下。"""
+    import conclusions
+    rec = conclusions.stamp(
+        {"kind": "judgment", "text": "一句沒有任何依據的話", "refs": [], "quotes": []},
+        1, 1.0, "sess", [0, 0], "")
+    errs = conclusions.validate([rec], "任意原文", known_ids=None)
+    assert any("同時為空" in e for e in errs), f"雙空該被擋,實際 {errs}"
+
+
+def test_gate_allows_refs_only_no_quotes():
+    """單邊空放行:有 refs 無 quotes = 可移用判準,合法。"""
+    import conclusions
+    rec = conclusions.stamp(
+        {"kind": "judgment", "text": "可移用判準", "refs": ["e1"], "quotes": []},
+        1, 1.0, "sess", [0, 0], "")
+    errs = conclusions.validate([rec], "任意原文", known_ids={"e1"})
+    assert not any("同時為空" in e for e in errs), f"單邊空不該被雙空閘門擋,實際 {errs}"
+
+
+def test_gate_allows_quotes_only_no_refs():
+    """單邊空放行:有 quotes 無 refs = 純文本觀察,合法。"""
+    import conclusions
+    src = "他把燈關了。"
+    rec = conclusions.stamp(
+        {"kind": "observation", "text": "純文本觀察", "refs": [], "quotes": ["他把燈關了。"]},
+        1, 1.0, "sess", [0, 0], "")
+    errs = conclusions.validate([rec], src, known_ids=None)
+    assert not any("同時為空" in e for e in errs), f"單邊空不該被雙空閘門擋,實際 {errs}"

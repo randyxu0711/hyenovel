@@ -158,6 +158,12 @@ def validate(records, source, known_ids=None):
     errors = []
     for r in records:
         rid = r.get("id", "?")
+        # 第四道閘門(跨欄):refs 與 quotes 不可同時為空。
+        # 雙空 = 既無逐字文本根據、又掛不上 analysis 圖 = 純浮空 LLM 主張,
+        # P2 recall 也無從錨定它。單邊空是合法的:有 refs 無 quotes(可移用判準)、
+        # 有 quotes 無 refs(純文本觀察)。schema 兩欄仍各自可空,這道是跨欄語意 guard。
+        if not r.get("refs") and not r.get("quotes"):
+            errors.append(f"{rid}: refs 與 quotes 不可同時為空(無錨結論)")
         for e in sorted(validator.iter_errors(r), key=lambda x: list(x.path)):
             path = "/".join(str(p) for p in e.path) or "(root)"
             errors.append(f"{rid} [{path}]: {e.message}")
