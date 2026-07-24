@@ -65,4 +65,15 @@ describe("Dock", () => {
     await waitFor(() => expect(screen.getByText("留下結論")).toBeTruthy());
     expect(screen.queryByText(/留下 2 條結論/)).toBeNull();
   });
+
+  it("G4:session 死(reason=session_gone)→ 顯示冷卻字且鈕 disable", async () => {
+    distillDiscuss.mockResolvedValue({ written: 0, errors: ["x"], reason: "session_gone" });
+    render(<Dock slug="x" viz={viz} selected={null} />);
+    fireEvent.change(screen.getByPlaceholderText(/寫下你的想法/), { target: { value: "嗨" } });
+    fireEvent.click(screen.getByText("送出"));
+    const keep = await screen.findByText("留下結論");
+    fireEvent.click(keep);
+    await waitFor(() => expect(screen.getByText(/討論已冷卻/)).toBeInTheDocument());
+    expect(keep).toBeDisabled();
+  });
 });

@@ -15,13 +15,14 @@ export default function Dock(
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [kept, setKept] = useState<string>("");     // 收束結果的一行回報
+  const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
   const sessionId = useRef<string | null>(null);   // 後端在 done/message 回傳,續局用
   const anchored = useRef<string | null>(null);     // 上次已對後端聲明的節點,避免每輪重貼
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // 換故事 → 整局重置(舊 session 由後端 sweep_idle 回收)
   useEffect(() => {
-    setMsgs([]); setInput(""); setBusy(false); setKept("");
+    setMsgs([]); setInput(""); setBusy(false); setKept(""); setCold(false);
     sessionId.current = null; anchored.current = null;
   }, [slug]);
 
@@ -76,7 +77,12 @@ export default function Dock(
     setKept("收束中…");
     try {
       const r = await distillDiscuss(slug, sessionId.current);
-      setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
+      if (r.reason === "session_gone") {
+        setCold(true);
+        setKept("討論已冷卻 · 逐字已留存");
+      } else {
+        setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
+      }
     } catch (e) {
       setKept(`收束失敗:${String(e instanceof Error ? e.message : e)}`);
     } finally { setBusy(false); }
@@ -129,7 +135,7 @@ export default function Dock(
 
         {msgs.length > 0 && (
           <div className="dock-keep">
-            <button type="button" onClick={keep} disabled={busy || !sessionId.current}>留下結論</button>
+            <button type="button" onClick={keep} disabled={busy || !sessionId.current || cold}>留下結論</button>
             {kept && <span className="dock-kept">{kept}</span>}
           </div>
         )}
