@@ -137,7 +137,13 @@ def _default_anchors(feedback):
 
 def recall(slug, *, anchors=(), layer="judgment", hops=1, budget_tokens=6000, now=None):
     """召回一篇的過去結論,隔離為程式閘門。純函式(零寫入副作用)。見 spec §3。
-    now 為凍結簽名保留欄位(時間衰減備用),目前不參與排序。"""
+
+    回傳 payload 的 `conclusions` 是目前唯一被消費的欄位(discuss 開場注入走
+    `format_recall`,只讀它)。`nodes`/`feedback` 兩欄是 spec §3「永遠給」契約的
+    一部分,留給 P3「按需給 / 前端 dock 錨定」消費 —— 現在算好但還沒有 caller 用,
+    不是漏接。`hops` 生產路徑固定預設 1(discuss 沒傳),故 `_EDGE_WEIGHT` 的邊權
+    排序訊號在 hops≥2(P3/多跳)之前是休眠的。`now` 為凍結簽名保留欄位(時間衰減
+    備用),目前不參與排序 —— `_stale` 走 analysis 指紋而非時間,較穩。"""
     analysis = _read_json(slug, "analysis.json") or {}
     feedback = _read_json(slug, "feedback.json")
     rows = conclusions.load(slug)
