@@ -51,3 +51,23 @@ def _stale(conclusion, cur_fp):
         return False
     prov = conclusion.get("provenance") or {}
     return prov.get("analysis_fp") != cur_fp
+
+
+def _expand(anchors, edges, hops):
+    """從 anchors 沿 edges 無向 BFS 最多 hops 跳。純函式。
+    回 {node_id: (min_hop, best_weight)}:min_hop 是最短跳距,best_weight 是
+    抵達它那一跳所走邊的權重。每一跳只從「上一層已達」的節點外擴(先 snapshot),
+    否則同一輪內剛加入的節點會被當成同跳的起點,把兩跳誤算成一跳。"""
+    reached = {a: (0, 1.0) for a in anchors}
+    for hop in range(1, hops + 1):
+        prev = dict(reached)          # 本跳只從上一層外擴
+        added = False
+        for e in edges:
+            w = _EDGE_WEIGHT.get(e.get("type"), 0.0)
+            for a, b in ((e.get("from"), e.get("to")), (e.get("to"), e.get("from"))):
+                if a in prev and b is not None and b not in reached:
+                    reached[b] = (hop, w)
+                    added = True
+        if not added:
+            break
+    return reached
