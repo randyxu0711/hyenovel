@@ -19,6 +19,7 @@ include = [
     "atomicio.py",
     "runstate.py",
     "conclusions.py",
+    "recall.py",
     "server/ingest.py",
 ]
 

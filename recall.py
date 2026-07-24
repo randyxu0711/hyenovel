@@ -113,3 +113,70 @@ def _truncate(ranked, budget_tokens):
         out.append((c, st))
         used += cost
     return out, truncated
+
+
+def _read_json(slug, name):
+    """讀 stories/<slug>/<name>;不存在或壞掉回 None(不炸,recall 對缺檔要優雅)。"""
+    try:
+        return json.loads((STORIES / slug / name).read_bytes())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _default_anchors(feedback):
+    """anchors 空時的預設錨點:feedback key_points 的 refs(spec §3-1)。純函式。"""
+    out = []
+    if not isinstance(feedback, dict):
+        return out
+    for pt in feedback.get("key_points") or []:
+        for r in pt.get("refs") or []:
+            if isinstance(r, str) and r not in out:
+                out.append(r)
+    return out
+
+
+def recall(slug, *, anchors=(), layer="judgment", hops=1, budget_tokens=6000, now=None):
+    """召回一篇的過去結論,隔離為程式閘門。純函式(零寫入副作用)。見 spec §3。
+    now 為凍結簽名保留欄位(時間衰減備用),目前不參與排序。"""
+    analysis = _read_json(slug, "analysis.json") or {}
+    feedback = _read_json(slug, "feedback.json")
+    rows = conclusions.load(slug)
+    cur_fp = conclusions.analysis_fp(slug)
+
+    nodes = {n["id"]: n for n in analysis.get("nodes", [])
+             if isinstance(n, dict) and isinstance(n.get("id"), str)}
+    edges = [e for e in analysis.get("edges", []) if isinstance(e, dict)]
+
+    anchor_list = [a for a in anchors if isinstance(a, str)] or _default_anchors(feedback)
+    reached = _expand(anchor_list, edges, hops)
+
+    allowed = [c for c in rows if _layer_allows(c.get("kind"), layer)]
+    ranked = _rank(allowed, reached, anchor_list, nodes, cur_fp)
+    kept, truncated = _truncate(ranked, budget_tokens)
+
+    payload_nodes = []
+    for nid, (hop, _w) in sorted(reached.items(), key=lambda kv: kv[1][0]):
+        n = nodes.get(nid)
+        if not n:
+            continue
+        payload_nodes.append({
+            "id": nid, "type": n.get("type"), "label": n.get("label"), "note": n.get("note"),
+            "quotes": [ev.get("quote") for ev in (n.get("evidence") or [])
+                       if isinstance(ev, dict) and ev.get("quote")],
+        })
+
+    fb_points = []
+    if layer != "observation" and isinstance(feedback, dict):
+        for pt in feedback.get("key_points") or []:
+            if set(pt.get("refs") or []).intersection(reached):
+                fb_points.append({"title": pt.get("title"), "body": pt.get("body"),
+                                  "question": pt.get("question")})
+
+    return {
+        "anchors": anchor_list,
+        "conclusions": [{"id": c.get("id"), "kind": c.get("kind"), "text": c.get("text"),
+                         "refs": c.get("refs"), "stale": st} for c, st in kept],
+        "nodes": payload_nodes,
+        "feedback": fb_points,
+        "truncated": truncated,
+    }
