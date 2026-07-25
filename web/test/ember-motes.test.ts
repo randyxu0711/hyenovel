@@ -17,4 +17,9 @@ describe("emberMotes", () => {
     const a = emberMotes([mk("c1"), mk("c2")], 4);
     expect(a[0].dx !== a[1].dx || a[0].dy !== a[1].dy).toBe(true);
   });
+  it("每顆帶自己的旋轉(有機抖動,夾在 0–45°)", () => {
+    const a = emberMotes([mk("c1"), mk("c2")], 4);
+    for (const m of a) { expect(m.rot).toBeGreaterThanOrEqual(0); expect(m.rot).toBeLessThan(45); }
+    expect(a[0].rot).not.toBe(a[1].rot);
+  });
 });

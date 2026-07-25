@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { streamDiscuss, distillDiscuss } from "../data/client";
+import { EMBER_SPARK } from "./BoneStage";
 import type { VizNode, FeedbackPoint, Conclusion } from "../types";
 
 type Msg = { role: "me" | "ed"; text: string };
+
+// 骨架上的燼是什麼形狀,這裡就是什麼形狀——同一個記號走完「掃 → 撩 → 讀」,
+// 才是一套語言而不是兩個各自發展的小裝飾。這裡不給動畫:catch 是骨架 mount 專屬的「喚」。
+const Spark = ({ stale }: { stale: boolean }) => (
+  <svg className={`ember-spark ${stale ? "stale" : "live"}`} viewBox="-3.4 -3.4 6.8 6.8" aria-hidden="true">
+    <path d={EMBER_SPARK} />
+  </svg>
+);
 
 // 沉浸式討論:不是側欄盒子,是星空上從節點長出來的發光對話。
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
@@ -18,12 +27,17 @@ export default function NodeTalk(
   const [busy, setBusy] = useState(false);
   const [kept, setKept] = useState("");
   const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
+  const [openEmbers, setOpenEmbers] = useState(false);
   const sessionId = useRef<string | null>(null);
   const anchored = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMsgs([]); setInput(""); setBusy(false); setKept(""); setCold(false); sessionId.current = null; anchored.current = null; }, [slug]);
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs]);
+  useEffect(() => { setOpenEmbers(false); }, [node.id]);   // 換節點換一批燼,收回去
+
+  // 活的在前、冷的殿後(與 recall 對 invalidated 的處置一致);同態內保持載入順序
+  const sorted = [...conclusions].sort((a, b) => Number(a.stale) - Number(b.stale));
 
   const cite = node.evidence.find(e => e.quote) ?? null;
   const quote = cite?.quote ?? "";
@@ -99,18 +113,6 @@ export default function NodeTalk(
           {kp?.question && (
             <button type="button" className="talk-qseed" onClick={() => setInput(kp.question!)}>{kp.question}</button>
           )}
-          {conclusions.length > 0 && (
-            <div className="talk-embers">
-              <div className="talk-kp-h">你留下的結論</div>
-              {[...conclusions].sort((a, b) => Number(a.stale) - Number(b.stale)).map(c => (
-                <div key={c.id} className={`ember-note ${c.stale ? "stale" : "live"}`}>
-                  <span className="ember-dot" />
-                  <span className="ember-text">{c.text}</span>
-                  {c.quotes[0] && <p className="ember-q">「{c.quotes[0]}」</p>}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
         {msgs.map((m, i) => (
           <div key={i} className={`talk-line ${m.role}`}>
@@ -121,6 +123,23 @@ export default function NodeTalk(
           <div className="talk-keep">
             <button type="button" onClick={keep} disabled={busy || !sessionId.current || cold}>留下結論</button>
             {kept && <span className="talk-kept">{kept}</span>}
+          </div>
+        )}
+        {/* 過去留下的燼:挨著輸入框(結構本身就是邀請),預設收起——一進節點
+            先看到的該是編輯的判斷,不是自己說過什麼。把手用一排火花講條數與活冷,不報數字。 */}
+        {sorted.length > 0 && (
+          <div className="talk-embers">
+            <button type="button" className="talk-embers-h" onClick={() => setOpenEmbers(o => !o)}>
+              <span>你留下的結論</span>
+              <span className="ember-row">{sorted.map(c => <Spark key={c.id} stale={c.stale} />)}</span>
+            </button>
+            {openEmbers && sorted.map(c => (
+              <div key={c.id} className={`ember-note ${c.stale ? "stale" : "live"}`}>
+                <Spark stale={c.stale} />
+                <span className="ember-text">{c.text}</span>
+                {c.quotes[0] && <p className="ember-q">「{c.quotes[0]}」</p>}
+              </div>
+            ))}
           </div>
         )}
       </div>
