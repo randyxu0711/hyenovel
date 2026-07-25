@@ -257,3 +257,24 @@
   font-family:var(--serif);font-size:var(--t-display);color:#f4eddb;opacity:.85}
 .tone-sky-lab{position:absolute;left:14px;bottom:11px;font-size:var(--t-micro);
   letter-spacing:.2em;color:#7d745c}
+
+/* 餘燼(spec ember-p2.5 §4/§5.2):活燼被「點著」(catch + 呼吸),冷燼只是「被照見」
+   (啞灰淡入,零生命動畫——靜止=死,對齊 failed 星「熄火·全靜」)。 */
+.bonestage .bs-ember{ pointer-events:none; }
+.bonestage .bs-ember.live{
+  fill:var(--c-ember); opacity:.85;
+  filter:drop-shadow(0 0 3px var(--c-ember));
+  animation:emberCatch var(--d-soft) var(--ease-house) backwards, emberBreath 3.2s ease-in-out infinite;
+}
+.bonestage .bs-ember.stale{
+  fill:var(--c-ash); opacity:.5;
+  animation:emberAshIn var(--d-soft) ease backwards;
+}
+@keyframes emberCatch{ 0%{r:0} 60%{r:2.6} 100%{r:2} }
+@keyframes emberBreath{ 0%,100%{opacity:.85} 50%{opacity:.55} }
+@keyframes emberAshIn{ from{opacity:0} to{opacity:.5} }
+@media (prefers-reduced-motion: reduce){
+  /* 降級:live 靠色+暖暈、stale 靠啞灰,無動仍分得開(spec §5.2 必驗那條)。
+     兩個 class 都要列:.bs-ember 單獨壓不過 .bs-ember.live 的 specificity。 */
+  .bonestage .bs-ember.live,.bonestage .bs-ember.stale{ animation:none }
+}

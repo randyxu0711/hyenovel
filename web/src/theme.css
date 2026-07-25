@@ -14,6 +14,9 @@
   --bone:#efe6cf; --bg:#0c0b09;
   --c-theme:#c47a72; --c-motif:#a98bb8; --c-technique:#7aa3bd; --c-effect:#c9a45e;
   --c-character:#8fb89a; --c-beat:#9a9488; --amber:#ecc98a;
+  /* 餘燼(spec ember-p2.5 §4):討論留下的結論。刻意避開 --amber(全 app 注意/選中色)
+     與節點填色 —— 燼是「還燒不燒」的獨立語言。ash 是冷掉的同一顆,不是灰階的 ember。 */
+  --c-ember:#bd7440; --c-ash:#726a5c;
   /* 冷夜裡的暖光(spec art-immersion §3B):整片天的單一正本。
      最底=墨青冷底(夜空不是棕色的),中低處=暖核心(原 #15140f 縮成光源),最外=vignette。
      色相系統不動——冷底只是讓 amber/骨色從「染色」變成「光」。 */
