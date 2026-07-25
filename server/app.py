@@ -15,6 +15,8 @@ import json
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
+import recall
+
 from . import config, critique, discuss, ingest, ledger, log
 
 app = FastAPI(title="hyenovel backend")
@@ -107,6 +109,13 @@ async def discuss_close(slug: str, session_id: str):
 async def discuss_distill(slug: str, session_id: str):
     """把這一局討論收束成結論正本。LLM 只吐 JSON 文字,確定性層驗過才落地。"""
     return await discuss.distill(_slug(slug), session_id)
+
+
+@app.get("/api/conclusions/{slug}")
+def conclusions_list(slug: str):
+    """單篇過去討論結論(唯讀,含 stale 旗標)——前端「喚燼可見」的資料來源。
+    完整列舉、不截斷:recall() 的 budget 是給 LLM 注入用的,視覺不能因預算藏掉一顆燼。"""
+    return {"conclusions": recall.list_conclusions(_slug(slug))}
 
 
 # ── 新故事 ingestion ─────────────────────────────────────────────────
