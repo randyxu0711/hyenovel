@@ -28,6 +28,15 @@ export interface Feedback {
   read: string; strengths: FeedbackPoint[]; key_points: FeedbackPoint[];
   minor: string[]; one_line: string;
 }
+export interface Conclusion {
+  id: string;
+  kind: "observation" | "judgment" | "question";
+  text: string;
+  refs: string[];
+  quotes: string[];
+  /** 懸空:analysis 重鑄後 refs 可能已飄,或整條被作廢 */
+  stale: boolean;
+}
 export interface VizData {
   slug: string; title: string;
   nodes: VizNode[]; edges: VizEdge[];
