@@ -298,3 +298,38 @@ def test_recall_observation_layer_no_default_anchors_from_feedback(tmp_path, mon
                  "key_points": [{"title": "kp", "body": "b", "refs": ["e1"], "quotes": ["他把燈關了。"]}]})
     out = recall.recall("s01", layer="observation")   # 不給 anchors
     assert out["anchors"] == [], "observation 層不從 feedback 借錨點"
+
+
+def test_list_conclusions_projects_flags_and_filters(tmp_path, monkeypatch):
+    import conclusions
+    stories = tmp_path / "stories"
+    d = stories / "s1"
+    d.mkdir(parents=True)
+    (d / "analysis.json").write_bytes(b'{"nodes":[{"id":"m1"},{"id":"t1"}]}')
+    monkeypatch.setattr(conclusions, "STORIES", stories)
+    cur = conclusions.analysis_fp("s1")
+    rows = [
+        {"id": "c0001", "kind": "observation", "text": "live", "refs": ["m1"],
+         "quotes": ["q"], "provenance": {"analysis_fp": cur}, "invalidated_at": None},
+        {"id": "c0002", "kind": "judgment", "text": "stale-fp", "refs": ["t1"],
+         "quotes": [], "provenance": {"analysis_fp": "OLD"}, "invalidated_at": None},
+        {"id": "c0003", "kind": "observation", "text": "killed", "refs": [],
+         "quotes": ["q"], "provenance": {"analysis_fp": cur}, "invalidated_at": 9.0},
+        {"id": "c0004", "kind": "question", "text": "dirty", "refs": ["m1", 123],
+         "quotes": ["ok", 456], "provenance": {"analysis_fp": cur}, "invalidated_at": None},
+    ]
+    (d / "conclusions.jsonl").write_text(
+        "\n".join(_json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+
+    out = recall.list_conclusions("s1")
+    assert [c["id"] for c in out] == ["c0001", "c0002", "c0003", "c0004"]  # 檔案順序
+    assert [c["stale"] for c in out] == [False, True, True, False]         # fp/invalidated
+    assert out[0] == {"id": "c0001", "kind": "observation", "text": "live",
+                      "refs": ["m1"], "quotes": ["q"], "stale": False}
+    assert out[3]["refs"] == ["m1"] and out[3]["quotes"] == ["ok"]         # 非字串濾掉
+
+
+def test_list_conclusions_missing_story_empty(tmp_path, monkeypatch):
+    import conclusions
+    monkeypatch.setattr(conclusions, "STORIES", tmp_path / "stories")
+    assert recall.list_conclusions("nope") == []
