@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { getStory } from "../data/client";
+import { getStory, getConclusions } from "../data/client";
 import BoneStage from "../lab/BoneStage";
 import NodeTalk from "../lab/NodeTalk";
+import { embersByRef } from "../data/embers";
 import SourceAnnotated from "./SourceAnnotated";
 import UsagePanel from "./UsagePanel";
 import Dust from "./Dust";
-import type { VizData, FeedbackPoint } from "../types";
+import type { VizData, FeedbackPoint, Conclusion } from "../types";
 import "../lab/lab.css";
 
 type Mode = "calm" | "axis" | "chain";
@@ -32,6 +33,7 @@ export default function Single() {
   const [text, setText] = useState<null | "source" | "feedback" | "usage">(
     wantTab === "usage" ? "usage" : null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
+  const [embers, setEmbers] = useState<Conclusion[]>([]);
   // 回饋頁是「讀」的層:判斷內文+首條原文證據直接在場(舊版只列標題,判斷要逐張點進
   // 討論才看得到=回饋頁淪為目錄)。點標題仍是討論啟動器:開該節點的沉浸討論。
   const accItems = (prefix: string, pts: FeedbackPoint[]) => pts.map((p, i) => {
@@ -52,10 +54,13 @@ export default function Single() {
 
   useEffect(() => {
     if (!slug) return;
-    setData(null); setErr(null); setSelected(null); setHover(null); setHl(null);
+    setData(null); setErr(null); setSelected(null); setHover(null); setHl(null); setEmbers([]);
     setText(wantTab === "usage" ? "usage" : null);   // 換篇歸零;但從星圖點進來的意圖要留著
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
+    // 燼是增益不是主線:抓不到就沒燼,骨架照常(絕不擋主畫面)。
+    getConclusions(slug).then(r => setEmbers(r.conclusions)).catch(() => setEmbers([]));
   }, [slug, wantTab]);
+  const embersByRefMap = useMemo(() => embersByRef(embers), [embers]);
 
   if (err) return <div className="sb"><div className="sb-msg">讀不到「{slug}」的分析:{err}</div></div>;
   if (!data) return <div className="sb"><div className="sb-msg">載入中…</div></div>;
@@ -82,7 +87,7 @@ export default function Single() {
       </div>
 
       <div className="sb-stage">
-        <BoneStage viz={viz} mode={mode} hover={hover} onHover={setHover} selected={selected} onSelect={setSelected} />
+        <BoneStage viz={viz} mode={mode} hover={hover} onHover={setHover} selected={selected} onSelect={setSelected} embers={embersByRefMap} />
       </div>
 
       {/* hover 讀出 */}
@@ -131,7 +136,9 @@ export default function Single() {
       {/* 沉浸討論 */}
       {sn && (
         <NodeTalk slug={slug!} node={sn} typeName={viz.cn[sn.type] ?? sn.type} color={VAR[sn.type]}
-          flag={flagOf(viz, sn.id)} kp={snKp} source={source} onJump={jumpToSource} onClose={() => setSelected(null)} />
+          flag={flagOf(viz, sn.id)} kp={snKp} source={source} conclusions={embersByRefMap[sn.id] ?? []}
+          onJump={jumpToSource} onClose={() => setSelected(null)}
+          onKept={() => getConclusions(slug!).then(r => setEmbers(r.conclusions)).catch(() => {})} />
       )}
     </div>
   );

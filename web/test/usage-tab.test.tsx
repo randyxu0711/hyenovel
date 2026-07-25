@@ -12,6 +12,7 @@ const AGG = {
 
 vi.mock("../src/data/client", () => ({
   getStory: vi.fn(async () => ({ viz, source: "　　原文。" })),
+  getConclusions: vi.fn(async () => ({ conclusions: [] })),
   getUsage: vi.fn(async () => AGG),
 }));
 import Single from "../src/journey/Single";

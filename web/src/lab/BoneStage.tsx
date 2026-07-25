@@ -3,7 +3,7 @@ import { buildBone } from "../lib/bone";
 import { orderedBeats } from "../lib/axis";
 import type { Pt } from "../lib/spline";
 import { layoutChain, focusSet } from "../lib/chain";
-import type { VizData, VizNode } from "../types";
+import type { VizData, VizNode, Conclusion } from "../types";
 
 // ── 一具密骨,三姿勢,節點守恆 ──
 // calm 剪影:脊椎+肋,無字。
@@ -48,6 +48,21 @@ function hash01(s: string) {
   let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return ((h >>> 0) % 1000) / 1000;
 }
+// 四角火花:整張圖裡唯一的非圓形小記號。圓點已被 motif/beat/診斷佔滿,
+// 形狀分家比色相分家有效(暖色帶早就飽和了)。腰身內凹到 .6、四尖到 3。
+export const EMBER_SPARK = "M0,-3 Q0.6,-0.6 3,0 Q0.6,0.6 0,3 Q-0.6,0.6 -3,0 Q-0.6,-0.6 0,-3 Z";
+
+// 微燼繞節點散開:角度/半徑/旋轉由結論 id 決定(確定性),免得多顆疊住。
+// rot 的有機抖動沿用 rib() 的家法——同一具骨不該有兩種「亂」的規矩。
+export function emberMotes(conclusions: Conclusion[], baseR: number) {
+  return conclusions.map(c => {
+    const a = hash01(c.id) * Math.PI * 2;
+    const rad = baseR + 5 + hash01(c.id + "r") * 3;
+    return { id: c.id, dx: Math.cos(a) * rad, dy: Math.sin(a) * rad,
+             rot: hash01(c.id + "rot") * 45, stale: c.stale };
+  });
+}
+
 // 一根有機的肋:往外微張 + 抖動 + 長短不一 + 一點彎(像真的骨,不是格尺)
 function rib(bx: number, by: number, sign: number, baseLen: number, level: number, id: string) {
   const j = hash01(id), j2 = hash01(id + "*");
@@ -60,16 +75,27 @@ function rib(bx: number, by: number, sign: number, baseLen: number, level: numbe
   return { d: `M${bx.toFixed(1)},${by.toFixed(1)} Q${(mx - dy / L * bow).toFixed(1)},${(my + dx / L * bow).toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)}`, tx, ty };
 }
 
+const EMBER_SETTLE_MS = 1700;   // 骨架入場 ~1.1s + 燼錯相尾巴 ~0.6s
+
 type Mode = "calm" | "axis" | "chain";
 interface Bridge { node: VizNode; ax: number; ay: number; bx: number; by: number; phase: number; }
 
 export default function BoneStage(
-  { viz, mode, hover, onHover, selected, onSelect }:
+  { viz, mode, hover, onHover, selected, onSelect, embers }:
   { viz: VizData; mode: Mode; hover: string | null; onHover: (id: string | null) => void;
-    selected: string | null; onSelect: (id: string | null) => void },
+    selected: string | null; onSelect: (id: string | null) => void;
+    embers?: Record<string, Conclusion[]> },
 ) {
   const gRef = useRef(0);
   const rafRef = useRef(0);
+  // 入場那批燼跟著骨架入場錯落亮起(等骨畫完才點);入場過後才出現的燼(剛按下
+  // 「留下結論」→ refetch)不等——那是 present-tense,遲到就沒了(spec §5.5)。
+  const settled = useRef(false);
+  useEffect(() => {
+    settled.current = false;
+    const t = setTimeout(() => { settled.current = true; }, EMBER_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [viz.slug]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
     const to = mode === "chain" ? 1 : 0;
@@ -308,6 +334,18 @@ export default function BoneStage(
             <circle r={r(n) * (on || sel ? 1.35 : 1)} fill={COLOR[n.type]} fillOpacity={hollow ? 0.28 : 1}
               style={{ transition: "r .2s ease", filter: on || sel || n.type === "theme" ? `drop-shadow(0 0 ${sel ? 11 : 7}px ${COLOR[n.type]})` : undefined }} />
             {hollow && <circle r={r(n)} fill="none" stroke={COLOR[n.type]} strokeWidth={1} opacity={0.7} />}
+            {/* 微燼吃 (1-eP):因果鏈成形時退場,與 motif/beat 小點同一條規矩——
+                結構模式看關係,閱讀模式才看個人記憶標記。 */}
+            {(embers?.[n.id]?.length ?? 0) > 0 && (
+              <g opacity={1 - eP}>
+                {emberMotes(embers![n.id], r(n)).map(m => (
+                  <g key={m.id} transform={`translate(${m.dx.toFixed(1)},${m.dy.toFixed(1)}) rotate(${m.rot.toFixed(0)})`}>
+                    <path className={`bs-ember ${m.stale ? "stale" : "live"}`} d={EMBER_SPARK}
+                      style={{ animationDelay: settled.current ? "0s" : `${(1.1 + hash01(m.id) * 0.6).toFixed(2)}s` }} />
+                  </g>
+                ))}
+              </g>
+            )}
             {showLabel && <>
               {ldy !== 0 && <line x1={0} y1={0} x2={labelX} y2={4 + ldy} stroke={COLOR.theme} strokeWidth={0.8} opacity={0.3} />}
               <text x={labelX} y={4 + ldy} fontSize={on || sel ? 13.5 : 12}

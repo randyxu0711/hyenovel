@@ -205,3 +205,17 @@ def format_recall(payload):
         suffix = f"({refs})" if refs else ""
         lines.append(f"- {tag}{c.get('text')}{suffix}")
     return "\n".join(lines)
+
+
+def list_conclusions(slug):
+    """完整列舉一篇的結論(投影 + stale 旗標),供前端「喚燼可見」路徑。純讀檔、零寫入。
+
+    與 recall() 刻意分家:recall() 是討論注入的 anchor→BFS→排序→budget 截斷;這裡
+    不截斷、不排序、不過 layer —— 使用者(編輯)看得到全部,且絕不因預算藏掉一顆燼。
+    stale 判定共用 `_stale`(單一正本)。"""
+    fp = conclusions.analysis_fp(slug)
+    return [{"id": c.get("id"), "kind": c.get("kind"), "text": c.get("text"),
+             "refs": [r for r in (c.get("refs") or []) if isinstance(r, str)],
+             "quotes": [q for q in (c.get("quotes") or []) if isinstance(q, str)],
+             "stale": _stale(c, fp)}
+            for c in conclusions.load(slug)]

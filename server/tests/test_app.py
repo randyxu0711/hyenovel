@@ -3,6 +3,8 @@
 module-level TestClient(app) 不會觸發 lifespan/startup(那需要 with 區塊),
 所以不會起 sweep 背景 task —— 正是我們要的。
 """
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -148,3 +150,35 @@ def test_anchors_boundary_guard():
     assert app._anchors("t1") == [], "不是陣列一律當沒帶"
     assert app._anchors(["t1", 7, None, "m2"]) == ["t1", "m2"], "非字串濾掉"
     assert len(app._anchors([f"n{i}" for i in range(50)])) == 16, "夾上限,不讓 body 灌爆正本"
+
+
+def test_conclusions_endpoint_lists_with_stale(tmp_path, monkeypatch):
+    import conclusions
+    stories = tmp_path / "stories"
+    d = stories / "s1"
+    d.mkdir(parents=True)
+    (d / "analysis.json").write_bytes(b'{"nodes":[{"id":"m1"}]}')
+    monkeypatch.setattr(conclusions, "STORIES", stories)
+    cur = conclusions.analysis_fp("s1")
+    (d / "conclusions.jsonl").write_text(
+        json.dumps({"id": "c0001", "kind": "observation", "text": "t", "refs": ["m1"],
+                    "quotes": ["q"], "provenance": {"analysis_fp": cur},
+                    "invalidated_at": None}, ensure_ascii=False) + "\n", encoding="utf-8")
+    r = client.get("/api/conclusions/s1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["conclusions"][0]["id"] == "c0001"
+    assert body["conclusions"][0]["stale"] is False
+
+
+def test_conclusions_endpoint_missing_story_empty(tmp_path, monkeypatch):
+    import conclusions
+    monkeypatch.setattr(conclusions, "STORIES", tmp_path / "stories")
+    r = client.get("/api/conclusions/s1")
+    assert r.status_code == 200
+    assert r.json() == {"conclusions": []}
+
+
+def test_conclusions_endpoint_bad_slug_400():
+    r = client.get("/api/conclusions/bad.slug")   # '.' 不合 _SLUG_RE
+    assert r.status_code == 400

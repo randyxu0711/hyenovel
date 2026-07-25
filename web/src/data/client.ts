@@ -1,4 +1,4 @@
-import type { IndexFile, VizData, UsageAggregate, UsageAll } from "../types";
+import type { IndexFile, VizData, UsageAggregate, UsageAll, Conclusion } from "../types";
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -14,6 +14,8 @@ async function getText(url: string): Promise<string> {
 export const getIndex = () => getJSON<IndexFile>("/data/index.json");
 export const getViz = (slug: string) => getJSON<VizData>(`/data/${slug}/viz.json`);
 export const getSource = (slug: string) => getText(`/data/${slug}/source.md`);
+export const getConclusions = (slug: string) =>
+  getJSON<{ conclusions: Conclusion[] }>(`/api/conclusions/${slug}`);
 export const getUsage = (slug: string) => getJSON<UsageAggregate>(`/api/usage/${slug}`);
 export const getUsageAll = () => getJSON<UsageAll>("/api/usage");
 export async function getStory(slug: string): Promise<{ viz: VizData; source: string }> {

@@ -257,3 +257,45 @@
   font-family:var(--serif);font-size:var(--t-display);color:#f4eddb;opacity:.85}
 .tone-sky-lab{position:absolute;left:14px;bottom:11px;font-size:var(--t-micro);
   letter-spacing:.2em;color:#7d745c}
+
+/* 餘燼(spec ember-p2.5 §4/§5.2):活燼被「點著」(catch + 呼吸),冷燼只是「被照見」
+   (啞灰淡入,零生命動畫——靜止=死,對齊 failed 星「熄火·全靜」)。 */
+.bonestage .bs-ember{ pointer-events:none; }
+.bonestage .bs-ember.live{
+  fill:var(--c-ember); opacity:.85;
+  filter:drop-shadow(0 0 3px var(--c-ember));
+  animation:emberCatch var(--d-soft) var(--ease-house) backwards, emberBreath 3.2s ease-in-out infinite;
+}
+.bonestage .bs-ember.stale{
+  fill:var(--c-ash); opacity:.5;
+  animation:emberAshIn var(--d-soft) ease backwards;
+}
+/* 撩:hover 節點順手把它的燼撥旺(活燼加暈、冷燼只是看清楚一點——冷的撥不旺) */
+.bonestage .bs-node:hover .bs-ember.live{ filter:drop-shadow(0 0 6px var(--c-ember)); }
+.bonestage .bs-node:hover .bs-ember.stale{ opacity:.72; }
+/* 火花沒有 r,catch 改動 scale(SVG 的 transform-origin 預設 0,0,而火花本來就以 0,0 為心) */
+@keyframes emberCatch{ 0%{transform:scale(0)} 60%{transform:scale(1.3)} 100%{transform:scale(1)} }
+@keyframes emberBreath{ 0%,100%{opacity:.85} 50%{opacity:.55} }
+@keyframes emberAshIn{ from{opacity:0} to{opacity:.5} }
+@media (prefers-reduced-motion: reduce){
+  /* 降級:live 靠色+暖暈、stale 靠啞灰,無動仍分得開(spec §5.2 必驗那條)。
+     兩個 class 都要列:.bs-ember 單獨壓不過 .bs-ember.live 的 specificity。 */
+  .bonestage .bs-ember.live,.bonestage .bs-ember.stale{ animation:none }
+}
+/* 燼區:挨著輸入框、預設收起。把手是一排火花——幾條就幾顆、暖的活灰的冷,不寫數字。 */
+.talk-embers{ margin-top:.7rem; border-top:1px solid rgba(255,255,255,.08); padding-top:.5rem; }
+.talk-embers-h{ display:flex; align-items:center; gap:.5rem; width:100%; padding:2px 0; cursor:pointer;
+  font:inherit; font-size:var(--t-micro); letter-spacing:.16em; color:#9c8c5e;
+  background:none; border:none; text-align:left }
+.talk-embers-h:hover{ color:#e6d3a6 }
+.ember-row{ display:flex; align-items:center; gap:3px }
+/* 骨架上的火花,縮小搬進面板;不給動畫——catch 是骨架 mount 專屬的「喚」 */
+.ember-spark{ width:9px; height:9px; flex:0 0 auto; overflow:visible }
+.ember-spark.live{ fill:var(--c-ember); filter:drop-shadow(0 0 3px var(--c-ember)) }
+.ember-spark.stale{ fill:var(--c-ash) }
+.ember-note{ display:flex; align-items:baseline; gap:.4rem; margin:.35rem 0; font-size:var(--t-caption) }
+.ember-note .ember-spark{ margin-top:.3rem }
+.ember-note.stale{ opacity:.7 }
+.ember-note .ember-q{ color:#b9a88a; font-size:var(--t-micro); margin:.15rem 0 0 }
+.talk-keep{ display:flex; align-items:center; gap:.6rem; margin-top:.5rem; }
+.talk-kept{ font-size:var(--t-micro); color:#b9a88a; }

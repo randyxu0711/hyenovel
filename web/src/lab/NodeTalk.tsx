@@ -1,26 +1,43 @@
 import { useEffect, useRef, useState } from "react";
-import { streamDiscuss } from "../data/client";
-import type { VizNode, FeedbackPoint } from "../types";
+import { streamDiscuss, distillDiscuss } from "../data/client";
+import { EMBER_SPARK } from "./BoneStage";
+import type { VizNode, FeedbackPoint, Conclusion } from "../types";
 
 type Msg = { role: "me" | "ed"; text: string };
+
+// 骨架上的燼是什麼形狀,這裡就是什麼形狀——同一個記號走完「掃 → 撩 → 讀」,
+// 才是一套語言而不是兩個各自發展的小裝飾。這裡不給動畫:catch 是骨架 mount 專屬的「喚」。
+const Spark = ({ stale }: { stale: boolean }) => (
+  <svg className={`ember-spark ${stale ? "stale" : "live"}`} viewBox="-3.4 -3.4 6.8 6.8" aria-hidden="true">
+    <path d={EMBER_SPARK} />
+  </svg>
+);
 
 // 沉浸式討論:不是側欄盒子,是星空上從節點長出來的發光對話。
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
 // 沿用 Dock 的串流 + 節點錨定;換節點不重開 session,改在訊息前補一句 context。
 export default function NodeTalk(
-  { slug, node, typeName, color, flag, kp, source, onJump, onClose }:
+  { slug, node, typeName, color, flag, kp, source, conclusions = [], onJump, onClose, onKept }:
   { slug: string; node: VizNode; typeName: string; color: string; flag: string; kp: FeedbackPoint | null;
-    source?: string; onJump?: (start: number, end: number) => void; onClose: () => void },
+    source?: string; conclusions?: Conclusion[]; onJump?: (start: number, end: number) => void;
+    onClose: () => void; onKept?: () => void },
 ) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kept, setKept] = useState("");
+  const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
+  const [openEmbers, setOpenEmbers] = useState(false);
   const sessionId = useRef<string | null>(null);
   const anchored = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setMsgs([]); setInput(""); setBusy(false); sessionId.current = null; anchored.current = null; }, [slug]);
+  useEffect(() => { setMsgs([]); setInput(""); setBusy(false); setKept(""); setCold(false); sessionId.current = null; anchored.current = null; }, [slug]);
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs]);
+  useEffect(() => { setOpenEmbers(false); }, [node.id]);   // 換節點換一批燼,收回去
+
+  // 活的在前、冷的殿後(與 recall 對 invalidated 的處置一致);同態內保持載入順序
+  const sorted = [...conclusions].sort((a, b) => Number(a.stale) - Number(b.stale));
 
   const cite = node.evidence.find(e => e.quote) ?? null;
   const quote = cite?.quote ?? "";
@@ -56,6 +73,22 @@ export default function NodeTalk(
     } finally { setBusy(false); }
   }
 
+  // 收束這一局:LLM 只吐草稿,四道閘門在後端。寫成了就通知上層 refetch(新燼當場點著)。
+  async function keep() {
+    if (!sessionId.current || busy) return;
+    setBusy(true); setKept("收束中…");
+    try {
+      const r = await distillDiscuss(slug, sessionId.current);
+      if (r.reason === "session_gone") { setCold(true); setKept("討論已冷卻 · 逐字已留存"); }
+      else {
+        setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
+        if (r.written > 0) onKept?.();
+      }
+    } catch (e) {
+      setKept(`收束失敗:${String(e instanceof Error ? e.message : e)}`);
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="talk">
       <div className="talk-head">
@@ -86,6 +119,29 @@ export default function NodeTalk(
             {m.text || (busy && i === msgs.length - 1 ? <span className="talk-typing">…</span> : "")}
           </div>
         ))}
+        {msgs.length > 0 && (
+          <div className="talk-keep">
+            <button type="button" onClick={keep} disabled={busy || !sessionId.current || cold}>留下結論</button>
+            {kept && <span className="talk-kept">{kept}</span>}
+          </div>
+        )}
+        {/* 過去留下的燼:挨著輸入框(結構本身就是邀請),預設收起——一進節點
+            先看到的該是編輯的判斷,不是自己說過什麼。把手用一排火花講條數與活冷,不報數字。 */}
+        {sorted.length > 0 && (
+          <div className="talk-embers">
+            <button type="button" className="talk-embers-h" onClick={() => setOpenEmbers(o => !o)}>
+              <span>你留下的結論</span>
+              <span className="ember-row">{sorted.map(c => <Spark key={c.id} stale={c.stale} />)}</span>
+            </button>
+            {openEmbers && sorted.map(c => (
+              <div key={c.id} className={`ember-note ${c.stale ? "stale" : "live"}`}>
+                <Spark stale={c.stale} />
+                <span className="ember-text">{c.text}</span>
+                {c.quotes[0] && <p className="ember-q">「{c.quotes[0]}」</p>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <form className="talk-compose" onSubmit={e => { e.preventDefault(); send(); }}>
