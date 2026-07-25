@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { streamDiscuss } from "../data/client";
-import type { VizNode, FeedbackPoint } from "../types";
+import { streamDiscuss, distillDiscuss } from "../data/client";
+import type { VizNode, FeedbackPoint, Conclusion } from "../types";
 
 type Msg = { role: "me" | "ed"; text: string };
 
@@ -8,18 +8,21 @@ type Msg = { role: "me" | "ed"; text: string };
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
 // 沿用 Dock 的串流 + 節點錨定;換節點不重開 session,改在訊息前補一句 context。
 export default function NodeTalk(
-  { slug, node, typeName, color, flag, kp, source, onJump, onClose }:
+  { slug, node, typeName, color, flag, kp, source, conclusions = [], onJump, onClose, onKept }:
   { slug: string; node: VizNode; typeName: string; color: string; flag: string; kp: FeedbackPoint | null;
-    source?: string; onJump?: (start: number, end: number) => void; onClose: () => void },
+    source?: string; conclusions?: Conclusion[]; onJump?: (start: number, end: number) => void;
+    onClose: () => void; onKept?: () => void },
 ) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kept, setKept] = useState("");
+  const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
   const sessionId = useRef<string | null>(null);
   const anchored = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setMsgs([]); setInput(""); setBusy(false); sessionId.current = null; anchored.current = null; }, [slug]);
+  useEffect(() => { setMsgs([]); setInput(""); setBusy(false); setKept(""); setCold(false); sessionId.current = null; anchored.current = null; }, [slug]);
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs]);
 
   const cite = node.evidence.find(e => e.quote) ?? null;
@@ -56,6 +59,22 @@ export default function NodeTalk(
     } finally { setBusy(false); }
   }
 
+  // 收束這一局:LLM 只吐草稿,四道閘門在後端。寫成了就通知上層 refetch(新燼當場點著)。
+  async function keep() {
+    if (!sessionId.current || busy) return;
+    setBusy(true); setKept("收束中…");
+    try {
+      const r = await distillDiscuss(slug, sessionId.current);
+      if (r.reason === "session_gone") { setCold(true); setKept("討論已冷卻 · 逐字已留存"); }
+      else {
+        setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
+        if (r.written > 0) onKept?.();
+      }
+    } catch (e) {
+      setKept(`收束失敗:${String(e instanceof Error ? e.message : e)}`);
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="talk">
       <div className="talk-head">
@@ -80,12 +99,30 @@ export default function NodeTalk(
           {kp?.question && (
             <button type="button" className="talk-qseed" onClick={() => setInput(kp.question!)}>{kp.question}</button>
           )}
+          {conclusions.length > 0 && (
+            <div className="talk-embers">
+              <div className="talk-kp-h">你留下的結論</div>
+              {[...conclusions].sort((a, b) => Number(a.stale) - Number(b.stale)).map(c => (
+                <div key={c.id} className={`ember-note ${c.stale ? "stale" : "live"}`}>
+                  <span className="ember-dot" />
+                  <span className="ember-text">{c.text}</span>
+                  {c.quotes[0] && <p className="ember-q">「{c.quotes[0]}」</p>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         {msgs.map((m, i) => (
           <div key={i} className={`talk-line ${m.role}`}>
             {m.text || (busy && i === msgs.length - 1 ? <span className="talk-typing">…</span> : "")}
           </div>
         ))}
+        {msgs.length > 0 && (
+          <div className="talk-keep">
+            <button type="button" onClick={keep} disabled={busy || !sessionId.current || cold}>留下結論</button>
+            {kept && <span className="talk-kept">{kept}</span>}
+          </div>
+        )}
       </div>
 
       <form className="talk-compose" onSubmit={e => { e.preventDefault(); send(); }}>

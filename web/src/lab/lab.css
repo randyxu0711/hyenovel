@@ -281,3 +281,12 @@
      兩個 class 都要列:.bs-ember 單獨壓不過 .bs-ember.live 的 specificity。 */
   .bonestage .bs-ember.live,.bonestage .bs-ember.stale{ animation:none }
 }
+.talk-embers{ margin-top:.7rem; border-top:1px solid rgba(255,255,255,.08); padding-top:.5rem; }
+.ember-note{ display:flex; align-items:baseline; gap:.4rem; margin:.35rem 0; font-size:var(--t-caption); }
+.ember-note .ember-dot{ flex:0 0 auto; width:6px; height:6px; border-radius:50%; margin-top:.35rem; }
+.ember-note.live .ember-dot{ background:var(--c-ember); box-shadow:0 0 4px var(--c-ember); }
+.ember-note.stale .ember-dot{ background:var(--c-ash); }
+.ember-note.stale{ opacity:.7; }
+.ember-note .ember-q{ color:#b9a88a; font-size:var(--t-micro); margin:.15rem 0 0; }
+.talk-keep{ display:flex; align-items:center; gap:.6rem; margin-top:.5rem; }
+.talk-kept{ font-size:var(--t-micro); color:#b9a88a; }
