@@ -270,6 +270,9 @@
   fill:var(--c-ash); opacity:.5;
   animation:emberAshIn var(--d-soft) ease backwards;
 }
+/* 撩:hover 節點順手把它的燼撥旺(活燼加暈、冷燼只是看清楚一點——冷的撥不旺) */
+.bonestage .bs-node:hover .bs-ember.live{ filter:drop-shadow(0 0 6px var(--c-ember)); }
+.bonestage .bs-node:hover .bs-ember.stale{ opacity:.72; }
 @keyframes emberCatch{ 0%{r:0} 60%{r:2.6} 100%{r:2} }
 @keyframes emberBreath{ 0%,100%{opacity:.85} 50%{opacity:.55} }
 @keyframes emberAshIn{ from{opacity:0} to{opacity:.5} }
