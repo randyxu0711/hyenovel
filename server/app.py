@@ -3,6 +3,7 @@
   POST /api/critique/{slug}              → SSE(phase/done/error)
   POST /api/discuss/{slug}               → SSE(token/thinking/message/done/error)
   GET  /api/discuss/{slug}/sessions      → 列 session
+  GET  /api/transcript/{slug}            → 逐字歷史(唯讀)
   DELETE /api/discuss/{slug}/{sid}       → 關 session
   POST /api/stories/extract  (multipart) → {filename, text}  只抽不寫
   POST /api/stories          (json)      → {slug}             落 source.md
@@ -17,7 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import recall
 
-from . import config, critique, discuss, ingest, ledger, log
+from . import config, critique, discuss, ingest, ledger, log, transcript
 
 app = FastAPI(title="hyenovel backend")
 
@@ -116,6 +117,17 @@ def conclusions_list(slug: str):
     """單篇過去討論結論(唯讀,含 stale 旗標)——前端「喚燼可見」的資料來源。
     完整列舉、不截斷:recall() 的 budget 是給 LLM 注入用的,視覺不能因預算藏掉一顆燼。"""
     return {"conclusions": recall.list_conclusions(_slug(slug))}
+
+
+@app.get("/api/transcript/{slug}")
+def transcript_list(slug: str):
+    """單篇討論的逐字歷史(唯讀)——F5 之後畫面接得回來的資料來源。
+
+    正本一直躺在 `transcript.jsonl`(P1 起逐輪寫),前端從沒讀過它:「討論不再蒸發」
+    在後端成立、在使用者眼裡沒成立。這支只是把正本原樣露出去。
+    **不做摘要、不做過濾**:逐字就是逐字,要挑要分組是前端的事。
+    """
+    return {"turns": transcript.load(_slug(slug))}
 
 
 # ── 新故事 ingestion ─────────────────────────────────────────────────

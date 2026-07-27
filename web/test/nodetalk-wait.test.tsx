@@ -19,6 +19,7 @@ const gate = vi.hoisted(() => {
 });
 
 vi.mock("../src/data/client", () => ({
+  getTranscript: vi.fn(async () => ({ turns: [] })),
   streamDiscuss: async function* () {
     await gate.waited;
     yield { event: "token", data: { text: "我不認為 m2 用得太滿。" } };

@@ -5,6 +5,7 @@ import type { VizNode, Conclusion } from "../src/types";
 
 const distillDiscuss = vi.fn();
 vi.mock("../src/data/client", () => ({
+  getTranscript: vi.fn(async () => ({ turns: [] })),
   streamDiscuss: async function* () {
     yield { event: "message", data: { role: "assistant", text: "好", session_id: "sid-1" } };
     yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };

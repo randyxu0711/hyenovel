@@ -9,7 +9,8 @@
  * node 在這裡的角色只剩「這輪從哪切入」:換節點不重開局,只在訊息前補一句錨定。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamDiscuss, distillDiscuss } from "../data/client";
+import { streamDiscuss, distillDiscuss, getTranscript } from "../data/client";
+import type { Turn } from "../types";
 
 // think = 這一則的推理草稿。跟 text 分開存,因為它們是兩種東西:text 是編輯說出口的話
 // (逐字進 transcript 正本),think 只活在這個畫面上,後端不留。
@@ -19,6 +20,7 @@ export type Discussion = ReturnType<typeof useDiscussion>;
 
 export function useDiscussion(slug: string) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [past, setPast] = useState<Turn[]>([]);     // 落盤的逐字歷史(唯讀)
   const [busy, setBusy] = useState(false);
   const [kept, setKept] = useState("");
   const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
@@ -27,8 +29,13 @@ export function useDiscussion(slug: string) {
 
   // 換篇才歸零。換節點不歸零 —— 那正是這個 hook 存在的理由。
   useEffect(() => {
-    setMsgs([]); setBusy(false); setKept(""); setCold(false);
+    setMsgs([]); setBusy(false); setKept(""); setCold(false); setPast([]);
     sessionId.current = null; anchored.current = null;
+    if (!slug) return;
+    // 歷史是增益不是主線:抓不到就沒歷史,討論照常(同燼的處置)。
+    let live = true;
+    getTranscript(slug).then(r => { if (live) setPast(r.turns); }).catch(() => {});
+    return () => { live = false; };
   }, [slug]);
 
   const send = useCallback(async (text: string, node: { id: string; label: string }, typeName: string) => {
@@ -71,5 +78,7 @@ export function useDiscussion(slug: string) {
     } finally { setBusy(false); }
   }, [slug, busy]);
 
-  return { msgs, busy, kept, cold, sessionId, send, keep };
+  // past 與 msgs 刻意不合併:msgs 是「這一局」,而「留下結論」受活著的 session 閘控。
+  // 併成一條流,只有歷史時鈕也會亮,按下去只拿得到 session_gone。
+  return { msgs, past, busy, kept, cold, sessionId, send, keep };
 }

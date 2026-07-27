@@ -21,7 +21,7 @@ export default function NodeTalk(
     onJump?: (start: number, end: number) => void;
     onClose: () => void; onKept?: () => void },
 ) {
-  const { msgs, busy, kept, cold, sessionId } = talk;
+  const { msgs, past, busy, kept, cold, sessionId } = talk;
   const [input, setInput] = useState("");
   const [openEmbers, setOpenEmbers] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -74,6 +74,15 @@ export default function NodeTalk(
             <button type="button" className="talk-qseed" onClick={() => setInput(kp.question!)}>{kp.question}</button>
           )}
         </div>
+        {/* 落盤的逐字歷史。編輯不會重讀這些字 —— 它帶進新一局的是 recall 注入的
+            蒸餾結論(discuss.py:90)。畫面顯示歷史不等於它讀過歷史,那句話得寫出來,
+            否則就是讓畫面替它撒謊。 */}
+        {past.length > 0 && <>
+          {past.map((t, i) => (
+            <div key={`p${i}`} className={`talk-line past ${t.role === "user" ? "me" : "ed"}`}>{t.text}</div>
+          ))}
+          <div className="talk-boundary">以上是過去的逐字 · 編輯讀的是你留下的結論,不是這些字</div>
+        </>}
         {msgs.map((m, i) => (
           <div key={i} className={`talk-line ${m.role}`}>
             {/* 想的擺在說的前面:那是它真實發生的順序,也是等待期間唯一有東西可看的地方。 */}

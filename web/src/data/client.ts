@@ -1,4 +1,4 @@
-import type { IndexFile, VizData, UsageAggregate, UsageAll, Conclusion } from "../types";
+import type { IndexFile, VizData, UsageAggregate, UsageAll, Conclusion, Turn } from "../types";
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -16,6 +16,9 @@ export const getViz = (slug: string) => getJSON<VizData>(`/data/${slug}/viz.json
 export const getSource = (slug: string) => getText(`/data/${slug}/source.md`);
 export const getConclusions = (slug: string) =>
   getJSON<{ conclusions: Conclusion[] }>(`/api/conclusions/${slug}`);
+/** 這篇的討論逐字歷史。F5 之後畫面靠它接回來 —— 正本一直在磁碟上。 */
+export const getTranscript = (slug: string) =>
+  getJSON<{ turns: Turn[] }>(`/api/transcript/${slug}`);
 export const getUsage = (slug: string) => getJSON<UsageAggregate>(`/api/usage/${slug}`);
 export const getUsageAll = () => getJSON<UsageAll>("/api/usage");
 export async function getStory(slug: string): Promise<{ viz: VizData; source: string }> {

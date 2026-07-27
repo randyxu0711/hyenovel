@@ -28,6 +28,15 @@ export interface Feedback {
   read: string; strengths: FeedbackPoint[]; key_points: FeedbackPoint[];
   minor: string[]; one_line: string;
 }
+/** 討論逐字正本的一行(`transcript.jsonl`)。原樣露出,不摘要不過濾。 */
+export interface Turn {
+  ts: number;
+  session: string;
+  role: "user" | "assistant";
+  text: string;
+  anchors: string[] | null;
+}
+
 export interface Conclusion {
   id: string;
   kind: "observation" | "judgment" | "question";

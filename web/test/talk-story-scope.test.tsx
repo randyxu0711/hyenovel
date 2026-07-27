@@ -18,6 +18,7 @@ import viz from "./fixtures/viz.json";
 const spy = vi.hoisted(() => ({ stream: vi.fn() }));
 
 vi.mock("../src/data/client", () => ({
+  getTranscript: vi.fn(async () => ({ turns: [] })),
   getStory: vi.fn(async () => ({ viz, source: "　　原文第一行。" })),
   getConclusions: vi.fn(async () => ({ conclusions: [] })),
   streamDiscuss: (...a: unknown[]) => {
