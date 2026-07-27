@@ -3,7 +3,9 @@ import { streamDiscuss, distillDiscuss } from "../data/client";
 import { EMBER_SPARK } from "./BoneStage";
 import type { VizNode, FeedbackPoint, Conclusion } from "../types";
 
-type Msg = { role: "me" | "ed"; text: string };
+// think = 這一則的推理草稿。跟 text 分開存,因為它們是兩種東西:text 是編輯說出口的話
+// (逐字進 transcript 正本),think 只活在這個畫面上,後端不留。
+type Msg = { role: "me" | "ed"; text: string; think?: string };
 
 // 骨架上的燼是什麼形狀,這裡就是什麼形狀——同一個記號走完「掃 → 撩 → 讀」,
 // 才是一套語言而不是兩個各自發展的小裝飾。這裡不給動畫:catch 是骨架 mount 專屬的「喚」。
@@ -59,17 +61,18 @@ export default function NodeTalk(
     }
     setMsgs(m => [...m, { role: "me", text }, { role: "ed", text: "" }]);
     setBusy(true);
-    const patchLast = (fn: (t: string) => string) =>
-      setMsgs(m => { const c = [...m]; c[c.length - 1] = { role: "ed", text: fn(c[c.length - 1].text) }; return c; });
+    const patchLast = (fn: (m: Msg) => Msg) =>
+      setMsgs(m => { const c = [...m]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
     try {
       for await (const ev of streamDiscuss(slug, sessionId.current, toSend, [node.id])) {
-        if (ev.event === "token") patchLast(t => t + (ev.data.text ?? ""));
-        else if (ev.event === "message") { if (ev.data.session_id) sessionId.current = ev.data.session_id; if (ev.data.text) patchLast(t => t || ev.data.text); }
+        if (ev.event === "token") patchLast(m => ({ ...m, text: m.text + (ev.data.text ?? "") }));
+        else if (ev.event === "thinking") patchLast(m => ({ ...m, think: (m.think ?? "") + (ev.data.text ?? "") }));
+        else if (ev.event === "message") { if (ev.data.session_id) sessionId.current = ev.data.session_id; if (ev.data.text) patchLast(m => ({ ...m, text: m.text || ev.data.text })); }
         else if (ev.event === "done") { if (ev.data.session_id) sessionId.current = ev.data.session_id; }
-        else if (ev.event === "error") patchLast(t => t || `(討論出錯:${ev.data.message})`);
+        else if (ev.event === "error") patchLast(m => ({ ...m, text: m.text || `(討論出錯:${ev.data.message})` }));
       }
     } catch (e) {
-      patchLast(t => t || `(連線中斷:${String(e instanceof Error ? e.message : e)})`);
+      patchLast(m => ({ ...m, text: m.text || `(連線中斷:${String(e instanceof Error ? e.message : e)})` }));
     } finally { setBusy(false); }
   }
 
@@ -116,13 +119,22 @@ export default function NodeTalk(
         </div>
         {msgs.map((m, i) => (
           <div key={i} className={`talk-line ${m.role}`}>
-            {m.text || (busy && i === msgs.length - 1 ? <span className="talk-typing">…</span> : "")}
+            {/* 想的擺在說的前面:那是它真實發生的順序,也是等待期間唯一有東西可看的地方。 */}
+            {m.think && <p className="talk-think">{m.think}</p>}
+            {/* 等待狀態:字講「在跑」、點講「還活著」。`aria-live` 讓讀螢幕的人也收得到這個轉場。
+                thinking 若日後翻回來,草稿一開始流就換它上場(下面 !m.think 那條)。 */}
+            {m.text || (busy && !m.think && i === msgs.length - 1
+              ? <span className="talk-wait" role="status" aria-live="polite">
+                  編輯正在回應<i /><i /><i />
+                </span>
+              : "")}
           </div>
         ))}
         {msgs.length > 0 && (
           <div className="talk-keep">
             <button type="button" onClick={keep} disabled={busy || !sessionId.current || cold}>留下結論</button>
-            {kept && <span className="talk-kept">{kept}</span>}
+            {/* 一律渲染(即使還沒有話講):這行的高度先佔著,訊息來的時候就不會把底下整個頂下去 */}
+            <span className="talk-kept">{kept}</span>
           </div>
         )}
         {/* 過去留下的燼:挨著輸入框(結構本身就是邀請),預設收起——一進節點

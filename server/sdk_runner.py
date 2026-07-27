@@ -197,6 +197,12 @@ def discuss_options(resume: str | None = None) -> ClaudeAgentOptions:
         hooks=_GUARD_HOOKS,                    # 讀也鎖在 stories/、schemas/ 內
         model=config.DISCUSS_MODEL,
         include_partial_messages=True,        # 逐 token delta
+        # 關掉 extended thinking。**理由跟 critique 那邊不一樣,別把那條教訓當已證明**:
+        # critique 關是為了避免 max_tokens 截斷 / 回到子代理行為;討論關是為了**節奏**——
+        # 要的是來回對話,深思是 criticizer 的工作。使用者拍板先關了看看(2026-07-27)。
+        # 量測:`event=discuss-turn deltas=` 這一行 + usage.jsonl 的秒數/成本(關前基準 28–96 秒)。
+        # 若回答品質掉了就翻回來(拿掉這行即恢復 adaptive),前端的思考可視化仍在、會自動醒。
+        thinking={"type": "disabled"},
         resume=resume,
     )
 
@@ -240,11 +246,25 @@ async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
                       duration_ms=duration_ms, num_turns=num_turns)
 
 
-def delta_text(stream_event) -> str | None:
-    """從 StreamEvent 抽純文字 delta(content_block_delta / text_delta);其餘回 None。"""
+def delta_of(stream_event) -> tuple[str, str] | None:
+    """從 StreamEvent 抽一段 delta,回 (kind, text);不是可顯示的內容就回 None。
+
+    kind:`"text"` = 回答本體、`"thinking"` = 推理草稿。只放行這兩種 ——
+    `signature_delta` 是 base64 簽章,不是給人看的。
+
+    `"thinking"` 目前**休眠**:critique 與 discuss 兩條路徑都設了 `thinking={"type":"disabled"}`,
+    wire 上不會再出 `thinking_delta`。刻意留著不刪 —— 討論那邊關 thinking 是可逆的實驗(見
+    `discuss_options`),翻回來時抽取器和前端 `.talk-think` 都還在,不必重寫一遍。
+    """
     ev = getattr(stream_event, "event", None) or {}
-    if isinstance(ev, dict) and ev.get("type") == "content_block_delta":
-        delta = ev.get("delta") or {}
-        if delta.get("type") == "text_delta":
-            return delta.get("text") or None
+    if not isinstance(ev, dict) or ev.get("type") != "content_block_delta":
+        return None
+    delta = ev.get("delta") or {}
+    dt = delta.get("type")
+    if dt == "text_delta":
+        text = delta.get("text")
+        return ("text", text) if text else None
+    if dt == "thinking_delta":
+        text = delta.get("thinking")   # ← 不是 "text";照 text_delta 的形狀讀會靜靜地拿到空的
+        return ("thinking", text) if text else None
     return None

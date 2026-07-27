@@ -4,7 +4,11 @@
 個人單機:每個 session 一把 lock 序列化輪次;閒置逾時由背景 sweeper 回收。
 
 事件信封:
-  token   {text}             逐 token delta
+  token    {text}            逐 token delta(回答本體)
+  thinking {text}            推理草稿 delta。**目前休眠**:討論已關 extended thinking
+                             (`sdk_runner.discuss_options`),wire 上不再出 thinking_delta。
+                             接線留著 —— 那是可逆的實驗,翻回來時這條路自動醒。
+                             **不進 transcript 正本**:正本記的是編輯說了什麼,不是它想過什麼。
   message {role, text, session_id}   整輪收尾(存檔 / 非串流 fallback)
   done    {ok, cost_usd, session_id}
   error   {where, message, recoverable}
@@ -105,13 +109,16 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
             transcript.append(slug, sid, "user", message, anchors)
         final_parts, cost = [], 0.0
         res_usage = res_model = res_dur = res_nt = None
+        kinds: dict[str, int] = {}   # 這一輪各類 delta 各來幾段(見收尾的 discuss-turn log)
         try:
             await sess.client.query(prompt)
             async for m in sess.client.receive_response():
                 if isinstance(m, StreamEvent):
-                    txt = sdk_runner.delta_text(m)
-                    if txt:
-                        yield {"event": "token", "data": {"text": txt}}
+                    d = sdk_runner.delta_of(m)
+                    if d:
+                        kinds[d[0]] = kinds.get(d[0], 0) + 1
+                        yield {"event": "thinking" if d[0] == "thinking" else "token",
+                               "data": {"text": d[1]}}
                 elif isinstance(m, AssistantMessage):
                     # 收集全部 TextBlock 再串接 —— 一輪可能有超過一個 AssistantMessage
                     # (討論 client 是 allowed_tools=["Read"],開場的 /story-discuss skill
@@ -137,6 +144,12 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
             yield {"event": "error", "data": {"where": "discuss", "message": str(e), "recoverable": True}}
             return
         sess.last_active = time.time()
+        # 這一輪 wire 上到底出了哪幾類 delta。「是不是 thinking」從此讀 log 回答,不靠推論或臨時插樁。
+        # 討論已關 thinking(2026-07-27),故預期只剩 `text:N`。**這行同時是那次改動的驗收**:
+        # 真出現 thinking:N 就代表 `thinking={"type":"disabled"}` 沒吃到,別當它關成功了。
+        # 配 usage.jsonl 的秒數看延遲有沒有真的降(關前基準:單輪 28–96 秒)。
+        tally = ",".join(f"{k}:{v}" for k, v in sorted(kinds.items())) or "none"
+        log.info(f"event=discuss-turn slug={slug} deltas={tally}")
         final = "".join(final_parts)
         transcript.append(slug, sid, "assistant", final, anchors)
         ledger.append(slug, "discuss", 0, sdk_runner.TurnResult(

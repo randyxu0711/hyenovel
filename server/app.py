@@ -1,7 +1,7 @@
 """FastAPI 入口:把三個職責的 async generator 轉成 SSE 串給瀏覽器。
 
   POST /api/critique/{slug}              → SSE(phase/done/error)
-  POST /api/discuss/{slug}               → SSE(token/message/done/error)
+  POST /api/discuss/{slug}               → SSE(token/thinking/message/done/error)
   GET  /api/discuss/{slug}/sessions      → 列 session
   DELETE /api/discuss/{slug}/{sid}       → 關 session
   POST /api/stories/extract  (multipart) → {filename, text}  只抽不寫
