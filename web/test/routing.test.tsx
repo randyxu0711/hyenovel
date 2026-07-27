@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import viz from "./fixtures/viz.json";
 
 vi.mock("../src/data/client", () => ({
+  getTranscript: vi.fn(async () => ({ turns: [] })),
   getStory: vi.fn(async () => ({ viz, source: "" })),
   getConclusions: vi.fn(async () => ({ conclusions: [] })),
 }));

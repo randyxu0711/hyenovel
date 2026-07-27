@@ -3,6 +3,7 @@ import { getViz } from "../data/client";
 import BoneStage from "./BoneStage";
 import NodeTalk from "./NodeTalk";
 import Dust from "../journey/Dust";
+import { useDiscussion } from "../journey/useDiscussion";
 import type { VizData } from "../types";
 import "./lab.css";
 
@@ -21,6 +22,7 @@ const flagOf = (viz: VizData | null, id: string | null) =>
 
 export default function Lab() {
   const [slug, setSlug] = useState("s01");
+  const talk = useDiscussion(slug);
   const [viz, setViz] = useState<VizData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("axis");   // 進單篇預設=完整解剖;calm 留給目錄剪影
@@ -80,7 +82,7 @@ export default function Lab() {
       {/* 沉浸討論:從節點長出來的發光對話(非側欄盒子) */}
       {sn && viz && (
         <NodeTalk slug={slug} node={sn} typeName={viz.cn[sn.type] ?? sn.type} color={VAR[sn.type]}
-          flag={flagOf(viz, sn.id)} kp={snKp} onClose={() => setSelected(null)} />
+          flag={flagOf(viz, sn.id)} kp={snKp} talk={talk} onClose={() => setSelected(null)} />
       )}
     </div>
   );

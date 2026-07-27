@@ -8,7 +8,7 @@
 */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import NodeTalk from "../src/lab/NodeTalk";
+import NodeTalk from "./talk-harness";
 import type { VizNode } from "../src/types";
 
 // 用一道閘把第一個 token 擋在外面 —— 那正是真實情況裡「後端在跑、前端沒事件」的那 20 秒。
@@ -19,6 +19,7 @@ const gate = vi.hoisted(() => {
 });
 
 vi.mock("../src/data/client", () => ({
+  getTranscript: vi.fn(async () => ({ turns: [] })),
   streamDiscuss: async function* () {
     await gate.waited;
     yield { event: "token", data: { text: "我不認為 m2 用得太滿。" } };

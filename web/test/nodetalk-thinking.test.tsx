@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import NodeTalk from "../src/lab/NodeTalk";
+import NodeTalk from "./talk-harness";
 import type { VizNode } from "../src/types";
 
 // 一輪真實形狀:先想一段(thinking),再開口(token),最後整輪收尾(message)。
 vi.mock("../src/data/client", () => ({
+  getTranscript: vi.fn(async () => ({ turns: [] })),
   streamDiscuss: async function* () {
     yield { event: "thinking", data: { text: "先確認 m2 " } };
     yield { event: "thinking", data: { text: "在原文出現幾次" } };

@@ -90,6 +90,15 @@
   border-right:2px solid rgba(150,180,220,.4);padding-right:12px}
 .talk-line.ed{align-self:flex-start;color:#e7dcc2;
   text-shadow:0 0 16px rgba(236,201,138,.12)}
+/* 落盤的逐字歷史:沿用同一套 me/ed 語彙,只退光 —— 它們已經冷了(同燼 stale 的處置:
+   啞、零暈)。不另給色相:暖色帶早就被 --c-ember / DIAG.over / DIAG.orphan / --amber 佔滿。 */
+.talk-line.past{opacity:.5;text-shadow:none}
+/* 邊界不是裝飾也不是道歉:它講的是編輯這一局到底讀了什麼。開新局時它拿到的是 recall
+   注入的蒸餾結論(discuss.py:90),不是上面那些字 —— 畫面顯示歷史 ≠ 它讀過歷史,
+   不寫出來就是讓畫面替它撒謊。 */
+.talk-boundary{margin:.5rem 0 .1rem;padding-top:.5rem;
+  border-top:1px solid rgba(236,201,138,.14);
+  font-size:var(--t-micro);line-height:1.6;color:#8d836d;letter-spacing:.02em}
 /* 送出 → 第一個 token 之間的等待(實測 20 秒起跳)。關掉討論的 extended thinking 之後,
    這裡是使用者唯一的回饋 —— 原本只有一個 opacity:.6 且完全不動的「…」,讀起來是「掛了」不是「在忙」。
    **不做假進度條**:它只承諾「還在跑」,不假裝知道還要多久(同誕生儀式 ①③ 那種循環穩態)。

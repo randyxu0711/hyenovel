@@ -182,3 +182,35 @@ def test_conclusions_endpoint_missing_story_empty(tmp_path, monkeypatch):
 def test_conclusions_endpoint_bad_slug_400():
     r = client.get("/api/conclusions/bad.slug")   # '.' 不合 _SLUG_RE
     assert r.status_code == 400
+
+
+# ── 逐字歷史:F5 之後畫面接得回來(正本一直在磁碟上,只是前端從沒讀過)──────
+
+
+def test_transcript_endpoint_lists_turns(stories):
+    d = stories / "s1"
+    d.mkdir()
+    rows = [{"ts": 1.0, "session": "a1", "role": "user", "text": "這意象用得太滿?",
+             "anchors": ["m2"], "analysis_fp": "fp"},
+            {"ts": 2.0, "session": "a1", "role": "assistant", "text": "我不這麼認為。",
+             "anchors": ["m2"], "analysis_fp": "fp"}]
+    (d / "transcript.jsonl").write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    r = client.get("/api/transcript/s1")
+    assert r.status_code == 200
+    turns = r.json()["turns"]
+    assert [t["role"] for t in turns] == ["user", "assistant"]
+    assert turns[0]["text"] == "這意象用得太滿?", "逐字原樣,不重寫不摘要"
+    assert turns[0]["anchors"] == ["m2"]
+
+
+def test_transcript_endpoint_missing_story_empty(stories):
+    """沒聊過就是沒有 —— 空是合法狀態,不是錯誤(同 conclusions 的處置)。"""
+    r = client.get("/api/transcript/s1")
+    assert r.status_code == 200
+    assert r.json() == {"turns": []}
+
+
+def test_transcript_endpoint_bad_slug_400():
+    r = client.get("/api/transcript/bad.slug")
+    assert r.status_code == 400
