@@ -90,7 +90,23 @@
   border-right:2px solid rgba(150,180,220,.4);padding-right:12px}
 .talk-line.ed{align-self:flex-start;color:#e7dcc2;
   text-shadow:0 0 16px rgba(236,201,138,.12)}
-.talk-typing{opacity:.6;letter-spacing:.14em}
+/* 送出 → 第一個 token 之間的等待(實測 20 秒起跳)。關掉討論的 extended thinking 之後,
+   這裡是使用者唯一的回饋 —— 原本只有一個 opacity:.6 且完全不動的「…」,讀起來是「掛了」不是「在忙」。
+   **不做假進度條**:它只承諾「還在跑」,不假裝知道還要多久(同誕生儀式 ①③ 那種循環穩態)。
+   **意義掛在字上、不掛在動畫上**:全域減動把點停住之後,「編輯正在回應」自己仍然講得完整。 */
+.talk-wait{display:inline-flex;align-items:center;color:#b9a88a;
+  font-size:var(--t-caption);font-style:italic;letter-spacing:.02em}
+.talk-wait i{width:3px;height:3px;margin-left:.32em;border-radius:50%;background:currentColor;
+  opacity:.25;animation:talkWait 1.4s var(--ease-house) infinite}
+.talk-wait i:first-of-type{margin-left:.5em}
+.talk-wait i:nth-of-type(2){animation-delay:.18s}
+.talk-wait i:nth-of-type(3){animation-delay:.36s}
+@keyframes talkWait{0%,60%,100%{opacity:.25} 30%{opacity:.9}}
+/* 推理草稿:留在編輯這一側(同色相家族),但抽掉 amber 暈、退成斜體小字並加一道左規
+   —— 靠形狀分家而非色相分家,才不會跟 .talk-line.me 那條冷藍的「使用者說的話」搶讀。 */
+.talk-think{font-size:var(--t-caption);line-height:1.75;font-style:italic;color:#9a9384;
+  margin:0 0 10px;padding-left:10px;border-left:1px solid rgba(236,201,138,.16);
+  text-shadow:none;white-space:pre-wrap}
 .talk-compose{display:flex;align-items:flex-end;gap:10px;padding-top:12px;
   border-top:1px solid rgba(236,201,138,.18)}
 .talk-compose textarea{flex:1;resize:none;font:inherit;font-size:var(--t-body);color:#ece3c8;
@@ -297,5 +313,16 @@
 .ember-note .ember-spark{ margin-top:.3rem }
 .ember-note.stale{ opacity:.7 }
 .ember-note .ember-q{ color:#b9a88a; font-size:var(--t-micro); margin:.15rem 0 0 }
-.talk-keep{ display:flex; align-items:center; gap:.6rem; margin-top:.5rem; }
-.talk-kept{ font-size:var(--t-micro); color:#b9a88a; }
+/* 留下結論:次要動作,吃面板既有的 amber ghost 語彙(同 .talk-qseed / .talk-compose button 那一族),
+   不是瀏覽器預設的灰方塊。直排 —— 狀態字擺在鈕「底下」而不是旁邊,鈕就不會被訊息推著跑。 */
+.talk-keep{ display:flex; flex-direction:column; align-items:flex-start; gap:.3rem; margin-top:.6rem }
+.talk-keep button{ font:inherit; font-size:var(--t-caption); line-height:1.6; cursor:pointer;
+  color:#e6d3a6; background:rgba(236,201,138,.08); border:1px solid rgba(236,201,138,.22);
+  border-radius:999px; padding:5px 14px; transition:background var(--d-quick), color var(--d-quick) }
+.talk-keep button:not(:disabled):hover{ background:rgba(236,201,138,.16); color:#f6efd9 }
+.talk-keep button:disabled{ opacity:.4; cursor:default }
+/* 狀態字固定佔一行:它會來會走,不該在出現的那一刻把底下的東西整個往下頂。 */
+/* 刻意不給「擋下/失敗」另一個顏色:暖紅那條帶已經被 --c-ember / DIAG.over / DIAG.orphan / --amber
+   佔滿,再擠一個進去會被讀成骨架上的診斷記號。狀態靠字講(「擋下:…」vs「留下 N 條」)。 */
+.talk-kept{ font-size:var(--t-micro); line-height:1.5; min-height:1.5em; color:#b9a88a;
+  overflow-wrap:anywhere }
