@@ -8,7 +8,7 @@
 */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import NodeTalk from "../src/lab/NodeTalk";
+import NodeTalk from "./talk-harness";
 import type { VizNode } from "../src/types";
 
 // 用一道閘把第一個 token 擋在外面 —— 那正是真實情況裡「後端在跑、前端沒事件」的那 20 秒。

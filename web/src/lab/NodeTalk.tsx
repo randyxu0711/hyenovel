@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { streamDiscuss, distillDiscuss } from "../data/client";
 import { EMBER_SPARK } from "./BoneStage";
+import type { Discussion } from "../journey/useDiscussion";
 import type { VizNode, FeedbackPoint, Conclusion } from "../types";
-
-// think = 這一則的推理草稿。跟 text 分開存,因為它們是兩種東西:text 是編輯說出口的話
-// (逐字進 transcript 正本),think 只活在這個畫面上,後端不留。
-type Msg = { role: "me" | "ed"; text: string; think?: string };
 
 // 骨架上的燼是什麼形狀,這裡就是什麼形狀——同一個記號走完「掃 → 撩 → 讀」,
 // 才是一套語言而不是兩個各自發展的小裝飾。這裡不給動畫:catch 是骨架 mount 專屬的「喚」。
@@ -19,22 +15,18 @@ const Spark = ({ stale }: { stale: boolean }) => (
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
 // 沿用 Dock 的串流 + 節點錨定;換節點不重開 session,改在訊息前補一句 context。
 export default function NodeTalk(
-  { slug, node, typeName, color, flag, kp, source, conclusions = [], onJump, onClose, onKept }:
+  { slug, node, typeName, color, flag, kp, source, conclusions = [], talk, onJump, onClose, onKept }:
   { slug: string; node: VizNode; typeName: string; color: string; flag: string; kp: FeedbackPoint | null;
-    source?: string; conclusions?: Conclusion[]; onJump?: (start: number, end: number) => void;
+    source?: string; conclusions?: Conclusion[]; talk: Discussion;
+    onJump?: (start: number, end: number) => void;
     onClose: () => void; onKept?: () => void },
 ) {
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const { msgs, busy, kept, cold, sessionId } = talk;
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [kept, setKept] = useState("");
-  const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
   const [openEmbers, setOpenEmbers] = useState(false);
-  const sessionId = useRef<string | null>(null);
-  const anchored = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setMsgs([]); setInput(""); setBusy(false); setKept(""); setCold(false); sessionId.current = null; anchored.current = null; }, [slug]);
+  useEffect(() => { setInput(""); }, [slug]);
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs]);
   useEffect(() => { setOpenEmbers(false); }, [node.id]);   // 換節點換一批燼,收回去
 
@@ -50,46 +42,11 @@ export default function NodeTalk(
     return { pre: (a > 0 ? "…" : "") + source.slice(a, cite.start), mid: source.slice(cite.start, cite.end), post: source.slice(cite.end, b) + (b < source.length ? "…" : "") };
   })();
 
-  async function send() {
+  function send() {
     const text = input.trim();
     if (!text || busy) return;
     setInput("");
-    let toSend = text;
-    if (node.id !== anchored.current) {
-      toSend = `(就「${node.label}」這個${typeName}節點)\n${text}`;
-      anchored.current = node.id;
-    }
-    setMsgs(m => [...m, { role: "me", text }, { role: "ed", text: "" }]);
-    setBusy(true);
-    const patchLast = (fn: (m: Msg) => Msg) =>
-      setMsgs(m => { const c = [...m]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
-    try {
-      for await (const ev of streamDiscuss(slug, sessionId.current, toSend, [node.id])) {
-        if (ev.event === "token") patchLast(m => ({ ...m, text: m.text + (ev.data.text ?? "") }));
-        else if (ev.event === "thinking") patchLast(m => ({ ...m, think: (m.think ?? "") + (ev.data.text ?? "") }));
-        else if (ev.event === "message") { if (ev.data.session_id) sessionId.current = ev.data.session_id; if (ev.data.text) patchLast(m => ({ ...m, text: m.text || ev.data.text })); }
-        else if (ev.event === "done") { if (ev.data.session_id) sessionId.current = ev.data.session_id; }
-        else if (ev.event === "error") patchLast(m => ({ ...m, text: m.text || `(討論出錯:${ev.data.message})` }));
-      }
-    } catch (e) {
-      patchLast(m => ({ ...m, text: m.text || `(連線中斷:${String(e instanceof Error ? e.message : e)})` }));
-    } finally { setBusy(false); }
-  }
-
-  // 收束這一局:LLM 只吐草稿,四道閘門在後端。寫成了就通知上層 refetch(新燼當場點著)。
-  async function keep() {
-    if (!sessionId.current || busy) return;
-    setBusy(true); setKept("收束中…");
-    try {
-      const r = await distillDiscuss(slug, sessionId.current);
-      if (r.reason === "session_gone") { setCold(true); setKept("討論已冷卻 · 逐字已留存"); }
-      else {
-        setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
-        if (r.written > 0) onKept?.();
-      }
-    } catch (e) {
-      setKept(`收束失敗:${String(e instanceof Error ? e.message : e)}`);
-    } finally { setBusy(false); }
+    talk.send(text, node, typeName);
   }
 
   return (
@@ -132,7 +89,7 @@ export default function NodeTalk(
         ))}
         {msgs.length > 0 && (
           <div className="talk-keep">
-            <button type="button" onClick={keep} disabled={busy || !sessionId.current || cold}>留下結論</button>
+            <button type="button" onClick={() => talk.keep(onKept)} disabled={busy || !sessionId.current || cold}>留下結論</button>
             {/* 一律渲染(即使還沒有話講):這行的高度先佔著,訊息來的時候就不會把底下整個頂下去 */}
             <span className="talk-kept">{kept}</span>
           </div>

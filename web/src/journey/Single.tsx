@@ -4,6 +4,7 @@ import { getStory, getConclusions } from "../data/client";
 import BoneStage from "../lab/BoneStage";
 import NodeTalk from "../lab/NodeTalk";
 import { embersByRef } from "../data/embers";
+import { useDiscussion } from "./useDiscussion";
 import SourceAnnotated from "./SourceAnnotated";
 import UsagePanel from "./UsagePanel";
 import Dust from "./Dust";
@@ -34,6 +35,8 @@ export default function Single() {
     wantTab === "usage" ? "usage" : null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
   const [embers, setEmbers] = useState<Conclusion[]>([]);
+  // 討論局活在篇這一層:關掉討論框(取消選取)不該把對話和 session 一起帶走。
+  const talk = useDiscussion(slug ?? "");
   // 回饋頁是「讀」的層:判斷內文+首條原文證據直接在場(舊版只列標題,判斷要逐張點進
   // 討論才看得到=回饋頁淪為目錄)。點標題仍是討論啟動器:開該節點的沉浸討論。
   const accItems = (prefix: string, pts: FeedbackPoint[]) => pts.map((p, i) => {
@@ -137,7 +140,7 @@ export default function Single() {
       {sn && (
         <NodeTalk slug={slug!} node={sn} typeName={viz.cn[sn.type] ?? sn.type} color={VAR[sn.type]}
           flag={flagOf(viz, sn.id)} kp={snKp} source={source} conclusions={embersByRefMap[sn.id] ?? []}
-          onJump={jumpToSource} onClose={() => setSelected(null)}
+          talk={talk} onJump={jumpToSource} onClose={() => setSelected(null)}
           onKept={() => getConclusions(slug!).then(r => setEmbers(r.conclusions)).catch(() => {})} />
       )}
     </div>

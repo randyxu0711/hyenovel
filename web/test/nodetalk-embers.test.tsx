@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import NodeTalk from "../src/lab/NodeTalk";
+import NodeTalk from "./talk-harness";
 import type { VizNode, Conclusion } from "../src/types";
 
 const distillDiscuss = vi.fn();
