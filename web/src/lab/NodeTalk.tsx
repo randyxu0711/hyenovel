@@ -15,13 +15,13 @@ const Spark = ({ stale }: { stale: boolean }) => (
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
 // 沿用 Dock 的串流 + 節點錨定;換節點不重開 session,改在訊息前補一句 context。
 export default function NodeTalk(
-  { slug, node, typeName, color, flag, kp, source, conclusions = [], talk, onJump, onClose, onKept }:
+  { slug, node, typeName, color, flag, kp, source, conclusions = [], talk, onJump, onClose }:
   { slug: string; node: VizNode; typeName: string; color: string; flag: string; kp: FeedbackPoint | null;
     source?: string; conclusions?: Conclusion[]; talk: Discussion;
     onJump?: (start: number, end: number) => void;
-    onClose: () => void; onKept?: () => void },
+    onClose: () => void },
 ) {
-  const { msgs, past, busy, kept, cold, sessionId } = talk;
+  const { msgs, past, busy } = talk;
   const [input, setInput] = useState("");
   const [openEmbers, setOpenEmbers] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -81,7 +81,7 @@ export default function NodeTalk(
           {past.map((t, i) => (
             <div key={`p${i}`} className={`talk-line past ${t.role === "user" ? "me" : "ed"}`}>{t.text}</div>
           ))}
-          <div className="talk-boundary">以上是過去的逐字 · 編輯讀的是你留下的結論,不是這些字</div>
+          <div className="talk-boundary">過去的逐字 · 編輯不重讀</div>
         </>}
         {msgs.map((m, i) => (
           <div key={i} className={`talk-line ${m.role}`}>
@@ -91,18 +91,14 @@ export default function NodeTalk(
                 thinking 若日後翻回來,草稿一開始流就換它上場(下面 !m.think 那條)。 */}
             {m.text || (busy && !m.think && i === msgs.length - 1
               ? <span className="talk-wait" role="status" aria-live="polite">
-                  編輯正在回應<i /><i /><i />
+                  思考中<i /><i /><i />
                 </span>
               : "")}
           </div>
         ))}
-        {msgs.length > 0 && (
-          <div className="talk-keep">
-            <button type="button" onClick={() => talk.keep(onKept)} disabled={busy || !sessionId.current || cold}>留下結論</button>
-            {/* 一律渲染(即使還沒有話講):這行的高度先佔著,訊息來的時候就不會把底下整個頂下去 */}
-            <span className="talk-kept">{kept}</span>
-          </div>
-        )}
+        {/* 這裡曾經有一顆「留下結論」鈕。收束現在是後端的本能:這一局閒置被回收之後,
+            settle worker 自己從 transcript.jsonl 煉(server/settle.py)。使用者不再需要
+            知道有「收束」這件事,也不必站著等那 67 秒。 */}
         {/* 過去留下的燼:挨著輸入框(結構本身就是邀請),預設收起——一進節點
             先看到的該是編輯的判斷,不是自己說過什麼。把手用一排火花講條數與活冷,不報數字。 */}
         {sorted.length > 0 && (

@@ -25,7 +25,6 @@ vi.mock("../src/data/client", () => ({
     yield { event: "token", data: { text: "我不認為 m2 用得太滿。" } };
     yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };
   },
-  distillDiscuss: vi.fn(),
 }));
 
 const node: VizNode = { id: "m2", type: "motif", label: "破帽", note: "", intensity: null, evidence: [] };
@@ -43,7 +42,7 @@ describe("NodeTalk 等待狀態", () => {
       return el!;
     });
     // 意義要掛在字上:減動會把那三顆點停住,只剩這行字撐著。空的等待提示等於沒有等待提示。
-    expect(wait.textContent).toContain("編輯正在回應");
+    expect(wait.textContent).toContain("思考中");
     // 讀螢幕的人也要收得到這個轉場,不然「空掛著」對他們照樣成立。
     expect(wait.getAttribute("aria-live")).toBe("polite");
 

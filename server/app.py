@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import recall
 
-from . import config, critique, discuss, ingest, ledger, log, transcript
+from . import config, critique, discuss, ingest, ledger, log, settle, transcript
 
 app = FastAPI(title="hyenovel backend")
 
@@ -57,6 +57,7 @@ async def _startup():
     critique.scan_crashed()     # 同步、便宜:標出無活 Run 卻仍 running 的孤兒
     asyncio.create_task(discuss.sweep_idle())
     asyncio.create_task(critique.sweep_runs())
+    asyncio.create_task(settle.sweep_settle())   # 討論結束後自動收束成結論
 
 
 @app.get("/api/health")
@@ -104,12 +105,6 @@ def discuss_sessions(slug: str):
 @app.delete("/api/discuss/{slug}/{session_id}")
 async def discuss_close(slug: str, session_id: str):
     return {"closed": await discuss.close_session(session_id)}
-
-
-@app.post("/api/discuss/{slug}/{session_id}/distill")
-async def discuss_distill(slug: str, session_id: str):
-    """把這一局討論收束成結論正本。LLM 只吐 JSON 文字,確定性層驗過才落地。"""
-    return await discuss.distill(_slug(slug), session_id)
 
 
 @app.get("/api/conclusions/{slug}")

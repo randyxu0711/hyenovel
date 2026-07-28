@@ -33,7 +33,11 @@ CRITIQUE_BUDGET_USD = 3.0        # 單格(analyst / criticizer 各一)成本上�
 MAX_GATE_RETRIES = 2             # 閘門失敗後最多重派 subagent 幾次
 PHASE_TIMEOUT = 600             # 單格(analyst/criticizer)LLM 回合逾時上限(秒)—— 防無界卡住
 AGENT_MAX_TURNS = 12            # 單一代理最多回合(讀幾檔 + 寫一次;綁上限防失控)
-DISCUSS_IDLE_TIMEOUT = 30 * 60   # 討論 session 閒置幾秒後回收(秒)
+# 討論 session 閒置幾秒後回收(秒)。它同時決定「這一局算不算結束」——
+# 回收之後 settle 才會把它煉成結論(session id 一旦回收就永遠不會再長新輪次)。
+# 15 分鐘是折衷:比 30 分鐘早一倍讓結論落地,而 15 分鐘的停頓已經是「真的去做別的事」
+# 而非「讀一段原文」。它**不影響蒸餾能不能成功**(settle 自帶 client,不借這個 session)。
+DISCUSS_IDLE_TIMEOUT = 15 * 60
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024   # 上傳原始位元組上限(純文學短篇 <1萬字,5MB 對 pdf/docx 綽綽有餘)
 SUBPROCESS_TIMEOUT = 120         # 確定性層子行程(render/viz/index/gate)逾時上限(秒)—— 卡死不拖垮 Run
 TRANSIENT_MAX_RETRIES = 2        # 瞬時 overload(529/500)最多退避幾次,耗盡轉 fail-fast

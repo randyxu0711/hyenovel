@@ -300,97 +300,7 @@ def test_discuss_records_anchors(monkeypatch):
         assert rows[1]["anchors"] == ["m2"], "assistant 行也要帶 —— 它回的就是這顆"
 
 
-# ── Task 5:收束 ────────────────────────────────────────────────────
-def _fixture_source():
-    """用合成樣本,絕不碰真實 stories/。"""
-    return (Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "mini" / "source.md").read_text(encoding="utf-8")
-
-
-def _prime_session(monkeypatch, S, reply):
-    """造一個活著的 session,並讓下一次 run_turn 回傳指定文字。"""
-    import conclusions
-    from server import discuss
-
-    class FakeClient:
-        async def connect(self):
-            pass
-
-        async def query(self, prompt):
-            pass
-
-        async def receive_response(self):
-            from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
-            yield AssistantMessage(content=[TextBlock(text=reply)], model="m")
-            yield ResultMessage(subtype="success", duration_ms=10, duration_api_ms=9,
-                                is_error=False, num_turns=1, session_id="sdk-1",
-                                total_cost_usd=0.01, usage={}, model_usage={})
-
-    monkeypatch.setattr(discuss, "ClaudeSDKClient", lambda options=None: FakeClient())
-    monkeypatch.setattr(conclusions, "STORIES", S)
-    return discuss
-
-
-def test_distill_writes_conclusions(monkeypatch):
-    import asyncio
-    import conclusions
-
-    with _tmp_stories() as S:
-        (S / "s99").mkdir()
-        # 圖裡要真的有 e1 —— 結論的 refs 落點也是閘門(conclusions 第三道),
-        # 空圖配 refs:["e1"] 會被正確擋下,那測到的就不是「收束能寫入」了。
-        (S / "s99" / "analysis.json").write_text(
-            '{"nodes":[{"id":"e1","type":"effect","label":"空缺感"}]}', encoding="utf-8")
-        (S / "s99" / "source.md").write_text(_fixture_source(), encoding="utf-8")
-        drafts = '[{"kind":"judgment","text":"收尾太快","refs":["e1"],"quotes":["他把燈關了。"]}]'
-        discuss = _prime_session(monkeypatch, S, drafts)
-
-        async def go():
-            sid = None
-            async for ev in discuss.run_discuss("s99", None, "聊聊結尾"):
-                if ev["event"] == "done":
-                    sid = ev["data"]["session_id"]
-            return await discuss.distill("s99", sid)
-
-        res = asyncio.run(go())
-        assert res["written"] == 1 and res["errors"] == []
-        rows = conclusions.load("s99")
-        assert rows[0]["kind"] == "judgment"
-        assert rows[0]["provenance"]["turns"] == [0, 1], "涵蓋這一局的 transcript 行"
-
-
-def test_distill_rejects_hallucinated_quote(monkeypatch):
-    """收束不是免死金牌 —— 引文照樣要過閘門。"""
-    import asyncio
-    import conclusions
-
-    with _tmp_stories() as S:
-        (S / "s99").mkdir()
-        (S / "s99" / "analysis.json").write_text('{"nodes":[]}', encoding="utf-8")
-        (S / "s99" / "source.md").write_text(_fixture_source(), encoding="utf-8")
-        drafts = '[{"kind":"judgment","text":"x","refs":[],"quotes":["這句原文裡根本沒有"]}]'
-        discuss = _prime_session(monkeypatch, S, drafts)
-
-        async def go():
-            sid = None
-            async for ev in discuss.run_discuss("s99", None, "聊聊"):
-                if ev["event"] == "done":
-                    sid = ev["data"]["session_id"]
-            return await discuss.distill("s99", sid)
-
-        res = asyncio.run(go())
-        assert res["written"] == 0 and res["errors"], "幻覺引文要被擋"
-        assert conclusions.load("s99") == []
-
-
-def test_distill_needs_live_session(monkeypatch):
-    import asyncio
-    from server import discuss
-
-    with _tmp_stories() as S:
-        (S / "s99").mkdir()
-        res = asyncio.run(discuss.distill("s99", "not-a-session"))
-        assert res["written"] == 0 and "session" in res["errors"][0]
-
+# 收束(distill)已搬到 server/settle.py，契約測試在 server/tests/test_settle.py。
 
 # ── Task 6:討論開場注入 recall ─────────────────────────────────────
 def test_new_session_injects_recall_into_opening(monkeypatch):
@@ -477,16 +387,3 @@ def test_continuing_session_does_not_reinject_recall(monkeypatch):
             discuss._sessions.pop("live1", None)
 
     assert seen[0] == "第二句", "續局 prompt 就是使用者訊息,不注入召回"
-
-
-def test_distill_dead_session_reports_reason():
-    """session 死 → distill 回 reason=session_gone,前端據此 disable 鈕(不靠比對中文字串)。"""
-    import asyncio
-    from server import discuss
-
-    async def go():
-        return await discuss.distill("s99", "no-such-session")
-
-    r = asyncio.run(go())
-    assert r["written"] == 0
-    assert r["reason"] == "session_gone", "session 死要有結構化 reason,不能只有中文 errors"

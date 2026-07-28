@@ -4,11 +4,9 @@
    在後端成立、在使用者眼裡沒成立:重整一次,昨天聊的東西在磁碟上完好無缺,
    畫面上一個字都沒有。
 
-   同時釘住兩條政策:
-   ① 邊界要誠實。開新局時模型拿到的是 `recall` 注入的**蒸餾結論**(discuss.py:90),
-      不是這些逐字。畫面顯示歷史不等於編輯讀過歷史,那句話要寫在畫面上。
-   ② 歷史不可收束。「留下結論」受 live session 閘控 —— 只有歷史沒有活著的局,
-      鈕不該出現(按了只會拿到 session_gone)。
+   同時釘住一條政策:
+   邊界要誠實。開新局時模型拿到的是 `recall` 注入的**蒸餾結論**(discuss.py:90),
+   不是這些逐字。畫面顯示歷史不等於編輯讀過歷史,那句話要寫在畫面上。
 
    跑法(web/):  npm test -- talk-history
 */
@@ -32,7 +30,6 @@ vi.mock("../src/data/client", () => ({
     yield { event: "token", data: { text: "現在的回答" } };
     yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };
   })(),
-  distillDiscuss: vi.fn(),
 }));
 
 const node: VizNode = { id: "m2", type: "motif", label: "破帽", note: "", intensity: null, evidence: [] };
@@ -48,24 +45,14 @@ describe("討論的逐字歷史", () => {
     expect(screen.getByText("過去的回答")).toBeTruthy();
   });
 
-  it("過去與現在之間有邊界,且它講明編輯讀的是結論不是這些字", async () => {
+  it("過去與現在之間有邊界,且它講明編輯不重讀這些字", async () => {
     const { container } = mount();
     const b = await waitFor(() => {
       const el = container.querySelector(".talk-boundary");
       expect(el).toBeTruthy();
       return el!;
     });
-    expect(b.textContent).toMatch(/結論/);
-  });
-
-  it("只有歷史、沒有活著的局 → 不給「留下結論」(歷史收束不了)", async () => {
-    mount();
-    await waitFor(() => expect(screen.getByText("過去的問題")).toBeTruthy());
-    expect(screen.queryByText("留下結論")).toBeNull();
-
-    fireEvent.change(screen.getByPlaceholderText(/說…/), { target: { value: "現在的問題" } });
-    fireEvent.click(screen.getByText("↑"));
-    await waitFor(() => expect(screen.getByText("留下結論")).toBeTruthy());
+    expect(b.textContent).toMatch(/不重讀/);
   });
 
   it("讀不到歷史不擋討論(歷史是增益不是主線,同燼的處置)", async () => {

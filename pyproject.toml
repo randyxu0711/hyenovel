@@ -20,6 +20,7 @@ include = [
     "runstate.py",
     "conclusions.py",
     "recall.py",
+    "settled.py",
     "server/ingest.py",
 ]
 

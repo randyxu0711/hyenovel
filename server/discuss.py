@@ -21,7 +21,6 @@ from claude_agent_sdk import (
     ClaudeSDKClient, AssistantMessage, TextBlock, StreamEvent, ResultMessage,
 )
 
-import conclusions
 import recall
 
 from . import config, ledger, sdk_runner, transcript
@@ -159,47 +158,6 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
         yield {"event": "done", "data": {"ok": True, "cost_usd": round(cost, 4), "session_id": sid}}
 
 
-_DISTILL_PROMPT = """把我們這輪討論收束成結論,輸出**單一 JSON 陣列**,不要任何其他文字。
-
-每個元素只有四個欄位:
-  kind    observation(對文本的觀察)/ judgment(編輯判斷)/ question(仍未解的提問)
-  text    一句話講完這條結論,且**能獨立成立** —— 日後它會在沒有這段對話的情況下被撈出來
-  refs    相關的 analysis node id 陣列(如 ["t3","m1"]);**必須是圖裡真有的 id**,
-          編一個不存在的會被閘門擋掉。不確定就給 []
-  quotes  支撐這條結論的**逐字原文**陣列;一字不改,改了會被閘門擋掉。沒有就給 []
-
-只收真的有結論的東西 —— 沒有就回 []。不要複述剛才說過的話,不要客套。"""
-
-
-async def distill(slug: str, session_id: str):
-    """把一局討論收束成 conclusions.jsonl。回 {"written", "errors"}。
-
-    只在**活著的** session 裡收束:那裡的語境最完整,而我們沒有 resume。
-    session 被 sweep_idle 收掉就收束不了 —— 誠實回報,不假裝能從 transcript 重建當時的思路。
-
-    LLM 全程碰不到檔案(討論 client 是 allowed_tools=["Read"]):
-    它把 JSON 當文字吐出來,由 conclusions.py 解析、驗證、寫入。
-    """
-    sess = _sessions.get(session_id)
-    if not sess or sess.slug != slug:
-        return {"written": 0, "reason": "session_gone",
-                "errors": ["session 不存在或已被回收 —— 結論只能在活著的討論裡收束"]}
-
-    async with sess.lock:
-        sess.last_active = time.time()
-        try:
-            r = await sdk_runner.run_turn(sess.client, _DISTILL_PROMPT)
-        except Exception as e:
-            log.exception(f"event=distill-turn-fail slug={slug}")
-            return {"written": 0, "errors": [str(e)]}
-        sess.last_active = time.time()
-    ledger.append(slug, "distill", 0, r)
-
-    drafts, err = conclusions.parse_drafts(r.text)
-    if err:
-        log.warning(f"event=distill-parse-fail slug={slug}")
-        return {"written": 0, "errors": [err]}
-    turns = transcript.session_range(transcript.load(slug), session_id)
-    written, errors = conclusions.append(slug, drafts, session_id, turns)
-    log.info(f"event=distill slug={slug} written={written} errors={len(errors)}")
-    return {"written": written, "errors": errors}
+# 收束(蒸餾成 conclusions.jsonl)已搬到 server/settle.py:它不再借用這裡的 client,
+# 而是在這一局被 sweep_idle 回收之後,自己開一個專用 client 從 transcript.jsonl 煉。
+# 理由見 settle.py 的 docstring。
