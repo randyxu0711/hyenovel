@@ -14,7 +14,6 @@ vi.mock("../src/data/client", () => ({
     yield { event: "message", data: { role: "assistant", text: "我不認為 m2 用得太滿。", session_id: "sid-1" } };
     yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };
   },
-  distillDiscuss: vi.fn(),
 }));
 
 const node: VizNode = { id: "m2", type: "motif", label: "破帽", note: "", intensity: null, evidence: [] };

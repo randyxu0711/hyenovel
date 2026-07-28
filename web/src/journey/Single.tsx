@@ -140,8 +140,7 @@ export default function Single() {
       {sn && (
         <NodeTalk slug={slug!} node={sn} typeName={viz.cn[sn.type] ?? sn.type} color={VAR[sn.type]}
           flag={flagOf(viz, sn.id)} kp={snKp} source={source} conclusions={embersByRefMap[sn.id] ?? []}
-          talk={talk} onJump={jumpToSource} onClose={() => setSelected(null)}
-          onKept={() => getConclusions(slug!).then(r => setEmbers(r.conclusions)).catch(() => {})} />
+          talk={talk} onJump={jumpToSource} onClose={() => setSelected(null)} />
       )}
     </div>
   );

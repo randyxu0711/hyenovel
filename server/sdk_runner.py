@@ -207,6 +207,27 @@ def discuss_options(resume: str | None = None) -> ClaudeAgentOptions:
     )
 
 
+def settle_options() -> ClaudeAgentOptions:
+    """自動收束:一次性的專用 client,只做「把一局逐字壓成結論」這一件事。
+
+    與 discuss_options 的差別是刻意的,別合併:
+    - 不串流(`include_partial_messages=False`)—— 沒有人在看,逐 token delta 是純浪費。
+    - 不 resume —— 它本來就不接任何既有對話,逐字由呼叫端組進 prompt。
+    唯讀權限相同:它需要讀 analysis.json 對 node id、讀 source.md 抓逐字引文,
+    而三道閘門在 conclusions.py 那端,不靠這裡的權限把關。
+    """
+    return ClaudeAgentOptions(
+        cwd=str(config.ROOT),
+        setting_sources=["project"],
+        allowed_tools=["Read"],
+        permission_mode="default",
+        hooks=_GUARD_HOOKS,
+        model=config.DISCUSS_MODEL,
+        include_partial_messages=False,
+        thinking={"type": "disabled"},
+    )
+
+
 async def run_turn(client: ClaudeSDKClient, prompt: str) -> TurnResult:
     """送一輪 prompt、抽乾回應,回 TurnResult(帶結構化失敗訊號)。"""
     await client.query(prompt)

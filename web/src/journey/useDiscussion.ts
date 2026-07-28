@@ -9,7 +9,7 @@
  * node 在這裡的角色只剩「這輪從哪切入」:換節點不重開局,只在訊息前補一句錨定。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamDiscuss, distillDiscuss, getTranscript } from "../data/client";
+import { streamDiscuss, getTranscript } from "../data/client";
 import type { Turn } from "../types";
 
 // think = 這一則的推理草稿。跟 text 分開存,因為它們是兩種東西:text 是編輯說出口的話
@@ -22,14 +22,12 @@ export function useDiscussion(slug: string) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [past, setPast] = useState<Turn[]>([]);     // 落盤的逐字歷史(唯讀)
   const [busy, setBusy] = useState(false);
-  const [kept, setKept] = useState("");
-  const [cold, setCold] = useState(false);          // session 已冷卻(sweep_idle 回收)→ 收不了
   const sessionId = useRef<string | null>(null);
   const anchored = useRef<string | null>(null);
 
   // 換篇才歸零。換節點不歸零 —— 那正是這個 hook 存在的理由。
   useEffect(() => {
-    setMsgs([]); setBusy(false); setKept(""); setCold(false); setPast([]);
+    setMsgs([]); setBusy(false); setPast([]);
     sessionId.current = null; anchored.current = null;
     if (!slug) return;
     // 歷史是增益不是主線:抓不到就沒歷史,討論照常(同燼的處置)。
@@ -62,23 +60,10 @@ export function useDiscussion(slug: string) {
     } finally { setBusy(false); }
   }, [slug, busy]);
 
-  // 收束這一局:LLM 只吐草稿,四道閘門在後端。寫成了就通知上層 refetch(新燼當場點著)。
-  const keep = useCallback(async (onKept?: () => void) => {
-    if (!sessionId.current || busy) return;
-    setBusy(true); setKept("收束中…");
-    try {
-      const r = await distillDiscuss(slug, sessionId.current);
-      if (r.reason === "session_gone") { setCold(true); setKept("討論已冷卻 · 逐字已留存"); }
-      else {
-        setKept(r.errors.length ? `擋下:${r.errors[0]}` : `留下 ${r.written} 條結論`);
-        if (r.written > 0) onKept?.();
-      }
-    } catch (e) {
-      setKept(`收束失敗:${String(e instanceof Error ? e.message : e)}`);
-    } finally { setBusy(false); }
-  }, [slug, busy]);
-
-  // past 與 msgs 刻意不合併:msgs 是「這一局」,而「留下結論」受活著的 session 閘控。
-  // 併成一條流,只有歷史時鈕也會亮,按下去只拿得到 session_gone。
-  return { msgs, past, busy, kept, cold, sessionId, send, keep };
+  // 收束不在這裡,也不在任何前端路徑上:這一局被 sweep_idle 回收之後,後端 settle worker
+  // 自己從 transcript.jsonl 煉成結論(server/settle.py)。使用者不必知道這件事發生過。
+  //
+  // past 與 msgs 仍刻意不合併:msgs 是「這一局」(送訊息要帶 sessionId),
+  // past 是整篇所有已落盤的局。合併會讓「這一局」的邊界消失。
+  return { msgs, past, busy, sessionId, send };
 }

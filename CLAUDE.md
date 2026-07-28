@@ -42,6 +42,10 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
 - **討論兩份正本**:`transcript.jsonl`(逐字,`server/transcript.py` 逐輪寫)、
   `conclusions.jsonl`(蒸餾結論,`conclusions.py` 是唯一寫入者與閘門)。
   結論的型別欄位叫 `kind` 不叫 `type`(`type` 已被 analysis node/edge 佔用)。
+- **收束是自動的,沒有使用者入口**:討論局被 `sweep_idle` 回收後,`server/settle.py` 開專用
+  client 從逐字煉成結論。水位在 `settled.jsonl`(根層 `settled.py`),**判定同時看它與
+  conclusions 的 `provenance.session`** —— 單看任一邊都有一個會重複花錢的洞。
+  `sweep_settle` 必須序列跑,不可扇出(會煉兩次)。
 - 討論的 LLM 全程唯讀(`allowed_tools=["Read"]`):結論由它吐 JSON 文字、確定性層驗過才落地。
 
 ## 測試(判準:這行的行為「是誰決定的」)

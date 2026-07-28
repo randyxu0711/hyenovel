@@ -88,8 +88,10 @@ export default function BoneStage(
 ) {
   const gRef = useRef(0);
   const rafRef = useRef(0);
-  // 入場那批燼跟著骨架入場錯落亮起(等骨畫完才點);入場過後才出現的燼(剛按下
-  // 「留下結論」→ refetch)不等——那是 present-tense,遲到就沒了(spec §5.5)。
+  // 入場那批燼跟著骨架入場錯落亮起(等骨畫完才點);入場過後才出現的燼不等——
+  // 那是 present-tense,遲到就沒了(spec §5.5)。
+  // 註:自動收束上線後前端已無 refetch 路徑(燼只在載入單篇時抓一次),這條分支
+  // 目前休眠。留著是因為它守的是「遲到的燼怎麼進場」這個規則,不是那顆已刪的鈕。
   const settled = useRef(false);
   useEffect(() => {
     settled.current = false;

@@ -28,7 +28,6 @@ vi.mock("../src/data/client", () => ({
       yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };
     })();
   },
-  distillDiscuss: vi.fn(),
 }));
 
 import Single from "../src/journey/Single";
