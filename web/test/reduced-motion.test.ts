@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 // theme.css 的全域減動兜底是所有 CSS 動畫的出路(全站 30+ 個動畫只有 6 個自帶精細規則)。
 // 它被刪掉時畫面完全正常,只有開 prefers-reduced-motion 的人受害——jsdom 不跑動畫也不模擬
 // media query,render 測試永遠抓不到。故直接對 CSS 原始碼驗這道承重牆還在。
-// 前科:刪 hero 區塊時連帶刪掉別處還在用的 @keyframes draw,退場軸靜默不亮。
+// 前科:刪 hero 區塊時連帶刪掉別處還在用的 @keyframes,中心軸靜默不畫(見 css-keyframes.test.ts)。
 
 const themeCss = () =>
   readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../src/theme.css"), "utf8");

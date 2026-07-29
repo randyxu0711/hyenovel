@@ -10,7 +10,7 @@
      事件動畫的專屬曲線(bornWave、ucFly、hatchIn…)不在此列——家法管口音,不抹台詞。
      framer-motion 的 TS 鏡像在 lib/motion.ts,test/motion-tokens.test.ts 釘兩邊同步。 */
   --ease-house:cubic-bezier(.66,0,.2,1);
-  --d-quick:.3s; --d-soft:.6s; --d-scene:.9s; --d-cam:1.4s;
+  --d-quick:.3s; --d-soft:.6s; --d-scene:.9s; --d-cam:1.4s; --d-cam-out:.8s;
   --bone:#efe6cf; --bg:#0c0b09;
   --c-theme:#c47a72; --c-motif:#a98bb8; --c-technique:#7aa3bd; --c-effect:#c9a45e;
   --c-character:#8fb89a; --c-beat:#9a9488; --amber:#ecc98a;

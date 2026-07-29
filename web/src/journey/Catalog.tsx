@@ -10,8 +10,8 @@ const IGNITE_MS = 1100;   // 點火播完(.skel.ignite 最長 .9s + 錯開)才�
 // 每篇載入自己的 viz.json,畫出資料驅動的星骨指紋(載入中先留空位)。
 // gestating=孕育中的骨(早出 viz 已落檔):點火 → 接力成「編輯在讀」,直到 criticizer 交件。
 // 接力而非並掛:兩者都動 .node,同時掛會被 CSS 疊到只剩一個;而且先點火再讀本來就是敘事順序。
-function StoryBone({ slug, hasViz, burst, reassemble, gestating, dormant }:
-  { slug: string; hasViz: boolean; burst?: boolean; reassemble?: boolean; gestating?: boolean;
+function StoryBone({ slug, hasViz, burst, gestating, dormant }:
+  { slug: string; hasViz: boolean; burst?: boolean; gestating?: boolean;
     dormant?: "paused" | "failed" }) {
   const [viz, setViz] = useState<VizData | null>(null);
   const [read, setRead] = useState(false);
@@ -27,7 +27,7 @@ function StoryBone({ slug, hasViz, burst, reassemble, gestating, dormant }:
     return () => clearTimeout(t);
   }, [gestating, viz]);
   if (!viz) return <div className="bone-ph" style={{ width: 300, height: 184 }} />;
-  return <Skeleton viz={viz} width={300} burst={burst} reassemble={reassemble}
+  return <Skeleton viz={viz} width={300} burst={burst}
     ignite={gestating && !read} reading={gestating && read} dormant={dormant} />;
 }
 
@@ -35,7 +35,7 @@ function StoryBone({ slug, hasViz, burst, reassemble, gestating, dormant }:
 //   step1 = analyst 跑(分鐘級)→ 凝聚:真的還沒有任何資料
 //   step2 = criticizer 跑(分鐘級)→ 秤出輕重:那正是 criticizer 在做的事,骨此時已在場
 //   step3 = render 跑(秒級)、step4 = done → 成形
-// 「長出骨架」不是一格,是 step1→2 的轉場瞬間(真骨 reassemble 現形那一下),
+// 「長出骨架」不是一格,是 step1→2 的轉場瞬間(真骨 ignite 現形那一下),
 // 畫面自己會講,不需要字。舊表把每個詞往後掛了一格:criticizer 跑了幾分鐘卻寫著
 // 「長出骨架」(骨老早長出來了),而「秤出輕重」只閃在 render 那一兩秒。
 const WORD = ["", "凝聚", "秤出輕重", "成形", "成形"];
@@ -45,10 +45,10 @@ const WORD = ["", "凝聚", "秤出輕重", "成形", "成形"];
 const FAIL_WORD: Record<string, string> = { timeout: "逾時", gate: "未通過檢核", crash: "出錯" };
 
 export default function Catalog(
-  { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, returning, confirming, onPick, onCancel, onResume, onReanalyze }:
+  { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, confirming, onPick, onCancel, onResume, onReanalyze }:
   {
     entries: IndexEntry[]; ordered: string[]; loading?: boolean; flying?: string | null; bursting?: boolean;
-    gestations: Map<string, Gestation>; hatching?: string | null; fresh?: Set<string>; returning?: string | null;
+    gestations: Map<string, Gestation>; hatching?: string | null; fresh?: Set<string>;
     confirming?: string | null;
     onPick: (slug: string) => void; onCancel: (slug: string) => void;
     onResume?: (slug: string, title: string) => void;
@@ -76,22 +76,19 @@ export default function Catalog(
         const entry = byslug.get(slug);
         const isFly = slug === flying;
         const isHatch = slug === hatching;
-        const isReturn = slug === returning;
         // 停拍:paused/failed 的胚胎(不是 running)。骨是否已在,看早出 viz 有沒有落檔(vizReady/has_viz)
         // —— 沒骨(卡 analyst)畫凍住的雲,有骨(卡 criticizer)畫靜止的骨,一律不畫假骨。
         const dormant: "paused" | "failed" | null = gest && gest.status !== "running" ? gest.status : null;
         const hasBone = !!(gest?.vizReady || entry?.has_viz);
-        // hatching:--hx/--hy 從中心飛到槽位。returning:骨留在自己槽位,退場當下鏡頭正對焦此槽位
-        // → 它就在鏡頭正中,零件於此對焦重組,鏡頭再拉遠把它帶回環上(運鏡即逆俯衝)。兩者都不套 skel-in。
-        const cls = `story ${isHatch ? "hatching" : isReturn ? "returning" : "skel-in"}${isFly ? " flying" : ""}${gest ? " gestating" : ""}${dormant ? ` ${dormant}` : ""}${!gest && fresh?.has(slug) ? " fresh" : ""}`;
+        // hatching:--hx/--hy 從中心飛到槽位(不套 skel-in)。
+        // 退場沒有自己的 class —— 骨一直在自己的槽位上,離開只是鏡頭抬起(見 Journey.startReturn)。
+        const cls = `story ${isHatch ? "hatching" : "skel-in"}${isFly ? " flying" : ""}${gest ? " gestating" : ""}${dormant ? ` ${dormant}` : ""}${!gest && fresh?.has(slug) ? " fresh" : ""}`;
         const style: React.CSSProperties = isHatch
           ? { left: base.x, top: base.y, ["--hx"]: `${cx - base.x}px`, ["--hy"]: `${cy - base.y}px` } as React.CSSProperties
-          : isReturn
-            ? { left: base.x, top: base.y }
-            : isFly
-              ? { left: base.x, top: base.y, animationDelay: `${i * 0.12}s`,
-                  transform: `translate(-50%,-50%) translate(${cx - base.x}px, ${cy - base.y}px) scale(3)` }
-              : { left: base.x, top: base.y, animationDelay: `${i * 0.12}s` };
+          : isFly
+            ? { left: base.x, top: base.y, animationDelay: `${i * 0.12}s`,
+                transform: `translate(-50%,-50%) translate(${cx - base.x}px, ${cy - base.y}px) scale(3)` }
+            : { left: base.x, top: base.y, animationDelay: `${i * 0.12}s` };
         return (
           <div className={cls} data-testid="story" key={slug} style={style}
             onClick={() => { if (!gest) onPick(slug); }}
@@ -109,7 +106,7 @@ export default function Catalog(
                   : (gest.vizReady
                       ? <StoryBone slug={slug} hasViz gestating />
                       : <CloudCollapse width={300} />))
-              : <StoryBone slug={slug} hasViz={!!entry?.has_viz} burst={isFly && !!bursting} reassemble={isReturn} />}
+              : <StoryBone slug={slug} hasViz={!!entry?.has_viz} burst={isFly && !!bursting} />}
             <div className="cap">{gest ? gest.title : entry?.title}</div>
             {/* running:階段詞 + 取消。停拍:狀態句 + 續跑(paused 帶重置時刻,failed 說已中斷)。 */}
             {gest && !dormant && <div className="gest-word">{WORD[Math.min(4, gest.step)]}</div>}
