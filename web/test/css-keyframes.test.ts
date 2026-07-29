@@ -5,7 +5,8 @@ import { dirname, resolve } from "node:path";
 
 // 每個 animation 引用的 keyframe 名字都必須有對應的 @keyframes 定義。
 // 這條不變式擋的是「刪一段以為死掉的 CSS,卻連帶刪掉別處還在用的 @keyframes」——
-// 例如 .skel.reassemble .spine 用的 draw 曾被誤當 hero 區塊的一部分刪掉,退場軸就靜默不亮。
+// 前科:.skel.ignite .stub 與當時的退場動畫共用 stubIn,而 draw 被誤當 hero 區塊的一部分刪掉,
+// 中心軸就靜默不畫(選擇器死了不代表區塊裡的 keyframe 也死)。
 // jsdom 不跑動畫,render 測試抓不到;這裡直接對 CSS 原始碼做靜態檢查。
 
 const KEYWORDS = new Set([

@@ -430,31 +430,23 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   .orbits.bloom ellipse,.nascent.ignite .nascent-spark{animation:none}
 }
 
-/* ── ① 逆俯衝出場:overlay 向中心收合 → 骨在鏡頭焦點(自己的槽位)重組 → 鏡頭拉遠帶回環上 ── */
-.single-overlay.out{animation:overlayOut .46s var(--ease-house) forwards} /* 事件曲線/週期,家法不抹(時長與 OVERLAY_OUT_MS 對齊,不換) */
-@keyframes overlayOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.92)}}
-
-/* 外殼留在自己的軌道槽位(不繞世界中心);退場當下鏡頭正對焦此槽位(single 1.5×),
-   零件就在鏡頭正中對焦重組,鏡頭再拉遠(→catalog)把它帶回環上——運鏡本身就是逆俯衝 */
-.story.returning{z-index:47}
-
-/* 內部零件:從四周(--bx/--by,再被 single 相機 1.5× 放大 → 畫面級)聚回定位;脊椎連線畫回 */
-.skel.reassemble{overflow:visible}
-.skel.reassemble .rib,.skel.reassemble .node{transform-box:fill-box;transform-origin:center;
-  animation:gather var(--d-soft) cubic-bezier(.2,.55,.25,1) both}
-@keyframes gather{
-  from{transform:translate(var(--bx),var(--by)) scale(1.5);opacity:0}
-  55%{opacity:1}
-  to{transform:translate(0,0) scale(1);opacity:1}}
-.skel.reassemble .spine{stroke-dasharray:1;stroke-dashoffset:1;animation:draw var(--d-soft) .12s ease both}
-@keyframes draw{to{stroke-dashoffset:0}}   /* 脊椎連線畫回(dashoffset 1→0);原長在已刪的 hero 區塊,退場軸靠它 */
-.skel.reassemble .stub{opacity:0;animation:stubIn var(--d-soft) .32s ease both}
-@keyframes stubIn{to{opacity:.38}}
+/* ── ① 退場 = 鏡頭抬起:overlay 淡出 → 鏡頭拉遠(--d-cam-out .8s)──
+   **離開不是一個事件,是視角的收回**:星一直在自己的槽位上,骨不重組、不演任何東西。
+   進場才是事件(選它、俯衝、穿過它)→ 進退場刻意非對稱。
+   前一版是「逆俯衝」(骨從四周聚回 + overlay 向中心收合 + 鏡頭同時拉遠,共 1.86s):
+   零件向內、鏡頭向外,方向打架沒有可跟隨的主體;而 reassemble 的前提(碎片剛炸開、正在外面)
+   在退場那一刻早就不成立了——burst 是幾分鐘前的事,中間隔著整段閱讀且 overlay 一直蓋著。
+   全程只留一件事在動:鏡頭。詳 specs/2026-07-29-exit-camera-lift-design.md。 */
+.single-overlay.out{animation:overlayOut .3s var(--ease-house) forwards} /* 事件週期,家法不抹(時長與 OVERLAY_OUT_MS 對齊,不換) */
+/* 純 opacity:不可再 scale —— 鏡頭同時在拉遠,兩層同向縮放疊加會讀成「畫面在塌」 */
+@keyframes overlayOut{from{opacity:1}to{opacity:0}}
+@keyframes stubIn{to{opacity:.38}}   /* 由 .skel.ignite .stub 使用(退場已不需要) */
 
 /* ── 誕生點火:核心一閃,骨從中心向外亮起(接住 CloudCollapse 收進核心的質量)──
-   **不可共用 reassemble**:那是退場語言,前提是「碎片剛炸開、正在外面」。誕生的前提相反——
-   質量剛塌縮進核心,零件從沒去過外面;從四周飛回來等於憑空多出一個與前一秒畫面矛盾的前提
-   (而且看起來就是「向內 → 瞬移到外面 → 再向內」)。天文上亦然:恆星在核心點火,不從外圍組裝。
+   曾有過一個「零件從四周聚回」的 reassemble,誕生想共用它被否決:質量剛塌縮進核心、
+   零件從沒去過外面,從四周飛回來就是「向內 → 瞬移到外面 → 再向內」,與前一秒畫面矛盾。
+   (2026-07-29 退場改成鏡頭抬起後 reassemble 已整個刪除——它的前提只在 burst 那一兩秒內為真。)
+   天文上亦然:恆星在核心點火,不從外圍組裝。
    錯開的 delay 由 Skeleton 依「離核心多遠」給(fromCore),所以光是從中心推出去的。
    減動由 theme.css 全域 reset 接住:瞬跑完 = 骨直接在終態,不演點火。 */
 .skel.ignite{overflow:visible;animation:igniteFlash var(--d-scene) ease-out both}
@@ -538,4 +530,4 @@ mark.hl{background:rgba(236,201,138,.28);color:#fff4dd;border-radius:3px;padding
   background:rgba(220,200,150,.08);border:1px solid rgba(220,200,150,.3);color:#e7dcc2}
 .reanalyze-confirm button:hover{background:rgba(220,200,150,.18);color:#f6efd9}
 
-@media (prefers-reduced-motion:reduce){.single-overlay.out,.story.returning{animation:none}}
+@media (prefers-reduced-motion:reduce){.single-overlay.out{animation:none}}

@@ -5,11 +5,11 @@ const CX = 155, CY = 95; // buildBone 用 W=310,H=190 的中心
 
 // 星骨指紋:脊椎=張力曲線、肋=主題(上)/意象(下)、肋長=復現、亮節=主題。資料驅動,非裝飾。
 // burst=true:飛抵中心後,每個零件朝外(離中心的方向)爆散(見 journey.css 的 .skel.burst)。
-// reassemble=true:burst 的逆放——零件從四周(--bx/--by)聚回,重組成骨架(.skel.reassemble)。
 // ignite=true:**誕生**——核心點火、骨從中心向外亮起(.skel.ignite)。
-//   刻意不共用 reassemble:那是退場語言,前提是「碎片剛炸開、正在外面」。誕生的前提相反——
-//   質量剛塌縮進核心(CloudCollapse),零件從沒去過外面;讓它們從四周飛回來,等於憑空多出一個
-//   跟前一秒畫面矛盾的前提。天文上亦然:恆星在核心點火,不從外圍組裝。
+//   曾有過一個「零件從四周聚回」的 reassemble(退場用),兩度想共用都不成立:誕生時質量剛塌縮進
+//   核心、零件從沒去過外面;退場時 burst 也是幾分鐘前的事、畫面上早沒有碎片在外面。**它的前提
+//   (碎片剛炸開、正在外面)只在 burst 的那一兩秒內為真**,已於 2026-07-29 連同退場動畫一起刪除。
+//   天文上亦然:恆星在核心點火,不從外圍組裝。
 // reading=true:**criticizer 跑中**(分鐘級)——一道光沿脊椎(=文本時間軸)掃過,
 //   掃到哪根肋就把那個節點掂亮一下,掃完從頭再來(.skel.reading)。
 //   每一層都是真的:脊椎 x 軸就是閱讀順序;肋的 x 來自 evidence.pos,即該意象/主題**在原文的
@@ -24,8 +24,8 @@ const X0 = 18;              // = buildBone 的左緣;肋的 t 靠它換算
 // dormant=停拍(paused/failed 卡在 criticizer,骨已在):不點火不掃描 —— 靜止的骨,
 //   顏色由 CSS(.skel.paused/.failed)接手(冷藍睡著 / 鏽紅熄火),故此時不給 inline 輝光免得蓋掉。
 export default function Skeleton(
-  { viz, width, burst, reassemble, ignite, reading, dormant }:
-  { viz: VizData; width: number; burst?: boolean; reassemble?: boolean; ignite?: boolean;
+  { viz, width, burst, ignite, reading, dormant }:
+  { viz: VizData; width: number; burst?: boolean; ignite?: boolean;
     reading?: boolean; dormant?: "paused" | "failed" },
 ) {
   const W = 310, H = 190;
@@ -45,7 +45,7 @@ export default function Skeleton(
   };
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={width} height={(width * H) / W}
-      className={`skel${burst ? " burst" : reassemble ? " reassemble" : ignite ? " ignite" : reading ? " reading" : dormant ? ` ${dormant}` : ""}`}
+      className={`skel${burst ? " burst" : ignite ? " ignite" : reading ? " reading" : dormant ? ` ${dormant}` : ""}`}
       style={dormant ? undefined : { filter: "drop-shadow(0 0 5px rgba(240,228,200,.3)) drop-shadow(0 0 18px rgba(214,196,150,.15))" }}>
       <path className="spine" d={d} pathLength={1} fill="none" stroke="var(--bone)" strokeWidth={2.2} strokeLinecap="round" />
       {/* 掃描光:同一條脊椎再描一次,只讓一小段亮著跑(dash 掃描,非 SMIL —— SMIL 不吃減動) */}

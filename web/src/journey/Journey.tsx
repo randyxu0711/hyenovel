@@ -37,8 +37,7 @@ export default function Journey() {
   const [usageFrom, setUsageFrom] = useState<{ x: number; y: number } | undefined>();
   const [spend, setSpend] = useState<number | null>(null);   // 入口上的累計小數字;讀不到就不顯示
   const [blooming, setBlooming] = useState(false);           // 入口點火後,catalog 真物體(種骨/軌道)綻放入場的一次性窗
-  const [returning, setReturning] = useState<string | null>(null);  // 從單篇退場、正飛回軌道槽位的那篇
-  const [closing, setClosing] = useState(false);             // 單篇 overlay 向中心收合中
+  const [closing, setClosing] = useState(false);             // 單篇 overlay 淡出中
   const [confirming, setConfirming] = useState<string | null>(null); // 剛孕育完、正擴一圈確認波的那篇(一次性)
   const flyTimers = useRef<number[]>([]);
   const hatchTimer = useRef<number>();
@@ -47,7 +46,7 @@ export default function Journey() {
   const returnTimers = useRef<number[]>([]);
   const orderRef = useRef<string[]>([]);
   const vp = useViewport();
-  const OVERLAY_OUT_MS = 460;   // overlay 收合時長,與 CSS overlayOut 對齊
+  const OVERLAY_OUT_MS = 300;   // overlay 淡出時長,與 CSS overlayOut 對齊
   const CONFIRM_MS = 1800;      // 誕生確認波總長,與 CSS bornWave 對齊(1.4s + 第三環 .32s delay,留餘裕)
 
   const refresh = useCallback(() => getIndex().then(i => setEntries(i.stories)).catch(() => {}), []);
@@ -89,16 +88,15 @@ export default function Journey() {
     bloomTimer.current = window.setTimeout(() => setBlooming(false), bloomMs);
   };
 
-  // 單篇退場:overlay 先向中心收合 → nav 回目錄 → 那篇的骨從中心飛回軌道槽位 → 清除
+  // 單篇退場 = 鏡頭抬起:overlay 淡出 → nav 回目錄 → 相機拉遠(--d-cam-out,Camera 自己判)。
+  // 骨不演——它一直在自己的槽位上,離開只是視角收回。串行不重疊:兩件事同時動正是舊版「花」的成因。
   const startReturn = () => {
     if (!slug) { nav("/"); return; }
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { nav("/"); return; }
-    const s = slug;
     setClosing(true);
     returnTimers.current.forEach(clearTimeout);
     returnTimers.current = [
-      window.setTimeout(() => { setClosing(false); setReturning(s); nav("/"); }, OVERLAY_OUT_MS),
-      window.setTimeout(() => setReturning(null), OVERLAY_OUT_MS + 1500),   // 蓋過 returnAssemble 1.4s
+      window.setTimeout(() => { setClosing(false); nav("/"); }, OVERLAY_OUT_MS),
     ];
   };
 
@@ -160,7 +158,7 @@ export default function Journey() {
       <Camera stage={stage} count={Math.max(1, ordered.length)} focus={focus}>
         {stage !== "overview" && <Orbits count={Math.max(1, ordered.length)} bloom={blooming} />}
         <Catalog entries={entries} ordered={ordered} loading={!loaded} flying={flying} bursting={bursting}
-          gestations={gestations} hatching={hatching} fresh={fresh} returning={returning} confirming={confirming}
+          gestations={gestations} hatching={hatching} fresh={fresh} confirming={confirming}
           onPick={pick} onCancel={cancel} onResume={resume} onReanalyze={reanalyze} />
       </Camera>
       {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}

@@ -64,7 +64,7 @@ export default function BornLab() {
     setFresh(k === "born" ? new Set([target]) : new Set());
     if (k === "collapse") { setVizReady(false); return; }
     if (k === "form") {
-      // 先卸再掛:StoryBone 重新掛載才會重播 reassemble(骨聚成的那一下要能反覆看)
+      // 先卸再掛:StoryBone 重新掛載才會重播 ignite(骨從中心亮起那一下要能反覆看)
       setVizReady(false);
       requestAnimationFrame(() => setVizReady(true));
       return;
