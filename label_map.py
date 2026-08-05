@@ -111,3 +111,76 @@ def validate(mapping, table):
                 errors.append(f"{cid}: evidence_index 超出範圍({key[0]}/{key[1]} "
                               f"只有 {len(row['quotes'])} 條 evidence)")
     return errors
+
+
+# 兩族被判為「同一族」所需的成員重疊度(Jaccard)下限。
+# 0.5 = 一半以上成員相同。太低會讓不相干的族互相繼承 id,太高會讓正常的增減就換號。
+JACCARD_MIN = 0.5
+
+
+def _members_key(c):
+    """concept 的成員集合(只取 (slug, node),忽略措辭)。
+
+    **只防 members 的內容,不防 c 本身不是 dict** —— 兩個呼叫端都保證餵 dict 進來:
+    drafts 已過 parse_drafts 的逐元素閘門,prev 的 concepts 在下面被 isinstance 濾過。
+    再多防一層就是**測不到的防禦**,那種分支會讓 100% 門檻變成演的(要嘛湊不滿、
+    要嘛靠 pragma 藏)。防禦要防真的會到的形狀。
+    """
+    out = set()
+    for m in c.get("members") or []:
+        if isinstance(m, dict) and isinstance(m.get("slug"), str) \
+                and isinstance(m.get("node"), str):
+            out.add((m["slug"], m["node"]))
+    return out
+
+
+def _jaccard(a, b):
+    union = a | b
+    return len(a & b) / len(union) if union else 0.0
+
+
+def assign_ids(drafts, prev):
+    """替草稿鑄 id(純函式)。LLM 不給 id —— 那要它造字,等於把穩定性交回給它。
+
+    沿用判準是**成員集合重疊度**,不是 canonical 字串相同:本設計同時要求族有權被
+    重切,而重切時 LLM 幾乎不可能逐字重打同一個族名。集合重疊度不看措辭只看內容。
+
+    一族裂成兩族時,成員留得多(重疊度高)的那支繼承 id,另一支鑄新號。
+    一個舊 id 最多被沿用一次。已消失的族不回收號碼。
+    """
+    old = []
+    for c in (prev or {}).get("concepts") or []:
+        if isinstance(c, dict) and isinstance(c.get("id"), str):
+            old.append((c["id"], _members_key(c)))
+
+    nums = [int(i[1:]) for i, _ in old if i[1:].isdigit()]
+    nxt = max(nums, default=0) + 1
+
+    # 先算全部配對的重疊度,由高到低指派 —— 保證裂族時大的那支先拿到 id。
+    pairs = []
+    for di, d in enumerate(drafts):
+        dk = _members_key(d)
+        for oid, ok in old:
+            score = _jaccard(dk, ok)
+            if score >= JACCARD_MIN:
+                pairs.append((score, di, oid))
+    pairs.sort(key=lambda p: (-p[0], p[1], p[2]))
+
+    taken_draft, taken_old, assigned = set(), set(), {}
+    for score, di, oid in pairs:
+        if di in taken_draft or oid in taken_old:
+            continue
+        assigned[di] = oid
+        taken_draft.add(di)
+        taken_old.add(oid)
+
+    out = []
+    for di, d in enumerate(drafts):
+        c = dict(d)
+        if di in assigned:
+            c["id"] = assigned[di]
+        else:
+            c["id"] = f"L{nxt:03d}"
+            nxt += 1
+        out.append(c)
+    return out

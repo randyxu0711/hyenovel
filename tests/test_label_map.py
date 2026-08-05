@@ -166,3 +166,75 @@ def test_validate_survives_garbage_shapes(monkeypatch):
         {"built_at": 1.0, "analysis_fps": {}, "source_node_count": 0,
          "concepts": [{"id": "L001", "canonical": "x", "node_type": "theme",
                        "members": ["不是 dict"]}]}, table)
+
+
+def _draft(canonical, node_type, pairs):
+    return {"canonical": canonical, "node_type": node_type,
+            "members": [{"slug": s, "node": n, "label": "x", "why": "y",
+                         "evidence_index": 0} for s, n in pairs]}
+
+
+def test_assign_ids_mints_from_001_when_no_prev():
+    out = label_map.assign_ids(
+        [_draft("等待", "theme", [("s01", "t1")]),
+         _draft("水", "motif", [("s01", "m1")])], None)
+    assert [c["id"] for c in out] == ["L001", "L002"]
+
+
+def test_assign_ids_reuses_by_member_overlap_not_by_name():
+    """族名整個換掉,但成員一樣 → 沿用舊 id。"""
+    prev = {"concepts": [{"id": "L007", "canonical": "歸屬的不可抵達",
+                          "node_type": "theme",
+                          "members": [{"slug": "s01", "node": "t1"},
+                                      {"slug": "s02", "node": "t1"}]}]}
+    out = label_map.assign_ids(
+        [_draft("永遠差一步的抵達", "theme", [("s01", "t1"), ("s02", "t1")])], prev)
+    assert out[0]["id"] == "L007"
+
+
+def test_assign_ids_mints_new_when_overlap_too_low():
+    prev = {"concepts": [{"id": "L007", "canonical": "等待", "node_type": "theme",
+                          "members": [{"slug": "s01", "node": "t1"},
+                                      {"slug": "s02", "node": "t1"}]}]}
+    out = label_map.assign_ids(
+        [_draft("完全不同的族", "theme", [("s03", "e1")])], prev)
+    assert out[0]["id"] == "L008"        # 不回收號碼:從既有最大值 +1
+
+
+def test_assign_ids_split_gives_id_to_the_bigger_half():
+    """一族裂成兩族 → 成員留得多的那支繼承 id,另一支鑄新號。"""
+    prev = {"concepts": [{"id": "L003", "canonical": "大族", "node_type": "motif",
+                          "members": [{"slug": "s01", "node": "m1"},
+                                      {"slug": "s02", "node": "m1"},
+                                      {"slug": "s03", "node": "m1"}]}]}
+    out = label_map.assign_ids(
+        [_draft("小的那支", "motif", [("s01", "m1")]),
+         _draft("大的那支", "motif", [("s02", "m1"), ("s03", "m1")])], prev)
+    ids = {c["canonical"]: c["id"] for c in out}
+    assert ids["大的那支"] == "L003"
+    assert ids["小的那支"] == "L004"
+
+
+def test_assign_ids_never_reuses_one_old_id_twice():
+    prev = {"concepts": [{"id": "L001", "canonical": "族", "node_type": "motif",
+                          "members": [{"slug": "s01", "node": "m1"},
+                                      {"slug": "s02", "node": "m1"}]}]}
+    out = label_map.assign_ids(
+        [_draft("甲", "motif", [("s01", "m1"), ("s02", "m1")]),
+         _draft("乙", "motif", [("s01", "m1"), ("s02", "m1")])], prev)
+    assert len({c["id"] for c in out}) == 2
+
+
+def test_assign_ids_does_not_recycle_vanished_numbers():
+    """已消失的族不回收號碼 —— 避免 id 被兩個不同的族先後用過。"""
+    prev = {"concepts": [{"id": "L009", "canonical": "早就沒了", "node_type": "motif",
+                          "members": [{"slug": "sX", "node": "m1"}]}]}
+    out = label_map.assign_ids([_draft("新族", "motif", [("s01", "m1")])], prev)
+    assert out[0]["id"] == "L010"
+
+
+def test_assign_ids_survives_garbage_prev():
+    for bad in (None, {}, {"concepts": "壞"}, {"concepts": [None]},
+                {"concepts": [{"id": "不合格式", "members": []}]}):
+        out = label_map.assign_ids([_draft("族", "motif", [("s01", "m1")])], bad)
+        assert out[0]["id"].startswith("L")
