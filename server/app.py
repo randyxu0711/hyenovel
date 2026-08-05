@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import recall
 
-from . import config, critique, discuss, ingest, ledger, log, settle, transcript
+from . import align, config, critique, discuss, ingest, ledger, log, settle, transcript
 
 app = FastAPI(title="hyenovel backend")
 
@@ -58,6 +58,7 @@ async def _startup():
     asyncio.create_task(discuss.sweep_idle())
     asyncio.create_task(critique.sweep_runs())
     asyncio.create_task(settle.sweep_settle())   # 討論結束後自動收束成結論
+    asyncio.create_task(align.sweep_align())     # 跨篇概念地圖 stale 就重建
 
 
 @app.get("/api/health")

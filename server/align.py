@@ -132,6 +132,50 @@ def rebuild(force=False):
     return asyncio.run(rebuild_async(force))
 
 
+# 醒來看一次的間隔。地圖不需要「critique 一結束就新鮮」,只需要在你下一次跨篇討論
+# 之前新鮮;而醒來的判定本身是幾個 sha1,零成本。
+SWEEP_INTERVAL = 60
+
+
+async def _sweep_once():
+    """醒來一次:該重建就重建。回「這一輪有沒有真的去重建」(給測試看的)。
+
+    **判斷全在這裡,sweep_align 只剩迴圈** —— 政策要可測,骨架不必測。
+    """
+    from . import critique      # 延後 import:critique 會 import orchestrator,模組層
+                                # 互相 import 容易繞回來(同 settle.py:112 的做法)
+    try:
+        if critique.list_running():
+            return False
+        m = label_map.load()
+        if m is not None and not label_map.is_stale(m):
+            return False
+        r = await rebuild_async()
+        if not r["ok"]:
+            log.warning(f"event=align-fail errors={len(r['errors'])}")
+        return True
+    except Exception:
+        # 最後一道:一輪炸掉不可以讓整個 worker 靜靜死掉。
+        log.exception("event=align-sweep-fail")
+        return False
+
+
+async def sweep_align():
+    """背景:跨篇概念地圖 stale 就重建。
+
+    **單一 task、迴圈內序列 await —— 不可改成 per-story create_task 扇出。**
+    扇出會讓兩輪併發各讀到同一份 prev、各花一次錢,最後 last-writer-wins 覆蓋掉
+    另一份(#15 已經為同一個形狀買過單:sweep_settle 扇出會煉兩次)。
+
+    **為什麼是輪詢而不是掛 critique 收尾**:掛在 orchestrator 尾巴會把一次 30–90 秒的
+    分群塞進誕生儀式第三拍與第四拍之間(_STEP 的 render 是 3、done 才是 4),
+    而輪詢的成本只是幾個 analysis.json 的 sha1。完整理由見 spec §7。
+    """
+    while True:
+        await asyncio.sleep(SWEEP_INTERVAL)
+        await _sweep_once()
+
+
 if __name__ == "__main__":
     import sys
     r = rebuild(force="--force" in sys.argv)

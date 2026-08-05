@@ -123,3 +123,77 @@ def test_rebuild_force_ignores_freshness(monkeypatch):
         monkeypatch.setattr(align, "_ask", _fake)
         r = align.rebuild(force=True)
         assert r["ok"] is True and r["skipped"] is False and len(called) == 1
+
+
+def test_sweep_skips_when_not_stale(monkeypatch):
+    """不 stale 就不該花錢 —— 這是輪詢能成立的前提(判定只是 sha1,零成本)。"""
+    with _tmp_stories() as root:
+        _seed(root)
+        label_map.build(_one_concept_json(), now=1.0)
+
+        async def _boom(force=False):
+            raise AssertionError("不 stale 就不該重建")
+
+        monkeypatch.setattr(align, "rebuild_async", _boom)
+        assert asyncio.run(align._sweep_once()) is False
+
+
+def test_sweep_skips_while_a_run_is_active(monkeypatch):
+    """有 critique 在跑就跳過。
+
+    不只是禮貌:analysis.json 是 **analyst 交件時就寫下**的,criticizer 還要跑好幾分鐘 ——
+    不擋的話 align 會在 criticizer 跑到一半時醒來,跟它搶同一個訂閱用量窗。
+    """
+    from server import critique
+
+    with _tmp_stories() as root:
+        _seed(root)          # 沒有 label-map.json → 一定 stale
+
+        async def _boom(force=False):
+            raise AssertionError("有 run 在跑就不該重建")
+
+        monkeypatch.setattr(critique, "list_running", lambda: [{"slug": "s01"}])
+        monkeypatch.setattr(align, "rebuild_async", _boom)
+        assert asyncio.run(align._sweep_once()) is False
+
+
+def test_sweep_rebuilds_when_stale(monkeypatch):
+    with _tmp_stories() as root:
+        _seed(root)
+        called = []
+
+        async def _fake(force=False):
+            called.append(force)
+            return {"ok": True, "skipped": False, "concepts": 3, "errors": []}
+
+        monkeypatch.setattr(align, "rebuild_async", _fake)
+        assert asyncio.run(align._sweep_once()) is True
+        assert called == [False]
+
+
+def test_sweep_reports_a_failed_rebuild_without_raising(monkeypatch, caplog):
+    """重建沒過閘門 ≠ worker 出事:記一行 WARNING,這一輪照樣算跑過。"""
+    with _tmp_stories() as root:
+        _seed(root)
+
+        async def _fake(force=False):
+            return {"ok": False, "skipped": False, "concepts": 0, "errors": ["壞"]}
+
+        monkeypatch.setattr(align, "rebuild_async", _fake)
+        with caplog.at_level("WARNING", logger="hyenovel"):
+            assert asyncio.run(align._sweep_once()) is True
+    assert "event=align-fail" in caplog.text
+
+
+def test_sweep_survives_a_failing_round(monkeypatch, caplog):
+    """一次失敗不可以讓 worker 靜靜死掉 —— 死掉的守衛跟活著的守衛長得一樣。"""
+    with _tmp_stories() as root:
+        _seed(root)
+
+        async def _boom(force=False):
+            raise RuntimeError("分群掛了")
+
+        monkeypatch.setattr(align, "rebuild_async", _boom)
+        with caplog.at_level("ERROR", logger="hyenovel"):
+            assert asyncio.run(align._sweep_once()) is False
+    assert "event=align-sweep-fail" in caplog.text
