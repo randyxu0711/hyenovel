@@ -19,7 +19,7 @@ from claude_agent_sdk import ClaudeSDKClient
 
 import label_map
 
-from . import config, sdk_runner
+from . import config, log as log_mod, sdk_runner
 from .log import log
 
 _PROMPT_HEAD = """以下是一位作者所有短篇的**分析標籤**,每行一個。
@@ -178,6 +178,10 @@ async def sweep_align():
 
 if __name__ == "__main__":
     import sys
+
+    # CLI 不經過 app.py 的 startup,logging 沒人配置過 —— 不呼叫這行的話
+    # event=align-turn(**唯一的成本紀錄**,align 沒有 slug 可掛 ledger)整個蒸發。
+    log_mod.setup()
     r = rebuild(force="--force" in sys.argv)
     print(json.dumps(r, ensure_ascii=False, indent=1))
     sys.exit(0 if r["ok"] else 1)
