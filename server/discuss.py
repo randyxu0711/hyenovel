@@ -18,7 +18,7 @@ import time
 import uuid
 
 from claude_agent_sdk import (
-    ClaudeSDKClient, AssistantMessage, TextBlock, StreamEvent, ResultMessage,
+    ClaudeSDKClient, AssistantMessage, TextBlock, ToolUseBlock, StreamEvent, ResultMessage,
 )
 
 import recall
@@ -64,6 +64,20 @@ async def sweep_idle():
                  if now - s.last_active > config.DISCUSS_IDLE_TIMEOUT and not s.lock.locked()]
         for sid in stale:
             await close_session(sid)
+
+
+def _log_reads(slug, blocks):
+    """把這一輪讀了哪些檔記下來(唯讀、不改行為)。
+
+    跨篇是 skill 指示不是程式閘門(sdk_runner 的 _READ_ROOTS 本來就是整個 stories/ 樹),
+    擋不住 —— 那至少要看得見。這也是「沒有多載」唯一可行的觀測手段:
+    usage.jsonl 是長命 session 的累計值,反推不出單輪讀了什麼。
+    """
+    for b in blocks:
+        if isinstance(b, ToolUseBlock) and b.name == "Read":
+            path = (b.input or {}).get("file_path")
+            if path:
+                log.info(f"event=discuss-read slug={slug} file={path}")
 
 
 async def run_discuss(slug: str, session_id: str | None, message: str, anchors=()):
@@ -119,6 +133,7 @@ async def run_discuss(slug: str, session_id: str | None, message: str, anchors=(
                         yield {"event": "thinking" if d[0] == "thinking" else "token",
                                "data": {"text": d[1]}}
                 elif isinstance(m, AssistantMessage):
+                    _log_reads(slug, m.content)
                     # 收集全部 TextBlock 再串接 —— 一輪可能有超過一個 AssistantMessage
                     # (討論 client 是 allowed_tools=["Read"],開場的 /story-discuss skill
                     # 會先讀 analysis/feedback/source,讀檔前後常各自帶一段文字)。

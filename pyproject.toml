@@ -21,6 +21,7 @@ include = [
     "conclusions.py",
     "recall.py",
     "settled.py",
+    "label_map.py",
     "server/ingest.py",
 ]
 

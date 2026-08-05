@@ -40,6 +40,8 @@ AGENT_MAX_TURNS = 12            # 單一代理最多回合(讀幾檔 + 寫一次
 DISCUSS_IDLE_TIMEOUT = 15 * 60
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024   # 上傳原始位元組上限(純文學短篇 <1萬字,5MB 對 pdf/docx 綽綽有餘)
 SUBPROCESS_TIMEOUT = 120         # 確定性層子行程(render/viz/index/gate)逾時上限(秒)—— 卡死不拖垮 Run
+ALIGN_TIMEOUT = 300              # 跨篇分群單輪逾時上限(秒)—— run_turn 自己不帶逾時,
+                                 # 而卡住不會拋例外,呼叫端的 except 接不到它
 TRANSIENT_MAX_RETRIES = 2        # 瞬時 overload(529/500)最多退避幾次,耗盡轉 fail-fast
 BACKOFF_BASE = 2.0               # 退避基數(秒),指數:BACKOFF_BASE * 2**n
 

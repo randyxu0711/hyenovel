@@ -1,0 +1,12 @@
+{
+  "slug": "s03",
+  "title": "合成樣本三",
+  "synopsis": "測試用,不是真故事。",
+  "nodes": [
+    {"id": "m1", "type": "motif", "label": "潮水",
+     "evidence": [{"quote": "潮水退了。"}]},
+    {"id": "e1", "type": "effect", "label": "停滯的悶", "intensity": 0.4,
+     "evidence": [{"quote": "空氣不動。"}]}
+  ],
+  "edges": []
+}

@@ -57,3 +57,27 @@ def test_形狀不對不炸():
     assert sdk_runner.delta_of(SimpleNamespace(event=None)) is None
     assert sdk_runner.delta_of(SimpleNamespace(event="not-a-dict")) is None
     assert sdk_runner.delta_of(ev({})) is None
+
+
+def test_tool_use_is_logged(caplog):
+    """討論模型讀了哪些檔要留痕 —— 擋不住,至少看得見。"""
+    from claude_agent_sdk import ToolUseBlock
+
+    from server import discuss
+
+    blocks = [ToolUseBlock(id="x", name="Read",
+                           input={"file_path": "/p/stories/s03/analysis.json"})]
+    with caplog.at_level("INFO", logger="hyenovel"):
+        discuss._log_reads("s07", blocks)
+    assert "event=discuss-read" in caplog.text
+    assert "s03/analysis.json" in caplog.text
+
+
+def test_non_read_tools_are_not_logged(caplog):
+    from claude_agent_sdk import ToolUseBlock
+
+    from server import discuss
+
+    with caplog.at_level("INFO", logger="hyenovel"):
+        discuss._log_reads("s07", [ToolUseBlock(id="x", name="Grep", input={})])
+    assert "event=discuss-read" not in caplog.text
