@@ -325,3 +325,22 @@ def build(text, now=None):
     atomicio.write_text_atomic(
         _path(), json.dumps(mapping, ensure_ascii=False, indent=1) + "\n")
     return mapping, []
+
+
+def count_singletons(mapping):
+    """只跨一篇的族有幾個(純函式)。
+
+    **這不是閘門,是一條備查線。** 只跨一篇不代表錯 —— 它可能是還沒長成的族
+    (全量重歸下,第 8 篇寫了同樣的東西它明天就跨兩篇了),砍掉等於把「七篇時的
+    視野」寫死。而 spec §5 承認視覺押後 → 沒人會去開 JSON 看 → 分錯了是靜默的;
+    這個數字進 log 之後,「1/29」與「12/29」的差別才看得見。
+    """
+    n = 0
+    for c in (mapping or {}).get("concepts") or []:
+        if not isinstance(c, dict):
+            continue
+        slugs = {m.get("slug") for m in c.get("members") or []
+                 if isinstance(m, dict)}
+        if len(slugs) == 1:
+            n += 1
+    return n

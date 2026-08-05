@@ -77,8 +77,71 @@ def build_prompt(table, prev):
     return _PROMPT_HEAD.format(n=len(table), body=body, prev=names)
 
 
-async def _ask(prompt):
-    """開一次性專用 client 問一輪,回它吐的文字。照 settle.py 的形狀。
+_RETRY_HEAD = """你上一份分群沒有通過閘門。逐條錯誤如下:
+
+{errors}
+
+請**修正這些問題,重新輸出完整的 JSON 陣列**(不是只輸出修好的那幾族)。
+沒有被指出問題的族請原樣保留 —— **不要趁這次重新分群**。
+
+常見錯誤與修法:
+- 「型別不符」:該族的 node_type 要跟成員實際的型別一致;型別混編的族請拆成兩族。
+- 「label 與 analysis 不符」:label 必須**原樣照抄**上面標籤表那一行,一字不改。
+- 「evidence_index 超出範圍」:從 0 起算,不可超過該行標示的引文條數。
+- 「analysis 裡沒有這個節點」:那個 (slug, node) 不存在,把該成員刪掉。
+"""
+
+# 回饋幾條錯誤就夠。全部倒回去會把 prompt 撐大又稀釋重點;錯誤通常同類。
+_MAX_ERRORS_FED_BACK = 20
+
+
+def _retry_prompt(errors):
+    """把閘門錯誤組成重派 prompt(純函式)。
+
+    **只回饋錯誤,不回饋正解** —— 我們手上其實知道 s02/k4 是 technique,但確定性層
+    的分工是「驗但不改」;直接把答案填回去等於偷改 LLM 的判斷,那條線一旦破了,
+    「分群是 LLM 的判斷」這個前提就不成立了。同 orchestrator 帶錯重派的做法。
+    """
+    shown = errors[:_MAX_ERRORS_FED_BACK]
+    more = len(errors) - len(shown)
+    body = "\n".join(f"- {e}" for e in shown)
+    if more > 0:
+        body += f"\n- (另有 {more} 條同類錯誤未列出)"
+    return _RETRY_HEAD.format(errors=body)
+
+
+async def _run_turns(table, prev, ask):
+    """閘門重派迴圈。回 (mapping 或 None, errors, 用掉幾輪)。
+
+    `ask` = 「送一個 prompt、回一段文字」—— SDK 接線由呼叫端注入,所以這支的
+    **政策**(重派幾次、回饋什麼、何時放棄)可以零成本測到,閘門也真的在跑。
+
+    重派上限沿用 config.MAX_GATE_RETRIES(與 critique 的閘門重派同一個概念,
+    不另立常數)。**重派必須在同一個 client 裡**,理由同 orchestrator:
+    讓模型保有「剛剛吐了什麼」的 context,否則它是在盲改一份看不到的東西。
+    """
+    prompt = build_prompt(table, prev)
+    attempt = 0
+    errors = []
+    while attempt <= config.MAX_GATE_RETRIES:
+        attempt += 1
+        text = await ask(prompt)
+        mapping, errors = label_map.build(text)
+        if mapping is not None:
+            log.info(f"event=align-gate ok=True attempt={attempt}")
+            return mapping, [], attempt
+        log.warning(f"event=align-gate-fail attempt={attempt} errors={len(errors)} "
+                    f"first={errors[0][:120]!r}")
+        prompt = _retry_prompt(errors)
+    log.warning(f"event=align-gate-giveup attempts={attempt} errors={len(errors)}")
+    return None, errors, attempt
+
+
+async def _ask_session(table, prev):
+    """開一個專用 client,把整段閘門重派跑完。回 _run_turns 的三元組。
+
+    **一個 client 跑完全部重派**(不是每輪重開):模型要看得到自己剛吐的那份 JSON,
+    否則重派等於叫它盲改一個看不到的東西。同 orchestrator._phase_with_retry。
 
     **不記 ledger**:`ledger.append(slug, ...)` 寫的是 `stories/<slug>/usage.jsonl`,
     而 align 是跨篇的,沒有 slug 可掛;硬塞一個假 slug 會讓那個目錄不存在而被靜靜
@@ -89,15 +152,24 @@ async def _ask(prompt):
     **要包 wait_for**:`run_turn` 自己不帶逾時,critique 路徑上每一格 LLM 都是
     `asyncio.wait_for(..., PHASE_TIMEOUT)` 包起來的(orchestrator.py:125)。
     這條雖然在背景、不阻塞誕生,但卡住的 client 會一直占著,而且**卡住不會拋例外** ——
-    呼叫端那個 `except Exception` 接不到它。
+    呼叫端那個 `except Exception` 接不到它。逾時是**逐輪**的,不是整段的。
     """
     client = ClaudeSDKClient(options=sdk_runner.settle_options())
     await client.connect()
-    try:
+    spent = [0.0]
+
+    async def ask(prompt):
         r = await asyncio.wait_for(sdk_runner.run_turn(client, prompt),
                                    timeout=config.ALIGN_TIMEOUT)
-        log.info(f"event=align-turn cost_usd={round(r.cost, 4)} is_error={r.is_error}")
+        # turn_cost 已經把「total_cost_usd 是 client 累計值」那條陷阱處理掉了,
+        # 所以多輪相加是對的(單看 total 相加會重複計)。
+        spent[0] += r.cost
+        log.info(f"event=align-turn cost_usd={round(r.cost, 4)} "
+                 f"spent_usd={round(spent[0], 4)} is_error={r.is_error}")
         return r.text
+
+    try:
+        return await _run_turns(table, prev, ask)
     finally:
         try:
             await client.disconnect()
@@ -112,19 +184,20 @@ async def rebuild_async(force=False):
     """
     prev = label_map.load()
     if not force and prev is not None and not label_map.is_stale(prev):
-        return {"ok": True, "skipped": True,
+        return {"ok": True, "skipped": True, "attempts": 0,
                 "concepts": len(prev.get("concepts") or []), "errors": []}
     table = label_map.collect()
     if not table:
-        return {"ok": False, "skipped": False, "concepts": 0,
+        return {"ok": False, "skipped": False, "attempts": 0, "concepts": 0,
                 "errors": ["沒有任何可分群的標籤"]}
-    text = await _ask(build_prompt(table, prev))
-    mapping, errors = label_map.build(text)
+    mapping, errors, attempts = await _ask_session(table, prev)
     ok = mapping is not None
-    log.info(f"event=align ok={ok} labels={len(table)} "
-             f"concepts={len(mapping['concepts']) if ok else 0} errors={len(errors)}")
+    log.info(f"event=align ok={ok} labels={len(table)} attempts={attempts} "
+             f"concepts={len(mapping['concepts']) if ok else 0} "
+             f"singletons={label_map.count_singletons(mapping)} errors={len(errors)}")
     return {"ok": ok, "skipped": False,
-            "concepts": len(mapping["concepts"]) if ok else 0, "errors": errors}
+            "concepts": len(mapping["concepts"]) if ok else 0,
+            "attempts": attempts, "errors": errors}
 
 
 def rebuild(force=False):

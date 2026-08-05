@@ -424,3 +424,21 @@ def test_build_stamps_empty_quote_when_index_out_of_range(monkeypatch, tmp_path)
     assert mapping is None
     assert any("evidence_index" in e for e in errs)
     assert label_map.load() is None
+
+
+def test_count_singletons():
+    m = {"concepts": [
+        {"members": [{"slug": "s01", "node": "m1"}, {"slug": "s01", "node": "m2"}]},
+        {"members": [{"slug": "s01", "node": "m1"}, {"slug": "s02", "node": "m1"}]},
+        {"members": [{"slug": "s03", "node": "m1"}]},
+    ]}
+    assert label_map.count_singletons(m) == 2
+
+
+def test_count_singletons_survives_garbage():
+    """備查線炸掉就等於沒有備查線。"""
+    assert label_map.count_singletons(None) == 0
+    assert label_map.count_singletons({}) == 0
+    assert label_map.count_singletons({"concepts": "壞"}) == 0
+    assert label_map.count_singletons({"concepts": [None]}) == 0
+    assert label_map.count_singletons({"concepts": [{"members": ["不是 dict"]}]}) == 0
