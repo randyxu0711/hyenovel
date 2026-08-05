@@ -1,0 +1,14 @@
+{
+  "slug": "s02",
+  "title": "合成樣本二",
+  "synopsis": "測試用,不是真故事。",
+  "nodes": [
+    {"id": "m1", "type": "motif", "label": "雨聲",
+     "evidence": [{"quote": "雨打在鐵皮上。"}]},
+    {"id": "t1", "type": "theme", "label": "等待的落空",
+     "evidence": [{"quote": "門一直是關的。"}]},
+    {"id": "k1", "type": "technique", "label": "重複的句式",
+     "evidence": [{"quote": "他等。他還在等。"}]}
+  ],
+  "edges": []
+}

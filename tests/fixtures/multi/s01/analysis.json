@@ -1,0 +1,20 @@
+{
+  "slug": "s01",
+  "title": "合成樣本一",
+  "synopsis": "測試用,不是真故事。",
+  "nodes": [
+    {"id": "m1", "type": "motif", "label": "水窪",
+     "evidence": [{"quote": "地上積了一窪水。"}, {"quote": "水面晃了一下。"}]},
+    {"id": "t1", "type": "theme", "label": "等不到的人",
+     "evidence": [{"quote": "他一直沒來。"}]},
+    {"id": "k1", "type": "technique", "label": "重複的動作描寫",
+     "evidence": [{"quote": "她又擦了一次桌子。"}]},
+    {"id": "e1", "type": "effect", "label": "時間的停滯感", "intensity": 0.6,
+     "evidence": [{"quote": "鐘沒有響。"}]},
+    {"id": "b1", "type": "beat", "label": "開場",
+     "evidence": [{"quote": "地上積了一窪水。"}]},
+    {"id": "c1", "type": "character", "label": "她",
+     "evidence": [{"quote": "她又擦了一次桌子。"}]}
+  ],
+  "edges": [{"type": "produces", "from": "k1", "to": "e1"}]
+}
