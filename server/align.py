@@ -243,7 +243,13 @@ async def sweep_align():
     **為什麼是輪詢而不是掛 critique 收尾**:掛在 orchestrator 尾巴會把一次 30–90 秒的
     分群塞進誕生儀式第三拍與第四拍之間(_STEP 的 render 是 3、done 才是 4),
     而輪詢的成本只是幾個 analysis.json 的 sha1。完整理由見 spec §7。
+
+    **啟動記一行的理由**:兩條跳過路徑(有 run 在跑 / 不 stale)都不記 log,所以
+    一個死掉的 worker 和一個正常運轉的在 log 裡長得一模一樣 —— 死掉的守衛跟活著的
+    守衛長得一樣。真實的失敗發生在註冊那一刻(忘了 create_task、import 炸掉),
+    所以在迴圈起點記一行就夠,不必每輪心跳(那只是噪音)。
     """
+    log.info(f"event=align-sweep-start interval={SWEEP_INTERVAL}")
     while True:
         await asyncio.sleep(SWEEP_INTERVAL)
         await _sweep_once()
