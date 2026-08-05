@@ -11,10 +11,12 @@
 """
 import json
 import logging
+import time
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+import atomicio
 import conclusions
 
 ROOT = Path(__file__).resolve().parent
@@ -241,3 +243,85 @@ def is_stale(mapping):
     if not isinstance(recorded, dict):
         return True
     return recorded != fingerprints()
+
+
+def parse_drafts(text):
+    """把 LLM 的回應剝成 concepts 陣列。回 (drafts, 錯誤或 None)。
+
+    照抄 conclusions.parse_drafts 的寬容度:剝 ``` 圍欄、容忍開場白 ——
+    那兩件事幾乎一定會發生,不該燒掉一次付費呼叫換一句「不是合法 JSON」。
+    寬容比對器 + 嚴格契約:剝完照樣要過全部閘門。
+
+    **元素必須是物件這道檢查在這裡做完,是下游的前提**:assign_ids 的 dict(d)
+    對字串會拋 ValueError —— 那會讓 build() 從「回錯誤清單」變成「炸例外」,
+    而它是 LLM 輸出的閘門,閘門不可以炸。在入口一次擋掉,下游就不必各防一次。
+    """
+    s = (text or "").strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[-1] if "\n" in s else ""
+        if s.rstrip().endswith("```"):
+            s = s.rstrip()[:-3]
+    try:
+        data = json.loads(s)
+    except json.JSONDecodeError:
+        i, j = s.find("["), s.rfind("]")
+        if i == -1 or j == -1 or j <= i:
+            return [], "分群回應不是合法 JSON"
+        try:
+            data = json.loads(s[i:j + 1])
+        except json.JSONDecodeError:
+            return [], "分群回應不是合法 JSON"
+    if not isinstance(data, list):
+        return [], "分群回應必須是 JSON 陣列"
+    if not all(isinstance(c, dict) for c in data):
+        return [], "分群回應的每個元素都必須是物件"
+    return data, None
+
+
+def _stamp_quotes(concepts, table):
+    """照 evidence_index 從正本取引文蓋上(純函式)。
+
+    LLM 不寫 quote 這欄:既然它必須是該 node evidence 裡已有的一條,讓它整句重打
+    就只剩下抄錯的機會。index 不合法時蓋空字串,留給閘門去報一個看得懂的錯 ——
+    不在這裡炸,也不悄悄重塑成看起來合法的東西。
+    """
+    known = {(r["slug"], r["node"]): r for r in table}
+    for c in concepts:
+        if not isinstance(c.get("members"), list):
+            continue     # c 本身一定是 dict(parse_drafts 已擋),但 members 可能是任何東西
+        for m in c["members"]:
+            if not isinstance(m, dict):
+                continue
+            row = known.get((m.get("slug"), m.get("node")))
+            i = m.get("evidence_index")
+            ok = (row is not None and isinstance(i, int) and not isinstance(i, bool)
+                  and 0 <= i < len(row["quotes"]))
+            m["quote"] = row["quotes"][i] if ok else ""
+    return concepts
+
+
+def build(text, now=None):
+    """總入口:解析 → 鑄 id → 蓋章 → 驗 → **全過才寫**。回 (mapping 或 None, 錯誤清單)。
+
+    全過才寫的理由同 conclusions.append:部分寫入會產生一份「看起來合法但缺角」的
+    地圖,那比沒有地圖更糟 —— 討論會拿它當完整的講。
+    """
+    drafts, err = parse_drafts(text)
+    if err:
+        return None, [err]
+    if not drafts:
+        return None, ["分群回應是空陣列"]
+    table = collect()
+    concepts = _stamp_quotes(assign_ids(drafts, load()), table)
+    mapping = {
+        "built_at": round(time.time(), 3) if now is None else now,
+        "analysis_fps": fingerprints(),
+        "source_node_count": len(table),
+        "concepts": concepts,
+    }
+    errors = validate(mapping, table)
+    if errors:
+        return None, errors
+    atomicio.write_text_atomic(
+        _path(), json.dumps(mapping, ensure_ascii=False, indent=1) + "\n")
+    return mapping, []

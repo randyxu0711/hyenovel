@@ -51,6 +51,12 @@ def test_collect_skips_unreadable_story(monkeypatch, tmp_path):
     (tmp_path / "broken" / "analysis.json").write_text("{ 壞掉", encoding="utf-8")
     (tmp_path / "no-analysis").mkdir()
     (tmp_path / "notadir.txt").write_text("x", encoding="utf-8")
+    # 合法 JSON 但沒有 nodes 陣列 / 根本不是物件 —— 兩者都解得開,所以走的不是
+    # JSONDecodeError 那條,是「nodes 不是 list」那條。少了它 collect() 湊不滿分支。
+    (tmp_path / "no-nodes").mkdir()
+    (tmp_path / "no-nodes" / "analysis.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "not-an-object").mkdir()
+    (tmp_path / "not-an-object" / "analysis.json").write_text("[]", encoding="utf-8")
     _use_fixtures(monkeypatch, tmp_path)
     rows = label_map.collect()
     assert [r["slug"] for r in rows] == ["good"]
@@ -302,3 +308,119 @@ def test_is_stale_when_mapping_is_none_or_garbage(monkeypatch):
     assert label_map.is_stale(None) is True
     assert label_map.is_stale({}) is True
     assert label_map.is_stale({"analysis_fps": "壞"}) is True
+
+
+def _drafts_json():
+    return json.dumps([{
+        "canonical": "等待", "node_type": "theme",
+        "members": [
+            {"slug": "s01", "node": "t1", "label": "等不到的人",
+             "why": "把等待寫成沒有終點的動作。", "evidence_index": 0},
+            {"slug": "s02", "node": "t1", "label": "等待的落空",
+             "why": "門始終沒開。", "evidence_index": 0}]}], ensure_ascii=False)
+
+
+def _seed_multi(tmp_path):
+    """把三篇合成樣本複製進 tmp_path —— build() 會寫檔,不可以寫進 fixtures 目錄。"""
+    for name in ("s01", "s02", "s03"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "analysis.json").write_bytes(
+            (FIXTURES / name / "analysis.json").read_bytes())
+    return tmp_path
+
+
+def test_parse_drafts_strips_fence_and_prose():
+    assert label_map.parse_drafts("```json\n[]\n```")[0] == []
+    assert label_map.parse_drafts("以下是結果:\n[{}]")[0] == [{}]
+    assert label_map.parse_drafts("完全不是 JSON")[1] is not None
+    assert label_map.parse_drafts('{"不是": "陣列"}')[1] is not None
+    # 元素不是物件要在入口擋掉:下游 assign_ids 的 dict(d) 對字串會拋 ValueError,
+    # 那會讓閘門從「回錯誤」變成「炸例外」。
+    assert label_map.parse_drafts('["字串"]')[1] is not None
+    # 圍欄裡的東西壞掉、以及只有一行圍欄的退化情形
+    assert label_map.parse_drafts("```\n不是 JSON\n```")[1] is not None
+    assert label_map.parse_drafts("```")[1] is not None
+    # 前後有散文包著一個合法陣列 → 撈中間那段
+    assert label_map.parse_drafts("結果如下:[{}] 以上")[0] == [{}]
+    assert label_map.parse_drafts("開頭 [壞掉 結尾]")[1] is not None
+
+
+def test_build_writes_and_stamps(monkeypatch, tmp_path):
+    _seed_multi(tmp_path)
+    _use_fixtures(monkeypatch, tmp_path)
+    mapping, errs = label_map.build(_drafts_json(), now=123.0)
+    assert errs == []
+    assert mapping["built_at"] == 123.0
+    assert mapping["source_node_count"] == len(label_map.collect())
+    assert set(mapping["analysis_fps"]) == {"s01", "s02", "s03"}
+    c = mapping["concepts"][0]
+    assert c["id"] == "L001"
+    # quote 是確定性層照 evidence_index 取的,LLM 沒寫這欄
+    assert c["members"][0]["quote"] == "他一直沒來。"
+    assert label_map.load() == mapping
+
+
+def test_build_stamps_time_when_now_omitted(monkeypatch, tmp_path):
+    _seed_multi(tmp_path)
+    _use_fixtures(monkeypatch, tmp_path)
+    mapping, errs = label_map.build(_drafts_json())
+    assert errs == [] and mapping["built_at"] > 0
+
+
+def test_build_reuses_id_across_rebuilds(monkeypatch, tmp_path):
+    _seed_multi(tmp_path)
+    _use_fixtures(monkeypatch, tmp_path)
+    label_map.build(_drafts_json(), now=1.0)
+    renamed = json.loads(_drafts_json())
+    renamed[0]["canonical"] = "換了個名字的同一族"
+    mapping, errs = label_map.build(json.dumps(renamed, ensure_ascii=False), now=2.0)
+    assert errs == []
+    assert mapping["concepts"][0]["id"] == "L001"
+
+
+def test_build_writes_nothing_when_a_gate_fails(monkeypatch, tmp_path):
+    _seed_multi(tmp_path)
+    _use_fixtures(monkeypatch, tmp_path)
+    bad = json.loads(_drafts_json())
+    bad[0]["members"][0]["label"] = "被竄改的 label"
+    mapping, errs = label_map.build(json.dumps(bad, ensure_ascii=False), now=1.0)
+    assert mapping is None and errs
+    assert label_map.load() is None          # 全過才寫:一道不過就整份不落地
+
+
+def test_build_reports_parse_error(monkeypatch, tmp_path):
+    _use_fixtures(monkeypatch, tmp_path)
+    mapping, errs = label_map.build("完全不是 JSON")
+    assert mapping is None and len(errs) == 1
+
+
+def test_build_rejects_empty_drafts(monkeypatch, tmp_path):
+    _use_fixtures(monkeypatch, tmp_path)
+    mapping, errs = label_map.build("[]")
+    assert mapping is None and errs
+
+
+def test_build_survives_garbage_inside_a_concept(monkeypatch, tmp_path):
+    """members 不是陣列 / 成員不是物件 —— parse_drafts 擋不到這兩層,
+    _stamp_quotes 必須跨過去而不是炸,再由 schema 報一個看得懂的錯。"""
+    _seed_multi(tmp_path)
+    _use_fixtures(monkeypatch, tmp_path)
+    for members in ("不是陣列", ["不是 dict"]):
+        mapping, errs = label_map.build(json.dumps(
+            [{"canonical": "x", "node_type": "theme", "members": members}],
+            ensure_ascii=False))
+        assert mapping is None and errs
+        assert label_map.load() is None
+
+
+def test_build_stamps_empty_quote_when_index_out_of_range(monkeypatch, tmp_path):
+    """evidence_index 越界 → quote 蓋空字串,交給閘門報錯,不在 _stamp_quotes 炸,
+    也不悄悄改成看起來合法的東西(例如夾到最後一條)。"""
+    _seed_multi(tmp_path)
+    _use_fixtures(monkeypatch, tmp_path)
+    bad = json.loads(_drafts_json())
+    bad[0]["members"][0]["evidence_index"] = 99      # s01/t1 只有 1 條
+    mapping, errs = label_map.build(json.dumps(bad, ensure_ascii=False))
+    assert mapping is None
+    assert any("evidence_index" in e for e in errs)
+    assert label_map.load() is None
