@@ -238,3 +238,67 @@ def test_assign_ids_survives_garbage_prev():
                 {"concepts": [{"id": "不合格式", "members": []}]}):
         out = label_map.assign_ids([_draft("族", "motif", [("s01", "m1")])], bad)
         assert out[0]["id"].startswith("L")
+
+
+def test_fingerprints_covers_all_stories(monkeypatch):
+    _use_fixtures(monkeypatch)
+    fps = label_map.fingerprints()
+    assert set(fps) == {"s01", "s02", "s03"}
+    assert all(len(v) == 40 for v in fps.values())
+
+
+def test_fingerprints_when_stories_dir_missing(monkeypatch, tmp_path):
+    _use_fixtures(monkeypatch, tmp_path / "nope")
+    assert label_map.fingerprints() == {}
+
+
+def test_fingerprints_skips_what_cannot_be_fingerprinted(monkeypatch, tmp_path):
+    """三種都要跳過,而且三種各是一條分支(缺一條就湊不滿 branch 覆蓋)。"""
+    (tmp_path / "good").mkdir()
+    (tmp_path / "good" / "analysis.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "no-analysis").mkdir()                    # 目錄在,但還沒分析
+    (tmp_path / "notadir.txt").write_text("x", encoding="utf-8")
+    # analysis.json 是「目錄」—— exists() 為真但 read_bytes() 拋 IsADirectoryError,
+    # analysis_fp 吞掉回空字串。這是 `if fp:` 那條 False 分支唯一構造得出來的情形。
+    (tmp_path / "weird").mkdir()
+    (tmp_path / "weird" / "analysis.json").mkdir()
+    _use_fixtures(monkeypatch, tmp_path)
+    assert set(label_map.fingerprints()) == {"good"}
+
+
+def test_load_returns_none_when_absent_or_broken(monkeypatch, tmp_path):
+    _use_fixtures(monkeypatch, tmp_path)
+    assert label_map.load() is None
+    (tmp_path / "label-map.json").write_text("{ 壞", encoding="utf-8")
+    assert label_map.load() is None
+    (tmp_path / "label-map.json").write_text('["不是 dict"]', encoding="utf-8")
+    assert label_map.load() is None
+
+
+def test_is_stale_when_fingerprint_changed(monkeypatch):
+    _use_fixtures(monkeypatch)
+    fps = label_map.fingerprints()
+    assert label_map.is_stale({"analysis_fps": fps}) is False
+    bad = dict(fps, s01="0" * 40)
+    assert label_map.is_stale({"analysis_fps": bad}) is True
+
+
+def test_is_stale_when_story_added(monkeypatch):
+    _use_fixtures(monkeypatch)
+    fps = label_map.fingerprints()
+    fps.pop("s03")
+    assert label_map.is_stale({"analysis_fps": fps}) is True
+
+
+def test_is_stale_when_story_deleted(monkeypatch):
+    """篇被刪掉 —— 少了這條,member 會指向不存在的篇。"""
+    _use_fixtures(monkeypatch)
+    fps = dict(label_map.fingerprints(), sGONE="0" * 40)
+    assert label_map.is_stale({"analysis_fps": fps}) is True
+
+
+def test_is_stale_when_mapping_is_none_or_garbage(monkeypatch):
+    _use_fixtures(monkeypatch)
+    assert label_map.is_stale(None) is True
+    assert label_map.is_stale({}) is True
+    assert label_map.is_stale({"analysis_fps": "壞"}) is True

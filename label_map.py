@@ -15,6 +15,8 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+import conclusions
+
 ROOT = Path(__file__).resolve().parent
 STORIES = ROOT / "stories"
 
@@ -184,3 +186,58 @@ def assign_ids(drafts, prev):
             nxt += 1
         out.append(c)
     return out
+
+
+def _path():
+    """每次現算 —— STORIES 是模組層變數,測試會 monkeypatch 它。"""
+    return STORIES / "label-map.json"
+
+
+def fingerprints():
+    """現況每篇 analysis.json 的 sha1。沿用 conclusions.analysis_fp(單一正本)。
+
+    只收真的有 analysis.json 的篇:analysis_fp 對不存在的檔回空字串,
+    把「沒有分析」與「指紋是空的」混為一談會讓 stale 判定失準。
+    """
+    out = {}
+    if not STORIES.is_dir():
+        return out
+    for d in sorted(STORIES.iterdir()):
+        if not d.is_dir() or not (d / "analysis.json").exists():
+            continue
+        fp = conclusions.analysis_fp(d.name)
+        if fp:
+            out[d.name] = fp
+    return out
+
+
+def load():
+    """讀 label-map.json;不存在 / 壞掉 / 不是 dict 一律回 None。
+
+    壞掉當作不存在(而不是炸):它是衍生快取,重建的成本是幾分錢,
+    而讓一個壞檔擋住整條討論路徑不划算。
+    """
+    p = _path()
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_bytes())
+    except (OSError, json.JSONDecodeError):
+        log.warning("event=label-map-load-fail")
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def is_stale(mapping):
+    """地圖跟現況對不上了嗎(純函式,雙向比對)。
+
+    三個成因,任一成立即 stale:
+      ① 某 slug 的 fp 對不上   —— 該篇被 re-analyze,node id 已重鑄
+      ② 現況有 slug 不在表裡   —— 新增了篇
+      ③ 表裡有 slug 但檔沒了   —— 篇被刪掉(member 會指向不存在的篇)
+    地圖本身讀不到 / 形狀不對 → 一律 stale。
+    """
+    recorded = (mapping or {}).get("analysis_fps")
+    if not isinstance(recorded, dict):
+        return True
+    return recorded != fingerprints()
