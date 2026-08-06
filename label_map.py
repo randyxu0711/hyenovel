@@ -213,6 +213,34 @@ def fingerprints():
     return out
 
 
+def titles():
+    """現況每篇的篇名(slug → 篇名)。給討論引用跨篇時標篇名用。
+
+    地圖裡本來只有 slug,而 slug 是我們讀檔用的內部代號 —— 使用者看到「s03」
+    只會愣住,所以引用時它得有篇名可查。
+
+    **放 top-level 一張表,不是每個 member 各帶一份**:成員數長得比篇數快
+    (七篇 = 84 個成員),重複幾十份同樣的字串會把檔案推向拆檔門檻。
+
+    沒有 title 的篇直接略過,不拿 slug 頂替 —— 那是拿內部代號冒充篇名,
+    跟這個欄位要修的 bug 是同一件事。
+    """
+    out = {}
+    if not STORIES.is_dir():
+        return out
+    for d in sorted(STORIES.iterdir()):
+        if not d.is_dir():
+            continue
+        try:
+            data = json.loads((d / "analysis.json").read_bytes())
+        except (OSError, json.JSONDecodeError):
+            continue
+        t = data.get("title") if isinstance(data, dict) else None
+        if isinstance(t, str) and t:
+            out[d.name] = t
+    return out
+
+
 def load():
     """讀 label-map.json;不存在 / 壞掉 / 不是 dict 一律回 None。
 
@@ -316,6 +344,7 @@ def build(text, now=None):
     mapping = {
         "built_at": round(time.time(), 3) if now is None else now,
         "analysis_fps": fingerprints(),
+        "titles": titles(),
         "source_node_count": len(table),
         "concepts": concepts,
     }

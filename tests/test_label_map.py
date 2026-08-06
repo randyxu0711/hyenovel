@@ -83,11 +83,41 @@ def test_collect_when_stories_dir_missing(monkeypatch, tmp_path):
     assert label_map.collect() == []
 
 
+def test_titles_maps_slug_to_title(monkeypatch):
+    _use_fixtures(monkeypatch)
+    assert label_map.titles() == {
+        "s01": "合成樣本一", "s02": "合成樣本二", "s03": "合成樣本三"}
+
+
+def test_titles_skips_anything_without_a_usable_title(monkeypatch, tmp_path):
+    """略過而不頂替 —— 拿 slug 當篇名正是這個欄位要修的 bug。"""
+    def story(name, payload):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "analysis.json").write_text(payload, encoding="utf-8")
+
+    story("good", json.dumps({"title": "有篇名"}))
+    story("broken", "{ 壞掉")                       # JSONDecodeError
+    story("not-an-object", "[]")                    # 解得開但不是 dict
+    story("no-title", "{}")                         # 沒有 title 欄
+    story("title-not-str", json.dumps({"title": 7}))
+    story("title-empty", json.dumps({"title": ""}))
+    (tmp_path / "no-analysis").mkdir()              # OSError
+    (tmp_path / "notadir.txt").write_text("x", encoding="utf-8")
+    _use_fixtures(monkeypatch, tmp_path)
+    assert label_map.titles() == {"good": "有篇名"}
+
+
+def test_titles_when_stories_dir_missing(monkeypatch, tmp_path):
+    _use_fixtures(monkeypatch, tmp_path / "nope")
+    assert label_map.titles() == {}
+
+
 def _ok_mapping():
     """一份會過全部閘門的地圖(對應 fixtures/multi)。"""
     return {
         "built_at": 1753900000.0,
         "analysis_fps": {"s01": "a", "s02": "b", "s03": "c"},
+        "titles": {"s01": "合成樣本一", "s02": "合成樣本二", "s03": "合成樣本三"},
         "source_node_count": 9,
         "concepts": [{
             "id": "L001", "canonical": "等待", "node_type": "theme",
@@ -353,6 +383,9 @@ def test_build_writes_and_stamps(monkeypatch, tmp_path):
     assert mapping["built_at"] == 123.0
     assert mapping["source_node_count"] == len(label_map.collect())
     assert set(mapping["analysis_fps"]) == {"s01", "s02", "s03"}
+    # 篇名也是確定性層蓋的:討論引用跨篇時標的是它,不是 slug
+    assert mapping["titles"] == {"s01": "合成樣本一", "s02": "合成樣本二",
+                                 "s03": "合成樣本三"}
     c = mapping["concepts"][0]
     assert c["id"] == "L001"
     # quote 是確定性層照 evidence_index 取的,LLM 沒寫這欄
