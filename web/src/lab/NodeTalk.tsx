@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import { EMBER_SPARK } from "./BoneStage";
 import type { Discussion } from "../journey/useDiscussion";
 import type { VizNode, FeedbackPoint, Conclusion } from "../types";
@@ -10,6 +11,17 @@ const Spark = ({ stale }: { stale: boolean }) => (
     <path d={EMBER_SPARK} />
   </svg>
 );
+
+// 討論的一行字。編輯那側走 markdown,使用者那側原樣留著 ——
+// 使用者寫的是純文學,`*` 可能就是他要的那個字;而且他打的是**輸入**不是輸出,
+// 不該被重新詮釋一次(換行仍由 .talk-line.me 的 white-space:pre-wrap 保住)。
+//
+// 為什麼是 memo 不是元件內 useMemo:hook 不能在 msgs.map 的 callback 裡呼叫,
+// 而 memo 給的是同一件事 —— 串流每個 delta 都讓 msgs 換一個新陣列,沒有它就是
+// 每則都重解析一次;有了它只有正在長的那則會重解析。
+const TalkText = memo(function TalkText({ text, md }: { text: string; md: boolean }) {
+  return md ? <Markdown>{text}</Markdown> : <>{text}</>;
+});
 
 // 沉浸式討論:不是側欄盒子,是星空上從節點長出來的發光對話。
 // 先呈現編輯對這顆「已寫好的判斷」(kp),再從那句往下聊。
@@ -79,7 +91,9 @@ export default function NodeTalk(
             否則就是讓畫面替它撒謊。 */}
         {past.length > 0 && <>
           {past.map((t, i) => (
-            <div key={`p${i}`} className={`talk-line past ${t.role === "user" ? "me" : "ed"}`}>{t.text}</div>
+            <div key={`p${i}`} className={`talk-line past ${t.role === "user" ? "me" : "ed"}`}>
+              <TalkText text={t.text} md={t.role !== "user"} />
+            </div>
           ))}
           <div className="talk-boundary">過去的逐字 · 編輯不重讀</div>
         </>}
@@ -89,11 +103,13 @@ export default function NodeTalk(
             {m.think && <p className="talk-think">{m.think}</p>}
             {/* 等待狀態:字講「在跑」、點講「還活著」。`aria-live` 讓讀螢幕的人也收得到這個轉場。
                 thinking 若日後翻回來,草稿一開始流就換它上場(下面 !m.think 那條)。 */}
-            {m.text || (busy && !m.think && i === msgs.length - 1
-              ? <span className="talk-wait" role="status" aria-live="polite">
-                  思考中<i /><i /><i />
-                </span>
-              : "")}
+            {m.text
+              ? <TalkText text={m.text} md={m.role === "ed"} />
+              : (busy && !m.think && i === msgs.length - 1
+                ? <span className="talk-wait" role="status" aria-live="polite">
+                    思考中<i /><i /><i />
+                  </span>
+                : "")}
           </div>
         ))}
         {/* 這裡曾經有一顆「留下結論」鈕。收束現在是後端的本能:這一局閒置被回收之後,
