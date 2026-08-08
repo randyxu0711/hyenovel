@@ -85,14 +85,44 @@
 .talk-jump{margin-top:8px;display:inline-block;font:inherit;font-size:var(--t-caption);color:#9fb6c8;
   background:none;border:none;cursor:pointer;padding:2px 0}
 .talk-jump:hover{color:#dfeaf2}
-.talk-line{font-size:var(--t-body);line-height:1.95;white-space:pre-wrap;max-width:92%}
-.talk-line.me{align-self:flex-end;color:#cdd6e2;text-align:right;
+/* pre-wrap 搬到 .me:編輯那側渲染成標籤之後由標籤決定斷行,而 remark→rehype 會在區塊
+   元素之間留下換行文字節點,pre-wrap 下那些會變成看得見的空行(尤其 li 與 li 之間)。
+   使用者那側不渲染,仍需要它才保得住換行 —— 是搬家不是刪除。 */
+.talk-line{font-size:var(--t-body);line-height:1.95;max-width:92%}
+.talk-line.me{align-self:flex-end;color:#cdd6e2;text-align:right;white-space:pre-wrap;
   border-right:2px solid rgba(150,180,220,.4);padding-right:12px}
 .talk-line.ed{align-self:flex-start;color:#e7dcc2;
   text-shadow:0 0 16px rgba(236,201,138,.12)}
 /* 落盤的逐字歷史:沿用同一套 me/ed 語彙,只退光 —— 它們已經冷了(同燼 stale 的處置:
    啞、零暈)。不另給色相:暖色帶早就被 --c-ember / DIAG.over / DIAG.orphan / --amber 佔滿。 */
 .talk-line.past{opacity:.5;text-shadow:none}
+/* ── 編輯打的 markdown(實測 9 則裡 55 個 **粗體** / 14 個 ---)。渲染在 view 層,不在
+   prompt 裡叫它別打:那類軟約束的失敗是沉默的(#18 付過學費)。
+   通則是「形狀分家,色相讓給既有語意」—— 別跟 .talk-boundary(應用程式自己的界線)
+   或 .talk-quote / .talk-passage(小說原文引用)撞衫,那兩個語域比排版重。 */
+.talk-line.ed>:first-child{margin-top:0}
+.talk-line.ed>:last-child{margin-bottom:0}
+.talk-line.ed p{margin:0 0 .55em}     /* 空行 → 段距:88 個死空隙變成節奏 */
+/* 中文襯線字多半沒有真 bold,font-weight 只會拿到合成 faux-bold(糊、字重不勻)。
+   同色相提亮到近白,不新增色相 —— 暖色帶早被 --amber / --c-ember / DIAG.* 佔滿。 */
+.talk-line.ed strong{font-weight:inherit;color:#f8f2e2;text-shadow:0 0 14px rgba(236,201,138,.2)}
+/* 中文沒有真斜體(合成傾斜很醜),而且斜體是 .talk-think 的語域(推理草稿),不能撞。 */
+.talk-line.ed em{font-style:normal;letter-spacing:.06em;color:#f0e7d0}
+/* --- 不畫線:滿寬淡線會跟 .talk-boundary「過去的逐字 · 編輯不重讀」長得一樣。
+   在 440px 窄欄裡它本來就只是分段,給間距就夠。 */
+.talk-line.ed hr{border:none;height:0;margin:1.15em 0}
+/* 左規線讓給原文引用。這裡只縮排 + 退光 —— 模型的旁白不該長得像小說原文。 */
+.talk-line.ed blockquote{margin:.55em 0;padding-left:14px;color:#b8ae95}
+.talk-line.ed ol,.talk-line.ed ul{margin:.55em 0;padding-left:1.5em}
+.talk-line.ed li{margin:0 0 .3em;line-height:1.95}
+/* 以下不是設計,是中和瀏覽器預設:不寫的話 h1 會長成巨大無襯線粗體、code 變等寬、
+   a 變藍底線 —— 那是主動變醜,不是保持中立。標題不做六級,全壓成同一個小標;
+   壓平順帶把串流最醜的那一下也壓掉(--- 會把上一行追溯成 setext <h2>)。 */
+.talk-line.ed h1,.talk-line.ed h2,.talk-line.ed h3,
+.talk-line.ed h4,.talk-line.ed h5,.talk-line.ed h6{
+  font:inherit;font-size:var(--t-body);color:#f0e7cf;margin:.7em 0 .3em;letter-spacing:.04em}
+.talk-line.ed code,.talk-line.ed pre{font:inherit;color:#e8dcbc;background:none;white-space:pre-wrap}
+.talk-line.ed a{color:#c8bb98;text-decoration:none}
 /* 邊界不是裝飾也不是道歉:它講的是編輯這一局到底讀了什麼。開新局時它拿到的是 recall
    注入的蒸餾結論(discuss.py:90),不是上面那些字 —— 畫面顯示歷史 ≠ 它讀過歷史,
    不寫出來就是讓畫面替它撒謊。 */
