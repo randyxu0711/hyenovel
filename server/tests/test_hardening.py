@@ -1,6 +1,8 @@
 """零成本回歸 canary(不燒訂閱):守住加固後不會無聲退回舊行為。
 跑法(repo 根):  server/.venv/bin/python -m pytest
 """
+import asyncio
+
 from server import sdk_runner, config
 
 
@@ -42,6 +44,128 @@ def test_agent_options_shape():
     assert "Task" in opt.disallowed_tools, "必須禁 Task(斷 async 巢狀)"
     assert "Bash" in opt.disallowed_tools, "必須禁 Bash(斷亂試)"
     assert opt.max_turns == config.AGENT_MAX_TURNS
+    assert opt.hooks is sdk_runner._CRITIQUE_GUARD_HOOKS, \
+        "analyst 要掛帶得到寫入根的那份閘門,否則寫不出 analysis.json"
+
+
+# ── 路徑白名單硬閘門 ──────────────────────────────────────────────
+# 這支閘門是唯一擋住「代理被 source.md 注入騎劫後亂讀亂寫」的東西,
+# 而它在 2026-08-10 之前零測試:把 _within 的 any 改成 all、或把 fail-closed
+# 改成 fail-open,整套測試照樣全綠。以下釘住它的每一條分支。
+
+def _guard_of(opt):
+    """取出實際掛在這份 options 上的 PreToolUse 閘門。
+    刻意不直接抓 sdk_runner 裡的函式 —— 要測的是「這個 client 拿到的是哪一份閘門」,
+    接錯線跟邏輯寫錯一樣會出事,而前者只有從 options 這頭看得見。"""
+    return opt.hooks["PreToolUse"][0].hooks[0]
+
+
+def _ask(guard, tool, path=None, key="file_path"):
+    ti = {} if path is None else {key: path}
+    return asyncio.run(guard({"tool_name": tool, "tool_input": ti}, "tu", None))
+
+
+def _denied(res):
+    return res.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+
+
+def test_guard_write_roots_allow_stories_only():
+    g = _guard_of(sdk_runner.agent_options("analyst"))
+    assert _ask(g, "Write", str(config.STORIES / "s99" / "analysis.json")) == {}, \
+        "analyst 寫自己的產物必須放行——擋掉這條 critique 全鏈當場死"
+    assert _denied(_ask(g, "Write", "/tmp/x.py")), "stories/ 外不得寫"
+    assert _denied(_ask(g, "Write", str(config.ROOT / "server" / "config.py"))), "不得寫 repo 自己的 code"
+    assert _denied(_ask(g, "Write", str(config.STORIES / ".." / "server" / "config.py"))), \
+        "`..` 逃逸必須被 resolve() 攤平後擋下"
+
+
+def test_guard_read_roots_allow_stories_and_schemas():
+    g = _guard_of(sdk_runner.agent_options("analyst"))
+    assert _ask(g, "Read", str(config.ROOT / "schemas" / "analysis.schema.json")) == {}
+    assert _ask(g, "Read", str(config.STORIES / "s99" / "source.md")) == {}
+    assert _denied(_ask(g, "Read", "/etc/passwd")), "讀也要鎖——不然注入就能撈機密"
+    assert _denied(_ask(g, "Write", str(config.ROOT / "schemas" / "analysis.schema.json"))), \
+        "schemas/ 唯讀:讀得到不代表寫得進"
+
+
+def test_guard_ignores_non_file_tools():
+    g = _guard_of(sdk_runner.agent_options("analyst"))
+    assert _ask(g, "WebSearch") == {}, "非檔案工具不歸這支閘門管,直接放行"
+
+
+def test_guard_is_fail_closed():
+    g = _guard_of(sdk_runner.agent_options("analyst"))
+    assert _denied(_ask(g, "Write", "")), "空路徑不是「沒指定所以算了」,是擋"
+    assert _denied(_ask(g, "Write", "\x00")), "路徑解析爆炸要 fail-closed,不能因例外而放行"
+
+
+def test_guard_resolves_relative_against_root():
+    g = _guard_of(sdk_runner.agent_options("analyst"))
+    assert _ask(g, "Write", "stories/s99/analysis.json") == {}, "相對路徑以 repo 根為基準"
+    assert _denied(_ask(g, "Write", "server/config.py"))
+
+
+def test_guard_checks_alternate_path_keys():
+    g = _guard_of(sdk_runner.agent_options("analyst"))
+    assert _denied(_ask(g, "NotebookEdit", "/tmp/x.ipynb", key="notebook_path")), \
+        "notebook_path 也要看,不能因為換個欄位名就繞過去"
+
+
+_READONLY = (("discuss", sdk_runner.discuss_options),
+             ("settle", sdk_runner.settle_options))
+
+
+def test_readonly_clients_cannot_write_anywhere():
+    """discuss/settle/align 宣稱唯讀,那就不該有任何寫入根。
+
+    在此之前它們與 analyst 共用 `_WRITE_ROOTS=[STORIES]` —— 寫 /tmp 被擋,
+    寫 stories/ 卻會放行,而唯讀這件事只剩 `allowed_tools=["Read"]` 一層在守。
+    #18 的 log(唯讀 client 吐出 Write、一路走到這支 hook)正是在懷疑那一層。
+    """
+    for name, mk in _READONLY:
+        g = _guard_of(mk())
+        assert _denied(_ask(g, "Write", str(config.STORIES / "s99" / "analysis.json"))), \
+            f"{name} 不得寫 analysis.json:那是觀察層正本,只有 analyst 寫"
+        assert _denied(_ask(g, "Write", str(config.STORIES / "s99" / "conclusions.jsonl"))), \
+            f"{name} 不得直接寫結論正本:四道閘門長在 conclusions.py,繞過去等於沒有閘門"
+        assert _denied(_ask(g, "Edit", str(config.STORIES / "s99" / "source.md"))), \
+            f"{name} 不得改使用者的創作"
+
+
+def test_readonly_clients_can_still_read():
+    """收緊寫入不能誤傷讀:討論要讀原文、跨篇地圖、命中篇的 analysis。"""
+    for name, mk in _READONLY:
+        g = _guard_of(mk())
+        assert _ask(g, "Read", str(config.STORIES / "s99" / "source.md")) == {}, f"{name} 要讀原文"
+        assert _ask(g, "Read", str(config.STORIES / "label-map.json")) == {}, f"{name} 要讀跨篇地圖"
+        assert _denied(_ask(g, "Read", "/etc/passwd")), f"{name} 讀仍然鎖在白名單內"
+
+
+def test_readonly_deny_reason_never_promises_write_access():
+    """被擋的那一方接下來會說什麼——#18 買過單的那條。
+
+    共用理由寫著「僅允許讀寫 stories/」,對唯讀 client 是假話:它剛被擋的正是
+    stories/ 內的檔。給模型一句自相矛盾的理由,它只會換條路再試或編個下台階。
+    """
+    g = _guard_of(sdk_runner.discuss_options())
+    res = _ask(g, "Write", str(config.STORIES / "s99" / "analysis.json"))
+    reason = res["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "僅允許讀寫" not in reason, "不能告訴唯讀 client 它可以寫 stories/"
+    assert "唯讀" in reason, "要講明它是唯讀的,好讓它照『有據』那條說出『我做不到』"
+
+
+def test_readonly_options_shape():
+    """對稱 test_agent_options_shape。
+
+    在此之前只有 analyst 那支有 shape 測試,於是「討論唯讀」這句話在測試層
+    一個字都沒被守著——把 discuss_options 的 allowed_tools 加回 "Write",
+    或把 hooks 換回帶寫入根的那份,整套測試照樣全綠。
+    """
+    for name, mk in _READONLY:
+        opt = mk()
+        assert opt.allowed_tools == ["Read"], f"{name} 只該拿到 Read"
+        assert opt.hooks is sdk_runner._READONLY_GUARD_HOOKS, \
+            f"{name} 掛錯閘門就等於拿到 analyst 的寫入根"
 
 
 def test_rate_limit_of():

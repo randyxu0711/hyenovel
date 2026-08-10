@@ -111,12 +111,20 @@ def classify_failure(message: str) -> str:
 
 
 # ── 縱深防禦:路徑白名單硬閘 ────────────────────────────────────────
-# 就算代理被 source.md 內的注入騎劫,檔案工具也只能碰 stories/(讀寫)與
-# schemas/(唯讀)—— 讀不到 repo 外的機密、寫不出 stories/ 之外。PreToolUse
-# hook 對 analyst/criticizer(以主代理直接跑)的檔案工具呼叫觸發,故真正
-# 接觸下毒文本的那一層也在守備範圍內。違規當下直接 deny,不重試。
+# 就算代理被 source.md 內的注入騎劫,檔案工具也只能碰白名單內的路徑 —— 讀不到
+# repo 外的機密、寫不出自己份內的地方。PreToolUse hook 對 analyst/criticizer
+# (以主代理直接跑)的檔案工具呼叫觸發,故真正接觸下毒文本的那一層也在守備
+# 範圍內。違規當下直接 deny,不重試。
+#
+# **寫入根是 per-client 的,不是全域常數。** analyst/criticizer 要寫 stories/;
+# discuss/settle/align 宣稱唯讀,一個檔都不該寫——它們的產物是文字,由
+# conclusions.py / label_map.py 這些確定性層解析、過閘門、蓋章後才落地。
+# 早先三者共用同一份寫入根,於是「唯讀」對 stories/ 內的檔實際上是暢通的,
+# 只剩 allowed_tools 一層在守;而 #18 的 log 顯示唯讀 client 吐出的 Write
+# 一路走到了這支 hook,那一層到底擋不擋從未被證實。讀取根仍共用(討論的
+# 跨篇引用本來就要走遍整棵 stories/)。
 _FILE_TOOLS = {"Read", "Write", "Edit", "MultiEdit", "NotebookEdit"}
-_WRITE_ROOTS = [config.STORIES.resolve()]
+_CRITIQUE_WRITE_ROOTS = [config.STORIES.resolve()]
 _READ_ROOTS = [config.STORIES.resolve(), (config.ROOT / "schemas").resolve()]
 
 
@@ -124,39 +132,55 @@ def _within(target: Path, roots: list[Path]) -> bool:
     return any(target == r or r in target.parents for r in roots)
 
 
-async def _guard_path(input_data, tool_use_id, context):
-    """PreToolUse 閘:檔案工具的目標路徑必須落在白名單內,否則硬 deny。"""
-    tool = input_data.get("tool_name", "")
-    if tool not in _FILE_TOOLS:
-        return {}
-    ti = input_data.get("tool_input", {}) or {}
-    raw = ti.get("file_path") or ti.get("path") or ti.get("notebook_path") or ""
-    try:
-        target = Path(raw)
-        if not target.is_absolute():
-            target = config.ROOT / target
-        target = target.resolve()
-        roots = _READ_ROOTS if tool == "Read" else _WRITE_ROOTS
-        ok = bool(raw) and _within(target, roots)
-    except Exception:
-        ok = False   # fail-closed:路徑解析不了就擋
-    if ok:
-        return {}
-    who = input_data.get("agent_id", "main")
-    log.warning(f"event=guard-deny tool={tool} path={raw!r} agent={who}")
-    return {"hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": (
-            f"路徑越界,已擋:{raw}。僅允許讀寫 stories/、唯讀 schemas/。"
-        ),
-    }}
+def _make_guard(write_roots: list[Path], deny_reason: str):
+    """造一支綁定寫入根的 PreToolUse 閘門(空 list = 什麼都不准寫)。
+
+    deny 理由跟著寫入根一起變,不是排版講究:**模型讀得到這句話**。
+    一句「僅允許讀寫 stories/」對唯讀 client 是假的——它剛被擋的正是
+    stories/ 內的檔。#18 買過的單:給模型自相矛盾的理由,它不會停下來,
+    它會換條路再試,或編一個「本來就不必做」的下台階繼續走。
+    """
+    async def _guard_path(input_data, tool_use_id, context):
+        tool = input_data.get("tool_name", "")
+        if tool not in _FILE_TOOLS:
+            return {}
+        ti = input_data.get("tool_input", {}) or {}
+        raw = ti.get("file_path") or ti.get("path") or ti.get("notebook_path") or ""
+        try:
+            target = Path(raw)
+            if not target.is_absolute():
+                target = config.ROOT / target
+            target = target.resolve()
+            roots = _READ_ROOTS if tool == "Read" else write_roots
+            ok = bool(raw) and _within(target, roots)
+        except Exception:
+            ok = False   # fail-closed:路徑解析不了就擋
+        if ok:
+            return {}
+        who = input_data.get("agent_id", "main")
+        log.warning(f"event=guard-deny tool={tool} path={raw!r} agent={who}")
+        return {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": f"{deny_reason}(已擋:{raw})",
+        }}
+    return _guard_path
 
 
-_GUARD_HOOKS = {
-    "PreToolUse": [HookMatcher(matcher="Read|Write|Edit|MultiEdit|NotebookEdit",
-                              hooks=[_guard_path])],
-}
+def _guard_hooks(write_roots: list[Path], deny_reason: str):
+    return {"PreToolUse": [HookMatcher(matcher="Read|Write|Edit|MultiEdit|NotebookEdit",
+                                       hooks=[_make_guard(write_roots, deny_reason)])]}
+
+
+_CRITIQUE_GUARD_HOOKS = _guard_hooks(
+    _CRITIQUE_WRITE_ROOTS,
+    "路徑越界。僅允許讀寫 stories/、唯讀 schemas/。")
+
+_READONLY_GUARD_HOOKS = _guard_hooks(
+    [],
+    "本回合唯讀,不寫任何檔案。新的觀察或結論請直接寫在回答裡"
+    "(講明它掛在哪個節點、逐字引文是哪一句),確定性層會負責落地。"
+    "不要換個路徑重試,也不要改口說這件事本來就不必做——做不到就講做不到。")
 
 
 def agent_options(agent_name: str) -> ClaudeAgentOptions:
@@ -173,7 +197,7 @@ def agent_options(agent_name: str) -> ClaudeAgentOptions:
         # Task=斷 async 子代理巢狀、Bash=斷亂試、Edit/NotebookEdit=逼全檔 Write、不做局部竄改。
         disallowed_tools=["Task", "Bash", "Edit", "NotebookEdit"],
         permission_mode="acceptEdits",
-        hooks=_GUARD_HOOKS,
+        hooks=_CRITIQUE_GUARD_HOOKS,
         model=config.CRITIQUE_MODEL,
         max_budget_usd=config.CRITIQUE_BUDGET_USD,
         max_turns=config.AGENT_MAX_TURNS,
@@ -194,7 +218,7 @@ def discuss_options(resume: str | None = None) -> ClaudeAgentOptions:
         setting_sources=["project"],
         allowed_tools=["Read"],               # v1 唯讀:聊天不誤改正本
         permission_mode="default",
-        hooks=_GUARD_HOOKS,                    # 讀也鎖在 stories/、schemas/ 內
+        hooks=_READONLY_GUARD_HOOKS,          # 讀鎖在 stories/、schemas/;寫一律擋
         model=config.DISCUSS_MODEL,
         include_partial_messages=True,        # 逐 token delta
         # 關掉 extended thinking。**理由跟 critique 那邊不一樣,別把那條教訓當已證明**:
@@ -221,7 +245,7 @@ def settle_options() -> ClaudeAgentOptions:
         setting_sources=["project"],
         allowed_tools=["Read"],
         permission_mode="default",
-        hooks=_GUARD_HOOKS,
+        hooks=_READONLY_GUARD_HOOKS,
         model=config.DISCUSS_MODEL,
         include_partial_messages=False,
         thinking={"type": "disabled"},
