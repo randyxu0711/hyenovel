@@ -46,7 +46,11 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
   client 從逐字煉成結論。水位在 `settled.jsonl`(根層 `settled.py`),**判定同時看它與
   conclusions 的 `provenance.session`** —— 單看任一邊都有一個會重複花錢的洞。
   `sweep_settle` 必須序列跑,不可扇出(會煉兩次)。
-- 討論的 LLM 全程唯讀(`allowed_tools=["Read"]`):結論由它吐 JSON 文字、確定性層驗過才落地。
+- 討論的 LLM 全程唯讀:結論由它吐 JSON 文字、確定性層驗過才落地。唯讀是**兩層**——
+  `allowed_tools=["Read"]` 加上 `_READONLY_GUARD_HOOKS`(寫入根為空,任何檔案寫入硬擋)。
+  **唯讀 client(discuss/settle/align)不共用 critique 的寫入白名單**:共用時它們對整棵
+  `stories/` 是暢通的,「唯讀」只剩 SDK 那一層在守,而那一層擋不擋從未被證實。
+  新增任何宣稱唯讀的 client,掛 `_READONLY_GUARD_HOOKS`,別掛 `_CRITIQUE_GUARD_HOOKS`。
 
 ## 測試(判準:這行的行為「是誰決定的」)
 - **我們的政策 → 測**(即使長在 LLM 路徑上):重試/分流、閘門決策、slug 白名單、成本換算、
