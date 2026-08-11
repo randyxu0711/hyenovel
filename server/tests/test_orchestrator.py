@@ -420,3 +420,34 @@ def test_resume_reruns_criticizer_when_analyst_fallback_reruns(monkeypatch):
         assert calls["criticizer"] == 1, "analyst 重跑後 feedback.refs 已經對不上新 analysis,criticizer 不得被跳過"
 
     asyncio.run(go())
+
+
+# ── 拒絕要留痕 ──────────────────────────────────────────────────────
+# run_critique 的兩個 where="input" 是全檔僅有的「yield error 但不記 log」——
+# 其餘 18 個 error 事件都跟一行 log 成對(usage-limit / timeout / subprocess-fail /
+# unexpected)。理由見 test_app.py 同名區塊。
+
+def test_invalid_slug_rejection_is_logged(caplog):
+    with caplog.at_level("INFO", logger="hyenovel"):
+        _drain("../etc/passwd")
+    assert "event=reject where=slug" in caplog.text
+
+
+def test_missing_source_rejection_is_logged(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(config, "STORIES", tmp_path / "stories")
+    (tmp_path / "stories").mkdir(exist_ok=True)
+    with caplog.at_level("INFO", logger="hyenovel"):
+        _drain("s01")
+    assert "event=reject where=source" in caplog.text
+
+
+def test_setup_runs_before_the_guards(monkeypatch):
+    """拒絕的 log 不能掉進沒掛 handler 的 logger → setup() 必須在兩道守門之前。
+
+    這條只能直接盯呼叫順序:caplog 走 root handler,對「handler 掛沒掛上」完全無感
+    ——mutation 驗過,把 setup() 移回守門後面,上面兩支 reject 測試照樣全綠。
+    """
+    calls = []
+    monkeypatch.setattr(orchestrator, "setup", lambda: calls.append("setup"))
+    _drain("../etc/passwd")
+    assert calls == ["setup"], "守門 return 之前沒跑 setup() → 這行 log 無處可去"

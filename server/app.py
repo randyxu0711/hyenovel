@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 import recall
 
 from . import align, config, critique, discuss, ingest, ledger, log, settle, transcript
+from .log import log as logger
 
 app = FastAPI(title="hyenovel backend")
 
@@ -26,6 +27,8 @@ app = FastAPI(title="hyenovel backend")
 def _slug(slug: str) -> str:
     """守門:slug 來自 path,拼路徑/餵 argv 前先過白名單,擋路徑穿越與 argv 注入。"""
     if not config.valid_slug(slug):
+        # !r 不是排版:被拒的 slug 是原始使用者輸入,可能夾 \n 偽造出一整行假 log。
+        logger.info(f"event=reject where=slug slug={slug[:64]!r}")
         raise HTTPException(status_code=400, detail="bad slug")
     return slug
 
@@ -82,6 +85,7 @@ async def critique_start(slug: str, body: dict = Body(default={})):
         try:
             critique.reanalyze(s, body.get("title", ""))
         except ValueError as e:
+            logger.info(f"event=reject where=reanalyze slug={s} reason={e}")
             raise HTTPException(status_code=409, detail=str(e))
     return _sse(critique.attach(s, body.get("title", ""), fresh=bool(body.get("fresh"))))
 
@@ -132,10 +136,12 @@ async def stories_extract(file: UploadFile):
     # 只讀到上限 +1:巨檔不會整個進記憶體,超標當場擋(413)。
     data = await file.read(config.MAX_UPLOAD_BYTES + 1)
     if len(data) > config.MAX_UPLOAD_BYTES:
+        logger.info(f"event=reject where=upload bytes={len(data)}")
         raise HTTPException(status_code=413, detail=f"檔案過大(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
     try:
         text = ingest.extract_text(file.filename or "", data)
     except ValueError as e:      # 壞檔 / 加密 / 讀不了 → 400,不冒成 500
+        # 這條不記 reject:ingest.extract_text 內已 log.exception(event=extract-fail)。
         raise HTTPException(status_code=400, detail=str(e))
     return {"filename": file.filename, "text": text, "chars": len(text)}
 
@@ -145,6 +151,7 @@ def stories_create(body: dict = Body(...)):
     try:
         slug = ingest.create_story(body.get("title", ""), body.get("text", ""))
     except ValueError as e:
+        logger.info(f"event=reject where=create reason={e}")
         return JSONResponse({"error": str(e)}, status_code=400)
     return {"slug": slug}
 
