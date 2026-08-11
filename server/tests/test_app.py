@@ -214,3 +214,43 @@ def test_transcript_endpoint_missing_story_empty(stories):
 def test_transcript_endpoint_bad_slug_400():
     r = client.get("/api/transcript/bad.slug")
     assert r.status_code == 400
+
+
+# ── 拒絕要留痕 ──────────────────────────────────────────────────────
+# 系統對「我做的事失敗了」記得滴水不漏(usage-limit / timeout / subprocess-fail /
+# extract-fail 全部成對),對「我拒絕了你要我做的事」卻一個字都不記 ——
+# 使用者看到紅字、app.log 全白,連他撞的是 413 還是 400 都查不出來。
+#
+# **INFO 不是 WARNING**:拒絕不是降級(系統運作完全正常),但它是一次互動的終點。
+# 放 WARNING 會污染「WARNING 以上都值得看一眼」這條篩選習慣。
+#
+# extract 的 400(壞檔)刻意不在此列:ingest.py 已經 log.exception(event=extract-fail),
+# 補在 app 層是雙記。
+
+def test_bad_slug_is_logged(caplog):
+    with caplog.at_level("INFO", logger="hyenovel"):
+        client.get("/api/usage/bad.slug")
+    assert "event=reject where=slug" in caplog.text
+
+
+def test_oversized_upload_is_logged(caplog):
+    big = b"x" * (config.MAX_UPLOAD_BYTES + 1)
+    with caplog.at_level("INFO", logger="hyenovel"):
+        client.post("/api/stories/extract", files={"file": ("big.txt", big, "text/plain")})
+    assert "event=reject where=upload" in caplog.text
+
+
+def test_reanalyze_conflict_is_logged(stories, caplog):
+    d = stories / "s01"
+    d.mkdir()
+    (d / "source.md").write_text("他走進門。\n", encoding="utf-8")
+    with caplog.at_level("INFO", logger="hyenovel"):
+        client.post("/api/critique/s01", json={"mode": "reanalyze", "title": "標題"})
+    assert "event=reject where=reanalyze" in caplog.text
+
+
+def test_create_story_rejection_is_logged(stories, caplog):
+    """走 JSONResponse 不走 HTTPException 的那條 400 —— 同樣要留痕。"""
+    with caplog.at_level("INFO", logger="hyenovel"):
+        client.post("/api/stories", json={"title": "空", "text": "   \n "})
+    assert "event=reject where=create" in caplog.text

@@ -169,19 +169,25 @@ async def _run_criticizer(slug, on_client):
 
 
 async def run_critique(slug: str, on_client=None):
+    # setup() 必須在兩道守門「之前」:被拒的那兩條路 return 得比原本的 setup() 位置早,
+    # 擺在後面 → 直接呼叫本函式時(docstring 說得到),拒絕的 log 掉進沒有 handler 的
+    # logger 裡靜靜蒸發。走 server 時 app 的 startup 已呼過,setup() 冪等,不會重複掛。
+    setup()
     # 縱深防禦:slug 會拼路徑、也會當 argv 餵子行程(viz/render/index)。
     # API 邊界已擋,這裡再守一道(本函式也可被直接呼叫)。
     if not config.valid_slug(slug):
+        # !r:被拒的 slug 是原始輸入,可能夾 \n 偽造整行假 log。
+        log.info(f"event=reject where=slug slug={slug[:64]!r}")
         yield {"event": "error", "data": {"where": "input",
                "message": "不合法的 slug", "recoverable": False}}
         return
     src = config.STORIES / slug / "source.md"
     if not src.exists():
+        log.info(f"event=reject where=source slug={slug}")
         yield {"event": "error", "data": {"where": "input",
                "message": f"找不到 stories/{slug}/source.md", "recoverable": False}}
         return
 
-    setup()
     total_cost = ledger.aggregate(slug).get("last_run_cost_usd", 0.0)   # 續跑成本結轉(#2)
     stage = "analyst"          # 目前跑到哪格;逾時報錯時標對階段
     start_at = runstate.resume_point(config.STORIES / slug)  # "analyst"|"criticizer"|"render"
