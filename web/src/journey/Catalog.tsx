@@ -42,7 +42,7 @@ const WORD = ["", "凝聚", "秤出輕重", "成形", "成形"];
 
 // failed 的原因(paused 沒有——它只是撞用量牆)。用字對寫作者友善、不曝露內部機制名稱
 //(gate=引用閘門 → 「未通過檢核」);未知原因就只留「已中斷」,不硬掰。
-const FAIL_WORD: Record<string, string> = { timeout: "逾時", gate: "未通過檢核", crash: "出錯" };
+const FAIL_WORD: Record<string, string> = { timeout: "逾時", gate: "未通過檢核", crash: "出錯", cancelled: "你取消了" };
 
 export default function Catalog(
   { entries, ordered, loading, flying, bursting, gestations, hatching, fresh, confirming, onPick, onCancel, onResume, onReanalyze }:

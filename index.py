@@ -77,9 +77,13 @@ def _incomplete_entry(d, rs):
     }
 
 
-def build():
+def build(stories_dir=None):
+    """stories_dir 省略則用模組層 STORIES(CLI 用法)。
+    server 一律明講自己的 config.STORIES —— 它與這裡是兩份各自 monkeypatch 的常數,
+    不講就會在測試裡寫到真實 stories/。"""
+    base = Path(stories_dir or STORIES)
     stories = []
-    for d in sorted(p for p in STORIES.iterdir() if p.is_dir()):
+    for d in sorted(p for p in base.iterdir() if p.is_dir()):
         e = entry(d)
         if e:
             stories.append(e)
@@ -90,18 +94,28 @@ def build():
     }
 
 
+def write(stories_dir=None) -> dict:
+    """建列表並原子寫出 <stories>/index.json;回傳建好的 dict。
+
+    CLI(main)與 server(停住的 Run 收尾)共用這一支,免得「怎麼算列表」長出第二份。
+    """
+    base = Path(stories_dir or STORIES)
+    data = build(base)
+    atomicio.write_text_atomic(base / "index.json",
+                               json.dumps(data, ensure_ascii=False, indent=2))
+    return data
+
+
 def main():
     check = "--check" in sys.argv[1:]
-    data = build()
+    data = build() if check else write()
     for s in data["stories"]:
         fb = "✓feedback" if s["has_feedback"] else "—"
         print(f"  {s['slug']}  {s['title']}  ({s['nodes']}節點/{s['edges']}邊, {fb})")
     if check:
         print(f"共 {data['count']} 篇(--check,未寫檔)。")
         return
-    out = STORIES / "index.json"
-    atomicio.write_text_atomic(out, json.dumps(data, ensure_ascii=False, indent=2))
-    print(f"✓ 出列表契約:{out}  ({data['count']} 篇)")
+    print(f"✓ 出列表契約:{STORIES / 'index.json'}  ({data['count']} 篇)")
 
 
 if __name__ == "__main__":

@@ -4,8 +4,8 @@ import type { Gestation, GestationStatus } from "../types";
 
 const STEP: Record<string, number> = { analyst: 1, criticizer: 2, render: 3 };
 
-// index 的 status 值域不封閉(carried note:可能是 "cancelled" 等)——只有 "paused" 原樣保留,
-// 其餘任何值一律當 "failed"(resumable=true 已保證它值得續跑,只是不知道確切原因)。
+// 只有 "paused" 原樣保留,其餘一律當 "failed"
+//(resumable=true 已保證它值得續跑,只是不知道確切原因)。
 const resumedStatus = (status: string): GestationStatus => status === "paused" ? "paused" : "failed";
 
 // 撞牆提示跨重整記住(F5 不消失):存 resets_at(可 null);到重置時刻或讀取時已過期就清掉。
@@ -83,10 +83,12 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
                 setUsageLimitResetAt(r);
                 saveUsageLimit(r);
                 put(slug, title, 0, "paused", undefined, reason, r);      // 不 drop:停在原拍,可續跑
-              } else if (reason === "timeout" || reason === "gate" || reason === "crash") {
+              } else if (reason === "timeout" || reason === "gate" || reason === "crash" || reason === "cancelled") {
                 put(slug, title, 0, "failed", undefined, reason);         // 不 drop:同上,可續跑/重新分析
               } else {
-                drop(slug);                      // cancel 等無可續跑意義:安靜收掉(只有當前這條才動)
+                // 後端只在「取消掉一個 fresh 新孕育」時不帶 reason —— 那個目錄已經被刪了,
+                // 沒有東西可續。取消既有故事(含 reanalyze)會帶 reason="cancelled" 走上一支。
+                drop(slug);                      // 只有當前這條才動
               }
             }
           }

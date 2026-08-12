@@ -5,6 +5,7 @@
 「消費端本就在 check 狀態」比「反應式填洞」乾淨。
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -176,3 +177,33 @@ def test_done_entry_reason_is_none(story):
     """完成的故事沒有失敗原因 → reason=None(不硬掰)。"""
     slug, base = story
     assert index.entry(base)["reason"] is None
+
+
+# ── write():CLI 與 server 共用的落檔入口 ─────────────────────────────
+
+def test_write_outputs_index_json(story):
+    """main() 與 server 停住的 Run 都走這一支,免得「怎麼算列表」長出第二份。"""
+    slug, base = story
+    data = index.write()
+
+    out = base.parent / "index.json"
+    assert out.exists()
+    assert json.loads(out.read_text(encoding="utf-8")) == data
+    assert data["count"] == 1
+
+
+def test_write_accepts_explicit_stories_dir(story, tmp_path):
+    """server 一律明講自己的 config.STORIES。
+
+    index.STORIES 與 server.config.STORIES 是兩份各自 monkeypatch 的常數;不明講的話,
+    server 的測試會寫到真實的 stories/(而測試絕不碰使用者創作)。
+    """
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    (other / "s99").mkdir()
+
+    data = index.write(other)
+
+    assert (other / "index.json").exists()
+    assert data["stories"] == [], "空目錄(無 analysis/run.json)= 孤兒隱形"
+    assert not (Path(index.STORIES) / "index.json").exists(), "明講了目錄卻寫到模組層 STORIES"

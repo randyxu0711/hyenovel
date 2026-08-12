@@ -14,6 +14,7 @@ import asyncio
 import shutil
 import time
 
+import index
 import runstate
 
 from . import config, ledger, orchestrator, sdk_runner
@@ -54,6 +55,32 @@ def list_running() -> list[dict]:
             for r in _runs.values() if r.status == "running"]
 
 
+def _refresh_index(where: str, slug: str) -> None:
+    """把 stories/index.json 重建成磁碟的真相。
+
+    不變式:**Run 的結束方式改變了磁碟,列表就要跟上。**
+    index.py 只長在 orchestrator 的 render 那一格 —— 那是成功路徑專用的。停住的 Run
+    若不補這一刀,index.json 會停在上一次成功的樣子;而對 reanalyze 來說,那份舊列表
+    正好在說「這篇完好」,產物其實已經被 snapshot 進 .prev/,前端於是畫出一顆騙人的完好星。
+    三個呼叫點各對應一次磁碟變動(Run 收尾 / 取消刪檔 / 啟動掃孤兒),不是同一件事寫三遍。
+    失敗不外傳:列表過期比「Run 收不了尾」輕得多。
+    """
+    try:
+        index.write(config.STORIES)
+    except Exception:  # noqa: BLE001
+        log.exception(f"event=index-refresh-fail where={where} slug={slug}")
+
+
+def _cancel_event(run: Run) -> dict:
+    """取消事件。**非 fresh 才帶 reason** —— fresh 取消會連目錄一起刪,沒有東西可續,
+    不該在列表上長出一顆可續的星;既有故事(含 reanalyze)取消則產物還在(或在 .prev/),
+    該停住可續。這個分野後端自己知道,別讓前端再猜一次。"""
+    data = {"where": "cancel", "message": "已取消", "recoverable": False}
+    if not run.fresh:
+        data["reason"] = "cancelled"
+    return {"event": "error", "data": data}
+
+
 def _persist(run: Run) -> None:
     """把 Run 當前狀態同步寫進 run.json(轉態時呼叫)。cost 以 ledger 累計為準。
     run.status 維持既有 SSE 詞彙(running|done|error|cancelled);run.json 另外把
@@ -62,6 +89,10 @@ def _persist(run: Run) -> None:
     cost = agg.get("last_run_cost_usd", 0.0) if not agg.get("empty") else run.cost
     if run.status == "error":
         rj_status = "paused" if run.reason == "usage-limit" else "failed"
+    elif run.status == "cancelled":
+        # 取消也是「停住可續」的一種。run.json 不留 cancelled 這個值域:index 的
+        # resumable 白名單只認 paused/failed,留著就是讓取消過的星一個出口都沒有。
+        rj_status = "failed"
     else:
         rj_status = run.status          # running | done
     runstate.write(run.dir, status=rj_status, stage=run.stage_name,
@@ -109,8 +140,7 @@ async def _drive(run: Run):
     except asyncio.CancelledError:
         if run.status == "running":
             run.status = "cancelled"
-        _record(run, {"event": "error",
-                      "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
+        _record(run, _cancel_event(run))
         raise
     except Exception as e:  # noqa: BLE001 —— 任何意外都收斂成 error 事件,不讓 Task 默默死掉
         # 取消會先 disconnect client,使 receive 拋連線錯誤而非 CancelledError;
@@ -122,8 +152,7 @@ async def _drive(run: Run):
                           "data": {"where": "run", "message": str(e), "recoverable": False,
                                    "reason": sdk_runner.classify_failure(str(e))}})
         else:
-            _record(run, {"event": "error",
-                          "data": {"where": "cancel", "message": "已取消", "recoverable": False}})
+            _record(run, _cancel_event(run))
     finally:
         run.client = None
         if run.status == "done":
@@ -132,6 +161,10 @@ async def _drive(run: Run):
             # 都代表那次 reanalyze 已完成 → 該丟棄舊備份(discard_prev 對
             # .prev 不存在是 no-op,故 unconditional-on-done 安全)。
             runstate.discard_prev(run.dir)    # commit;失敗則保留 .prev(退路)
+        else:
+            # 停住 → 列表得說實話。done 不必也不可:render 那一格已經建過,而且必須是
+            # 它建 —— done 事件一發前端就重抓 index,擺到這裡會變成競態。
+            _refresh_index("drive", run.slug)
         run.finished.set()
         for q in list(run.subscribers):
             q.put_nowait(None)   # 串流結束哨兵
@@ -208,6 +241,7 @@ async def cancel(slug: str) -> bool:
     except BaseException:  # noqa: BLE001 —— 取消必然拋 CancelledError/連線錯誤,吞掉
         pass
     _discard_story(run)    # 取消=連檔一起丟:ingest 出來的 source.md 等一併移除,不留孤兒
+    _refresh_index("cancel", run.slug)   # _drive 的 finally 早於刪檔 → 那次刷到的是還沒刪的樣子
     return True
 
 
@@ -231,6 +265,7 @@ def scan_crashed() -> None:
     → 標 failed/crash(可續)。不依賴 run.json 存在:純孤兒由 resume_point 自然處理。"""
     if not config.STORIES.is_dir():
         return
+    marked = False
     for d in config.STORIES.iterdir():
         if not d.is_dir():
             continue
@@ -239,6 +274,11 @@ def scan_crashed() -> None:
             runstate.write(d, status="failed", stage=rs.get("stage", "analyst"),
                            reason="crash", title=rs.get("title"),
                            cost_usd=rs.get("cost_usd", 0.0))
+            marked = True
+    if marked:
+        # 掛在 reanalyze 中間的 server 是第三條會讓 index.json 說謊的路徑:
+        # 產物在 .prev/,列表卻還是上次成功的樣子。標完才刷,沒標到就別每次啟動白寫一次檔。
+        _refresh_index("scan", "-")
 
 
 async def sweep_runs():
