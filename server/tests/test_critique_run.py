@@ -519,3 +519,149 @@ def test_reanalyze_refuses_when_run_already_live(monkeypatch):
             pass
 
     asyncio.run(go())
+
+
+# ── 停住的 Run 要讓 index.json 說實話 ────────────────────────────────
+#
+# index.py 只長在 orchestrator 的 render 那一格(成功路徑)。停住的 Run 若不補一刀,
+# index.json 會停在上一次成功的樣子——對 reanalyze 而言,那份舊列表正好在說
+# 「這篇完好」,而產物已經被 snapshot 進 .prev/,前端於是畫出一顆騙人的完好星。
+
+
+def _index(d=None):
+    p = (d or config.STORIES) / "index.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+
+
+def test_stopped_reanalyze_refreshes_index(monkeypatch):
+    """reanalyze 失敗 → 列表要立刻反映「產物不在了、這篇可續跑」。
+
+    不修的話 index.json 還是重跑前那份(has_feedback/has_viz 皆 true、resumable false),
+    前端據此畫出一顆完好的星:點進去 404 或半殘,hover 出來的「重新分析」按下去是 409,
+    而真正的舊版鎖在 .prev/ 裡從 UI 完全看不到。
+    """
+    _mk_complete_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "error",
+                                         "data": {"message": "逾時", "recoverable": False,
+                                                  "reason": "timeout"}}]))
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        await run.task
+
+    asyncio.run(go())
+
+    idx = _index()
+    assert idx is not None, "停住的 Run 沒有重建 index.json —— 列表還在說這篇完好"
+    e = next(s for s in idx["stories"] if s["slug"] == "s01")
+    assert e["resumable"] is True, "停住的故事在列表上必須是可續跑的"
+    assert e["has_feedback"] is False and e["has_viz"] is False, \
+        "產物已搬進 .prev,列表卻還說它們在——這正是那顆騙人的星"
+
+
+def test_done_does_not_refresh_index(monkeypatch):
+    """done 不在這裡重建列表:render 那一格已經建過,而且必須是它建。
+
+    done 事件一發,前端就 onBorn → 重抓 index(useGestations)。把重建挪到 _drive 的
+    finally(在 done 之後)會變成競態:前端可能抓到還沒更新的那份。
+    """
+    _mk_complete_story()
+    monkeypatch.setattr(critique.orchestrator, "run_critique",
+                        _fake_critique([{"event": "done", "data": {"ok": True, "cost_usd": 0.5}}]))
+
+    async def go():
+        run = critique.start("s01", "標題")
+        await run.task
+
+    asyncio.run(go())
+    assert _index() is None, "done 竟在 _drive 裡重建 index —— 那是 render 那一格的職責"
+
+
+def test_cancelled_reanalyze_is_resumable(monkeypatch):
+    """取消一次 reanalyze:run.json 要寫 failed(而非 cancelled)+ reason=cancelled。
+
+    index 的 resumable 白名單只認 paused/failed。留著 "cancelled" 這個值域,
+    取消過的星就一個出口都沒有:續跑鈕不出(resumable false)、重新分析鈕也不出
+    (產物在 .prev,has_feedback false),而舊版拿不回來。
+    """
+    d = _mk_complete_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        run = critique.reanalyze("s01", "標題")
+        await asyncio.sleep(0)
+        await critique.cancel("s01")
+        return run
+
+    run = asyncio.run(go())
+
+    rs = runstate.read(d)
+    assert rs["status"] == "failed", "取消過的 reanalyze 卡在 cancelled → 列表認不得,星沒有出口"
+    assert rs["reason"] == "cancelled"
+    e = next(s for s in _index()["stories"] if s["slug"] == "s01")
+    assert e["resumable"] is True
+    assert e["reason"] == "cancelled", "停住的原因要一路帶到列表,前端才講得出「你取消了」"
+    assert any(ev.get("data", {}).get("reason") == "cancelled" for ev in run.events), \
+        "取消既有故事的事件要帶 reason,前端才不會把星靜靜收掉"
+
+
+def test_cancelled_fresh_gestation_carries_no_reason(monkeypatch):
+    """取消 fresh 新孕育:事件**不帶** reason,且列表裡不留那篇。
+
+    fresh 取消會連目錄一起刪(_discard_story),沒有東西可續 —— 帶 reason 會讓前端
+    長出一顆指向已刪目錄的可續星。這個分野後端自己知道(run.fresh),別讓前端猜。
+    """
+    _mk_story()
+
+    async def never_ending(slug, on_client=None):
+        await asyncio.sleep(3600); yield {}
+
+    monkeypatch.setattr(critique.orchestrator, "run_critique", never_ending)
+
+    async def go():
+        run = critique.start("s01", "標題", fresh=True)
+        await asyncio.sleep(0)
+        await critique.cancel("s01")
+        return run
+
+    run = asyncio.run(go())
+
+    assert not any("reason" in ev.get("data", {}) for ev in run.events), \
+        "fresh 取消竟帶了 reason —— 前端會留下一顆指向已刪目錄的可續星"
+    assert not (config.STORIES / "s01").exists()
+    assert _index()["stories"] == [], \
+        "取消刪檔後列表沒重刷:_drive 的 finally 早於 _discard_story,那次刷到的是還沒刪的樣子"
+
+
+def test_scan_crashed_refreshes_index():
+    """server 掛在 reanalyze 中間 → 重啟掃孤兒,列表也得跟著更新。
+
+    scan_crashed 只寫 run.json;不補這一刀的話,crash 這條路上 index.json 照樣
+    停在重跑前那份完好的樣子(_drive 根本沒機會跑 finally)。
+    """
+    d = config.STORIES / "s01"
+    d.mkdir(parents=True)
+    (d / "source.md").write_text("他走進門。\n", encoding="utf-8")
+    runstate.write(d, status="running", stage="analyst", title="標題")
+
+    critique.scan_crashed()
+
+    assert runstate.read(d)["status"] == "failed"
+    e = next(s for s in _index()["stories"] if s["slug"] == "s01")
+    assert e["resumable"] is True and e["reason"] == "crash"
+
+
+def test_scan_crashed_without_orphans_writes_nothing():
+    """沒標到任何一篇就別寫檔:每次啟動白寫一次 index.json 是純噪音。"""
+    d = config.STORIES / "s01"
+    d.mkdir(parents=True)
+    runstate.write(d, status="done", stage="done", title="標題")
+
+    critique.scan_crashed()
+
+    assert _index() is None, "沒有孤兒可標,卻還是重寫了 index.json"

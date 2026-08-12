@@ -150,6 +150,26 @@ describe("useGestations", () => {
     expect(result.current.gestations.get("h")?.reason).toBe("crash");
   });
 
+  it("error reason=cancelled(取消既有故事)→ 不 drop,標 failed 讓星停住可續", async () => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([{ event: "error", data: { where: "cancel", message: "已取消", reason: "cancelled" } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("h2", "取消的重跑"));
+    await waitFor(() => expect(result.current.gestations.get("h2")?.status).toBe("failed"));
+    expect(result.current.gestations.get("h2")?.reason).toBe("cancelled");
+  });
+
+  it("取消 fresh 新孕育(事件不帶 reason)→ 照舊安靜收掉", async () => {
+    // 後端只在 fresh 取消時省略 reason —— 那個目錄已被 _discard_story 刪了,
+    // 留一顆可續的星就是指向不存在的東西。這條守著那個分野別被「統一處理」抹掉。
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([{ event: "error", data: { where: "cancel", message: "已取消" } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("h3", "新孕育"));
+    await waitFor(() => expect(stream).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.gestations.has("h3")).toBe(false));
+  });
+
   it("初載併入 index 裡 resumable 的故事,標成停住的胎(step 對齊 stage)", async () => {
     running.mockResolvedValue([]);
     idx.mockResolvedValue({
@@ -162,12 +182,12 @@ describe("useGestations", () => {
     expect(result.current.gestations.get("i")?.step).toBe(2);   // stage=criticizer
   });
 
-  it("index 的 status 是未列舉值(如 cancelled)但 resumable=true → 容忍,標 failed 不炸掉", async () => {
+  it("index 的 status 是未列舉值但 resumable=true → 容忍,標 failed 不炸掉", async () => {
     running.mockResolvedValue([]);
     idx.mockResolvedValue({
       generated: "", count: 1,
       stories: [{ slug: "j", title: "癸", synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz: false,
-                  updated: "", status: "cancelled", stage: "analyst", resumable: true, reason: "crash" }],
+                  updated: "", status: "某個沒人列舉過的值", stage: "analyst", resumable: true, reason: "crash" }],
     });
     const { result } = renderHook(() => useGestations(() => {}));
     await waitFor(() => expect(result.current.gestations.get("j")?.status).toBe("failed"));
