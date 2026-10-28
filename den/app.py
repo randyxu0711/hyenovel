@@ -1,0 +1,215 @@
+"""den 的 HTTP 入口:job API + SSE,本機安全三件套(綁 127.0.0.1、Origin、token)、單一實例鎖。
+
+  POST /jobs                {"kind":"critique","slug"} → 202 {job_id, estimate, runner, note}
+  GET  /jobs/{id}           → job 列 + attempts 摘要(不含 raw_output / prompt)
+  POST /jobs/{id}/cancel    → 200 {"ok":true} | 409
+  POST /jobs/{id}/resume    → 200 {"ok":true} | 409
+  GET  /jobs/{id}/events    → SSE,每事件 `data: <json>\\n\\n`;一定會收尾
+
+- 路由一律 async def:sqlite3 連線綁在 lifespan 建立它的事件迴圈執行緒,def 路由會被丟進 threadpool。
+- 拒絕都記 INFO `event=reject where=...`(#21);token 與 Origin 原值不進 log。
+"""
+import asyncio
+import functools
+import json
+import logging
+import os
+import secrets
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Literal
+
+import filelock
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
+
+from den.config import HOST, PHASE_TIMEOUT, PORT, valid_slug
+from den.jobs import JobManager
+from den.runner import ClaudePreset, cli_version, find_claude, run_job
+from marrow import db, repo
+
+log = logging.getLogger("hyenovel")
+
+_TERMINAL = ("done", "paused", "failed", "cancelled")
+_SSE_POLL = 15.0        # SSE 多久沒事件就回頭看 DB(兼 keep-alive)
+_RESTART_DELAY = 1.0    # worker 死掉後隔多久重起(別讓壞 DB 變成熱迴圈)
+_ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
+_JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
+             "error_class", "detail", "created_at", "updated_at")
+
+
+class JobIn(BaseModel):
+    kind: Literal["critique"]
+    slug: str
+
+
+def load_token(data_dir: Path) -> str:
+    """`<data_dir>/den.token`;不存在就建,O_EXCL + 0600 一次到位,不留短暫可讀的空窗。"""
+    p = data_dir / "den.token"
+    try:
+        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return p.read_text(encoding="utf-8").strip()
+    token = secrets.token_urlsafe(32)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(token + "\n")
+    return token
+
+
+async def _supervise(mgr) -> None:
+    """worker 例外死掉不能沉默(否則之後每個 job 永遠 queued):記下、收孤兒、重起。"""
+    while True:
+        try:
+            await mgr.worker()
+        except Exception:
+            log.exception("event=worker-died")
+            await asyncio.sleep(_RESTART_DELAY)
+            try:
+                mgr.startup()   # 死在半路的 running 已沒人跑,收成 crash 才能續
+            except Exception:
+                log.exception("event=worker-recover-failed")
+
+
+def _default_factory():
+    exe = find_claude()
+    if exe is None:
+        raise RuntimeError("找不到 claude CLI(PATH 上沒有):先安裝 Claude Code 並登入再啟動 den")
+    preset = ClaudePreset(exe)
+
+    def factory(on_proc):
+        return functools.partial(run_job, preset, timeout=PHASE_TIMEOUT, on_proc=on_proc)
+    return factory, cli_version(exe)
+
+
+def _sse_line(ev: dict) -> str:
+    return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+
+
+def _state_event(job: dict) -> dict:
+    return {"event": "state", "data": {k: job[k] for k in ("state", "step", "error_class", "detail")}}
+
+
+def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = PORT) -> FastAPI:
+    origins = {f"http://{HOST}:{port}", f"http://localhost:{port}"}
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        data_dir.mkdir(parents=True, exist_ok=True)
+        lock = filelock.FileLock(data_dir / "den.lock")
+        try:
+            lock.acquire(timeout=0)
+        except filelock.Timeout:
+            raise RuntimeError(f"den 已在執行(鎖在 {data_dir / 'den.lock'})") from None
+        conn = None
+        try:
+            factory, ver = (run_factory, None) if run_factory else _default_factory()
+            app.state.token = load_token(data_dir)
+            conn = db.connect(conn_url)
+            path = conn_url.removeprefix("sqlite:///")
+            db.migrate(conn, None if path == ":memory:" else Path(path))
+            mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)
+            mgr.startup()
+            app.state.mgr = mgr
+            worker = asyncio.create_task(_supervise(mgr))
+            log.info("event=den-start port=%s", port)
+            try:
+                yield
+            finally:
+                worker.cancel()
+                await asyncio.gather(worker, return_exceptions=True)
+                log.info("event=den-stop")
+        finally:
+            if conn is not None:
+                conn.close()
+            lock.release()
+
+    app = FastAPI(title="hyenovel den", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def guard(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if origin is not None and origin not in origins:
+            # !r 且截斷:Origin 是外部輸入,可能夾換行偽造 log 行
+            log.info("event=reject where=origin origin=%r", origin[:64])
+            return JSONResponse({"detail": "origin not allowed"}, status_code=403)
+        auth = request.headers.get("authorization", "")
+        want = f"Bearer {request.app.state.token}"
+        if not secrets.compare_digest(auth.encode(), want.encode()):
+            log.info("event=reject where=token")
+            return JSONResponse({"detail": "bad token"}, status_code=401)
+        return await call_next(request)
+
+    def _job(request: Request, job_id: int) -> dict:
+        job = repo.get_job(request.app.state.mgr.conn, job_id)
+        if job is None:
+            raise HTTPException(404, "job 不存在")
+        return job
+
+    @app.post("/jobs", status_code=202)
+    async def post_job(body: JobIn, request: Request):
+        if not valid_slug(body.slug):
+            log.info("event=reject where=slug slug=%r", body.slug[:64])
+            raise HTTPException(422, "bad slug")
+        try:
+            out = request.app.state.mgr.submit(body.slug)
+        except LookupError:
+            raise HTTPException(404, "這篇不在 DB:先執行 python -m marrow.importer") from None
+        return {**out, "runner": ClaudePreset.runner_name, "note": "會用你同一份訂閱額度"}
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(job_id: int, request: Request):
+        job = _job(request, job_id)
+        atts = repo.attempts(request.app.state.mgr.conn, job_id)
+        return {**{k: job[k] for k in _JOB_KEYS},
+                "attempts": [{k: a[k] for k in _ATTEMPT_KEYS} for a in atts]}
+
+    async def _act(request: Request, job_id: int, verb: str):
+        _job(request, job_id)
+        if not getattr(request.app.state.mgr, verb)(job_id):
+            log.info("event=reject where=%s job=%s", verb, job_id)
+            raise HTTPException(409, f"目前狀態不能 {verb}")
+        return {"ok": True}
+
+    @app.post("/jobs/{job_id}/cancel")
+    async def cancel(job_id: int, request: Request):
+        return await _act(request, job_id, "cancel")
+
+    @app.post("/jobs/{job_id}/resume")
+    async def resume(job_id: int, request: Request):
+        return await _act(request, job_id, "resume")
+
+    @app.get("/jobs/{job_id}/events")
+    async def events(job_id: int, request: Request):
+        _job(request, job_id)
+        mgr = request.app.state.mgr
+
+        async def stream():
+            q = mgr.bus.subscribe(job_id)
+            try:
+                if q.empty():   # 沒得補播:已結束(TTL 過了 / 上個行程跑的)就送現況收尾
+                    job = repo.get_job(mgr.conn, job_id)
+                    if job["state"] in _TERMINAL:
+                        yield _sse_line(_state_event(job))
+                        return
+                while True:
+                    try:
+                        ev = await asyncio.wait_for(q.get(), _SSE_POLL)
+                    except asyncio.TimeoutError:
+                        # bus 不保證發收尾(worker 死在半路之類):DB 已結束就據實收尾
+                        job = repo.get_job(mgr.conn, job_id)
+                        if job["state"] in _TERMINAL and q.empty():
+                            yield _sse_line(_state_event(job))
+                            return
+                        yield ": ping\n\n"
+                        continue
+                    yield _sse_line(ev)
+                    if ev.get("event") in ("done", "error"):
+                        return
+            finally:
+                mgr.bus.unsubscribe(job_id, q)
+
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    return app
