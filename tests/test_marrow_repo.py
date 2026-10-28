@@ -98,3 +98,40 @@ def test_reverted_edit_is_a_new_version(conn):                            # fina
     v3, created = repo.add_source_version(conn, s, "甲", 2)
     latest = repo.latest_source_version(conn, s)
     assert created and latest["id"] == v3 and latest["n"] == 3 and latest["text"] == "甲"
+
+
+def test_next_den_slug_empty_is_d01(conn):
+    assert repo.next_den_slug(conn) == "d01"
+
+
+def test_next_den_slug_ignores_s_prefix(conn):
+    repo.ensure_story(conn, "s01", None, 0)
+    repo.ensure_story(conn, "s07", None, 0)
+    assert repo.next_den_slug(conn) == "d01"
+
+
+def test_next_den_slug_increments(conn):
+    repo.ensure_story(conn, "d01", None, 0)
+    repo.ensure_story(conn, "d09", None, 0)
+    repo.ensure_story(conn, "dx", None, 0)
+    assert repo.next_den_slug(conn) == "d10"
+
+
+def test_story_by_latest_sha_matches_latest_only(conn):
+    s = repo.ensure_story(conn, "s1", None, 0)
+    repo.add_source_version(conn, s, "甲", 0)
+    repo.add_source_version(conn, s, "乙", 1)
+    assert repo.story_by_latest_sha(conn, repo.sha256_text("甲")) is None
+    assert repo.story_by_latest_sha(conn, repo.sha256_text("乙"))["id"] == s
+
+
+def test_has_pending_jobs(conn):
+    s, v = _story(conn)
+    assert repo.has_pending_jobs(conn) is False
+    j = repo.create_job(conn, "critique", s, v, {}, 0)
+    assert repo.has_pending_jobs(conn) is True            # queued
+    repo.set_job_state(conn, j, "running", 1)
+    assert repo.has_pending_jobs(conn) is True
+    for st in ("done", "failed", "cancelled", "paused"):
+        repo.set_job_state(conn, j, st, 2)
+        assert repo.has_pending_jobs(conn) is False

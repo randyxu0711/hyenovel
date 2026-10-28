@@ -10,6 +10,7 @@
 """
 import hashlib
 import json
+import re
 import sqlite3
 
 _JSON_COLS = {"body", "provenance", "anchors", "refs", "quotes",
@@ -44,6 +45,21 @@ def ensure_story(conn, slug: str, title: str | None, now: float) -> int:
     if title is not None:
         conn.execute("UPDATE story SET title = ? WHERE slug = ?", (title, slug))
     return _id(conn, "SELECT id FROM story WHERE slug = ?", (slug,))
+
+
+def next_den_slug(conn) -> str:
+    """den 建的故事用 d01, d02…:掃 `^d(\\d+)$` 最大值 +1。只看 d 前綴,舊 web 的 sNN 不影響。"""
+    nums = [int(m.group(1)) for (slug,) in conn.execute("SELECT slug FROM story")
+            if (m := re.fullmatch(r"d(\d+)", slug))]
+    return f"d{(max(nums) + 1) if nums else 1:02d}"
+
+
+def story_by_latest_sha(conn, sha256: str) -> dict | None:
+    """「最新版」source_version 的 sha 等於它的那篇;舊版吻合不算(改稿後舊稿不該認回來)。"""
+    return _row(conn.execute(
+        "SELECT st.* FROM story st JOIN source_version sv ON sv.story_id = st.id "
+        "WHERE sv.sha256 = ? AND sv.n = (SELECT MAX(n) FROM source_version WHERE story_id = st.id) "
+        "ORDER BY st.id LIMIT 1", (sha256,)).fetchone())
 
 
 def story(conn, story_id: int) -> dict | None:
@@ -259,3 +275,8 @@ def attempt_history(conn, step: str) -> list[dict]:
         "FROM attempt a JOIN job j ON j.id = a.job_id "
         "JOIN source_version sv ON sv.id = j.source_version_id "
         "WHERE a.step = ? AND a.outcome = 'ok' ORDER BY a.id", (step,))]
+
+
+def has_pending_jobs(conn) -> bool:
+    return conn.execute("SELECT 1 FROM job WHERE state IN ('queued', 'running') LIMIT 1"
+                        ).fetchone() is not None
