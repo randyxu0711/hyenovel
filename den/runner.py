@@ -67,7 +67,8 @@ def classify(rc: int, stdout: str) -> tuple[str, dict | None, str | None]:
         return "usage-limit", obj, "用量已達上限"
     if status in (500, 529):
         return "transient", obj, f"API 暫時錯誤 ({status})"
-    if status == 401 or "/login" in text or "Not logged in" in text:
+    # 文字判斷只在 is_error 時用:成功時 result 是 structured_output 的 JSON,可能逐字含使用者原文
+    if status == 401 or (obj.get("is_error") and ("/login" in text or "Not logged in" in text)):
         return "auth", obj, _AUTH_MSG
     if obj.get("is_error"):
         return "crash", obj, f"CLI 回報錯誤 subtype={obj.get('subtype')}"

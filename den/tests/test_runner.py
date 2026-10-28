@@ -76,6 +76,8 @@ def test_classify_failures():
     o, _, m = runner.classify(1, _err(is_error=True, api_error_status=401))
     assert o == "auth" and "/login" in m
     assert runner.classify(1, _err(is_error=True, result="Please run /login"))[0] == "auth"
+    # 成功的 run:原文逐字含 "/login" 不可被誤判成 auth
+    assert runner.classify(0, _err(is_error=False, result='{"q":"/login"}'))[0] == "ok"
     o, _, m = runner.classify(1, _err(is_error=True, subtype="error_max_turns"))
     assert o == "crash" and "error_max_turns" in m
     bad = {k: v for k, v in OK.items() if k != "structured_output"}
@@ -128,7 +130,7 @@ def _dead(pid):
 
 
 def test_timeout_kills_and_reports(fake, tmp_path):
-    res = asyncio.run(runner.run_job(ClaudePreset(fake("sleep")), "S", "U", SCHEMA, timeout=0.5))
+    res = asyncio.run(runner.run_job(ClaudePreset(fake("sleep")), "S", "U", SCHEMA, timeout=2))
     assert res.outcome == "timeout"
     pid = _child_pid(tmp_path)
     assert pid and _dead(pid)
