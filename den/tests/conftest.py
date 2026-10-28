@@ -16,3 +16,14 @@ def conn():
     importer.import_story(c, FIXTURES / "mini", 1.0)
     yield c
     c.close()
+
+
+@pytest.fixture
+def data(tmp_path):
+    """tmp_path 當 data_dir,檔案 DB 預先 migrate + 匯入 mini。"""
+    url = f"sqlite:///{tmp_path}/t.db"
+    c = db.connect(url)
+    db.migrate(c, tmp_path / "t.db")
+    importer.import_story(c, FIXTURES / "mini", 1.0)
+    c.close()
+    return url, tmp_path

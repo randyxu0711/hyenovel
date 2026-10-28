@@ -15,9 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
-from den.tests.conftest import FIXTURES
 from den.tests.test_pipeline import _analysis, _feedback, ok
-from marrow import db, importer
+from marrow import db
 from marrow.workpacks import WORKPACKS
 
 
@@ -35,17 +34,6 @@ class Run:
                 await asyncio.sleep(0.01)
             return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _feedback())
         return run
-
-
-@pytest.fixture
-def data(tmp_path):
-    """tmp_path 當 data_dir,檔案 DB 預先 migrate + 匯入 mini。"""
-    url = f"sqlite:///{tmp_path}/t.db"
-    c = db.connect(url)
-    db.migrate(c, tmp_path / "t.db")
-    importer.import_story(c, FIXTURES / "mini", 1.0)
-    c.close()
-    return url, tmp_path
 
 
 def _client(data, run=None, **kw):

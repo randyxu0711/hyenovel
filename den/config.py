@@ -21,6 +21,7 @@ HOST = "127.0.0.1"
 PORT = 8788  # 舊 server 佔 8787,過渡期並存;被佔就自動選(den.json 記實際值)
 IDLE_EXIT = 3 * 3600  # 沒人理 den 超過這麼久(且沒 job、沒串流)就自己結束
 IDLE_CHECK = 60
+SPAWN_WAIT = 15  # 秒:shim 拉起 den 後最多等這麼久(也是等舊 den 放鎖的上限)
 
 # 工人環境白名單:不含任何 CLAUDE*、不含 ANTHROPIC_API_KEY(吃訂閱的既有政策)。
 ENV_WHITELIST = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
