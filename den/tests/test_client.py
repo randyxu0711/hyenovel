@@ -34,6 +34,9 @@ class FakeDen:
         self.statuses: list[int] = []
         self.spawns = 0
         self.kills: list[int] = []
+        self.paths: list[tuple[str, str]] = []   # 真的送到假 den 的 (method, path)
+        self.fake_401 = 0          # 非 /health 請求:接下來幾次直接回 401(不送進 den)
+        self.raise_after = None    # 非 /health 請求:den 處理完後丟這個例外(回應在路上丟了)
 
     # 注入點 ------------------------------------------------------------
     def start(self):
@@ -61,7 +64,15 @@ class FakeDen:
                 if fake.tc is None:
                     raise httpx.ConnectError("connection refused", request=request)
                 fake.auth.append(request.headers.get("authorization"))
+                api = request.url.path != "/health"
+                if api and fake.fake_401:
+                    fake.fake_401 -= 1
+                    fake.statuses.append(401)
+                    return httpx.Response(401, json={"detail": "bad token"})
+                fake.paths.append((request.method, request.url.path))
                 r = fake.tc._transport.handle_request(request)
+                if api and fake.raise_after is not None:
+                    raise fake.raise_after("lost", request=request)
                 r.read()   # starlette 的回應 stream 不是 httpx.SyncByteStream,轉成一般回應
                 fake.statuses.append(r.status_code)
                 return httpx.Response(r.status_code, headers=r.headers, content=r.content)
@@ -171,8 +182,11 @@ def test_concurrent_ensure_spawns_once(den):
 
 
 def test_concurrent_ensure_same_client(den):
+    lock = threading.Lock()
+
     def spawn():
-        den.spawns += 1
+        with lock:
+            den.spawns += 1
         time.sleep(0.1)
         den.start()
     c = den.client(spawn=spawn)
@@ -199,10 +213,27 @@ def test_token_reread_after_regen(den):
     new = "n" * 43
     (den.dir / "den.token").write_text(new + "\n")
     den.tc.app.state.token = new   # 模擬 den 重產 token
-    den.statuses.clear()
-    assert c.request("GET", "/health").status_code == 200
-    assert den.statuses[0] == 401 and den.statuses[-1] == 200
+    den.auth.clear()
+    assert c.request("GET", "/jobs/999").status_code == 404
+    assert set(den.auth) == {f"Bearer {new}"}   # 每次 request 前的 ensure 重讀了 token
     assert den.spawns == 0 and den.kills == []
+
+
+def test_request_retries_once_on_401(den):
+    den.start()
+    c = den.client()
+    den.fake_401 = 1
+    den.statuses.clear()
+    assert c.request("GET", "/jobs/999").status_code == 404
+    assert 401 in den.statuses and den.spawns == 0
+
+
+def test_request_401_twice_returned_as_is(den):
+    den.start()
+    c = den.client()
+    den.fake_401 = 5
+    assert c.request("GET", "/jobs/999").status_code == 401
+    assert den.fake_401 == 3   # 原送一次 + 重試一次,不多
 
 
 def test_no_restart_loop_when_shim_stale(den):
@@ -347,3 +378,116 @@ def test_spawn_oserror_is_den_unavailable(den):
         raise FileNotFoundError("python 不見了")
     with pytest.raises(DenUnavailable, match="python 不見了"):
         den.client(spawn=spawn).ensure()
+
+
+def test_read_timeout_after_den_handled_is_not_retried(den):
+    """回應在路上丟了(den 已 commit job):不可重送,否則第二個 job、第二份花費。"""
+    den.start()
+    c = den.client()
+    den.raise_after = httpx.ReadTimeout
+    with pytest.raises(DenUnavailable):
+        c.request("POST", "/jobs", json={"kind": "critique", "slug": "mini"})
+    assert den.paths.count(("POST", "/jobs")) == 1
+    assert den.spawns == 0
+
+
+def test_connect_timeout_is_retried(den):
+    den.start()
+    real = den.http
+    n = []
+
+    def http(base_url):
+        cl = real(base_url)
+        orig = cl.request
+
+        def request(method, path, **kw):
+            if path != "/health" and not n:
+                n.append(1)
+                raise httpx.ConnectTimeout("slow connect")
+            return orig(method, path, **kw)
+        cl.request = request
+        return cl
+    c = den.client(http=http)
+    assert c.request("GET", "/jobs/999").status_code == 404
+    assert n == [1] and den.spawns == 0
+
+
+def test_request_restarts_when_disk_version_changes(den):
+    den.start()
+    ver = {"v": den.tc.app.state.version}
+    c = den.client(disk_version=lambda: ver["v"])
+    c.loaded_version = ver["v"]
+    assert c.request("GET", "/health").status_code == 200
+    ver["v"] = "new"   # git pull 了
+    assert c.request("GET", "/health").status_code == 200
+    assert den.kills == [os.getpid()] and den.spawns == 1
+
+
+def test_request_busy_den_kept_on_disk_change(data):
+    den = FakeDen(data, run=Run(released=False))
+    try:
+        den.start()
+        ver = {"v": den.tc.app.state.version}
+        c = den.client(disk_version=lambda: ver["v"])
+        c.loaded_version = ver["v"]
+        assert c.request("POST", "/jobs", json={"kind": "critique", "slug": "mini"}).status_code == 202
+        ver["v"] = "new"
+        assert c.request("GET", "/health").status_code == 200
+        assert den.kills == [] and den.spawns == 0
+        assert den_client.NOTICE_BUSY in c.take_notices()
+    finally:
+        den.run.release.set()
+        den.stop()
+
+
+def test_request_stale_shim_no_restart(den):
+    den.start()
+    c = den.client()
+    c.loaded_version = "old-shim"
+    for _ in range(3):
+        assert c.request("GET", "/health").status_code == 200
+    assert den.kills == [] and den.spawns == 0
+    assert c.take_notices() == [den_client.NOTICE_STALE]
+
+
+def test_take_notices_clears(den):
+    den.start()
+    c = den.client()
+    c.loaded_version = "old-shim"
+    c.ensure()
+    assert c.take_notices() == [den_client.NOTICE_STALE]
+    assert c.take_notices() == [] and c.notices == []
+
+
+def test_kill_process_gone_still_starts(den):
+    den.start()
+
+    def kill(pid):
+        den.kills.append(pid)
+        den.stop()   # 在 /health 與 SIGTERM 之間自己退場了
+        raise ProcessLookupError(pid)
+    den.client(disk_version=lambda: "other", kill=kill).ensure()
+    assert den.kills == [os.getpid()] and den.spawns == 1
+
+
+def test_kill_permission_denied_is_den_unavailable(den):
+    den.start()
+
+    def kill(pid):
+        raise PermissionError(pid)
+    with pytest.raises(DenUnavailable, match="無權"):
+        den.client(disk_version=lambda: "other", kill=kill).ensure()
+    assert den.spawns == 0
+
+
+def test_probe_uses_short_timeout(den, monkeypatch):
+    den.start()
+    seen = []
+    orig = httpx.Client.get
+
+    def get(self, url, **kw):
+        seen.append(kw.get("timeout"))
+        return orig(self, url, **kw)
+    monkeypatch.setattr(httpx.Client, "get", get)
+    den.client().ensure()
+    assert seen == [den_client._PROBE_TIMEOUT]
