@@ -129,8 +129,22 @@ def _dead(pid):
         return True
 
 
-def test_timeout_kills_and_reports(fake, tmp_path):
-    res = asyncio.run(runner.run_job(ClaudePreset(fake("sleep")), "S", "U", SCHEMA, timeout=2))
+def test_timeout_kills_and_reports(fake, tmp_path, monkeypatch):
+    real_wait_for = asyncio.wait_for
+
+    async def wait_ready_then_wait_for(aw, timeout):
+        # 計時從孫行程存在後才開始:先等 child.pid(有上限,逾時明確失敗)
+        for _ in range(200):
+            if _child_pid(tmp_path):
+                break
+            await asyncio.sleep(0.05)
+        else:
+            aw.close() if hasattr(aw, "close") else None
+            pytest.fail("fake 沒在 10s 內起孫行程")
+        return await real_wait_for(aw, timeout)
+
+    monkeypatch.setattr(runner.asyncio, "wait_for", wait_ready_then_wait_for)
+    res = asyncio.run(runner.run_job(ClaudePreset(fake("sleep")), "S", "U", SCHEMA, timeout=0.3))
     assert res.outcome == "timeout"
     pid = _child_pid(tmp_path)
     assert pid and _dead(pid)
