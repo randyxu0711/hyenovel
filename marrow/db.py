@@ -39,3 +39,32 @@ def connect(url: str) -> sqlite3.Connection:
     if target != ":memory:":
         conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+
+
+def migrate(conn: sqlite3.Connection, db_path: Path | None,
+            migrations_dir: Path = MIGRATIONS_DIR) -> int:
+    """套用 `NNNN_*.sql` 中版號大於 `PRAGMA user_version` 的,回最終版號。
+
+    別人機器上的 DB 我們碰不到,所以升級是 daemon 啟動時自動做的;既有 DB(版號 > 0)
+    升級前先 `VACUUM INTO` 留一份 `<db>.bak-v<舊版號>`——WAL 下直接複製檔案可能拿到不一致快照。
+    """
+    files = sorted(migrations_dir.glob("*.sql"))
+    versions = [int(f.name.split("_", 1)[0]) for f in files]
+    if versions != list(range(1, len(files) + 1)):
+        raise ValueError(f"migration 版號必須從 1 連號不重複:{[f.name for f in files]}")
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+    pending = files[current:]
+    if pending and current > 0 and db_path is not None:
+        conn.execute("VACUUM INTO ?", (f"{db_path}.bak-v{current}",))
+    for n, f in enumerate(pending, start=current + 1):
+        # 每支 migration 連同版號一個 transaction(SQLite 的 DDL 可 rollback):中途壞掉不留半套表。
+        try:
+            conn.executescript(f"BEGIN;\n{f.read_text(encoding='utf-8')}\n"
+                               f"PRAGMA user_version = {n};\nCOMMIT;")
+        except sqlite3.Error:
+            conn.rollback()
+            raise
+    return conn.execute("PRAGMA user_version").fetchone()[0]
