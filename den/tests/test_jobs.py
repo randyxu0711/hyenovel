@@ -82,7 +82,11 @@ def test_worker_runs_one_at_a_time(conn):
     async def main():
         run = GatedRun()
         m = _mgr(conn, run)
-        a, b = m.submit("mini")["job_id"], m.submit("mini")["job_id"]
+        with conn:   # 第二篇(同文,假分析的引文才對得上):同篇同版會被去重,不會排出第二個 job
+            text = repo.latest_source_version(conn, repo.story_by_slug(conn, "mini")["id"])["text"]
+            sid = repo.ensure_story(conn, "other", None, 0)
+            repo.add_source_version(conn, sid, text, 0)
+        a, b = m.submit("mini")["job_id"], m.submit("other")["job_id"]
         w = asyncio.create_task(m.worker())
         await asyncio.wait_for(run.started.wait(), 5)
         assert (_state(conn, a), _state(conn, b)) == ("running", "queued")
@@ -268,3 +272,27 @@ def test_submit_estimate_failure_leaves_no_job(conn, monkeypatch):
     with pytest.raises(ZeroDivisionError):
         m.submit("mini")
     assert conn.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 0
+
+
+def test_submit_dedupes_inflight_same_version(conn, caplog):
+    """同篇同版還在 queued/running → 回同一個 job,不建第二個(第二份花費)。"""
+    async def main():
+        run = GatedRun()
+        m = _mgr(conn, run)
+        first = m.submit("mini")
+        assert first["existing"] is False
+        with caplog.at_level(logging.INFO, logger="hyenovel"):
+            again = m.submit("mini")                       # queued
+        assert again == {**first, "existing": True}
+        assert f"event=job-deduped job={first['job_id']}" in caplog.text
+        w = asyncio.create_task(m.worker())
+        await asyncio.wait_for(run.started.wait(), 5)
+        assert m.submit("mini")["job_id"] == first["job_id"]   # running
+        assert conn.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 1
+        run.gate.set()
+        await _until(lambda: _state(conn, first["job_id"]) == "done", "跑完")
+        rerun = m.submit("mini")                           # done 之後明確重跑 = 新 job
+        assert rerun["existing"] is False and rerun["job_id"] != first["job_id"]
+        await _until(lambda: _state(conn, rerun["job_id"]) == "done", "重跑完")
+        await _stop(w)
+    asyncio.run(main())

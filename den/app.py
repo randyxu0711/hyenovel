@@ -3,8 +3,9 @@
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
   GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
   GET  /health              → {version, pid, busy}
-  POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, runner, note}
-  GET  /jobs/{id}           → job 列 + attempts 摘要(不含 raw_output / prompt)
+  POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, runner, note}
+                            (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的)
+  GET  /jobs/{id}           → job 列 + slug + attempts 摘要(不含 raw_output / prompt)
   POST /jobs/{id}/cancel    → 200 {"ok":true} | 409
   POST /jobs/{id}/resume    → 200 {"ok":true} | 409
   GET  /jobs/{id}/events    → SSE,每事件 `data: <json>\\n\\n`;一定會收尾
@@ -268,8 +269,9 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
     @app.get("/jobs/{job_id}")
     async def get_job(job_id: int, request: Request):
         job = _job(request, job_id)
-        atts = repo.attempts(request.app.state.mgr.conn, job_id)
-        return {**{k: job[k] for k in _JOB_KEYS},
+        conn = request.app.state.mgr.conn
+        atts = repo.attempts(conn, job_id)
+        return {**{k: job[k] for k in _JOB_KEYS}, "slug": repo.story(conn, job["story_id"])["slug"],
                 "attempts": [{k: a[k] for k in _ATTEMPT_KEYS} for a in atts]}
 
     async def _act(request: Request, job_id: int, verb: str):

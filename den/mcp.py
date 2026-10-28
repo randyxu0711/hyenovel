@@ -16,7 +16,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from den.client import DenClient, DenUnavailable
-from den.config import MAX_SOURCE_BYTES
+from den.config import MAX_SOURCE_BYTES, valid_slug
 from marrow import db
 from marrow.ingest import decode
 
@@ -93,6 +93,10 @@ def render_discussion(ctx: dict) -> str:
             for p in fb.get(key) or ():
                 refs = f" / refs: {_refs(p['refs'])}" if p.get("refs") else ""
                 out.append(f"- {p['title']} / {p['body']}{refs}")
+                if p.get("question"):     # schema:提問是討論的開場
+                    out.append(f"  提問:{p['question']}")
+                if p.get("experiment"):
+                    out.append(f"  實驗:{p['experiment']}")
         if fb.get("minor"):
             out.append("### 枝節")
             out += [f"- {m}" for m in fb["minor"]]
@@ -155,7 +159,7 @@ def _status_text(j: dict) -> str:
     if st in _RESUMABLE:
         lines.append(f"可用 resume_critique(job_id={j['id']}) 續跑;已完成的步驟不重跑。")
     elif st == "done":
-        lines.append("可用 open_discussion 開始討論這篇。")
+        lines.append(f"可用 open_discussion(slug=\"{j['slug']}\") 開始討論這篇。")
     elif st in ("queued", "running"):
         lines.append("還在跑,晚點再問我進度。")
     return "\n".join(lines)
@@ -193,6 +197,10 @@ def build_server(den: DenClient) -> MCPServer:
         lines = []
         if s["reused"]:
             lines.append(f"這份原文和 {s['slug']} 的最新版相同,沿用那篇。")
+        if j["existing"]:
+            lines += [f"{s['slug']} 這一版已在分析中:job {j['job_id']}(沒有開新的 job,不會再花額度)。",
+                      f"好了問我進度(critique_status job_id={j['job_id']})。"]
+            return "\n".join(lines)
         lines += [f"已送出:slug {s['slug']}(第 {s['version']} 版)、job {j['job_id']}(runner:{j['runner']})。",
                   f"{_minutes(j['estimate'])}。{j['note']}。",
                   f"這是背景工作,好了問我進度(critique_status job_id={j['job_id']})。",
@@ -228,6 +236,8 @@ def build_server(den: DenClient) -> MCPServer:
                                   f"job {job_id} 已重新排入;用 critique_status 查進度。"))
 
     async def _open(slug: str) -> str:
+        if not valid_slug(slug):   # 會拼進 URL 路徑:本地先擋
+            raise _reject("slug", f"slug 格式不對:{slug[:64]!r}(只能英數、底線、連字號,例:d01)。")
         return render_discussion(await call(
             "GET", f"/stories/{slug}/discussion",
             on_status={404: f"找不到這篇:{slug}。",

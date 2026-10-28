@@ -151,6 +151,30 @@ def test_post_job_returns_202_and_persists(data):
     c2.close()
 
 
+def test_post_job_twice_while_inflight_dedupes(data):
+    with _client(data, Run(released=False)) as c:
+        h = _auth(data[1])
+        first = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        assert first["existing"] is False
+        queued = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        _wait_state(c, h, first["job_id"], "running")
+        running = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        for again in (queued, running):
+            assert again["job_id"] == first["job_id"] and again["existing"] is True
+            assert again["runner"] == "claude" and "estimate" in again
+        c.app.state.mgr.cancel(first["job_id"])
+    c2 = db.connect(data[0])
+    assert c2.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 1
+    c2.close()
+
+
+def test_get_job_has_slug(data):
+    with _client(data, Run(released=False)) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        assert c.get(f"/jobs/{jid}", headers=h).json()["slug"] == "mini"
+
+
 def test_unknown_slug_404_mentions_importer(data):
     with _client(data) as c:
         r = c.post("/jobs", json={"kind": "critique", "slug": "nope"}, headers=_auth(data[1]))

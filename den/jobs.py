@@ -101,12 +101,18 @@ class JobManager:
         # 預估在 create_job 之前算:算壞了不能留下一個 client 不知道的 job
         est = estimate({s: repo.attempt_history(self.conn, s) for s in pipeline.CRITIQUE},
                        len(sv["text"]))
+        # 同篇同版已在排隊 / 執行:回那個 job,不排第二份花費(重送、帶 slug 沒改稿)。
+        # done 之後再送 = 明確要重跑,照建新 job。
+        active = repo.active_job(self.conn, st["id"], sv["id"])
+        if active is not None:
+            log.info("event=job-deduped job=%s", active["id"])
+            return {"job_id": active["id"], "estimate": est, "existing": True}
         with self.conn:
             jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
                                   {"client": client, "runner": runner}, self._now())
         log.info("event=job-submitted job=%s client=%r runner=%s", jid, client, runner)
         self._wake.set()
-        return {"job_id": jid, "estimate": est}
+        return {"job_id": jid, "estimate": est, "existing": False}
 
     def cancel(self, job_id: int) -> bool:
         if self._current is not None and self._current[0] == job_id:

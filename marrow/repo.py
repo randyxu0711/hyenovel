@@ -280,3 +280,11 @@ def attempt_history(conn, step: str) -> list[dict]:
 def has_pending_jobs(conn) -> bool:
     return conn.execute("SELECT 1 FROM job WHERE state IN ('queued', 'running') LIMIT 1"
                         ).fetchone() is not None
+
+
+def active_job(conn, story_id: int, source_version_id: int) -> dict | None:
+    """同篇同版還在排隊 / 執行中的最舊 job(重送去重用:同一份原文不該花兩次錢)。"""
+    return _row(conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? "
+        "AND state IN ('queued', 'running') ORDER BY id LIMIT 1",
+        (story_id, source_version_id)).fetchone())

@@ -135,3 +135,21 @@ def test_has_pending_jobs(conn):
     for st in ("done", "failed", "cancelled", "paused"):
         repo.set_job_state(conn, j, st, 2)
         assert repo.has_pending_jobs(conn) is False
+
+
+def test_active_job_only_queued_or_running_same_version(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    assert repo.active_job(conn, s, v) is None
+    other = repo.create_job(conn, "critique", s, v2, {}, 0)       # 別的版本不算
+    assert repo.active_job(conn, s, v) is None
+    j = repo.create_job(conn, "critique", s, v, {}, 1)
+    later = repo.create_job(conn, "critique", s, v, {}, 2)
+    assert repo.active_job(conn, s, v)["id"] == j                 # 最舊的優先
+    repo.set_job_state(conn, j, "running", 3)
+    assert repo.active_job(conn, s, v)["id"] == j
+    for st in ("done", "failed", "paused", "cancelled"):
+        repo.set_job_state(conn, j, st, 4)
+        repo.set_job_state(conn, later, st, 4)
+        assert repo.active_job(conn, s, v) is None
+    assert repo.active_job(conn, s, v2)["id"] == other

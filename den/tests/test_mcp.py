@@ -4,6 +4,7 @@ den 端是 test_client 的 FakeDen(in-process TestClient,Run() 立即放行);絕
 data dir 一律 tmp_path。
 """
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from mcp_types import Implementation
 
 from den import mcp as den_mcp
 from den.config import MAX_SOURCE_BYTES
+from den.tests.test_app import Run
 from den.tests.test_client import FakeDen
 from marrow import db, repo
 
@@ -159,6 +161,28 @@ def test_start_same_file_twice_reuses(den, tmp_path):
     assert _story_count(den) == 2   # mini + d01
 
 
+def test_start_twice_while_inflight_no_second_job(data, tmp_path):
+    """第一個 job 還沒跑完就再送同一份 → 回同一個 job,說明沒有新花費。"""
+    d = FakeDen(data, run=Run(released=False))
+    try:
+        p = str(_write(tmp_path))
+        c = d.client()
+        first = _job_id(_text(_call(c, "start_critique", {"path": p})))
+        r = _call(c, "start_critique", {"path": p})
+        assert not r.is_error
+        t = _text(r)
+        assert f"job {first}" in t and "已在分析" in t and "不會再花" in t
+        assert "已送出" not in t
+        conn = _conn(d)
+        try:
+            assert conn.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 1
+        finally:
+            conn.close()
+    finally:
+        d.run.release.set()
+        d.stop()
+
+
 def test_start_unknown_slug_is_error(den, tmp_path):
     r = _call(den.client(), "start_critique", {"path": str(_write(tmp_path)), "slug": "d99"})
     assert r.is_error and "unknown slug" in _text(r)
@@ -166,7 +190,7 @@ def test_start_unknown_slug_is_error(den, tmp_path):
 
 def test_status_maps_states(den):
     c = den.client()
-    cases = [(_make_job(den, "done"), ["完成", "open_discussion"], ["resume_critique"]),
+    cases = [(_make_job(den, "done"), ["完成", 'open_discussion(slug="mini")'], ["resume_critique"]),
              (_make_job(den, "paused", "usage-limit"), ["已暫停", "額度用完", "resume_critique"], []),
              (_make_job(den, "failed", "gate"), ["失敗", "引文閘門", "resume_critique"], []),
              (_make_job(den, "cancelled"), ["已取消", "resume_critique"], []),
@@ -233,6 +257,14 @@ def test_open_discussion_unknown(den):
     assert r.is_error and "zz" in _text(r)
 
 
+def test_open_discussion_bad_slug_rejected_locally(den, caplog):
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = _call(den.client(), "open_discussion", {"slug": "../x?y"})
+    assert r.is_error and "slug" in _text(r) and "../x?y" in _text(r)
+    assert "event=reject where=mcp reason=slug" in caplog.text
+    assert den.paths == []   # 沒送到 den
+
+
 def test_den_unavailable_is_tool_error(den):
     def spawn():
         (den.dir / "den.log").write_text("boot\nRuntimeError: 找不到 claude CLI\n", encoding="utf-8")
@@ -281,12 +313,16 @@ def test_render_stale_and_feedback_and_conclusions():
         feedback={"read": "讀法", "one_line": "改一件事",
                   "strengths": [{"title": "S", "body": "SB", "refs": None, "quotes": ["QQQ"]}],
                   "key_points": [{"title": "K", "body": "KB", "refs": ["k1", "e1"],
-                                  "quotes": ["PPP"]}],
+                                  "quotes": ["PPP"], "question": "問作者", "experiment": "試試看"},
+                                 {"title": "K2", "body": "KB2", "refs": None, "quotes": [],
+                                  "question": None, "experiment": None}],
                   "minor": ["枝節一"]},
         conclusions=[{"kind": "insight", "text": "結論文", "refs": ["t1"], "quotes": ["CQ"]},
                      {"kind": "open", "text": "沒錨", "refs": None, "quotes": None}]))
     assert "原文已改稿、分析是舊版的" in out
     assert "S / SB" in out and "K / KB / refs: k1, e1" in out and "枝節一" in out
+    assert "  提問:問作者" in out and "  實驗:試試看" in out
+    assert out.count("提問:") == 1 and out.count("實驗:") == 1   # null 不出行
     assert "(insight) 結論文 [t1]" in out and "(open) 沒錨" in out
     assert "QQQ" not in out and "PPP" not in out and "CQ" not in out
 
@@ -300,11 +336,17 @@ def test_open_discussion_within_budget():
              for i in range(60)]
     edges = [{"type": "relates_to", "from": f"n{i % 60}", "to": f"n{(i + 7) % 60}", "note": None}
              for i in range(80)]
-    out = den_mcp.render_discussion(_ctx(source=source,
+    point = {"title": "標題" * 5, "body": "正文說明。" * 40, "refs": ["n1", "n2"], "quotes": ["引"],
+             "question": "想問作者的一個問題,開啟討論的第一步?" * 3,
+             "experiment": "試著把這段刪掉、重讀一次,看看效果是否更好。" * 3}
+    feedback = {"read": "讀法。" * 50, "one_line": "改一件事。" * 10,
+                "strengths": [point] * 3, "key_points": [point] * 5, "minor": ["枝節。" * 10] * 5}
+    out = den_mcp.render_discussion(_ctx(source=source, feedback=feedback,
                                          analysis={"synopsis": "梗概", "nodes": nodes, "edges": edges}))
     print(f"\nrender_discussion budget chars={len(out)}", file=sys.stderr)
     assert len(out) < 50_000
     assert not any(n["evidence"][0]["quote"] in out for n in nodes)
+    assert out.count("提問:") == 8 and out.count("實驗:") == 8
 
 
 # ── 入口 ──
