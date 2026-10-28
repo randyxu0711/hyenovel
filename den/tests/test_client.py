@@ -149,6 +149,38 @@ def test_spawn_failure_reports_log_tail(den):
     assert "RuntimeError: 找不到 claude CLI" in str(ei.value)
 
 
+def test_spawned_den_exits_fails_fast(den):
+    """den 一起來就死(例:沒有 claude CLI)→ 立刻回報 log 尾巴,不等滿 spawn_wait。"""
+    class Dead:
+        def poll(self):
+            return 1
+
+    def spawn():
+        with open(den.dir / "den.log", "a", encoding="utf-8") as f:
+            f.write("RuntimeError: 找不到 claude CLI\n")
+        return Dead()
+    c = den.client(spawn=spawn, spawn_wait=10.0)
+    t0 = time.monotonic()
+    with pytest.raises(DenUnavailable) as ei:
+        c.ensure()
+    assert time.monotonic() - t0 < 1.0
+    assert "結束" in str(ei.value) and "1" in str(ei.value)
+    assert "RuntimeError: 找不到 claude CLI" in str(ei.value)
+
+
+def test_spawned_den_still_running_keeps_waiting(den):
+    """poll() 回 None = 還活著:照常等它起來。"""
+    class Alive:
+        def poll(self):
+            return None
+
+    def spawn():
+        den.spawn()
+        return Alive()
+    den.client(spawn=spawn).ensure()
+    assert den.spawns == 1
+
+
 def test_spawn_failure_without_log(den):
     c = den.client(spawn=lambda: None, spawn_wait=0.1)
     with pytest.raises(DenUnavailable, match="den"):
@@ -347,7 +379,7 @@ def test_spawn_env_strips_claude(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "s")
     monkeypatch.setenv("CLAUDECODE", "1")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///x.db")
-    den_client.default_spawn(tmp_path)()
+    assert isinstance(den_client.default_spawn(tmp_path)(), P)   # 留著 handle,死了才知道
     kw = seen["kw"]
     assert seen["args"] == [sys.executable, "-m", "den"]
     assert "CLAUDE_CODE_SESSION_ID" not in kw["env"] and "CLAUDECODE" not in kw["env"]

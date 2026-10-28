@@ -33,14 +33,15 @@ class DenUnavailable(Exception):
     """den 起不來 / 連不上;訊息給人看(有 den.log 時附尾巴)。"""
 
 
-def default_spawn(data_dir: Path) -> Callable[[], None]:
+def default_spawn(data_dir: Path) -> Callable[[], subprocess.Popen]:
     """detached 拉起 `python -m den`:新 session(Claude Code 關掉不會帶走它)、
-    stdin 接 /dev/null、stdout/stderr 進 den.log(絕不繼承 shim 的 stdout)、env 去掉 CLAUDE*。"""
-    def spawn() -> None:
+    stdin 接 /dev/null、stdout/stderr 進 den.log(絕不繼承 shim 的 stdout)、env 去掉 CLAUDE*。
+    回傳 Popen:等它起來時 poll() 得知它已經死了,就不必等滿 spawn_wait。"""
+    def spawn() -> subprocess.Popen:
         data_dir.mkdir(parents=True, exist_ok=True)
         env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE")}
         with open(data_dir / "den.log", "ab") as log:   # 子行程已 dup 了 fd,父行程關掉無妨
-            subprocess.Popen([sys.executable, "-m", "den"], start_new_session=True,
+            return subprocess.Popen([sys.executable, "-m", "den"], start_new_session=True,
                              stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                              cwd=_REPO, env=env)
     return spawn
@@ -55,7 +56,7 @@ def _http(base_url: str) -> httpx.Client:
 
 
 class DenClient:
-    def __init__(self, data_dir: Path, *, spawn: Callable[[], None] | None = None,
+    def __init__(self, data_dir: Path, *, spawn: Callable[[], object | None] | None = None,
                  kill: Callable[[int], None] = _sigterm,
                  http: Callable[[str], httpx.Client] = _http,
                  disk_version: Callable[[], str] = fingerprint,
@@ -170,7 +171,7 @@ class DenClient:
             if self._wait_lock_free(disk):
                 return
             try:
-                self._spawn()
+                proc = self._spawn()   # 有 poll() 的 handle,或 None(不知道行程死活)
             except OSError as e:
                 raise DenUnavailable(f"拉不起 den:{e}") from None
             deadline = time.monotonic() + self.spawn_wait
@@ -180,8 +181,11 @@ class DenClient:
                 if p is not None:
                     self._conn = (p[0], p[1])
                     return
+                code = proc.poll() if proc is not None else None
+                if code is not None:
+                    raise DenUnavailable(self._failure_message(f"den 一啟動就結束了(exit code {code})。"))
                 if time.monotonic() >= deadline:
-                    raise DenUnavailable(self._failure_message())
+                    raise DenUnavailable(self._failure_message(f"den 沒在 {self.spawn_wait:g} 秒內起來。"))
                 time.sleep(self.poll)
         finally:
             spawn_lock.release()
@@ -208,8 +212,7 @@ class DenClient:
                     f"檢查是否有卡住的 den 行程({self.data_dir / 'den.lock'})。")
             time.sleep(self.poll)
 
-    def _failure_message(self) -> str:
-        msg = f"den 沒在 {self.spawn_wait:g} 秒內起來。"
+    def _failure_message(self, msg: str) -> str:
         try:
             lines = (self.data_dir / "den.log").read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
