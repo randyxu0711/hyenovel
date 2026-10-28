@@ -34,6 +34,7 @@ log = logging.getLogger("hyenovel")
 _TERMINAL = ("done", "paused", "failed", "cancelled")
 _SSE_POLL = 15.0        # SSE 多久沒事件就回頭看 DB(兼 keep-alive)
 _RESTART_DELAY = 1.0    # worker 死掉後隔多久重起(別讓壞 DB 變成熱迴圈)
+_TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞檔
 _ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
              "error_class", "detail", "created_at", "updated_at")
@@ -45,15 +46,25 @@ class JobIn(BaseModel):
 
 
 def load_token(data_dir: Path) -> str:
-    """`<data_dir>/den.token`;不存在就建,O_EXCL + 0600 一次到位,不留短暫可讀的空窗。"""
+    """`<data_dir>/den.token`;不存在或太短(例:建檔後寫入前被殺 → 空檔)就重產。
+
+    重產 = 暫存檔 O_EXCL + 0600 寫好再 os.replace:token 檔永遠不會是半成品或短暫可讀。
+    呼叫者已持單一實例鎖,不會兩個 den 同時重產。
+    """
     p = data_dir / "den.token"
     try:
-        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError:
-        return p.read_text(encoding="utf-8").strip()
+        token = p.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        token = ""
+    if len(token) >= _TOKEN_MIN:
+        return token
     token = secrets.token_urlsafe(32)
+    tmp = data_dir / f".den.token.{secrets.token_hex(8)}"
+    fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(token + "\n")
+    os.replace(tmp, p)
+    log.info("event=token-created")
     return token
 
 
@@ -106,8 +117,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
             factory, ver = (run_factory, None) if run_factory else _default_factory()
             app.state.token = load_token(data_dir)
             conn = db.connect(conn_url)
-            path = conn_url.removeprefix("sqlite:///")
-            db.migrate(conn, None if path == ":memory:" else Path(path))
+            db.migrate(conn, db.sqlite_path(conn_url))
             mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)
             mgr.startup()
             app.state.mgr = mgr
@@ -134,8 +144,9 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
             log.info("event=reject where=origin origin=%r", origin[:64])
             return JSONResponse({"detail": "origin not allowed"}, status_code=403)
         auth = request.headers.get("authorization", "")
-        want = f"Bearer {request.app.state.token}"
-        if not secrets.compare_digest(auth.encode(), want.encode()):
+        token = request.app.state.token
+        # token 為空時 want 會變成 "Bearer ",一律拒絕而非 fail-open
+        if not token or not secrets.compare_digest(auth.encode(), f"Bearer {token}".encode()):
             log.info("event=reject where=token")
             return JSONResponse({"detail": "bad token"}, status_code=401)
         return await call_next(request)

@@ -41,3 +41,10 @@ def test_connect_memory():
     conn = db.connect("sqlite:///:memory:")
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     conn.close()
+
+
+def test_sqlite_path(tmp_path):
+    assert db.sqlite_path(f"sqlite:///{tmp_path}/a.db") == tmp_path / "a.db"
+    assert db.sqlite_path("sqlite:///:memory:") is None
+    with pytest.raises(db.UnsupportedDatabase):
+        db.sqlite_path("postgresql://u@h/d")

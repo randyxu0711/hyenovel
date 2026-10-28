@@ -100,6 +100,26 @@ def test_token_file_reused_across_restarts(data):
         assert (data[1] / "den.token").read_text() == first
 
 
+def test_empty_token_file_regenerated(data):
+    """建檔後、寫入前被殺 → 空檔:不可變成「Bearer 」就過,要重產且仍 0600。"""
+    p = data[1] / "den.token"
+    p.write_text("  \n")
+    p.chmod(0o644)
+    with _client(data) as c:
+        assert c.get("/jobs/999", headers={"Authorization": "Bearer "}).status_code == 401
+        tok = p.read_text().strip()
+        assert len(tok) >= 32
+        assert stat.S_IMODE(p.stat().st_mode) == 0o600
+        assert c.get("/jobs/999", headers=_auth(data[1])).status_code == 404
+    assert [x.name for x in data[1].iterdir() if x.name.startswith(".den.token")] == []
+
+
+def test_falsy_token_rejects_everything(data):
+    with _client(data) as c:
+        c.app.state.token = ""
+        assert c.get("/jobs/999", headers={"Authorization": "Bearer "}).status_code == 401
+
+
 def test_missing_token_401(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         assert c.get("/jobs/1").status_code == 401
@@ -236,6 +256,48 @@ def test_events_ends_when_db_turns_terminal_without_event(data, monkeypatch):
         t.join(10)
         assert not t.is_alive()
         assert res[-1]["event"] == "state" and res[-1]["data"]["state"] == "failed"
+
+
+def test_events_unsubscribes_on_client_disconnect(data):
+    """直接驅動 ASGI:收到第一塊就回 http.disconnect,訂閱必須在有限時間內退掉。
+
+    TestClient 會等 app 跑完才回應,測不到「中途斷線」,所以這裡不用它。
+    """
+    url, d = data
+    app = den_app.create_app(url, d, run_factory=Run(released=False))
+
+    async def main():
+        async with app.router.lifespan_context(app):
+            mgr = app.state.mgr
+            jid = mgr.submit("mini")["job_id"]
+            for _ in range(500):
+                if mgr._step is not None:
+                    break
+                await asyncio.sleep(0.01)
+            got_body = asyncio.Event()
+            sent = []
+
+            async def receive():
+                if not sent:
+                    sent.append(1)
+                    return {"type": "http.request", "body": b"", "more_body": False}
+                await got_body.wait()
+                return {"type": "http.disconnect"}
+
+            async def send(msg):
+                if msg["type"] == "http.response.body" and msg.get("body"):
+                    got_body.set()
+            tok = app.state.token
+            scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
+                     "http_version": "1.1", "method": "GET", "scheme": "http",
+                     "path": f"/jobs/{jid}/events", "raw_path": f"/jobs/{jid}/events".encode(),
+                     "query_string": b"", "root_path": "",
+                     "headers": [(b"authorization", f"Bearer {tok}".encode())],
+                     "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 8788)}
+            await asyncio.wait_for(app(scope, receive, send), 5)
+            assert got_body.is_set()
+            assert jid not in mgr.bus._subs
+    asyncio.run(main())
 
 
 def test_events_unknown_job_404(data):

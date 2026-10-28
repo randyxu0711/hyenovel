@@ -150,8 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     url = args.db or db.database_url()
     conn = db.connect(url)
     try:
-        path = url.removeprefix("sqlite:///")
-        db.migrate(conn, None if path == ":memory:" else Path(path))
+        db.migrate(conn, db.sqlite_path(url))
         reps = import_all(conn, args.stories, time.time())
     finally:
         conn.close()
