@@ -175,7 +175,7 @@ def test_error_routing_usage_limit_auth_crash(conn, outcome, state, cls):
     err = events[-1]
     assert err["event"] == "error"
     assert err["data"]["where"] == "analyst" and err["data"]["reason"] == cls
-    assert err["data"]["recoverable"] is (state == "paused")
+    assert err["data"]["recoverable"] is True   # 引擎回的每種停止都可續(paused|failed)
 
 
 def _paused_second_job(conn):

@@ -131,7 +131,7 @@ async def run_critique(conn, job: dict, run: RunFn, emit: Callable[[dict], None]
             log.info("event=job-stop job=%s step=%s state=%s class=%s",
                      jid, step, res.state, res.error_class)
             emit({"event": "error", "data": {
-                "where": step, **res.detail, "recoverable": res.state == "paused",
+                "where": step, **res.detail, "recoverable": True,
                 "reason": res.error_class}})
             return res
         done[step] = res
