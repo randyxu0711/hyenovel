@@ -14,6 +14,7 @@ def pick_port(preferred: int) -> int:
     """能 bind 就用 preferred,否則讓系統給一個(den.json 會記實際值)。"""
     for p in (preferred, 0):
         with socket.socket() as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)   # 同 uvicorn:TIME_WAIT 不算佔用
             try:
                 s.bind((HOST, p))
             except OSError:

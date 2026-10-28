@@ -528,7 +528,6 @@ def test_idle_exit_fires_after_threshold(data):
         assert not fired.is_set()
         clk.t = 11
         assert fired.wait(5)
-        time.sleep(0.1)   # 之後不再重複呼叫(Event 看不出次數,下面用計數)
 
 
 def test_idle_exit_called_exactly_once(data):
@@ -618,3 +617,20 @@ def test_stream_count_tracks_open_streams(data):
         run.release.set()
         t.join(10)
         assert _poll(lambda: c.app.state.streams == 0)
+
+
+def test_idle_watcher_survives_check_error(data, monkeypatch, caplog):
+    real, n = den_app.repo.has_pending_jobs, []
+
+    def flaky(conn):
+        n.append(1)
+        if len(n) == 1:
+            raise RuntimeError("database is locked")
+        return real(conn)
+    monkeypatch.setattr(den_app.repo, "has_pending_jobs", flaky)
+    clk, fired = Clock(), threading.Event()
+    with caplog.at_level(logging.INFO, logger="hyenovel"), _idle_client(data, clk=clk, fired=fired):
+        clk.t = 11
+        assert fired.wait(5)
+    assert len(n) >= 2
+    assert "event=idle-check-failed" in caplog.text

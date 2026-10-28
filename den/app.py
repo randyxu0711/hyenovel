@@ -122,11 +122,14 @@ def remove_den_json(data_dir: Path) -> None:
 async def _watch_idle(app: FastAPI, idle_exit, idle_check, clock, on_idle) -> None:
     while True:
         await asyncio.sleep(idle_check)
-        if (clock() - app.state.last_seen >= idle_exit and app.state.streams == 0
-                and not repo.has_pending_jobs(app.state.mgr.conn)):
-            log.info("event=den-idle-exit")
-            on_idle()
-            return
+        try:   # 例:importer 同時寫 DB 造成 database is locked——這輪放過,別讓監看就此死掉
+            if (clock() - app.state.last_seen >= idle_exit and app.state.streams == 0
+                    and not repo.has_pending_jobs(app.state.mgr.conn)):
+                log.info("event=den-idle-exit")
+                on_idle()
+                return
+        except Exception:
+            log.exception("event=idle-check-failed")
 
 
 def _default_factory():
@@ -174,10 +177,10 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
             mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)
             mgr.startup()
             app.state.mgr = mgr
+            write_den_json(data_dir, port, app.state.version)
             worker = asyncio.create_task(_supervise(mgr))
             watcher = (asyncio.create_task(_watch_idle(app, idle_exit, idle_check, clock, on_idle))
                        if on_idle else None)
-            write_den_json(data_dir, port, app.state.version)
             log.info("event=den-start port=%s", port)
             try:
                 yield
