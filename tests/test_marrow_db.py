@@ -34,8 +34,10 @@ def test_connect_file_creates_parent_and_enables_fk(tmp_path):
     assert (tmp_path / "a/b.db").exists()
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    conn.close()
 
 
 def test_connect_memory():
     conn = db.connect("sqlite:///:memory:")
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    conn.close()

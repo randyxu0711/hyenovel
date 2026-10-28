@@ -70,4 +70,5 @@ def conn():
     from marrow import db
     c = db.connect("sqlite:///:memory:")
     db.migrate(c, None)
-    return c
+    yield c
+    c.close()

@@ -12,6 +12,9 @@
 - **觀察與判斷隔離**:analyst 與 criticizer 是**兩個獨立 subagent**(各自 context),不可在同一 context 兼任,否則判斷獨立性被污染。
 - **每條主張必引逐字原文**;`viz.py` 會在 source.md 搜尋驗證,幻覺引用直接擋(硬閘門)。
 - v1 **不接任何 DB**(MemPalace 退到 L3);Obsidian 為可選 viewer(`stories/` 即 vault)。
+- **marrow/(den 切片 1,2026-10-28)**:DB 正本骨架(SQLite)已在,但**過渡期是舊檔案的唯讀鏡像**——
+  舊 server 仍寫 `stories/`,`python -m marrow.importer` 冪等重跑補進 DB。本段前述「analysis.json 正本」
+  「不接 DB」到切片 4 web 改接 den 時才翻案。DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
 
 ## 架構與資料流
 ```

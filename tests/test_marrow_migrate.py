@@ -9,8 +9,20 @@ TABLES = {"story", "source_version", "artifact", "current_artifact", "job", "att
           "discussion", "utterance", "conclusion", "settlement"}
 
 
+_open = []
+
+
 def _mem():
-    return db.connect("sqlite:///:memory:")
+    c = db.connect("sqlite:///:memory:")
+    _open.append(c)
+    return c
+
+
+@pytest.fixture(autouse=True)
+def _close_all():
+    yield
+    while _open:
+        _open.pop().close()
 
 
 def test_fresh_db_gets_all_tables_and_version():
@@ -32,11 +44,13 @@ def test_upgrade_backs_up_first(tmp_path):
     (mig / "0001_a.sql").write_text("CREATE TABLE a (x INTEGER);")
     p = tmp_path / "h.db"
     conn = db.connect(f"sqlite:///{p}")
+    _open.append(conn)
     db.migrate(conn, p, mig)
     assert not list(tmp_path.glob("h.db.bak-*"))            # 全新 DB 不備份
     (mig / "0002_b.sql").write_text("CREATE TABLE b (y INTEGER);")
     assert db.migrate(conn, p, mig) == 2
     old = sqlite3.connect(tmp_path / "h.db.bak-v1")
+    _open.append(old)
     assert {r[0] for r in old.execute("SELECT name FROM sqlite_master")} == {"a"}
 
 
