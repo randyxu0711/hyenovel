@@ -1,7 +1,9 @@
 fastapi
 uvicorn[standard]
 python-multipart
-claude-agent-sdk
+claude-agent-sdk>=0.2.174
+mcp>=2.3,<3
+httpx
 pypdf
 python-docx
 jsonschema
