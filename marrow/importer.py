@@ -30,7 +30,16 @@ def _skip(rep, item, reason):
     log.warning(f"event=import-skip slug={rep['slug']} item={item} reason={reason}")
 
 
+_REQUIRED = {
+    "transcript.jsonl": ("session", "ts", "role", "text"),
+    "conclusions.jsonl": ("id", "kind", "text", "refs", "quotes", "provenance", "valid_from"),
+    "settled.jsonl": ("session", "ts", "written"),
+}
+
+
 def _jsonl(rep, path: Path) -> list[dict]:
+    """壞行(非 JSON)與形狀不對的行(不是 object、缺必要欄)都只跳過那一行——
+    丟 KeyError 會讓整篇 rollback、每次重跑都卡在同一行。"""
     if not path.exists():
         return []
     rows = []
@@ -38,9 +47,14 @@ def _jsonl(rep, path: Path) -> list[dict]:
         if not ln.strip():
             continue
         try:
-            rows.append(json.loads(ln))
+            row = json.loads(ln)
         except json.JSONDecodeError:
             _skip(rep, f"{path.name}:{i}", "bad-json")
+            continue
+        if not isinstance(row, dict) or any(k not in row for k in _REQUIRED[path.name]):
+            _skip(rep, f"{path.name}:{i}", "bad-shape")
+            continue
+        rows.append(row)
     return rows
 
 
@@ -52,6 +66,9 @@ def _artifact_body(rep, story_dir: Path, kind: str) -> dict | None:
         body = schema.to_v1(kind, json.loads(p.read_text(encoding="utf-8")))
     except json.JSONDecodeError:
         _skip(rep, kind, "bad-json")
+        return None
+    except UnicodeDecodeError:
+        _skip(rep, kind, "bad-encoding")
         return None
     errors = schema.validate_v1(kind, body)
     if errors:
@@ -94,7 +111,9 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
 
         for c in _jsonl(rep, story_dir / "conclusions.jsonl"):
             rep["conclusions_added"] += repo.add_conclusion(
-                conn, sid, c["id"], disc.get(c["provenance"].get("session")), c["kind"], c["text"],
+                conn, sid, c["id"],
+                disc.get(c["provenance"].get("session")) if isinstance(c["provenance"], dict) else None,
+                c["kind"], c["text"],
                 c["refs"], c["quotes"], c["provenance"], c["valid_from"], c.get("invalidated_at"))
 
         for s in _jsonl(rep, story_dir / "settled.jsonl"):
@@ -105,8 +124,15 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
 
 
 def import_all(conn, stories_root: Path, now: float) -> list[dict]:
+    """依 slug 排序逐篇匯入。DB 裡有、磁碟上已沒有的篇(例:fresh run 被取消、目錄被刪)
+    只記 `event=import-orphan`,不刪——鏡像不替使用者決定刪什麼。"""
     reps = []
-    for d in sorted(p for p in stories_root.iterdir() if (p / "source.md").is_file()):
+    dirs = sorted(p for p in stories_root.iterdir() if (p / "source.md").is_file())
+    on_disk = {d.name for d in dirs}
+    for (slug,) in conn.execute("SELECT slug FROM story ORDER BY slug").fetchall():
+        if slug not in on_disk:
+            log.warning(f"event=import-orphan slug={slug}")
+    for d in dirs:
         try:
             reps.append(import_story(conn, d, now))
         except Exception as e:

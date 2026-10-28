@@ -49,13 +49,13 @@ def story_by_slug(conn, slug: str) -> dict | None:
 
 
 def add_source_version(conn, story_id: int, text: str, now: float) -> tuple[int, bool]:
+    """只跟**最新一版**比:相同回 (舊 id, False);不同就是新的一版——
+    包括改回更早的稿(A→B→A 的第三次是 n=3,不是 n=1),否則「最新版」會指向磁碟上已不存在的文字。"""
     digest = sha256_text(text)
-    old = _id(conn, "SELECT id FROM source_version WHERE story_id = ? AND sha256 = ?",
-              (story_id, digest))
-    if old is not None:
-        return old, False
-    n = _id(conn, "SELECT COALESCE(MAX(n), 0) + 1 FROM source_version WHERE story_id = ?",
-            (story_id,))
+    latest = latest_source_version(conn, story_id)
+    if latest is not None and latest["sha256"] == digest:
+        return latest["id"], False
+    n = (latest["n"] if latest else 0) + 1
     cur = conn.execute("INSERT INTO source_version (story_id, n, text, sha256, created_at) "
                        "VALUES (?, ?, ?, ?, ?)", (story_id, n, text, digest, now))
     return cur.lastrowid, True

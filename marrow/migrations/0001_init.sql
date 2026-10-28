@@ -5,7 +5,7 @@ CREATE TABLE story (
 CREATE TABLE source_version (
   id INTEGER PRIMARY KEY, story_id INTEGER NOT NULL REFERENCES story(id),
   n INTEGER NOT NULL, text TEXT NOT NULL, sha256 TEXT NOT NULL, created_at REAL NOT NULL,
-  UNIQUE (story_id, n), UNIQUE (story_id, sha256));
+  UNIQUE (story_id, n));   -- 不設 UNIQUE(sha256):改回舊稿(A→B→A)也是一次改稿,要是新的一版
 CREATE TABLE artifact (
   id INTEGER PRIMARY KEY, story_id INTEGER NOT NULL REFERENCES story(id),
   source_version_id INTEGER NOT NULL REFERENCES source_version(id),

@@ -96,3 +96,18 @@ def test_failed_migration_leaves_no_partial_state(tmp_path):
         db.migrate(conn, None, tmp_path)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0] == 0
+
+
+def test_leftover_backup_does_not_block_upgrade(tmp_path):                # final review I3
+    mig = tmp_path / "mig"
+    mig.mkdir()
+    (mig / "0001_a.sql").write_text("CREATE TABLE a (x INTEGER);")
+    p = tmp_path / "h.db"
+    conn = db.connect(f"sqlite:///{p}")
+    _open.append(conn)
+    db.migrate(conn, p, mig)
+    (tmp_path / "h.db.bak-v1").write_text("舊的備份")
+    (mig / "0002_b.sql").write_text("CREATE TABLE b (y INTEGER);")
+    assert db.migrate(conn, p, mig) == 2
+    assert (tmp_path / "h.db.bak-v1").read_text() == "舊的備份"          # 不覆蓋既有備份
+    assert (tmp_path / "h.db.bak-v1-2").exists()

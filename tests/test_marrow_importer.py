@@ -178,3 +178,30 @@ def test_main_exit_codes(tmp_path, capsys):
     (root / "mini/feedback.json").write_text("{壞", encoding="utf-8")
     assert importer.main(["--stories", str(root), "--db", url]) == 1
     assert "mini" in capsys.readouterr().out
+
+
+# ── final review 修正 ──
+
+def test_wrong_shape_jsonl_rows_skipped_not_fatal(conn, tmp_path):     # I1
+    root = make_story(tmp_path, "mini", feedback=True, transcript=TWO_SESSIONS)
+    _jsonl(root / "mini/transcript.jsonl", [{"ts": 9, "role": "user", "text": "沒 session"}, 123])
+    _jsonl(root / "mini/conclusions.jsonl", [{"id": "c9"}])
+    rep = importer.import_story(conn, root / "mini", 1.0)
+    assert rep["utterances_added"] == 4 and rep["artifacts_added"] == 2
+    assert rep["skipped"] == ["transcript.jsonl:5: bad-shape", "transcript.jsonl:6: bad-shape",
+                              "conclusions.jsonl:1: bad-shape"]
+
+
+def test_non_utf8_artifact_skipped(conn, tmp_path):                      # I1
+    root = make_story(tmp_path, "mini")
+    (root / "mini/analysis.json").write_bytes(b"\xff\xfe{")
+    rep = importer.import_story(conn, root / "mini", 1.0)
+    assert rep["skipped"] == ["analysis: bad-encoding"] and rep["source_versions_added"] == 1
+
+
+def test_orphan_db_story_logged(conn, tmp_path, caplog):                 # I4
+    root = make_story(tmp_path, "mini")
+    importer.import_all(conn, root, 1.0)
+    shutil.rmtree(root / "mini")
+    importer.import_all(conn, root, 2.0)
+    assert "event=import-orphan slug=mini" in caplog.text

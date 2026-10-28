@@ -44,6 +44,16 @@ def connect(url: str) -> sqlite3.Connection:
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 
+def _free_backup_path(db_path: Path, version: int) -> Path:
+    """`<db>.bak-v<N>`,已存在就 `-2`、`-3`…——絕不覆蓋既有備份,也不讓一份殘留的備份
+    (上次升級失敗、或使用者剛從它還原)擋住之後每一次啟動(VACUUM INTO 不肯寫已存在的檔)。"""
+    base = Path(f"{db_path}.bak-v{version}")
+    p, i = base, 2
+    while p.exists():
+        p, i = Path(f"{base}-{i}"), i + 1
+    return p
+
+
 def migrate(conn: sqlite3.Connection, db_path: Path | None,
             migrations_dir: Path = MIGRATIONS_DIR) -> int:
     """套用 `NNNN_*.sql` 中版號大於 `PRAGMA user_version` 的,回最終版號。
@@ -58,7 +68,7 @@ def migrate(conn: sqlite3.Connection, db_path: Path | None,
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     pending = files[current:]
     if pending and current > 0 and db_path is not None:
-        conn.execute("VACUUM INTO ?", (f"{db_path}.bak-v{current}",))
+        conn.execute("VACUUM INTO ?", (str(_free_backup_path(db_path, current)),))
     for n, f in enumerate(pending, start=current + 1):
         # 每支 migration 連同版號一個 transaction(SQLite 的 DDL 可 rollback):中途壞掉不留半套表。
         try:

@@ -89,3 +89,12 @@ def test_conclusion_and_settlement_idempotent(conn):
     assert [c["external_id"] for c in cs] == ["c0000", "c0001"]
     assert cs[1]["refs"] == ["t1"] and cs[1]["provenance"] == {"session": "sess"}
     assert repo.add_settlement(conn, d, 2.0, 1) and not repo.add_settlement(conn, d, 3.0, 1)
+
+
+def test_reverted_edit_is_a_new_version(conn):                            # final review I2
+    s = repo.ensure_story(conn, "s1", None, 0)
+    repo.add_source_version(conn, s, "甲", 0)
+    repo.add_source_version(conn, s, "乙", 1)
+    v3, created = repo.add_source_version(conn, s, "甲", 2)
+    latest = repo.latest_source_version(conn, s)
+    assert created and latest["id"] == v3 and latest["n"] == 3 and latest["text"] == "甲"
