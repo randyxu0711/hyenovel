@@ -472,3 +472,149 @@ def test_post_job_no_runner_503(data, caplog):
         r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=_auth(data[1]))
     assert r.status_code == 503 and "沒有可用的 runner" in r.json()["detail"]
     assert "event=reject where=runner" in caplog.text
+
+
+# ── 生命週期:den.json、閒置退場 ──
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def _poll(pred, limit=5.0):
+    end = time.monotonic() + limit
+    while time.monotonic() < end:
+        if pred():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def _idle_client(data, run=None, clk=None, fired=None):
+    return _client(data, run, port=9999, idle_exit=10, idle_check=0.01, clock=clk,
+                   on_idle=fired.set if fired is not None else None)
+
+
+def test_den_json_written_and_removed(data):
+    p = data[1] / "den.json"
+    with _client(data, port=9999) as c:
+        assert json.loads(p.read_text()) == {"port": 9999, "pid": os.getpid(),
+                                             "version": c.app.state.version}
+        assert stat.S_IMODE(p.stat().st_mode) == 0o600
+    assert not p.exists()
+
+
+def test_den_json_not_removed_if_other_pid(data):
+    p = data[1] / "den.json"
+    with _client(data):
+        p.write_text(json.dumps({"port": 1, "pid": os.getpid() + 1, "version": "x"}))
+    assert p.exists()
+
+
+def test_den_json_unreadable_at_exit_is_left_alone(data):
+    p = data[1] / "den.json"
+    with _client(data):
+        p.write_text("not json")
+    assert p.read_text() == "not json"
+
+
+def test_idle_exit_fires_after_threshold(data):
+    clk, fired = Clock(), threading.Event()
+    with _idle_client(data, clk=clk, fired=fired):
+        time.sleep(0.1)
+        assert not fired.is_set()
+        clk.t = 11
+        assert fired.wait(5)
+        time.sleep(0.1)   # 之後不再重複呼叫(Event 看不出次數,下面用計數)
+
+
+def test_idle_exit_called_exactly_once(data):
+    clk, calls = Clock(), []
+    url, d = data
+    app = den_app.create_app(url, d, run_factory=Run(), idle_exit=10, idle_check=0.01,
+                             clock=clk, on_idle=lambda: calls.append(1))
+    with TestClient(app):
+        clk.t = 11
+        assert _poll(lambda: calls)
+        time.sleep(0.15)
+    assert calls == [1]
+
+
+def test_no_watcher_without_on_idle(data):
+    clk = Clock()
+    with _client(data, idle_exit=10, idle_check=0.01, clock=clk) as c:
+        clk.t = 100
+        time.sleep(0.05)
+        assert c.get("/health", headers=_auth(data[1])).status_code == 200
+
+
+def test_request_resets_idle(data):
+    clk, fired = Clock(), threading.Event()
+    with _idle_client(data, clk=clk, fired=fired) as c:
+        clk.t = 9
+        assert c.get("/health", headers=_auth(data[1])).status_code == 200
+        clk.t = 18
+        time.sleep(0.15)
+        assert not fired.is_set()
+        clk.t = 19.5
+        assert fired.wait(5)
+
+
+def test_rejected_request_does_not_reset_idle(data):
+    clk, fired = Clock(), threading.Event()
+    with _idle_client(data, clk=clk, fired=fired) as c:
+        clk.t = 9
+        assert c.get("/health").status_code == 401
+        clk.t = 11
+        assert fired.wait(5)
+
+
+def test_idle_exit_waits_for_pending_jobs(data):
+    clk, fired, run = Clock(), threading.Event(), Run(released=False)
+    with _idle_client(data, run, clk, fired) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, jid, "running")
+        clk.t = 11
+        time.sleep(0.15)
+        assert not fired.is_set()
+        run.release.set()
+        _wait_state(c, h, jid, "done")
+        clk.t = 25
+        assert fired.wait(5)
+
+
+def test_idle_exit_waits_for_open_stream(data):
+    clk, fired, run = Clock(), threading.Event(), Run(released=False)
+    with _idle_client(data, run, clk, fired) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, jid, "running")
+        c.post(f"/jobs/{jid}/cancel", headers=h)
+        _wait_state(c, h, jid, "cancelled")   # 沒有 pending job 了
+        # 開一條不會收尾的串流:手動把計數撐著(cancelled 是終態,真串流會立刻收尾)
+        c.app.state.streams += 1
+        clk.t = 11
+        time.sleep(0.15)
+        assert not fired.is_set()
+        c.app.state.streams -= 1
+        clk.t = 25
+        assert fired.wait(5)
+
+
+def test_stream_count_tracks_open_streams(data):
+    run = Run(released=False)
+    with _client(data, run) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, jid, "running")
+        got = []
+        t = threading.Thread(target=lambda: got.extend(_read_sse(c, h, jid)), daemon=True)
+        t.start()
+        assert _poll(lambda: c.app.state.streams == 1)
+        run.release.set()
+        t.join(10)
+        assert _poll(lambda: c.app.state.streams == 0)
