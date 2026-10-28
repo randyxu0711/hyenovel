@@ -216,6 +216,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
         try:
             return stories.discussion_context(request.app.state.mgr.conn, slug)
         except LookupError:
+            log.info("event=reject where=discussion reason=unknown-slug")
             raise HTTPException(404, "這篇不在 DB") from None
         except ValueError:
             log.info("event=reject where=discussion reason=not-analyzed")

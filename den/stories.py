@@ -13,6 +13,9 @@ def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> 
     if slug is not None:
         if not config.valid_slug(slug):
             raise ValueError("bad slug")
+        # 明確 slug 只可能是 den 先前回的那個;替任意 slug 建新篇會重開 sNN 命名空間撞號
+        if repo.story_by_slug(conn, slug) is None:
+            raise ValueError("unknown slug")
         sid = repo.ensure_story(conn, slug, title, now)
         _, new = repo.add_source_version(conn, sid, text, now)
         reused = False

@@ -29,7 +29,7 @@ def test_ingest_same_text_no_slug_reuses(conn):
 
 
 def test_ingest_with_slug_new_version(conn):
-    _ingest(conn, "初稿。")
+    _ingest(conn, "初稿。")                       # 先無 slug 建出 d01
     out = _ingest(conn, "改稿。", slug="d01")
     assert out["version"] == 2 and out["new_version"] is True and out["reused"] is False
     again = _ingest(conn, "改稿。", slug="d01")
@@ -50,6 +50,14 @@ def test_ingest_rejects_blank(conn):
 def test_ingest_rejects_oversize(conn):
     with pytest.raises(ValueError, match="原文過長"):
         _ingest(conn, "字" * (config.MAX_SOURCE_BYTES // 3 + 1))
+
+
+def test_ingest_unknown_slug_rejected(conn):
+    n = _count(conn)
+    for slug in ("s07", "d1", "d01"):
+        with pytest.raises(ValueError, match="unknown slug"):
+            _ingest(conn, "x", slug=slug)
+    assert _count(conn) == n
 
 
 def test_ingest_rejects_bad_slug(conn):

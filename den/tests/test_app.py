@@ -408,9 +408,17 @@ def test_post_stories_422_blank(data, caplog):
     assert "event=reject where=stories" in caplog.text
 
 
-def test_discussion_404(data):
-    with _client(data) as c:
+def test_discussion_404(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         assert c.get("/stories/nope/discussion", headers=_auth(data[1])).status_code == 404
+    assert "event=reject where=discussion reason=unknown-slug" in caplog.text
+
+
+def test_post_stories_422_unknown_slug(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = c.post("/stories", json={"text": "x", "slug": "s07"}, headers=_auth(data[1]))
+    assert r.status_code == 422
+    assert "event=reject where=stories reason=unknown slug" in caplog.text
 
 
 def test_discussion_422_bad_slug(data):

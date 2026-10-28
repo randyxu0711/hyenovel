@@ -8,3 +8,9 @@ def test_discuss_prompt_promises_no_saving():
     text = DISCUSS.read_text(encoding="utf-8")
     assert "收束保存" not in text
     assert "不會被存成結論" in text
+
+
+def test_discuss_prompt_has_no_cross_story_wording():
+    text = DISCUSS.read_text(encoding="utf-8")
+    assert "地圖" not in text
+    assert "四篇" not in text
