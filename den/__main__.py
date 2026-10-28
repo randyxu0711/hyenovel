@@ -16,7 +16,8 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     d = db.data_dir()
     print(f"den token 檔:{d / 'den.token'}(請求帶 Authorization: Bearer <內容>)", flush=True)
-    uvicorn.run(create_app(db.database_url(), d, port=args.port), host=HOST, port=args.port)
+    uvicorn.run(create_app(db.database_url(), d, port=args.port), host=HOST, port=args.port,
+                timeout_graceful_shutdown=3)   # 開著的 SSE 不能讓 Ctrl+C 等到 job 跑完
 
 
 if __name__ == "__main__":

@@ -77,6 +77,22 @@ def classify(rc: int, stdout: str) -> tuple[str, dict | None, str | None]:
     return "ok", obj, None
 
 
+def explain(outcome: str, obj: dict | None, err: str, msg: str | None) -> str | None:
+    """crash/auth 的訊息補上病因尾巴:非 JSON → stderr 末 300 字;is_error → result 文字。
+
+    只進 attempt / job detail,絕不進 log(可能夾帶使用者原文)。
+    """
+    if outcome not in ("crash", "auth"):
+        return msg
+    if obj is None:
+        tail = err.strip()[-300:]
+    elif obj.get("is_error") and isinstance(obj.get("result"), str):
+        tail = obj["result"].strip()[-300:]
+    else:
+        tail = ""
+    return f"{msg}：{tail}" if tail else msg
+
+
 def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
                 duration_ms: int) -> RunResult:
     model = tokens = parsed = None
@@ -123,7 +139,7 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
         if on_proc:
             on_proc(proc)
         try:
-            out, _err = await asyncio.wait_for(
+            out, err = await asyncio.wait_for(
                 proc.communicate(user_prompt.encode()), timeout)
         except asyncio.TimeoutError:
             kill_tree(proc)
@@ -140,6 +156,7 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
                 on_proc(None)
         raw = out.decode("utf-8", "replace")
         outcome, obj, msg = classify(proc.returncode, raw)
+        msg = explain(outcome, obj, err.decode("utf-8", "replace"), msg)
         log.info("event=run_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
         return make_result(outcome, obj, raw, msg, ms())
 

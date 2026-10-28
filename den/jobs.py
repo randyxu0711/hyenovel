@@ -98,10 +98,11 @@ class JobManager:
             log.info("event=submit-rejected reason=unknown-slug")
             raise LookupError(slug)
         sv = repo.latest_source_version(self.conn, st["id"])
-        with self.conn:
-            jid = repo.create_job(self.conn, "critique", st["id"], sv["id"], {}, self._now())
+        # 預估在 create_job 之前算:算壞了不能留下一個 client 不知道的 job
         est = estimate({s: repo.attempt_history(self.conn, s) for s in pipeline.CRITIQUE},
                        len(sv["text"]))
+        with self.conn:
+            jid = repo.create_job(self.conn, "critique", st["id"], sv["id"], {}, self._now())
         log.info("event=job-submitted job=%s", jid)
         self._wake.set()
         return {"job_id": jid, "estimate": est}

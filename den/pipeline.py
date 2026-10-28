@@ -25,6 +25,7 @@ CRITIQUE: tuple[str, ...] = ("analyst", "criticizer")
 RunFn = Callable[[str, str, dict], Awaitable[RunResult]]
 
 _USAGE_MSG = "撞到訂閱用量上限，稍後再續（與你在 Claude Code 的對話共用同一份額度）"
+_OVERLOAD_MSG = "Anthropic 服務過載，退避重試後仍失敗，稍後再續"
 _GATE_MSG = "閘門重試後仍未過"
 
 
@@ -101,7 +102,9 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
                 transient += 1                            # 不吃閘門額度、不換 prompt
                 emit(_phase(step, "retry", n, r.message))
                 await sleep(config.BACKOFF_BASE * 2 ** transient)
-            elif r.outcome in ("transient", "usage-limit"):   # transient 耗盡視同 usage-limit
+            elif r.outcome == "transient":                # 重試耗盡:可續,但不是額度問題
+                return stop(StepOutcome("paused", "overload", {"message": _OVERLOAD_MSG}))
+            elif r.outcome == "usage-limit":
                 return stop(StepOutcome("paused", "usage-limit",
                                         {"message": _USAGE_MSG, "resets_at": None}))
             else:                                         # auth / crash / timeout

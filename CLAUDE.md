@@ -15,6 +15,8 @@
 - **marrow/(den 切片 1,2026-10-28)**:DB 正本骨架(SQLite)已在,但**過渡期是舊檔案的唯讀鏡像**——
   舊 server 仍寫 `stories/`,`python -m marrow.importer` 冪等重跑補進 DB。本段前述「analysis.json 正本」
   「不接 DB」到切片 4 web 改接 den 時才翻案。DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
+  **切片 2 起 den 會寫 DB**:產物 commit 進 `artifact`,`current_artifact` 只在 job **全部步驟成功**時一次換;
+  importer 只對「新建」的 artifact 切 current,不覆蓋 den 已換的。
 
 ## 架構與資料流
 ```
@@ -31,6 +33,9 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
 - `/story-critique stories/<slug>/source.md` — 跑完整鏈(analyst→引用閘門→criticizer→渲染→viz)。
 - `/story-discuss <slug>` — 就一篇來回討論(出版編輯人格、有據、反諂媚)。
 - `python viz.py <slug>` — 出 viz.html;`python viz.py <slug> --check` — 只驗引用(編排當閘門用)。
+- `python -m den [--port N]` — 本機 daemon(127.0.0.1:8788,token 在 `~/.local/share/hyenovel/den.token`);
+  只能對**已用 `python -m marrow.importer` 匯入**的故事開 job。工人 env 是白名單(無 `CLAUDE*`、
+  無 `ANTHROPIC_API_KEY`、無 proxy 變數 / `CLAUDE_CONFIG_DIR`)。
 - `server/.venv/bin/python -m pytest` — 跑全部測試(零成本、不燒訂閱)。CI 在 push 時跑同一套。
 - subagent 定義在 `.claude/agents/{analyst,criticizer}.md`;skill 在 `.claude/skills/`。
 - **slash command 與 subagent 綁工作目錄**:必須在 `~/projects/hyenovel` 開的 session 才載入。

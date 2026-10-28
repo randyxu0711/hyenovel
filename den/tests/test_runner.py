@@ -191,3 +191,31 @@ def test_find_claude(monkeypatch):
     assert runner.find_claude() == "/usr/bin/claude"
     monkeypatch.setattr(shutil, "which", lambda n: None)
     assert runner.find_claude() is None
+
+
+def test_explain_adds_stderr_tail_when_stdout_not_json():
+    err = "x" * 500 + "boom: 找不到設定"
+    msg = runner.explain("crash", None, err, "CLI 輸出不是 JSON 物件 (rc=1)")
+    assert msg.startswith("CLI 輸出不是 JSON 物件 (rc=1)") and msg.endswith("boom: 找不到設定")
+    assert len(msg) < 400
+
+
+def test_explain_adds_result_text_when_is_error():
+    msg = runner.explain("crash", {"is_error": True, "result": "prompt too long"}, "ignored", "CLI 回報錯誤")
+    assert "prompt too long" in msg and "ignored" not in msg
+    assert "Please run /login" in runner.explain(
+        "auth", {"is_error": True, "result": "Please run /login"}, "", "未登入")
+
+
+def test_explain_leaves_other_cases_untouched():
+    assert runner.explain("transient", None, "stderr", "API 暫時錯誤") == "API 暫時錯誤"
+    assert runner.explain("crash", None, "  \n", "m") == "m"
+    assert runner.explain("crash", {"is_error": False}, "e", "沒有結構化輸出") == "沒有結構化輸出"
+
+
+def test_run_job_crash_message_carries_stderr(tmp_path):
+    exe = tmp_path / "claude"
+    exe.write_text("#!/bin/sh\necho 'kaboom: bad flag' >&2\necho garbage\nexit 1\n")
+    exe.chmod(0o755)
+    res = asyncio.run(runner.run_job(ClaudePreset(str(exe)), "s", "u", SCHEMA, timeout=10))
+    assert res.outcome == "crash" and "kaboom: bad flag" in res.message

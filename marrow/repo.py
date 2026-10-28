@@ -190,7 +190,10 @@ def get_job(conn, job_id: int) -> dict | None:
 
 
 def claim_next_job(conn, now: float) -> dict | None:
-    """最舊的 queued 改 running 並回傳;呼叫者在 `with conn:` 內呼叫。"""
+    """最舊的 queued 改 running 並回傳;呼叫者在 `with conn:` 內呼叫。
+
+    假設只有單一 claimer(一個 worker + daemon 檔案鎖);SELECT 與 UPDATE 之間沒有防併發。
+    """
     jid = _id(conn, "SELECT id FROM job WHERE state = 'queued' ORDER BY id LIMIT 1", ())
     if jid is None:
         return None
@@ -200,6 +203,7 @@ def claim_next_job(conn, now: float) -> dict | None:
 
 def set_job_state(conn, job_id: int, state: str, now: float, step: str | None = None,
                   error_class: str | None = None, detail: dict | None = None) -> None:
+    """改 job 狀態。省略 error_class / detail = 清成 NULL;省略 step = 保留原值。"""
     conn.execute(
         "UPDATE job SET state = ?, step = COALESCE(?, step), error_class = ?, detail = ?, "
         "updated_at = ? WHERE id = ?",

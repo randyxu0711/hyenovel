@@ -149,10 +149,11 @@ def test_transient_backoff_not_counted(conn):
     assert [a["n"] for a in repo.attempts(conn, job["id"]) if a["step"] == "analyst"] == [0, 1, 2, 3, 4]
 
 
-def test_transient_exhausted_is_usage_limit(conn):
+def test_transient_exhausted_is_overload_not_quota(conn):
     job = _job(conn)
     out, _, sleeps = _drive(conn, job, FakeRun(*[fail("transient")] * 3))
-    assert (out.state, out.error_class) == ("paused", "usage-limit")
+    assert (out.state, out.error_class) == ("paused", "overload")
+    assert "額度" not in out.detail["message"] and "resets_at" not in out.detail
     assert sleeps == [4.0, 8.0]
     assert _outcomes(conn, job) == ["transient"] * 3
 

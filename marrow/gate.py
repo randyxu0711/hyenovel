@@ -33,6 +33,11 @@ def locate(quote, source):
     return None
 
 
+def _found(quote, source) -> bool:
+    """閘門專用:空白/全形空白-only 的引文不算找到(locate 第三層對它會建空 regex 而恆命中)。"""
+    return bool(quote.strip()) and locate(quote, source) is not None
+
+
 def _dicts(value):
     """list 裡的 dict 項;不是 list 回空。"""
     return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
@@ -60,7 +65,7 @@ def gate_analysis(body: dict, source: str) -> list[str]:
     for n in nodes:
         for ev in _dicts(n.get("evidence")):
             q = ev.get("quote")
-            if isinstance(q, str) and not (q and locate(q, source)):
+            if isinstance(q, str) and not _found(q, source):
                 errs.append(f"node {n.get('id')}: 引文在原文找不到:「{q[:50]}」")
     return errs
 
@@ -75,7 +80,7 @@ def gate_feedback(body: dict, analysis: dict, source: str) -> list[str]:
             label = f"feedback「{str(p.get('title'))[:14]}」"
             quotes = p.get("quotes")
             for q in quotes if isinstance(quotes, list) else []:
-                if isinstance(q, str) and not (q and locate(q, source)):
+                if isinstance(q, str) and not _found(q, source):
                     errs.append(f"{label}: 引文在原文找不到:「{q[:50]}」")
             refs = p.get("refs")
             for r in refs if isinstance(refs, list) else []:

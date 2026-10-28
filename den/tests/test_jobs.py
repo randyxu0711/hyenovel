@@ -258,3 +258,13 @@ def test_bus_drops_finished_jobs_after_ttl():
     t[0] = jobs._DONE_TTL + 1
     bus.publish(2, {"event": "y"})
     assert bus.subscribe(1).qsize() == 0
+
+
+def test_submit_estimate_failure_leaves_no_job(conn, monkeypatch):
+    def boom(*a):
+        raise ZeroDivisionError
+    monkeypatch.setattr(jobs, "estimate", boom)
+    m = _mgr(conn, GatedRun())
+    with pytest.raises(ZeroDivisionError):
+        m.submit("mini")
+    assert conn.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 0

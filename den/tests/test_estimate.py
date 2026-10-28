@@ -28,3 +28,9 @@ def test_missing_tokens_are_skipped_not_zeroed():
     hist = {"analyst": [_h(1000, 60_000, 500), {"chars": 1000, "duration_ms": 60_000,
                                                  "tokens": None}]}
     assert estimate(hist, 1000) == {"seconds": 60, "output_tokens": 500, "basis": 2}
+
+
+def test_zero_char_rows_skipped_no_division_by_zero():
+    hist = {"analyst": [_h(0, 1000, 5), _h(1000, 60_000, 500)], "criticizer": [_h(1000, 30_000, 100)]}
+    assert estimate(hist, 1000)["seconds"] == 90
+    assert estimate({"analyst": [_h(0, 1000, 5)]}, 1000) is None

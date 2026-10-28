@@ -10,6 +10,7 @@ def _mean(xs: list[float]) -> float:
 
 def estimate(history: dict[str, list[dict]], chars: int) -> dict | None:
     """history = {step: repo.attempt_history(step)};任一步沒歷史 → None。"""
+    history = {s: [r for r in h if r["chars"]] for s, h in history.items()}   # 空原文不能當分母
     if not history or any(not h for h in history.values()):
         return None
     ms = toks = 0.0

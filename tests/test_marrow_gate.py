@@ -112,3 +112,17 @@ def test_errors_never_contain_fix(analysis, source):
     a["nodes"][0]["evidence"][0]["quote"] = "原文沒有這句"
     first = source.split("。")[0]
     assert not any(first in e for e in gate.gate_analysis(a, source))
+
+
+@pytest.mark.parametrize("blank", ["   ", "\n", "　", " 　\n"])
+def test_gate_analysis_whitespace_only_quote_rejected(analysis, source, blank):
+    a = copy.deepcopy(analysis)
+    a["nodes"][1]["evidence"][0]["quote"] = blank
+    assert any("引文在原文找不到" in e for e in gate.gate_analysis(a, source))
+
+
+@pytest.mark.parametrize("blank", ["   ", "\n", "　", " 　\n"])
+def test_gate_feedback_whitespace_only_quote_rejected(feedback, analysis, source, blank):
+    f = copy.deepcopy(feedback)
+    f["strengths"][0]["quotes"] = [blank]
+    assert any("引文在原文找不到" in e for e in gate.gate_feedback(f, analysis, source))
