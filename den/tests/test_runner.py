@@ -41,6 +41,17 @@ def test_argv_recipe_locked():
     assert "--bare" not in argv
 
 
+def test_argv_strips_top_level_dollar_schema():
+    from marrow.workpacks import WORKPACKS
+    schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", "a": 1}
+    argv = runner.build_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"), schema)
+    assert json.loads(argv[argv.index("--json-schema") + 1]) == {"a": 1}
+    assert "$schema" in schema
+    real = WORKPACKS["analyst"].schema
+    argv = runner.build_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"), real)
+    assert "$schema" not in json.loads(argv[argv.index("--json-schema") + 1])
+
+
 def test_worker_env_whitelist():
     env = runner.worker_env({
         "CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "s", "CLAUDE_CODE_MESSAGING_SOCKET": "x",

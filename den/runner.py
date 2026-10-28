@@ -41,11 +41,14 @@ class RunResult:
 
 
 def build_argv(preset: ClaudePreset, system_prompt_file: Path, schema: dict) -> list[str]:
+    # CLI 的 validator 解析不了 draft 2020-12 的 meta-schema URI($schema),會直接拒收
+    # (2026-10-29 真 smoke 發現);傳給 CLI 時拿掉頂層 $schema,不動呼叫者的 dict。
+    cli_schema = {k: v for k, v in schema.items() if k != "$schema"}
     return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
             "--no-session-persistence", "--output-format", "json",
             "--model", preset.model,
             "--system-prompt-file", str(system_prompt_file),
-            "--json-schema", json.dumps(schema, ensure_ascii=False)]
+            "--json-schema", json.dumps(cli_schema, ensure_ascii=False)]
 
 
 def worker_env(env: Mapping[str, str]) -> dict[str, str]:
