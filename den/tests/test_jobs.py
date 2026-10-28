@@ -138,6 +138,16 @@ def test_cancel_queued_marks_cancelled(conn):
     assert m.bus._events[jid][-1]["data"]["reason"] == "cancelled"
 
 
+def test_resume_clears_stale_error_before_claim(conn):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    assert m.cancel(jid) is True                     # queued → cancelled,發收尾 error
+    assert m.resume(jid) is True                     # 沒有 worker:停在 queued 未被 claim
+    q = m.bus.subscribe(jid)
+    assert q.empty()
+    assert _state(conn, jid) == "queued"
+
+
 def test_cancel_done_returns_false(conn, caplog):
     async def main():
         m = _mgr(conn, GatedRun(gated=False))

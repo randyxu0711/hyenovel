@@ -39,7 +39,7 @@ class EventBus:
             self._events.pop(jid, None)
 
     def reset(self, job_id: int) -> None:
-        """續跑開始:舊的收尾事件不再補播(否則新訂閱者先看到上一輪的 error)。"""
+        """續跑排入時清掉上一輪事件(否則新訂閱者先看到上一輪的 error,SSE 就地收尾)。"""
         self._events[job_id] = []
         self._closed.pop(job_id, None)
 
@@ -130,6 +130,7 @@ class JobManager:
         if not ok:
             log.info("event=resume-rejected job=%s", job_id)
             return False
+        self.bus.reset(job_id)   # 排隊期間的新訂閱者不能被補播上一輪的收尾 error
         log.info("event=job-resume job=%s", job_id)
         self._wake.set()
         return True
@@ -149,7 +150,6 @@ class JobManager:
 
     async def _run(self, job: dict) -> None:
         jid = job["id"]
-        self.bus.reset(jid)
         self._step = None
 
         async def go() -> pipeline.StepOutcome:   # run_factory 的例外也要落在下面的 crash 收尾
