@@ -12,7 +12,8 @@ import hashlib
 import json
 import sqlite3
 
-_JSON_COLS = {"body", "provenance", "anchors", "refs", "quotes"}
+_JSON_COLS = {"body", "provenance", "anchors", "refs", "quotes",
+              "params", "detail", "parsed", "gate_verdict", "tokens"}
 
 
 def canonical_json(obj) -> str:
@@ -26,7 +27,8 @@ def sha256_text(s: str) -> str:
 def _row(r: sqlite3.Row | None) -> dict | None:
     if r is None:
         return None
-    return {k: json.loads(r[k]) if k in _JSON_COLS else r[k] for k in r.keys()}
+    return {k: json.loads(r[k]) if k in _JSON_COLS and r[k] is not None else r[k]
+            for k in r.keys()}
 
 
 def _id(conn, sql, args) -> int | None:
@@ -44,6 +46,10 @@ def ensure_story(conn, slug: str, title: str | None, now: float) -> int:
     return _id(conn, "SELECT id FROM story WHERE slug = ?", (slug,))
 
 
+def story(conn, story_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM story WHERE id = ?", (story_id,)).fetchone())
+
+
 def story_by_slug(conn, slug: str) -> dict | None:
     return _row(conn.execute("SELECT * FROM story WHERE slug = ?", (slug,)).fetchone())
 
@@ -59,6 +65,11 @@ def add_source_version(conn, story_id: int, text: str, now: float) -> tuple[int,
     cur = conn.execute("INSERT INTO source_version (story_id, n, text, sha256, created_at) "
                        "VALUES (?, ?, ?, ?, ?)", (story_id, n, text, digest, now))
     return cur.lastrowid, True
+
+
+def source_version(conn, source_version_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM source_version WHERE id = ?",
+                             (source_version_id,)).fetchone())
 
 
 def latest_source_version(conn, story_id: int) -> dict | None:
@@ -150,3 +161,97 @@ def add_settlement(conn, discussion_id: int, settled_at: float, written: int) ->
                        "VALUES (?, ?, ?) ON CONFLICT (discussion_id) DO NOTHING",
                        (discussion_id, settled_at, written))
     return cur.rowcount == 1
+
+
+# ── artifact 單筆 ──
+
+def artifact(conn, artifact_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM artifact WHERE id = ?", (artifact_id,)).fetchone())
+
+
+# ── job / attempt ──
+# 狀態:queued | running | paused | failed | done | cancelled。可續 = paused | failed | cancelled
+# (取消過的也要有出口,#22)。
+
+_RESUMABLE = ("paused", "failed", "cancelled")
+
+
+def create_job(conn, kind: str, story_id: int, source_version_id: int, params: dict,
+               now: float) -> int:
+    cur = conn.execute(
+        "INSERT INTO job (kind, story_id, source_version_id, state, params, created_at, updated_at) "
+        "VALUES (?, ?, ?, 'queued', ?, ?, ?)",
+        (kind, story_id, source_version_id, canonical_json(params), now, now))
+    return cur.lastrowid
+
+
+def get_job(conn, job_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM job WHERE id = ?", (job_id,)).fetchone())
+
+
+def claim_next_job(conn, now: float) -> dict | None:
+    """最舊的 queued 改 running 並回傳;呼叫者在 `with conn:` 內呼叫。"""
+    jid = _id(conn, "SELECT id FROM job WHERE state = 'queued' ORDER BY id LIMIT 1", ())
+    if jid is None:
+        return None
+    conn.execute("UPDATE job SET state = 'running', updated_at = ? WHERE id = ?", (now, jid))
+    return get_job(conn, jid)
+
+
+def set_job_state(conn, job_id: int, state: str, now: float, step: str | None = None,
+                  error_class: str | None = None, detail: dict | None = None) -> None:
+    conn.execute(
+        "UPDATE job SET state = ?, step = COALESCE(?, step), error_class = ?, detail = ?, "
+        "updated_at = ? WHERE id = ?",
+        (state, step, error_class, None if detail is None else canonical_json(detail), now, job_id))
+
+
+def requeue_job(conn, job_id: int, now: float) -> bool:
+    cur = conn.execute(
+        "UPDATE job SET state = 'queued', error_class = NULL, detail = NULL, updated_at = ? "
+        "WHERE id = ? AND state IN (?, ?, ?)", (now, job_id, *_RESUMABLE))
+    return cur.rowcount == 1
+
+
+def recover_running_jobs(conn, now: float) -> list[int]:
+    """daemon 啟動時呼叫:上次沒收尾的 running 一律視為 crash。"""
+    ids = [r[0] for r in conn.execute("SELECT id FROM job WHERE state = 'running' ORDER BY id")]
+    for jid in ids:
+        set_job_state(conn, jid, "failed", now, error_class="crash")
+    return ids
+
+
+def add_attempt(conn, job_id: int, step: str, n: int, *, runner: str, model: str | None,
+                cli_version: str | None, outcome: str, raw_output: str | None,
+                parsed: dict | None, gate_verdict: dict | None, tokens: dict | None,
+                duration_ms: int | None, artifact_id: int | None, now: float) -> int:
+    def j(o):
+        return None if o is None else canonical_json(o)
+    cur = conn.execute(
+        "INSERT INTO attempt (job_id, step, n, runner, model, cli_version, outcome, raw_output, "
+        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (job_id, step, n, runner, model, cli_version, outcome, raw_output, j(parsed),
+         j(gate_verdict), j(tokens), duration_ms, artifact_id, now))
+    return cur.lastrowid
+
+
+def attempts(conn, job_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM attempt WHERE job_id = ? ORDER BY id", (job_id,))]
+
+
+def ok_attempt(conn, job_id: int, step: str) -> dict | None:
+    """該 job 該步 outcome=ok 的那筆(續跑判定用)。"""
+    return _row(conn.execute(
+        "SELECT * FROM attempt WHERE job_id = ? AND step = ? AND outcome = 'ok' "
+        "ORDER BY id LIMIT 1", (job_id, step)).fetchone())
+
+
+def attempt_history(conn, step: str) -> list[dict]:
+    """所有成功 attempt 的 {chars, duration_ms, tokens}(chars = 該 job 原文長度)。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT LENGTH(sv.text) AS chars, a.duration_ms AS duration_ms, a.tokens AS tokens "
+        "FROM attempt a JOIN job j ON j.id = a.job_id "
+        "JOIN source_version sv ON sv.id = j.source_version_id "
+        "WHERE a.step = ? AND a.outcome = 'ok' ORDER BY a.id", (step,))]
