@@ -62,3 +62,13 @@ def feedback_json():
         "minor": ["第二段的逗號可以再收一點。"],
         "one_line": "節制,但收得太急。",
     }
+
+
+@pytest.fixture
+def conn():
+    """已 migrate 的 in-memory marrow DB。"""
+    from marrow import db
+    c = db.connect("sqlite:///:memory:")
+    db.migrate(c, None)
+    yield c
+    c.close()

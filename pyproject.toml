@@ -23,6 +23,7 @@ include = [
     "settled.py",
     "label_map.py",
     "server/ingest.py",
+    "marrow/*.py",
 ]
 
 [tool.coverage.report]
