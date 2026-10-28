@@ -230,3 +230,26 @@ def test_run_job_crash_message_carries_stderr(tmp_path):
     exe.chmod(0o755)
     res = asyncio.run(runner.run_job(ClaudePreset(str(exe)), "s", "u", SCHEMA, timeout=10))
     assert res.outcome == "crash" and "kaboom: bad flag" in res.message
+
+
+# ── pick_runner(clientInfo 是提示不是授權) ──
+
+def test_pick_runner_maps_claude_code():
+    assert runner.pick_runner("claude-code", ("claude",)) == "claude"
+
+
+def test_pick_runner_case_insensitive_substring():
+    assert runner.pick_runner("Claude-Code (via mcp-remote 0.1)", ("claude",)) == "claude"
+
+
+def test_pick_runner_unknown_falls_back_to_order():
+    assert runner.pick_runner("codex-mcp-client", ("claude",)) == "claude"
+
+
+def test_pick_runner_none_client():
+    assert runner.pick_runner(None, ("claude",)) == "claude"
+
+
+def test_pick_runner_nothing_available():
+    assert runner.pick_runner("claude-code", ()) is None
+    assert runner.pick_runner(None, ()) is None

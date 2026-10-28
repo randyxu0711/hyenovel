@@ -174,3 +174,12 @@ def cli_version(exe: str) -> str | None:
 
 def find_claude() -> str | None:
     return shutil.which("claude")
+
+
+def pick_runner(client_name: str | None, available: tuple[str, ...]) -> str | None:
+    """clientInfo 對得到且可用就用它;否則照 RUNNER_ORDER 取第一個可用;都沒有 → None。"""
+    name = (client_name or "").lower()
+    for key, runner in config.CLIENT_RUNNERS.items():
+        if key in name and runner in available:
+            return runner
+    return next((r for r in config.RUNNER_ORDER if r in available), None)

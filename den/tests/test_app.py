@@ -6,6 +6,7 @@ TestClient 當 context manager 才會跑 lifespan;run_factory 一律注入假的
 import asyncio
 import json
 import logging
+import os
 import stat
 import threading
 import time
@@ -153,7 +154,7 @@ def test_post_job_returns_202_and_persists(data):
         r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
         assert r.status_code == 202
         body = r.json()
-        assert body["runner"] == "claude-cli"
+        assert body["runner"] == "claude"
         assert body["note"] == "會用你同一份訂閱額度"
         assert "estimate" in body
         jid = body["job_id"]
@@ -373,3 +374,93 @@ def test_worker_death_is_logged_and_restarted(caplog, monkeypatch):
     assert m.startups == 1                                  # 重起前把孤兒 running 收成 crash
     assert "event=worker-died" in caplog.text
     assert "database is locked" in caplog.text              # 有 traceback
+
+
+# ── 切片 3:收原文 / 討論素材 / health / client → runner ──
+
+def test_health_requires_token(data):
+    with _client(data) as c:
+        assert c.get("/health").status_code == 401
+
+
+def test_health_returns_version(data):
+    with _client(data) as c:
+        r = c.get("/health", headers=_auth(data[1]))
+    body = r.json()
+    assert r.status_code == 200
+    assert body["version"] == c.app.state.version and len(body["version"]) == 12
+    assert body["pid"] == os.getpid() and body["busy"] is False
+
+
+def test_post_stories_201(data):
+    with _client(data) as c:
+        r = c.post("/stories", json={"text": "他走進門。", "title": "T", "slug": None},
+                   headers=_auth(data[1]))
+    assert r.status_code == 201
+    assert r.json()["slug"] == "d01" and r.json()["version"] == 1
+
+
+def test_post_stories_422_blank(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = c.post("/stories", json={"text": "  ", "title": None, "slug": None},
+                   headers=_auth(data[1]))
+    assert r.status_code == 422 and "空白故事" in r.json()["detail"]
+    assert "event=reject where=stories" in caplog.text
+
+
+def test_discussion_404(data):
+    with _client(data) as c:
+        assert c.get("/stories/nope/discussion", headers=_auth(data[1])).status_code == 404
+
+
+def test_discussion_422_bad_slug(data):
+    with _client(data) as c:
+        assert c.get("/stories/-x/discussion", headers=_auth(data[1])).status_code == 422
+
+
+def test_discussion_409(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "未分析。"}, headers=h)
+        r = c.get("/stories/d01/discussion", headers=h)
+    assert r.status_code == 409 and r.json() == {"detail": "這篇還沒分析完成"}
+
+
+def test_discussion_200(data):
+    with _client(data) as c:
+        r = c.get("/stories/mini/discussion", headers=_auth(data[1]))
+    assert r.status_code == 200 and r.json()["slug"] == "mini"
+
+
+def test_post_job_records_client_and_runner(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini",
+                                  "client": {"name": "claude-code", "version": "2.1.312"}}, headers=h)
+        assert r.status_code == 202 and r.json()["runner"] == "claude"
+        job = c.get(f"/jobs/{r.json()['job_id']}", headers=h).json()
+    assert job["params"] == {"client": {"name": "claude-code", "version": "2.1.312"},
+                             "runner": "claude"}
+
+
+def test_post_job_without_client_still_ok(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        job = c.get(f"/jobs/{r.json()['job_id']}", headers=h).json()
+    assert r.status_code == 202 and job["params"] == {"client": None, "runner": "claude"}
+
+
+def test_post_job_client_name_too_long_422(data):
+    with _client(data) as c:
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini",
+                                  "client": {"name": "x" * 65}}, headers=_auth(data[1]))
+    assert r.status_code == 422
+
+
+def test_post_job_no_runner_503(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        c.app.state.available = ()
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=_auth(data[1]))
+    assert r.status_code == 503 and "沒有可用的 runner" in r.json()["detail"]
+    assert "event=reject where=runner" in caplog.text

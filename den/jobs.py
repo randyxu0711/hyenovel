@@ -92,7 +92,7 @@ class JobManager:
         for jid in ids:
             log.info("event=job-recovered job=%s", jid)
 
-    def submit(self, slug: str) -> dict:
+    def submit(self, slug: str, client: dict | None = None, runner: str | None = None) -> dict:
         st = repo.story_by_slug(self.conn, slug)
         if st is None:
             log.info("event=submit-rejected reason=unknown-slug")
@@ -102,8 +102,9 @@ class JobManager:
         est = estimate({s: repo.attempt_history(self.conn, s) for s in pipeline.CRITIQUE},
                        len(sv["text"]))
         with self.conn:
-            jid = repo.create_job(self.conn, "critique", st["id"], sv["id"], {}, self._now())
-        log.info("event=job-submitted job=%s", jid)
+            jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
+                                  {"client": client, "runner": runner}, self._now())
+        log.info("event=job-submitted job=%s client=%r runner=%s", jid, client, runner)
         self._wake.set()
         return {"job_id": jid, "estimate": est}
 

@@ -23,3 +23,9 @@ PORT = 8788  # 舊 server 佔 8787,過渡期並存
 # 工人環境白名單:不含任何 CLAUDE*、不含 ANTHROPIC_API_KEY(吃訂閱的既有政策)。
 ENV_WHITELIST = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
                  "TMPDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME")
+
+MAX_SOURCE_BYTES = 5 * 1024 * 1024   # 沿用 server/config.MAX_UPLOAD_BYTES 的值,不 import 它
+
+# clientInfo.name 是提示不是授權(R14):只拿來挑預設 runner。對照表是資料,新增一家只改這裡。
+CLIENT_RUNNERS: dict[str, str] = {"claude-code": "claude"}
+RUNNER_ORDER = ("claude",)

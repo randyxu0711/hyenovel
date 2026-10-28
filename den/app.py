@@ -1,6 +1,9 @@
 """den 的 HTTP 入口:job API + SSE,本機安全三件套(綁 127.0.0.1、Origin、token)、單一實例鎖。
 
-  POST /jobs                {"kind":"critique","slug"} → 202 {job_id, estimate, runner, note}
+  POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
+  GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
+  GET  /health              → {version, pid, busy}
+  POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, runner, note}
   GET  /jobs/{id}           → job 列 + attempts 摘要(不含 raw_output / prompt)
   POST /jobs/{id}/cancel    → 200 {"ok":true} | 409
   POST /jobs/{id}/resume    → 200 {"ok":true} | 409
@@ -15,6 +18,7 @@ import json
 import logging
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -22,11 +26,12 @@ from typing import Literal
 import filelock
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from den import stories, version
 from den.config import HOST, PHASE_TIMEOUT, PORT, valid_slug
 from den.jobs import JobManager
-from den.runner import ClaudePreset, cli_version, find_claude, run_job
+from den.runner import ClaudePreset, cli_version, find_claude, pick_runner, run_job
 from marrow import db, repo
 
 log = logging.getLogger("hyenovel")
@@ -37,12 +42,25 @@ _RESTART_DELAY = 1.0    # worker 死掉後隔多久重起(別讓壞 DB 變成熱
 _TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞檔
 _ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
-             "error_class", "detail", "created_at", "updated_at")
+             "error_class", "detail", "params", "created_at", "updated_at")
+
+
+class ClientIn(BaseModel):
+    # 外部自報字串,進 DB 與 log:限長
+    name: str = Field(max_length=64)
+    version: str | None = Field(default=None, max_length=64)
 
 
 class JobIn(BaseModel):
     kind: Literal["critique"]
     slug: str
+    client: ClientIn | None = None
+
+
+class StoryIn(BaseModel):
+    text: str
+    title: str | None = None
+    slug: str | None = None
 
 
 def load_token(data_dir: Path) -> str:
@@ -116,6 +134,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
         try:
             factory, ver = (run_factory, None) if run_factory else _default_factory()
             app.state.token = load_token(data_dir)
+            app.state.version = version.fingerprint()   # 啟動時算一次;磁碟上現在的值由呼叫者現算比對
+            app.state.available = ("claude",)           # 目前唯一 preset;其他家在 backlog
             conn = db.connect(conn_url)
             db.migrate(conn, db.sqlite_path(conn_url))
             mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)
@@ -162,11 +182,44 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
         if not valid_slug(body.slug):
             log.info("event=reject where=slug slug=%r", body.slug[:64])
             raise HTTPException(422, "bad slug")
+        client = body.client.model_dump() if body.client else None
+        runner = pick_runner(client["name"] if client else None, request.app.state.available)
+        if runner is None:
+            log.info("event=reject where=runner client=%r", client and client["name"][:64])
+            raise HTTPException(503, "沒有可用的 runner：目前只支援 Claude CLI")
         try:
-            out = request.app.state.mgr.submit(body.slug)
+            out = request.app.state.mgr.submit(body.slug, client, runner)
         except LookupError:
             raise HTTPException(404, "這篇不在 DB:先執行 python -m marrow.importer") from None
-        return {**out, "runner": ClaudePreset.runner_name, "note": "會用你同一份訂閱額度"}
+        return {**out, "runner": runner, "note": "會用你同一份訂閱額度"}
+
+    @app.get("/health")
+    async def health(request: Request):
+        return {"version": request.app.state.version, "pid": os.getpid(),
+                "busy": repo.has_pending_jobs(request.app.state.mgr.conn)}
+
+    @app.post("/stories", status_code=201)
+    async def post_story(body: StoryIn, request: Request):
+        conn = request.app.state.mgr.conn
+        try:
+            with conn:
+                return stories.ingest(conn, body.text, body.title, body.slug, time.time())
+        except ValueError as e:
+            log.info("event=reject where=stories reason=%s", e)
+            raise HTTPException(422, str(e)) from None
+
+    @app.get("/stories/{slug}/discussion")
+    async def get_discussion(slug: str, request: Request):
+        if not valid_slug(slug):
+            log.info("event=reject where=slug slug=%r", slug[:64])
+            raise HTTPException(422, "bad slug")
+        try:
+            return stories.discussion_context(request.app.state.mgr.conn, slug)
+        except LookupError:
+            raise HTTPException(404, "這篇不在 DB") from None
+        except ValueError:
+            log.info("event=reject where=discussion reason=not-analyzed")
+            raise HTTPException(409, "這篇還沒分析完成") from None
 
     @app.get("/jobs/{job_id}")
     async def get_job(job_id: int, request: Request):
