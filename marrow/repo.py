@@ -94,3 +94,59 @@ def current_artifact(conn, story_id: int, kind: str) -> dict | None:
     return _row(conn.execute(
         "SELECT a.* FROM current_artifact c JOIN artifact a ON a.id = c.artifact_id "
         "WHERE c.story_id = ? AND c.kind = ?", (story_id, kind)).fetchone())
+
+
+# ── discussion / utterance ──
+
+def ensure_discussion(conn, story_id: int, external_id: str, home: str, client: str | None,
+                      started_at: float) -> int:
+    conn.execute("INSERT INTO discussion (story_id, external_id, home, client, started_at) "
+                 "VALUES (?, ?, ?, ?, ?) ON CONFLICT (story_id, external_id) DO NOTHING",
+                 (story_id, external_id, home, client, started_at))
+    return _id(conn, "SELECT id FROM discussion WHERE story_id = ? AND external_id = ?",
+               (story_id, external_id))
+
+
+def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
+    conn.execute("UPDATE discussion SET ended_at = ? WHERE id = ? "
+                 "AND (ended_at IS NULL OR ended_at < ?)", (ended_at, discussion_id, ended_at))
+
+
+def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
+                  origin: str, anchors: list[str], analysis_fp: str | None) -> bool:
+    cur = conn.execute(
+        "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp))
+    return cur.rowcount == 1
+
+
+def utterances(conn, discussion_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM utterance WHERE discussion_id = ? ORDER BY seq", (discussion_id,))]
+
+
+# ── conclusion / settlement ──
+
+def add_conclusion(conn, story_id: int, external_id: str, discussion_id: int | None, kind: str,
+                   text: str, refs: list, quotes: list, provenance: dict, valid_from: float,
+                   invalidated_at: float | None) -> bool:
+    cur = conn.execute(
+        "INSERT INTO conclusion (story_id, external_id, discussion_id, kind, text, refs, quotes, "
+        "provenance, valid_from, invalidated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT (story_id, external_id) DO NOTHING",
+        (story_id, external_id, discussion_id, kind, text, canonical_json(refs),
+         canonical_json(quotes), canonical_json(provenance), valid_from, invalidated_at))
+    return cur.rowcount == 1
+
+
+def conclusions(conn, story_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM conclusion WHERE story_id = ? ORDER BY valid_from", (story_id,))]
+
+
+def add_settlement(conn, discussion_id: int, settled_at: float, written: int) -> bool:
+    cur = conn.execute("INSERT INTO settlement (discussion_id, settled_at, written) "
+                       "VALUES (?, ?, ?) ON CONFLICT (discussion_id) DO NOTHING",
+                       (discussion_id, settled_at, written))
+    return cur.rowcount == 1

@@ -54,3 +54,38 @@ def test_current_pointer_moves(conn):
 def test_canonical_json_keeps_cjk_and_sorts():
     assert repo.canonical_json({"b": "字", "a": 1}) == '{"a": 1, "b": "字"}'
     assert len(repo.sha256_text("x")) == 64
+
+
+# ── 討論 / 逐字 / 結論 / 收束 ──
+
+def _disc(conn):
+    s = repo.ensure_story(conn, "s1", None, 0)
+    return s, repo.ensure_discussion(conn, s, "sess", "web", None, 0)
+
+
+def test_utterance_seq_is_idempotency_key(conn):
+    s, d = _disc(conn)
+    assert repo.ensure_discussion(conn, s, "sess", "web", None, 9) == d
+    assert repo.add_utterance(conn, d, 0, "user", "問", 1.0, "den", ["t1"], "fp")
+    assert not repo.add_utterance(conn, d, 0, "user", "別的字", 1.0, "den", [], None)
+    repo.add_utterance(conn, d, 1, "assistant", "答", 2.0, "den", [], None)
+    us = repo.utterances(conn, d)
+    assert [u["text"] for u in us] == ["問", "答"] and us[0]["anchors"] == ["t1"]
+
+
+def test_close_discussion_only_moves_forward(conn):
+    _, d = _disc(conn)
+    repo.close_discussion(conn, d, 5.0)
+    repo.close_discussion(conn, d, 3.0)
+    assert conn.execute("SELECT ended_at FROM discussion WHERE id=?", (d,)).fetchone()[0] == 5.0
+
+
+def test_conclusion_and_settlement_idempotent(conn):
+    s, d = _disc(conn)
+    args = (s, "c0001", d, "observation", "文", ["t1"], ["引"], {"session": "sess"}, 1.0, None)
+    assert repo.add_conclusion(conn, *args) and not repo.add_conclusion(conn, *args)
+    repo.add_conclusion(conn, s, "c0000", None, "question", "早", [], ["引"], {}, 0.5, None)
+    cs = repo.conclusions(conn, s)
+    assert [c["external_id"] for c in cs] == ["c0000", "c0001"]
+    assert cs[1]["refs"] == ["t1"] and cs[1]["provenance"] == {"session": "sess"}
+    assert repo.add_settlement(conn, d, 2.0, 1) and not repo.add_settlement(conn, d, 3.0, 1)
