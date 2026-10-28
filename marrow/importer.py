@@ -94,7 +94,8 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                 conn, sid, vid, kind, schema.SCHEMA_VERSION, body,
                 {"tier": "A", "runner": "legacy-sdk", "imported_from": f"{kind}.json"}, now)
             rep["artifacts_added"] += created
-            repo.set_current(conn, sid, kind, aid)
+            if created:                      # den 已接手的 current 不被舊檔蓋回
+                repo.set_current(conn, sid, kind, aid)
 
         sessions: dict[str, list[dict]] = {}
         for row in _jsonl(rep, story_dir / "transcript.jsonl"):
@@ -149,8 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     url = args.db or db.database_url()
     conn = db.connect(url)
     try:
-        path = url.removeprefix("sqlite:///")
-        db.migrate(conn, None if path == ":memory:" else Path(path))
+        db.migrate(conn, db.sqlite_path(url))
         reps = import_all(conn, args.stories, time.time())
     finally:
         conn.close()

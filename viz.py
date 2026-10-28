@@ -13,12 +13,12 @@
   python viz.py <slug> --check    # 只驗兩道閘門,不出檔(給 critique 編排當閘門)
 """
 import json
-import re
 import sys
 import html
 from pathlib import Path
 
 import atomicio
+from marrow.gate import _PUNCT, locate  # noqa: F401  (_PUNCT 給測試用)
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent
@@ -53,32 +53,6 @@ def load(slug):
     analysis = read_json(aj)
     source = src.read_text(encoding="utf-8")
     return base, analysis, source
-
-
-# 標點正規化(1:1 等長,故正規化後的索引在原文仍有效)。
-# 容忍作者手打/子代理難辨的半形⇄全形與引號方向差異,但不放過真正缺字的幻覺引用。
-_PUNCT = str.maketrans({
-    ",": "，", ".": "。", "!": "！", "?": "？",
-    ":": "：", ";": "；", "(": "（", ")": "）",
-    # 引號:ASCII 與左右彎引號視為等價(作者常混用、子代理難辨方向),全部正規化到右彎引號
-    '"': "”", "“": "”",
-    "'": "’", "‘": "’",
-})
-
-
-def locate(quote, source):
-    """回傳 (start, end) 或 None。容許半形/全形標點與空白差異;仍要求逐字。"""
-    nq, ns = quote.translate(_PUNCT), source.translate(_PUNCT)
-    for q, s in ((quote, source), (nq, ns)):
-        idx = s.find(q)
-        if idx != -1:
-            return idx, idx + len(quote)
-    # 容許換行/空白差異(在標點正規化後)
-    pat = re.compile(r"\s*".join(re.escape(ch) for ch in nq if not ch.isspace()))
-    m = pat.search(ns)
-    if m:
-        return m.start(), m.end()
-    return None
 
 
 def validate_and_locate(analysis, source):

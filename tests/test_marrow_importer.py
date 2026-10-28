@@ -205,3 +205,15 @@ def test_orphan_db_story_logged(conn, tmp_path, caplog):                 # I4
     shutil.rmtree(root / "mini")
     importer.import_all(conn, root, 2.0)
     assert "event=import-orphan slug=mini" in caplog.text
+
+
+def test_importer_rerun_keeps_den_current(conn, tmp_path):
+    root = make_story(tmp_path, "mini")
+    importer.import_story(conn, root / "mini", 1.0)
+    s = repo.story_by_slug(conn, "mini")
+    v = repo.latest_source_version(conn, s["id"])
+    body = dict(repo.current_artifact(conn, s["id"], "analysis")["body"], title="den 版")
+    aid, _ = repo.add_artifact(conn, s["id"], v["id"], "analysis", 1, body, {"runner": "den"}, 2.0)
+    repo.set_current(conn, s["id"], "analysis", aid)          # 模擬 den 產出
+    importer.import_story(conn, root / "mini", 3.0)
+    assert repo.current_artifact(conn, s["id"], "analysis")["id"] == aid

@@ -1,0 +1,93 @@
+"""marrow.workpacks:登錄表、無工具 prompt、輸入組裝、閘門分派。"""
+import copy
+import json
+from pathlib import Path
+
+import pytest
+
+from marrow import schema, workpacks
+from marrow.repo import canonical_json
+
+MINI = Path(__file__).parent / "fixtures" / "mini"
+
+
+@pytest.fixture
+def source():
+    return (MINI / "source.md").read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def analysis():
+    return schema.to_v1("analysis", json.loads((MINI / "analysis.json").read_text(encoding="utf-8")))
+
+
+@pytest.fixture
+def feedback(feedback_json):
+    return schema.to_v1("feedback", feedback_json)
+
+
+def test_registry_shape():
+    assert set(workpacks.WORKPACKS) == {"analyst", "criticizer"}
+    assert workpacks.WORKPACKS["analyst"].kind == "analysis"
+    assert workpacks.WORKPACKS["criticizer"].kind == "feedback"
+
+
+@pytest.mark.parametrize("name", ["analyst", "criticizer"])
+def test_registry_schemas_are_strict(name):
+    wp = workpacks.WORKPACKS[name]
+    assert wp.schema == schema.load_schema(wp.kind)
+    assert schema.strict_violations(wp.schema) == []
+
+
+@pytest.mark.parametrize("name", ["analyst", "criticizer"])
+def test_prompts_are_toolless(name):
+    p = workpacks.WORKPACKS[name].system_prompt
+    for banned in ("Write", "stories/", "schemas/", "docs/", "回報"):
+        assert banned not in p
+
+
+def test_prompts_keep_persona():
+    assert "絕不評價好壞" in workpacks.WORKPACKS["analyst"].system_prompt
+    c = workpacks.WORKPACKS["criticizer"].system_prompt
+    assert "有輕重" in c and "不諂媚" in c
+    assert "輸出前自檢" in c
+
+
+def test_first_input_wraps_source(source, analysis):
+    assert workpacks.first_input("analyst", "mini", source, None) == f"slug: mini\n<source>\n{source}\n</source>"
+    got = workpacks.first_input("criticizer", "mini", source, analysis)
+    assert got == (f"slug: mini\n<source>\n{source}\n</source>"
+                   f"\n<analysis>\n{canonical_json(analysis)}\n</analysis>")
+
+
+def test_criticizer_requires_analysis(source):
+    with pytest.raises(ValueError):
+        workpacks.first_input("criticizer", "mini", source, None)
+
+
+def test_repair_input_lists_errors_without_answers(source, analysis):
+    prev = {"slug": "mini", "title": "x"}
+    errors = ["引文找不到:甲", "node id 重複:乙"]
+    out = workpacks.repair_input("analyst", "mini", source, None, prev, errors)
+    assert out.startswith(workpacks.first_input("analyst", "mini", source, None))
+    assert f"<previous_output>\n{canonical_json(prev)}\n</previous_output>" in out
+    assert "- 引文找不到:甲\n- node id 重複:乙" in out
+    rest = out.replace(source, "").replace(canonical_json(prev), "")
+    for e in errors:
+        rest = rest.replace(e, "")
+    assert rest == ("slug: mini\n<source>\n\n</source>"
+                    "\n<previous_output>\n\n</previous_output>\n"
+                    "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
+                    "- \n- ")
+
+
+def test_gate_dispatch(source, analysis, feedback):
+    assert workpacks.gate("analyst", analysis, source, None) == []
+    bad = copy.deepcopy(analysis)
+    bad["nodes"][0]["evidence"][0]["quote"] = "原文裡不存在的句子"
+    assert workpacks.gate("analyst", bad, source, None) != []
+
+    assert workpacks.gate("criticizer", feedback, source, analysis) == []
+    badf = copy.deepcopy(feedback)
+    badf["key_points"][0]["quotes"] = ["原文裡不存在的句子"]
+    assert workpacks.gate("criticizer", badf, source, analysis) != []

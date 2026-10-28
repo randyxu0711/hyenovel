@@ -27,16 +27,22 @@ def database_url(env: Mapping[str, str] = os.environ) -> str:
     return env.get("DATABASE_URL") or f"{_SQLITE}{data_dir(env)}/hyenovel.db"
 
 
-def connect(url: str) -> sqlite3.Connection:
+def sqlite_path(url: str) -> Path | None:
+    """DATABASE_URL → DB 檔路徑(給 migrate 備份用);:memory: 回 None。"""
     if not url.startswith(_SQLITE):
         raise UnsupportedDatabase(f"目前只支援 SQLite(sqlite:///<路徑>),收到:{url.split(':', 1)[0]}")
     target = url[len(_SQLITE):]
-    if target != ":memory:":
-        Path(target).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(target)
+    return None if target == ":memory:" else Path(target)
+
+
+def connect(url: str) -> sqlite3.Connection:
+    path = sqlite_path(url)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(":memory:" if path is None else path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    if target != ":memory:":
+    if path is not None:
         conn.execute("PRAGMA journal_mode = WAL")
     return conn
 
