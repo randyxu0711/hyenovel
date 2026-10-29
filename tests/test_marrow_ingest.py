@@ -31,3 +31,54 @@ def test_decode_garbage_falls_back():
 
 def test_normalize():
     assert ingest.normalize("a  \r\n\r\n\r\n\r\nb\r") == "a\n\nb\n"
+
+
+# ── extract_text(搬自 server/ingest.py;大小上限是呼叫端的職責)──────────
+
+import io
+import logging
+
+import pytest
+
+
+def test_extract_txt_normalized():
+    assert ingest.extract_text("a.txt", b"a  \r\n\r\n\r\n\r\nb") == "a\n\nb\n"
+
+
+def test_extract_md_and_no_extension_as_text():
+    assert "他走進門。" in ingest.extract_text("a.md", "他走進門。".encode("utf-8"))
+    assert "他走進門。" in ingest.extract_text("noext", "他走進門。".encode("utf-8"))
+    assert "他走進門。" in ingest.extract_text("", "他走進門。".encode("utf-8"))
+
+
+def test_extract_corrupt_pdf_friendly_error_and_logged(caplog):
+    with caplog.at_level(logging.ERROR, logger="hyenovel"):
+        with pytest.raises(ValueError, match="讀不了這個檔"):
+            ingest.extract_text("BROKEN.PDF", b"not a pdf")
+    assert "event=extract-fail" in caplog.text
+
+
+def test_extract_corrupt_docx_friendly_error():
+    with pytest.raises(ValueError, match="讀不了"):
+        ingest.extract_text("broken.docx", b"not a docx")
+
+
+def test_extract_pdf_pages_joined():
+    pypdf = pytest.importorskip("pypdf")
+    w = pypdf.PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    w.add_blank_page(width=200, height=200)
+    buf = io.BytesIO()
+    w.write(buf)
+    assert isinstance(ingest.extract_text("a.pdf", buf.getvalue()), str)
+
+
+def test_extract_docx_paragraphs_joined():
+    docx = pytest.importorskip("docx")
+    d = docx.Document()
+    d.add_paragraph("他走進門。")
+    d.add_paragraph("屋裡沒有人。")
+    buf = io.BytesIO()
+    d.save(buf)
+    text = ingest.extract_text("a.docx", buf.getvalue())
+    assert "他走進門。" in text and "屋裡沒有人。" in text

@@ -6,44 +6,17 @@ create 才配 slug 落檔。理由:PDF/docx 抽出的髒字會毒死 analyst 的
 
 title 目前不落檔:analyst 讀完故事會自己定 title(進 analysis.json → index)。
 """
-import io
 import re
 
-from marrow.ingest import decode as _decode, normalize as _normalize
+from marrow.ingest import decode as _decode, extract_text as _extract, normalize as _normalize
 
 from . import config
-from .log import log
 
 
 def extract_text(filename: str, data: bytes) -> str:
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise ValueError(f"檔案過大(> {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB)")
-    ext = (filename or "").lower().rsplit(".", 1)[-1] if "." in (filename or "") else ""
-    try:
-        if ext == "pdf":
-            text = _pdf(data)
-        elif ext == "docx":
-            text = _docx(data)
-        else:                   # txt / md / 其餘:當純文字解(_decode 有 fallback,不會拋)
-            text = _decode(data)
-    except Exception as e:      # pypdf / docx 解析失敗(壞檔 / 加密)→ 友善訊息,不冒成 500
-        # 給使用者的訊息刻意只留型別;真正的 traceback 落 log(否則事後零診斷線索)。
-        # 只記檔名+例外,不記檔案內容(safe-to-log,同 log 模組約定)。
-        log.exception(f"event=extract-fail file={filename!r} ext={ext}")
-        raise ValueError(f"讀不了這個檔(可能損壞或加密):{type(e).__name__}")
-    return _normalize(text)
-
-
-def _pdf(data: bytes) -> str:
-    from pypdf import PdfReader
-    reader = PdfReader(io.BytesIO(data))
-    return "\n\n".join((p.extract_text() or "") for p in reader.pages)
-
-
-def _docx(data: bytes) -> str:
-    import docx
-    doc = docx.Document(io.BytesIO(data))
-    return "\n\n".join(p.text for p in doc.paragraphs)
+    return _extract(filename, data)
 
 
 def next_slug() -> str:
