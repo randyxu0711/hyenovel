@@ -76,8 +76,7 @@ describe("討論框的 markdown(逐字歷史,4a 在場)", () => {
   });
 });
 
-// TODO(4b): web 討論接回 den 後恢復
-describe.skip("討論框的 markdown(live 串流)", () => {
+describe("討論框的 markdown(live 串流)", () => {
   it("編輯側渲染:`**x**` 變 <strong>,裸星號不留在畫面上", async () => {
     const c = await talk("問一句");
     const ed = live(c, "ed");

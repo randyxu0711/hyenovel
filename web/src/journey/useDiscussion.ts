@@ -1,15 +1,14 @@
 /** 一篇的討論局:訊息流 + session,活在「篇」這一層。
  *
- * 為什麼在這裡而不是 NodeTalk 裡:資料層從來就是 by story —— 後端 `Session.slug`、
- * `transcript.jsonl`、`conclusions.jsonl`、`recall(slug, anchors=...)` 全以篇為單位,
- * node 只是 `anchors`/`refs` 標註。狀態放在節點元件裡,「取消選取」就等於卸載,
- * 對話與 sessionId 一起蒸發,而後端那個 ClaudeSDKClient 還活著 —— 再選一顆是新
- * session,要重付一次 `/story-discuss` 開場(讀 analysis+feedback+source,~$0.13–0.24)。
+ * 為什麼在這裡而不是 NodeTalk 裡:資料層從來就是 by story —— den 的 discussion 掛在 story 上,
+ * node 只是 utterance 的 `anchors` 標註。狀態放在節點元件裡,「取消選取」就等於卸載,
+ * 對話與 sessionId 一起蒸發,再選一顆節點就成了新局。
+ * 現在 den 每輪開一個工人、從 DB 逐字重送歷史;局 = discussion(session_id),換節點不重開局。
  *
  * node 在這裡的角色只剩「這輪從哪切入」:換節點不重開局,只在訊息前補一句錨定。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getTranscript } from "../data/client";
+import { getTranscript, streamDiscuss } from "../data/client";
 import type { Turn } from "../types";
 
 // think = 這一則的推理草稿。跟 text 分開存,因為它們是兩種東西:text 是編輯說出口的話
@@ -36,16 +35,37 @@ export function useDiscussion(slug: string) {
     return () => { live = false; };
   }, [slug]);
 
-  // busy/anchored/sessionId 與未用參數(node、typeName)留給 4b 接回 den,勿刪。
-  // 4a:網頁討論搬家中(4b 回來)。不打網路,只在尾端留一則說明;逐字歷史照常從 getTranscript 載入。
-  const send = useCallback(async (text: string, _node: { id: string; label: string }, _typeName: string) => {
-    if (!text) return;
-    setMsgs(m => [...m, { role: "me", text },
-      { role: "ed", text: `網頁討論搬家中(下一版回來)。現在請在 Claude Code 對 hyenovel 說「討論 ${slug}」(open_discussion)。` }]);
-  }, [slug]);
+  const send = useCallback(async (text: string, node: { id: string; label: string }, typeName: string) => {
+    if (!text || busy) return;
+    let toSend = text;
+    if (node.id !== anchored.current) {
+      toSend = `(就「${node.label}」這個${typeName}節點)\n${text}`;
+      anchored.current = node.id;
+    }
+    setMsgs(m => [...m, { role: "me", text }, { role: "ed", text: "" }]);
+    setBusy(true);
+    // 失敗的一輪 den 不落盤(編輯下一輪不會記得):畫面上一律標出來,不讓截斷的字像正常回答。
+    const UNSAVED = "(這輪沒完成,沒有存下;編輯下一輪不會記得這段)";
+    const fail = (m: Msg, label: string, why: string): Msg =>
+      ({ ...m, text: m.text ? `${m.text}\n\n${UNSAVED}(${why})` : `(${label}:${why})` });
+    let terminal = false;
+    const patchLast = (fn: (m: Msg) => Msg) =>
+      setMsgs(m => { const c = [...m]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
+    try {
+      for await (const ev of streamDiscuss(slug, sessionId.current, toSend, [node.id])) {
+        if (ev.event === "token") patchLast(m => ({ ...m, text: m.text + (ev.data.text ?? "") }));
+        else if (ev.event === "thinking") patchLast(m => ({ ...m, think: (m.think ?? "") + (ev.data.text ?? "") }));
+        else if (ev.event === "message") { if (ev.data.session_id) sessionId.current = ev.data.session_id; if (ev.data.text) patchLast(m => ({ ...m, text: ev.data.text || m.text })); }
+        else if (ev.event === "done") { terminal = true; if (ev.data.session_id) sessionId.current = ev.data.session_id; }
+        else if (ev.event === "error") { terminal = true; patchLast(m => fail(m, "討論出錯", String(ev.data.message))); }
+      }
+      if (!terminal) patchLast(m => fail(m, "連線中斷", "連線提前結束"));
+    } catch (e) {
+      patchLast(m => fail(m, "連線中斷", String(e instanceof Error ? e.message : e)));
+    } finally { setBusy(false); }
+  }, [slug, busy]);
 
-  // 收束不在這裡,也不在任何前端路徑上:這一局被 sweep_idle 回收之後,後端 settle worker
-  // 自己從 transcript.jsonl 煉成結論(server/settle.py)。使用者不必知道這件事發生過。
+  // 收束不在這裡,也不在任何前端路徑上:收束暫無,另開切片。
   //
   // past 與 msgs 仍刻意不合併:msgs 是「這一局」(送訊息要帶 sessionId),
   // past 是整篇所有已落盤的局。合併會讓「這一局」的邊界消失。

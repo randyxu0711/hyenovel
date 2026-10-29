@@ -36,3 +36,8 @@ MAX_SOURCE_BYTES = 5 * 1024 * 1024   # 沿用 server/config.MAX_UPLOAD_BYTES 的
 # clientInfo.name 是提示不是授權(R14):只拿來挑預設 runner。對照表是資料,新增一家只改這裡。
 CLIENT_RUNNERS: dict[str, str] = {"claude-code": "claude"}
 RUNNER_ORDER = ("claude",)
+
+# web 討論一輪(切片 4b):每輪一個隔離工人,整輪逾時;訊息與錨點上限擋手滑的 body
+CHAT_TIMEOUT = 300
+MAX_CHAT_CHARS = 8000
+MAX_ANCHORS = 8
