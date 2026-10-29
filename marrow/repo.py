@@ -14,7 +14,7 @@ import re
 import sqlite3
 
 _JSON_COLS = {"body", "provenance", "anchors", "refs", "quotes",
-              "params", "detail", "parsed", "gate_verdict", "tokens"}
+              "params", "detail", "parsed", "gate_verdict", "tokens", "usage"}
 
 
 def canonical_json(obj) -> str:
@@ -134,17 +134,25 @@ def ensure_discussion(conn, story_id: int, external_id: str, home: str, client: 
                (story_id, external_id))
 
 
+def discussion_by_external(conn, story_id: int, external_id: str) -> dict | None:
+    """依 (story, external_id) 找局;web 聊天端靠它把 session id 對回既有的局。"""
+    return _row(conn.execute("SELECT * FROM discussion WHERE story_id = ? AND external_id = ?",
+                             (story_id, external_id)).fetchone())
+
+
 def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
     conn.execute("UPDATE discussion SET ended_at = ? WHERE id = ? "
                  "AND (ended_at IS NULL OR ended_at < ?)", (ended_at, discussion_id, ended_at))
 
 
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
-                  origin: str, anchors: list[str], analysis_fp: str | None) -> bool:
+                  origin: str, anchors: list[str], analysis_fp: str | None,
+                  usage: dict | None = None) -> bool:
     cur = conn.execute(
-        "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
-        (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp))
+        "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
+        "usage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
+         None if usage is None else canonical_json(usage)))
     return cur.rowcount == 1
 
 

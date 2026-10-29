@@ -266,3 +266,28 @@ def test_discussions_with_utterances_orders_by_ts_then_seq(conn):
     assert [(u["external_id"], u["text"]) for u in got] == [("A", "a0"), ("B", "b0"), ("A", "a1")]
     assert got[0]["anchors"] == ["t1"] and set(got[0]) == {
         "external_id", "seq", "role", "text", "ts", "anchors"}
+
+
+def test_add_utterance_stores_usage_json(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "assistant", "B", 1.0, "den", [], "fp",
+                       usage={"output": 3, "duration_ms": 900})
+    assert repo.utterances(conn, d)[0]["usage"] == {"output": 3, "duration_ms": 900}
+
+
+def test_add_utterance_usage_defaults_null(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "user", "問", 1.0, "den", [], None)
+    assert repo.utterances(conn, d)[0]["usage"] is None
+    assert conn.execute("SELECT usage FROM utterance WHERE discussion_id = ?",
+                        (d,)).fetchone()[0] is None      # 真的是 SQL NULL,不是字串 "null"
+
+
+def test_discussion_by_external_scoped_to_story(conn):
+    s1 = repo.ensure_story(conn, "s1", None, 0)
+    s2 = repo.ensure_story(conn, "s2", None, 0)
+    d1 = repo.ensure_discussion(conn, s1, "x", "web", None, 0)
+    repo.ensure_discussion(conn, s2, "x", "web", None, 0)
+    assert repo.discussion_by_external(conn, s1, "x")["id"] == d1
+    assert repo.discussion_by_external(conn, s1, "x")["story_id"] == s1
+    assert repo.discussion_by_external(conn, s1, "nope") is None
