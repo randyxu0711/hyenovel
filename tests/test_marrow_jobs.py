@@ -93,11 +93,29 @@ def test_attempt_history_chars(conn):
     jid, _, _ = _job(conn, text="一二三")
     other, _, _ = _job(conn, text="一二三四五", now=2.0)
     _att(conn, jid, "analyst", 0, "gate", duration_ms=1)
-    _att(conn, jid, "analyst", 1, "ok", duration_ms=5, tokens={"out": 9})
-    _att(conn, other, "criticizer", 0, "ok", duration_ms=2)
+    _att(conn, jid, "analyst", 1, "ok", duration_ms=5, tokens={"out": 9}, prompt_sha="abc")
+    _att(conn, other, "criticizer", 0, "ok", duration_ms=2, prompt_sha="abc")
     assert repo.attempt_history(conn, "analyst") == [
         {"chars": 3, "duration_ms": 5, "tokens": {"out": 9}}]
     assert repo.attempt_history(conn, "criticizer")[0]["chars"] == 5
+
+
+def test_attempt_history_excludes_null_prompt_sha(conn):
+    """prompt_sha NULL = 舊 --json-schema 配方的樣本,不代表現行配方的速度。"""
+    jid, _, _ = _job(conn, text="一二三")
+    _att(conn, jid, "analyst", 0, "ok", duration_ms=588_000)
+    _att(conn, jid, "analyst", 1, "ok", duration_ms=5, prompt_sha="abc")
+    assert [h["duration_ms"] for h in repo.attempt_history(conn, "analyst")] == [5]
+
+
+def test_has_newer_resumable_job(conn):
+    a, s, v = _job(conn)
+    b = repo.create_job(conn, "critique", s, v, {}, 2.0)
+    assert not repo.has_newer_resumable_job(conn, s, v, a)       # b 還是 queued
+    repo.set_job_state(conn, b, "paused", 3.0)
+    assert repo.has_newer_resumable_job(conn, s, v, a)
+    assert not repo.has_newer_resumable_job(conn, s, v, b)       # 沒有更新的
+    assert not repo.has_newer_resumable_job(conn, s, v + 1, a)   # 別版不算
 
 
 def test_story_and_source_version_by_id(conn):

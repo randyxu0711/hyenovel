@@ -270,12 +270,14 @@ def ok_attempt(conn, job_id: int, step: str) -> dict | None:
 
 
 def attempt_history(conn, step: str) -> list[dict]:
-    """所有成功 attempt 的 {chars, duration_ms, tokens}(chars = 該 job 原文長度)。"""
+    """所有成功 attempt 的 {chars, duration_ms, tokens}(chars = 該 job 原文長度)。
+    prompt_sha NULL = 舊 --json-schema 配方的樣本,不代表現行速度,排除。"""
     return [_row(r) for r in conn.execute(
         "SELECT LENGTH(sv.text) AS chars, a.duration_ms AS duration_ms, a.tokens AS tokens "
         "FROM attempt a JOIN job j ON j.id = a.job_id "
         "JOIN source_version sv ON sv.id = j.source_version_id "
-        "WHERE a.step = ? AND a.outcome = 'ok' ORDER BY a.id", (step,))]
+        "WHERE a.step = ? AND a.outcome = 'ok' AND a.prompt_sha IS NOT NULL "
+        "ORDER BY a.id", (step,))]
 
 
 def has_pending_jobs(conn) -> bool:
@@ -319,3 +321,11 @@ def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:
         "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? "
         "AND state IN (?, ?, ?) ORDER BY id DESC LIMIT 1",
         (story_id, source_version_id, *_RESUMABLE)).fetchone())
+
+
+def has_newer_resumable_job(conn, story_id: int, source_version_id: int, job_id: int) -> bool:
+    """同篇同版有 id 比 job_id 大、可續(paused/failed/cancelled)的 job:續舊的會跟新的重複花錢。"""
+    return conn.execute(
+        "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
+        "AND state IN (?, ?, ?) LIMIT 1",
+        (story_id, source_version_id, job_id, *_RESUMABLE)).fetchone() is not None

@@ -16,8 +16,9 @@ MAX_GATE_RETRIES = 2
 TRANSIENT_MAX_RETRIES = 2
 BACKOFF_BASE = 2.0
 PHASE_TIMEOUT = 600
-# 工人異常門檻(只記 WARNING、不設輸出上限):正常 2–3 輪、3.5–4.7k output tokens
-ANOMALY_TURNS = 3
+# 工人異常門檻(只記 WARNING、不設輸出上限):現行配方每次呼叫正常 1 輪、約 2–8k output tokens,
+# 多一輪就是無法解釋的
+ANOMALY_TURNS = 1
 ANOMALY_OUTPUT_TOKENS = 20000
 
 HOST = "127.0.0.1"

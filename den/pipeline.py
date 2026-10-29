@@ -31,13 +31,14 @@ _NOT_JSON = "輸出不是單一 JSON 物件（可能被截斷或夾了說明文�
 
 
 def _check_anomaly(jid: int, step: str, r: RunResult) -> None:
-    """工人回來就看(不論 outcome):輪數或輸出量超門檻 → WARNING。缺欄位當 None、不拋。"""
+    """工人回來就看(不論 outcome):輪數或輸出量超門檻、或逾時 → WARNING。缺欄位當 None、不拋。"""
     turns = r.num_turns
     out = (r.tokens or {}).get("output")
-    if ((isinstance(turns, int) and turns > config.ANOMALY_TURNS)
+    timeout = r.outcome == "timeout"   # 逾時沒有 turns / tokens 可比,本身就是異常
+    if (timeout or (isinstance(turns, int) and turns > config.ANOMALY_TURNS)
             or (isinstance(out, int) and out > config.ANOMALY_OUTPUT_TOKENS)):
-        log.warning("event=worker-anomaly job=%s step=%s turns=%s output_tokens=%s duration_ms=%s",
-                    jid, step, turns, out, r.duration_ms)
+        log.warning("event=worker-anomaly job=%s step=%s turns=%s output_tokens=%s duration_ms=%s%s",
+                    jid, step, turns, out, r.duration_ms, " reason=timeout" if timeout else "")
 
 
 @dataclass

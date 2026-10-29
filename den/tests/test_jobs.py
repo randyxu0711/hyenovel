@@ -441,6 +441,23 @@ def test_resume_rejected_when_version_already_done(conn, caplog):
     assert _state(conn, old) == "paused"
 
 
+def test_resume_rejected_when_newer_resumable_sibling(conn, caplog):
+    """auto-resume 之前留下的兩個可續 job:續舊的會跟新的重複花錢。"""
+    m = _mgr(conn, GatedRun())
+    old = _paused(m, conn)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        new = repo.create_job(conn, "critique", st["id"],
+                              repo.latest_source_version(conn, st["id"])["id"], {}, 3.0)
+        repo.set_job_state(conn, new, "failed", 4.0, error_class="crash")
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+    assert f"event=resume-rejected job={old} reason=superseded" in caplog.text
+    assert _state(conn, old) == "paused"
+    out = m.submit("mini")                       # 自動續跑照挑最新的可續 job
+    assert (out["job_id"], out["resumed"]) == (new, True)
+
+
 def test_rerun_after_done_can_pause_and_resume(conn):
     """done J1 → 明確重跑 J2 停在半路 → J2 能續(直接 resume 與重送自動續跑都行)。"""
     async def main():

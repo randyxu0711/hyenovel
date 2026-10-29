@@ -457,7 +457,8 @@ def test_main_keeps_stdout_clean(tmp_path):
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                          text=True)
     lines: queue.Queue = queue.Queue()
-    threading.Thread(target=lambda: [lines.put(ln) for ln in p.stdout], daemon=True).start()
+    reader = threading.Thread(target=lambda: [lines.put(ln) for ln in p.stdout], daemon=True)
+    reader.start()
     seen: list[str] = []
 
     def send(msg):
@@ -492,6 +493,7 @@ def test_main_keeps_stdout_clean(tmp_path):
         if p.poll() is None:
             p.kill()
             p.wait()
+    reader.join(timeout=10)                   # 讀完管線,尾巴的行才進得了 queue
     for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
         if ln.strip():
             json.loads(ln)

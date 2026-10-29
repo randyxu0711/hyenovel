@@ -146,6 +146,8 @@ class JobManager:
             return "stale-version"   # 跑完會把 current(按篇+種類)換回舊稿的分析
         if repo.has_newer_done_job(self.conn, job["story_id"], sv, job["id"]):
             return "already-done"    # 已被後來跑完的同版 job 取代;要重跑請送新 job
+        if repo.has_newer_resumable_job(self.conn, job["story_id"], sv, job["id"]):
+            return "superseded"      # 同版有更新的可續 job;續舊的會重複花錢
         other = repo.active_job(self.conn, job["story_id"], sv)
         if other is not None and other["id"] != job["id"]:
             return f"active-job other={other['id']}"   # 再排一個 = 同一份錢花兩次

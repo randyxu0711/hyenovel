@@ -258,10 +258,22 @@ def test_worker_anomaly_warns_any_outcome(conn, caplog):
             "duration_ms=5") == hits[0].getMessage()
 
 
+def test_worker_anomaly_on_timeout(conn, caplog):
+    """逾時沒有 turns / tokens 也要留痕,欄位當 None。"""
+    job = _job(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out, _, _ = _drive(conn, job, FakeRun(fail("timeout")))
+    assert out.error_class == "timeout"
+    hits = [r for r in caplog.records if "event=worker-anomaly" in r.getMessage()]
+    assert len(hits) == 1 and hits[0].levelno == logging.WARNING
+    assert "reason=timeout" in hits[0].getMessage()
+    assert f"job={job['id']} step=analyst" in hits[0].getMessage()
+
+
 def test_worker_anomaly_turns_on_ok(conn, caplog):
     job = _job(conn)
     run = FakeRun(_with(ok(_analysis()), turns=4, output=132533),
-                  _with(ok(_feedback()), turns=2, output=4000))
+                  _with(ok(_feedback()), turns=1, output=4000))
     with caplog.at_level(logging.INFO, logger="hyenovel"):
         out, _, _ = _drive(conn, job, run)
     assert out.state == "done"
@@ -270,7 +282,7 @@ def test_worker_anomaly_turns_on_ok(conn, caplog):
                     "output_tokens=132533 duration_ms=5"]
 
 
-@pytest.mark.parametrize("turns,output", [(2, 4000), (3, 20000), (None, None), (None, 4000)],
+@pytest.mark.parametrize("turns,output", [(1, 4000), (1, 20000), (None, None), (None, 4000)],
                          ids=["normal", "at-threshold", "missing", "no-turns"])
 def test_worker_anomaly_quiet_when_normal_or_missing(conn, caplog, turns, output):
     job = _job(conn)
