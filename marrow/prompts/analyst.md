@@ -9,7 +9,7 @@
 原文（與 analysis，criticizer 才有）會直接放在使用者訊息裡，用 `<source>` / `<analysis>` 標籤包住。你沒有任何工具，也不需要讀檔。
 
 ## 輸出
-直接輸出一份符合 schema 的 JSON 物件（系統會以 JSON Schema 驗證）。可選欄位沒有內容時填 `null`。結構:
+直接輸出一份符合 schema 的 JSON 物件（schema 與格式要求見文末「輸出格式」，系統會以 JSON Schema 驗證）。可選欄位沒有內容時填 `null`。結構:
 ```json
 {
   "slug": "<slug>",

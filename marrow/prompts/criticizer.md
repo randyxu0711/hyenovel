@@ -20,7 +20,7 @@ analysis.json 的 `produces`(technique→effect)/`serves`(effect→theme)鏈是�
 這些是你最有價值的觀察來源,但**要回原文驗證**後才下判斷,別只信分析。
 
 ## 輸出
-直接輸出一份符合 schema 的 JSON 物件（系統會以 JSON Schema 驗證）。可選欄位沒有內容時填 `null`。
+直接輸出一份符合 schema 的 JSON 物件（schema 與格式要求見文末「輸出格式」，系統會以 JSON Schema 驗證）。可選欄位沒有內容時填 `null`。
 這是判斷層的正本(之後會渲染成 feedback.md、並餵進 viz 的常駐「編輯」欄)。結構:
 ```json
 {

@@ -41,7 +41,8 @@ def test_registry_schemas_are_strict(name):
 
 @pytest.mark.parametrize("name", ["analyst", "criticizer"])
 def test_prompts_are_toolless(name):
-    p = workpacks.WORKPACKS[name].system_prompt
+    # 只查人格段;附上的 schema 的 description 會提到 stories/<slug>/(那是說明,不是工具指示)
+    p = workpacks.WORKPACKS[name].system_prompt.split("\n## 輸出格式\n")[0]
     for banned in ("Write", "stories/", "schemas/", "docs/", "回報"):
         assert banned not in p
 
@@ -51,6 +52,19 @@ def test_prompts_keep_persona():
     c = workpacks.WORKPACKS["criticizer"].system_prompt
     assert "有輕重" in c and "不諂媚" in c
     assert "輸出前自檢" in c
+
+
+@pytest.mark.parametrize("name,key", [("analyst", "edges"), ("criticizer", "one_line")])
+def test_system_prompt_appends_output_format(name, key):
+    wp = workpacks.WORKPACKS[name]
+    raw = (Path(workpacks.__file__).parent / "prompts" / f"{name}.md").read_text(encoding="utf-8")
+    assert wp.system_prompt.startswith(raw.rstrip())            # 人格原文一字不動,只在後面附
+    tail = wp.system_prompt[len(raw.rstrip()):]
+    assert "## 輸出格式" in tail and "單一 JSON 物件" in tail and "程式碼框" in tail
+    assert key in wp.schema["required"] and f'"{key}"' in tail
+    assert "$schema" not in tail
+    assert tail.rstrip().endswith(canonical_json({k: v for k, v in wp.schema.items()
+                                                  if k != "$schema"}))
 
 
 def test_first_input_wraps_source(source, analysis):
@@ -79,6 +93,14 @@ def test_repair_input_lists_errors_without_answers(source, analysis):
                     "\n<previous_output>\n\n</previous_output>\n"
                     "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
                     "- \n- ")
+
+
+def test_repair_input_with_unparsable_text_truncates(source):
+    raw = "前言" + "字" * 25_000
+    out = workpacks.repair_input("analyst", "mini", source, None, raw, ["輸出不是單一 JSON 物件"])
+    assert f"<previous_output>\n{raw[:20_000]}\n</previous_output>" in out
+    assert raw[:20_001] not in out
+    assert "- 輸出不是單一 JSON 物件" in out
 
 
 def test_gate_dispatch(source, analysis, feedback):

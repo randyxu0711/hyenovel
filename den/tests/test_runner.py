@@ -36,20 +36,10 @@ def test_argv_recipe_locked():
     assert argv == ["/x/claude", "-p", "--safe-mode", "--tools", "",
                     "--strict-mcp-config", "--no-session-persistence",
                     "--output-format", "json", "--model", "sonnet",
-                    "--system-prompt-file", "/t/sys.md",
-                    "--json-schema", '{"a": "中"}']
+                    "--system-prompt-file", "/t/sys.md"]
     assert "--bare" not in argv
-
-
-def test_argv_strips_top_level_dollar_schema():
-    from marrow.workpacks import WORKPACKS
-    schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", "a": 1}
-    argv = runner.build_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"), schema)
-    assert json.loads(argv[argv.index("--json-schema") + 1]) == {"a": 1}
-    assert "$schema" in schema
-    real = WORKPACKS["analyst"].schema
-    argv = runner.build_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"), real)
-    assert "$schema" not in json.loads(argv[argv.index("--json-schema") + 1])
+    # CLI 的 --json-schema 會在內部自己驗、自己重試(我們的閘門與 log 看不到),Task 9 拿掉
+    assert "--json-schema" not in argv
 
 
 def test_worker_env_whitelist():
@@ -65,7 +55,7 @@ def test_worker_env_whitelist():
 def test_classify_ok_fixture():
     outcome, obj, msg = runner.classify(0, json.dumps(OK))
     assert (outcome, msg) == ("ok", None)
-    assert obj["structured_output"] == {"answer": 2}
+    assert "structured_output" not in obj                    # 不再走 CLI 結構化輸出
     res = runner.make_result(outcome, obj, json.dumps(OK), msg, 5)
     assert res.model == "claude-haiku-5-5"
     assert res.tokens == {"input": 2, "output": 111, "cache_read": 0,
@@ -92,9 +82,20 @@ def test_classify_failures():
     assert runner.classify(0, _err(is_error=False, result='{"q":"/login"}'))[0] == "ok"
     o, _, m = runner.classify(1, _err(is_error=True, subtype="error_max_turns"))
     assert o == "crash" and "error_max_turns" in m
-    bad = {k: v for k, v in OK.items() if k != "structured_output"}
-    o, _, m = runner.classify(0, json.dumps(bad))
-    assert o == "crash" and m == "沒有結構化輸出"
+    # 成功但 result 不是字串 → crash(不是格式錯誤,是 CLI 輸出壞了)
+    for bad in ({k: v for k, v in OK.items() if k != "result"}, {**OK, "result": {"a": 1}}):
+        o, _, m = runner.classify(0, json.dumps(bad))
+        assert o == "crash" and m == "CLI 輸出沒有 result 文字"
+
+
+def test_make_result_parses_result_text():
+    for text, want in (('```json\n{"a": 1}\n```', {"a": 1}), ("我做不到", None),
+                       ('{"a": [1', None)):
+        raw = _err(result=text)
+        o, obj, m = runner.classify(0, raw)
+        assert o == "ok"                                  # 解析不出不是工人失敗,交給流水線閘門
+        res = runner.make_result(o, obj, raw, m, 1)
+        assert res.parsed == want and res.raw == raw
 
 
 def test_make_result_without_usage():

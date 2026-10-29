@@ -1,6 +1,7 @@
 """工作包登錄表:analyst / criticizer 的 system prompt、輸出 schema、輸入組裝與閘門分派。
 
-prompt 是 marrow 內唯一正本(無工具版:原文直接放在使用者訊息,schema 由 CLI 結構化輸出帶)。
+prompt 是 marrow 內唯一正本(無工具版:原文直接放在使用者訊息)。輸出格式與 schema 由這裡
+附在 system prompt 尾巴(穩定、可被快取);模型把 JSON 當文字吐,我們解析、閘門驗。
 """
 from dataclasses import dataclass
 from functools import cache
@@ -22,13 +23,27 @@ class WorkPack:
     schema: dict
 
 
+# 修補時夾回去的原始輸出上限(解析不出的文字可能是一大段失控輸出)
+MAX_PREVIOUS_CHARS = 20_000
+
+
 @cache
 def _prompt(name: str) -> str:
     return (_PROMPTS / f"{name}.md").read_text(encoding="utf-8")
 
 
+def _system_prompt(name: str, sch: dict) -> str:
+    shown = {k: v for k, v in sch.items() if k != "$schema"}
+    return (_prompt(name).rstrip()
+            + "\n\n## 輸出格式\n"
+            + "只輸出**單一 JSON 物件**：不要用程式碼框（```）包住，也不要任何前後說明文字。"
+            + "這個物件必須符合下列 JSON Schema：\n"
+            + canonical_json(shown) + "\n")
+
+
 WORKPACKS: dict[str, WorkPack] = {
-    name: WorkPack(name, kind, _prompt(name), schema.load_schema(kind))
+    name: WorkPack(name, kind, _system_prompt(name, schema.load_schema(kind)),
+                   schema.load_schema(kind))
     for name, kind in (("analyst", "analysis"), ("criticizer", "feedback"))
 }
 
@@ -43,9 +58,12 @@ def first_input(name: str, slug: str, source: str, analysis: dict | None) -> str
 
 
 def repair_input(name: str, slug: str, source: str, analysis: dict | None,
-                 previous: dict, errors: list[str]) -> str:
+                 previous: dict | str, errors: list[str]) -> str:
+    """previous 是上一份解析出的物件;解析不出時是原始文字(截前 MAX_PREVIOUS_CHARS 字)。"""
+    prev = (previous[:MAX_PREVIOUS_CHARS] if isinstance(previous, str)
+            else canonical_json(previous))
     return (first_input(name, slug, source, analysis)
-            + f"\n<previous_output>\n{canonical_json(previous)}\n</previous_output>\n"
+            + f"\n<previous_output>\n{prev}\n</previous_output>\n"
             + "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
             + "\n".join(f"- {e}" for e in errors))
 
