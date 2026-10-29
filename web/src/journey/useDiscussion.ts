@@ -36,6 +36,7 @@ export function useDiscussion(slug: string) {
     return () => { live = false; };
   }, [slug]);
 
+  // busy/anchored/sessionId 與未用參數(node、typeName)留給 4b 接回 den,勿刪。
   // 4a:網頁討論搬家中(4b 回來)。不打網路,只在尾端留一則說明;逐字歷史照常從 getTranscript 載入。
   const send = useCallback(async (text: string, _node: { id: string; label: string }, _typeName: string) => {
     if (!text) return;

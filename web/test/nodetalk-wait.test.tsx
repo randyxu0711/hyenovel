@@ -29,7 +29,7 @@ vi.mock("../src/data/client", () => ({
 
 const node: VizNode = { id: "m2", type: "motif", label: "破帽", note: "", intensity: null, evidence: [] };
 
-// 4a:send 暫不走 streamDiscuss(網頁討論 4b 回來),這組串流行為測試待 4b 恢復。
+// TODO(4b): web 討論接回 den 後恢復
 describe.skip("NodeTalk 等待狀態", () => {
   it("送出後就有等待提示,而且它自己講得出在等什麼", async () => {
     const { container } = render(<NodeTalk slug="s1" node={node} typeName="意象" color="#a98bb8"

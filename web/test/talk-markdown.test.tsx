@@ -37,7 +37,7 @@ const node: VizNode = { id: "m2", type: "motif", label: "破帽", note: "", inte
 const mount = () => render(<NodeTalk slug="s1" node={node} typeName="意象" color="#a98bb8"
   flag="" kp={null} onClose={() => {}} />);
 
-/** 送一則使用者訊息並等編輯回完 —— msgs 兩側同時就位才驗得到「同一棵 DOM 上兩套規則」。 */
+/** 送一則使用者訊息並等編輯回完(live 串流,4b 恢復) */
 async function talk(userText: string) {
   const { container } = mount();
   await waitFor(() => expect(container.querySelector(".talk-line.past")).toBeTruthy());
@@ -48,6 +48,13 @@ async function talk(userText: string) {
   return container;
 }
 
+/** 4a 仍在場的路徑:只靠 getTranscript 載入的逐字歷史 */
+async function mountHistory() {
+  const { container } = mount();
+  await waitFor(() => expect(container.querySelector(".talk-line.past")).toBeTruthy());
+  return container;
+}
+
 const live = (c: HTMLElement, side: "me" | "ed") =>
   c.querySelector<HTMLElement>(`.talk-line.${side}:not(.past)`)!;
 const history = (c: HTMLElement, side: "me" | "ed") =>
@@ -55,8 +62,22 @@ const history = (c: HTMLElement, side: "me" | "ed") =>
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-// 4a:send 暫不走 streamDiscuss(網頁討論 4b 回來),這組串流行為測試待 4b 恢復。
-describe.skip("討論框的 markdown", () => {
+describe("討論框的 markdown(逐字歷史,4a 在場)", () => {
+  it("past 編輯側渲染:`**x**` 變 <strong>,裸星號不留", async () => {
+    const c = await mountHistory();
+    expect(history(c, "ed").querySelector("strong")?.textContent).toBe("編輯");
+    expect(history(c, "ed").textContent).not.toContain("**");
+  });
+
+  it("past 使用者側不渲染:`*` 可能就是他要的那個字", async () => {
+    const c = await mountHistory();
+    expect(history(c, "me").querySelector("strong")).toBeNull();
+    expect(history(c, "me").textContent).toContain("**使用者**");
+  });
+});
+
+// TODO(4b): web 討論接回 den 後恢復
+describe.skip("討論框的 markdown(live 串流)", () => {
   it("編輯側渲染:`**x**` 變 <strong>,裸星號不留在畫面上", async () => {
     const c = await talk("問一句");
     const ed = live(c, "ed");
@@ -64,18 +85,16 @@ describe.skip("討論框的 markdown", () => {
     expect(ed.textContent).not.toContain("**");
   });
 
-  it("使用者側不渲染:使用者寫的是純文學,`*` 可能就是他要的那個字", async () => {
+  it("使用者側不渲染", async () => {
     const c = await talk("我打的**星號**要原樣留著");
     const me = live(c, "me");
     expect(me.querySelector("strong")).toBeNull();
     expect(me.textContent).toContain("**星號**");
   });
 
-  it("past 與 msgs 同一套規則(只做一邊會讓同一句話在兩區長得不一樣)", async () => {
+  it("past 與 msgs 同一套規則", async () => {
     const c = await talk("問一句");
     expect(history(c, "ed").querySelector("strong")?.textContent).toBe("編輯");
-    expect(history(c, "ed").textContent).not.toContain("**");
-    expect(history(c, "me").querySelector("strong")).toBeNull();
     expect(history(c, "me").textContent).toContain("**使用者**");
   });
 });
