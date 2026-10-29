@@ -16,6 +16,9 @@ MAX_GATE_RETRIES = 2
 TRANSIENT_MAX_RETRIES = 2
 BACKOFF_BASE = 2.0
 PHASE_TIMEOUT = 600
+# 工人異常門檻(只記 WARNING、不設輸出上限):正常 2–3 輪、3.5–4.7k output tokens
+ANOMALY_TURNS = 3
+ANOMALY_OUTPUT_TOKENS = 20000
 
 HOST = "127.0.0.1"
 PORT = 8788  # 舊 server 佔 8787,過渡期並存;被佔就自動選(den.json 記實際值)

@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+import logging
 
 import pytest
 
@@ -235,3 +236,56 @@ def test_cancel_records_attempt_and_reraises(conn):
     assert _current(conn, job, "analysis")["id"] == before
     assert _current(conn, job, "feedback") is None
 
+
+
+# ── 8a 工人異常 ──
+
+def _with(r, *, turns, output):
+    r.num_turns = turns
+    r.tokens = None if output is None else {"output": output}
+    return r
+
+
+def test_worker_anomaly_warns_any_outcome(conn, caplog):
+    """CLI 多跑輪 / 吐爆量(smoke:4 輪、132,533 tokens)→ WARNING,不論 outcome。"""
+    job = _job(conn)
+    run = FakeRun(_with(fail("crash"), turns=2, output=132533))
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job, run)
+    hits = [r for r in caplog.records if "event=worker-anomaly" in r.getMessage()]
+    assert len(hits) == 1 and hits[0].levelno == logging.WARNING
+    assert (f"event=worker-anomaly job={job['id']} step=analyst turns=2 output_tokens=132533 "
+            "duration_ms=5") == hits[0].getMessage()
+
+
+def test_worker_anomaly_turns_on_ok(conn, caplog):
+    job = _job(conn)
+    run = FakeRun(_with(ok(_analysis()), turns=4, output=132533),
+                  _with(ok(_feedback()), turns=2, output=4000))
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out, _, _ = _drive(conn, job, run)
+    assert out.state == "done"
+    hits = [r.getMessage() for r in caplog.records if "event=worker-anomaly" in r.getMessage()]
+    assert hits == [f"event=worker-anomaly job={job['id']} step=analyst turns=4 "
+                    "output_tokens=132533 duration_ms=5"]
+
+
+@pytest.mark.parametrize("turns,output", [(2, 4000), (3, 20000), (None, None), (None, 4000)],
+                         ids=["normal", "at-threshold", "missing", "no-turns"])
+def test_worker_anomaly_quiet_when_normal_or_missing(conn, caplog, turns, output):
+    job = _job(conn)
+    run = FakeRun(_with(ok(_analysis()), turns=turns, output=output),
+                  _with(ok(_feedback()), turns=turns, output=output))
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out, _, _ = _drive(conn, job, run)
+    assert out.state == "done"
+    assert "event=worker-anomaly" not in caplog.text
+
+
+def test_worker_anomaly_tokens_without_output_key(conn, caplog):
+    job = _job(conn)
+    r = fail("crash")
+    r.num_turns, r.tokens = 5, {"input": 3}
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job, FakeRun(r))
+    assert "turns=5 output_tokens=None" in caplog.text

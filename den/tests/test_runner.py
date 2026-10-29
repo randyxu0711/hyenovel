@@ -71,6 +71,7 @@ def test_classify_ok_fixture():
     assert res.tokens == {"input": 2, "output": 111, "cache_read": 0,
                           "cache_creation": 1186, "thinking": 58}
     assert res.parsed == {"answer": 2}
+    assert res.num_turns == 2
 
 
 def _err(**kw):
@@ -100,7 +101,7 @@ def test_make_result_without_usage():
     res = runner.make_result("crash", None, "raw", "m", 3)
     assert res.model is None and res.tokens is None and res.parsed is None
     res = runner.make_result("crash", {"is_error": True}, "raw", "m", 3)
-    assert res.model is None and res.tokens is None
+    assert res.model is None and res.tokens is None and res.num_turns is None
 
 
 def test_run_job_ok_stdin_and_isolated_cwd(fake, tmp_path):

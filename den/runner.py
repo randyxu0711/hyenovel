@@ -38,6 +38,7 @@ class RunResult:
     tokens: dict | None
     duration_ms: int
     message: str | None
+    num_turns: int | None = None
 
 
 def build_argv(preset: ClaudePreset, system_prompt_file: Path, schema: dict) -> list[str]:
@@ -98,8 +99,9 @@ def explain(outcome: str, obj: dict | None, err: str, msg: str | None) -> str | 
 
 def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
                 duration_ms: int) -> RunResult:
-    model = tokens = parsed = None
+    model = tokens = parsed = turns = None
     if obj is not None:
+        turns = obj.get("num_turns")
         usage = obj.get("usage")
         if isinstance(usage, dict):
             tokens = {"input": usage.get("input_tokens"),
@@ -112,7 +114,7 @@ def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
             model = next(iter(mu))
         if outcome == "ok":
             parsed = obj["structured_output"]
-    return RunResult(outcome, parsed, raw, model, tokens, duration_ms, message)
+    return RunResult(outcome, parsed, raw, model, tokens, duration_ms, message, turns)
 
 
 def kill_tree(proc) -> None:

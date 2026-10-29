@@ -29,6 +29,16 @@ _OVERLOAD_MSG = "Anthropic 服務過載，退避重試後仍失敗，稍後再�
 _GATE_MSG = "閘門重試後仍未過"
 
 
+def _check_anomaly(jid: int, step: str, r: RunResult) -> None:
+    """工人回來就看(不論 outcome):輪數或輸出量超門檻 → WARNING。缺欄位當 None、不拋。"""
+    turns = r.num_turns
+    out = (r.tokens or {}).get("output")
+    if ((isinstance(turns, int) and turns > config.ANOMALY_TURNS)
+            or (isinstance(out, int) and out > config.ANOMALY_OUTPUT_TOKENS)):
+        log.warning("event=worker-anomaly job=%s step=%s turns=%s output_tokens=%s duration_ms=%s",
+                    jid, step, turns, out, r.duration_ms)
+
+
 @dataclass
 class StepOutcome:
     state: str
@@ -54,6 +64,8 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
     gate_retries = transient = 0
 
     def record(outcome: str, r: RunResult | None, gate_verdict=None, artifact_id=None):
+        if r is not None:
+            _check_anomaly(jid, step, r)
         repo.add_attempt(
             conn, jid, step, n, runner=runner_name, model=r and r.model, cli_version=cli_version,
             outcome=outcome, raw_output=r and r.raw, parsed=r and r.parsed,
