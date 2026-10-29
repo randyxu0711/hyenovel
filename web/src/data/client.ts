@@ -172,7 +172,7 @@ export async function cancelCritique(slug: string): Promise<boolean> {
 }
 
 /** 討論一輪;sessionId 為 null = 開新 session(後端在 done.data.session_id 回傳)。
- *  anchors = 這輪在談的 node id;後端落進 transcript.jsonl,將來的召回靠它定位。 */
+ *  anchors = 這輪在談的 node id;後端落進 den DB(utterance.anchors),將來的召回靠它定位。 */
 export const streamDiscuss = (slug: string, sessionId: string | null, message: string, anchors: string[] = []) =>
   sseStream(`/api/discuss/${slug}`, { session_id: sessionId, message, anchors });
 

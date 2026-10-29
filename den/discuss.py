@@ -118,6 +118,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], now
     seq = history[-1]["seq"] + 1 if history else 0
     user_ts = now()
     result = None
+    slug = turn["slug"]
+    failed = False
     try:
         async with aclosing(chat(render_discussion(turn["ctx"]),
                                  render_turn(history, message))) as stream:
@@ -126,24 +128,41 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], now
                     yield {"event": "token", "data": {"text": val}}
                 else:
                     result = val
-    finally:
-        log.info("event=discuss-turn slug=%s outcome=%s ms=%s", turn["slug"],
-                 result.outcome if result else "aborted", result.duration_ms if result else "-")
+    except Exception:   # 不抓 BaseException:CancelledError / GeneratorExit 要原樣穿過
+        log.exception("event=discuss-turn-failed slug=%s stage=chat", slug)
+        failed = True
+    except BaseException:
+        log.info("event=discuss-turn slug=%s outcome=aborted ms=-", slug)
+        raise
+    if failed or result is None:
+        if not failed:
+            log.error("event=discuss-turn-failed slug=%s stage=no-result", slug)
+        yield {"event": "error", "data": {"where": "discuss", "message": "討論工人沒有回應,這輪沒有存下",
+                                          "recoverable": False}}
+        return
     sid = turn["session_id"]
     if result.outcome != "ok":
+        log.info("event=discuss-turn slug=%s outcome=%s ms=%s", slug, result.outcome, result.duration_ms)
         yield {"event": "error", "data": {"where": "discuss", "message": result.message,
                                           "recoverable": result.outcome in _RECOVERABLE}}
         return
     end = now()
     usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
     fp = turn["analysis_fp"]
-    with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫
-        if d is None:
-            d = repo.ensure_discussion(conn, turn["story_id"], sid, "web", "web", user_ts)
-        repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp)
-        repo.add_utterance(conn, d, seq + 1, "assistant", result.text, end, "den", anchors, fp,
-                           usage=usage)
-        repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
+    try:
+        with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫
+            if d is None:
+                d = repo.ensure_discussion(conn, turn["story_id"], sid, "web", "web", user_ts)
+            repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp)
+            repo.add_utterance(conn, d, seq + 1, "assistant", result.text, end, "den", anchors, fp,
+                               usage=usage)
+            repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
+    except Exception:
+        log.exception("event=discuss-turn-failed slug=%s stage=commit", slug)
+        yield {"event": "error", "data": {"where": "discuss", "message": "存檔失敗,這輪沒有存下",
+                                          "recoverable": False}}
+        return
+    log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
                                         "session_id": sid}}
     yield {"event": "done", "data": {"ok": True, "session_id": sid}}

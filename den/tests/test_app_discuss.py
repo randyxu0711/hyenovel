@@ -32,6 +32,7 @@ class FakeChat:
         self.hang = False
         self.started = threading.Event()   # 卡住的那次已吐出第一個 delta
         self.release = threading.Event()
+        self.override = None               # 換掉整個 chat(測例外 / 無 result)
         self.closed = threading.Event()    # 卡住的那次 generator 的 finally 跑過
 
     def __call__(self):
@@ -39,6 +40,10 @@ class FakeChat:
 
     async def chat(self, system_prompt, user_prompt):
         self.calls.append((system_prompt, user_prompt))
+        if self.override:
+            async for ev in self.override():
+                yield ev
+            return
         hang, self.hang = self.hang, False
         try:
             for d in self.deltas:
@@ -369,3 +374,45 @@ def test_not_analyzed_409(c, caplog, fake_chat):
 def test_requires_token(c):
     c.headers.pop("Authorization")
     assert post_raw(c, "mini", None).status_code == 401
+
+
+# ── 例外轉 error 事件(整輪不落盤) ──
+
+def test_chat_raising_yields_error_and_persists_nothing(c, fake_chat, caplog):
+    async def boom():
+        raise OSError("spawn failed")
+        yield   # pragma: no cover
+    fake_chat.override = boom
+    caplog.set_level(logging.INFO)
+    evs = post_discuss(c, "mini", None, "秘密提問")
+    assert evs[-1]["event"] == "error"
+    assert evs[-1]["data"]["where"] == "discuss" and evs[-1]["data"]["recoverable"] is False
+    assert turns(c) == []
+    assert "event=discuss-turn-failed slug=mini stage=chat" in caplog.text
+    assert "秘密提問" not in caplog.text
+
+
+def test_chat_without_result_yields_error(c, fake_chat):
+    async def empty():
+        yield ("delta", "x")
+    fake_chat.override = empty
+    evs = post_discuss(c, "mini", None, "q")
+    assert [e["event"] for e in evs] == ["token", "error"]
+    assert evs[-1]["data"]["recoverable"] is False
+    assert turns(c) == []
+
+
+def test_commit_failure_yields_error_and_does_not_log_ok(c, monkeypatch, caplog):
+    import sqlite3
+
+    def busy(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(repo, "add_utterance", busy)
+    caplog.set_level(logging.INFO)
+    evs = post_discuss(c, "mini", None, "q")
+    assert evs[-1]["event"] == "error" and evs[-1]["data"]["recoverable"] is False
+    assert "message" not in [e["event"] for e in evs]
+    monkeypatch.undo()
+    assert turns(c) == []
+    assert "outcome=ok" not in caplog.text
+    assert "stage=commit" in caplog.text
