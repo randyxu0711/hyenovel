@@ -219,6 +219,31 @@ def test_importer_rerun_keeps_den_current(conn, tmp_path):
     assert repo.current_artifact(conn, s["id"], "analysis")["id"] == aid
 
 
+def test_importer_changed_legacy_file_keeps_den_current(conn, tmp_path):
+    root = make_story(tmp_path, "mini")
+    importer.import_story(conn, root / "mini", 1.0)
+    s = repo.story_by_slug(conn, "mini")
+    v = repo.latest_source_version(conn, s["id"])
+    body = dict(repo.current_artifact(conn, s["id"], "analysis")["body"], title="den 版")
+    aid, _ = repo.add_artifact(conn, s["id"], v["id"], "analysis", 1, body, {"runner": "den"}, 2.0)
+    repo.set_current(conn, s["id"], "analysis", aid)          # 模擬 den 產出
+    path = root / "mini/analysis.json"                        # 舊 server 之後又重跑寫了檔
+    path.write_text(json.dumps(dict(json.loads(path.read_text()), title="舊路徑重跑")))
+    rep = importer.import_story(conn, root / "mini", 3.0)
+    assert rep["artifacts_added"] == 1                        # 照樣收進 DB,只是不搶 current
+    assert repo.current_artifact(conn, s["id"], "analysis")["id"] == aid
+
+
+def test_importer_changed_legacy_file_replaces_legacy_current(conn, tmp_path):
+    root = make_story(tmp_path, "mini")
+    importer.import_story(conn, root / "mini", 1.0)
+    path = root / "mini/analysis.json"
+    path.write_text(json.dumps(dict(json.loads(path.read_text()), title="舊路徑重跑")))
+    importer.import_story(conn, root / "mini", 2.0)
+    s = repo.story_by_slug(conn, "mini")
+    assert repo.current_artifact(conn, s["id"], "analysis")["body"]["title"] == "舊路徑重跑"
+
+
 # ── 結論回填 analysis_artifact_id(切片 4a)──
 
 def _fp(root, slug="mini"):

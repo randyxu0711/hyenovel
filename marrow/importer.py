@@ -100,7 +100,9 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                 {"tier": "A", "runner": "legacy-sdk", "imported_from": f"{kind}.json"}, now)
             rep["artifacts_added"] += created
             aids[kind] = aid
-            if created:                      # den 已接手的 current 不被舊檔蓋回
+            cur = repo.current_artifact(conn, sid, kind)
+            # den 已接手的 current 不被舊檔蓋回——連「接手後舊 server 又重跑寫檔」也算
+            if created and (cur is None or cur["provenance"].get("runner") == "legacy-sdk"):
                 repo.set_current(conn, sid, kind, aid)
 
         sessions: dict[str, list[dict]] = {}
