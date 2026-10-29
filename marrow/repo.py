@@ -244,15 +244,16 @@ def recover_running_jobs(conn, now: float) -> list[int]:
 def add_attempt(conn, job_id: int, step: str, n: int, *, runner: str, model: str | None,
                 cli_version: str | None, outcome: str, raw_output: str | None,
                 parsed: dict | None, gate_verdict: dict | None, tokens: dict | None,
-                duration_ms: int | None, artifact_id: int | None, now: float) -> int:
+                duration_ms: int | None, artifact_id: int | None, now: float,
+                prompt_sha: str | None = None) -> int:
     def j(o):
         return None if o is None else canonical_json(o)
     cur = conn.execute(
         "INSERT INTO attempt (job_id, step, n, runner, model, cli_version, outcome, raw_output, "
-        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at, prompt_sha) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (job_id, step, n, runner, model, cli_version, outcome, raw_output, j(parsed),
-         j(gate_verdict), j(tokens), duration_ms, artifact_id, now))
+         j(gate_verdict), j(tokens), duration_ms, artifact_id, now, prompt_sha))
     return cur.lastrowid
 
 

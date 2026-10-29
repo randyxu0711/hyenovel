@@ -95,12 +95,12 @@ def test_make_result_parses_result_text():
         o, obj, m = runner.classify(0, raw)
         assert o == "ok"                                  # 解析不出不是工人失敗,交給流水線閘門
         res = runner.make_result(o, obj, raw, m, 1)
-        assert res.parsed == want and res.raw == raw
+        assert res.parsed == want and res.raw == raw and res.text == text
 
 
 def test_make_result_without_usage():
     res = runner.make_result("crash", None, "raw", "m", 3)
-    assert res.model is None and res.tokens is None and res.parsed is None
+    assert res.model is None and res.tokens is None and res.parsed is None and res.text is None
     res = runner.make_result("crash", {"is_error": True}, "raw", "m", 3)
     assert res.model is None and res.tokens is None and res.num_turns is None
 

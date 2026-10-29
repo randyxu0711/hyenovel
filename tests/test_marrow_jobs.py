@@ -106,3 +106,10 @@ def test_story_and_source_version_by_id(conn):
     sv = repo.source_version(conn, v)
     assert sv["text"] == "一二三" and sv["story_id"] == s
     assert repo.source_version(conn, 999) is None
+
+
+def test_attempt_prompt_sha_optional(conn):                       # Task 9e
+    jid, _, _ = _job(conn)
+    _att(conn, jid, "analyst", 0, "gate")
+    _att(conn, jid, "analyst", 1, "ok", prompt_sha="abc123def456")
+    assert [a["prompt_sha"] for a in repo.attempts(conn, jid)] == [None, "abc123def456"]

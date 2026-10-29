@@ -289,3 +289,100 @@ def test_worker_anomaly_tokens_without_output_key(conn, caplog):
     with caplog.at_level(logging.INFO, logger="hyenovel"):
         _drive(conn, job, FakeRun(r))
     assert "turns=5 output_tokens=None" in caplog.text
+
+
+# ── Task 9d:工人 ok 但抽不出 JSON 物件 → 視同閘門失敗 ──
+
+_NOT_JSON = "輸出不是單一 JSON 物件（可能被截斷或夾了說明文字）"
+
+
+def unparsed(text, *, with_text=True):
+    """CLI 正常結束、result 是文字但抽不出物件;raw 是 CLI 的 envelope。"""
+    return RunResult("ok", None, json.dumps({"result": text}, ensure_ascii=False),
+                     "claude-sonnet", {"output": 10}, 5, None,
+                     text=text if with_text else None)
+
+
+def test_unparsable_output_retries_with_raw_text(conn):
+    job = _job(conn)
+    run = FakeRun(unparsed("好的，以下是分析：{\"slug\": \"mini\", \"nodes\": [截斷"),
+                  ok(_analysis()), ok(_feedback()))
+    out, events, _ = _drive(conn, job, run)
+    assert out.state == "done"
+    assert _outcomes(conn, job, "analyst") == ["gate", "ok"]
+    gate_att = repo.attempts(conn, job["id"])[0]
+    assert gate_att["gate_verdict"] == {"errors": [_NOT_JSON]}
+    assert gate_att["parsed"] is None
+    second = run.calls[1][1]
+    assert "<previous_output>\n好的，以下是分析：{\"slug\": \"mini\", \"nodes\": [截斷\n" in second
+    assert _NOT_JSON in second
+    retry = [e for e in events if e["data"].get("status") == "retry"]
+    assert len(retry) == 1 and retry[0]["data"]["detail"] == _NOT_JSON
+
+
+def test_unparsable_without_text_falls_back_to_raw(conn):
+    job = _job(conn)
+    r = unparsed("我做不到", with_text=False)
+    run = FakeRun(r, ok(_analysis()), ok(_feedback()))
+    _drive(conn, job, run)
+    assert f"<previous_output>\n{r.raw}\n" in run.calls[1][1]
+
+
+def test_unparsable_exhausted_pauses_gate(conn):
+    job = _job(conn)
+    out, events, _ = _drive(conn, job, FakeRun(*[unparsed("不是 JSON")] * 3))
+    assert (out.state, out.error_class) == ("paused", "gate")
+    assert _outcomes(conn, job) == ["gate"] * 3
+    assert events[-1]["event"] == "error" and events[-1]["data"]["reason"] == "gate"
+
+
+def test_unparsable_criticizer_does_not_rerun_analyst(conn):
+    job = _job(conn)
+    run = FakeRun(ok(_analysis()), *[unparsed("不是 JSON")] * 3)
+    out, _, _ = _drive(conn, job, run)
+    assert (out.state, out.error_class) == ("paused", "gate")
+    assert [c[0] for c in run.calls] == [WORKPACKS["analyst"].system_prompt] + \
+        [WORKPACKS["criticizer"].system_prompt] * 3
+    run2 = FakeRun(unparsed("還是不行"), ok(_feedback()))         # 續跑:只重跑被擋的那步
+    out, _, _ = _drive(conn, job, run2)
+    assert out.state == "done"
+    assert [c[0] for c in run2.calls] == [WORKPACKS["criticizer"].system_prompt] * 2
+    assert _outcomes(conn, job, "analyst") == ["ok"]
+    assert _outcomes(conn, job, "criticizer") == ["gate"] * 4 + ["ok"]
+
+
+# ── Task 9e:attempt 記 system prompt 指紋 ──
+
+def _sha(text):
+    return repo.sha256_text(text)[:12]
+
+
+def test_attempts_record_prompt_sha(conn):
+    job = _job(conn)
+    run = FakeRun(fail("transient"), ok(_bad_analysis()), ok(_analysis()), ok(_feedback()))
+    _drive(conn, job, run)
+    atts = repo.attempts(conn, job["id"])
+    assert [a["outcome"] for a in atts] == ["transient", "gate", "ok", "ok"]
+    for a in atts:
+        assert a["prompt_sha"] == _sha(WORKPACKS[a["step"]].system_prompt)
+    assert len(atts[0]["prompt_sha"]) == 12
+    assert atts[0]["prompt_sha"] != atts[-1]["prompt_sha"]
+
+
+def test_cancelled_attempt_records_prompt_sha(conn):
+    job = _job(conn)
+    with pytest.raises(asyncio.CancelledError):
+        _drive(conn, job, FakeRun(asyncio.CancelledError()))
+    (a,) = repo.attempts(conn, job["id"])
+    assert a["outcome"] == "cancelled" and a["prompt_sha"] == _sha(WORKPACKS["analyst"].system_prompt)
+
+
+def test_prompt_change_changes_sha(conn, monkeypatch):
+    import dataclasses
+    old = WORKPACKS["analyst"]
+    monkeypatch.setitem(WORKPACKS, "analyst",
+                        dataclasses.replace(old, system_prompt=old.system_prompt + "改一個字"))
+    job = _job(conn)
+    _drive(conn, job, FakeRun(ok(_analysis()), ok(_feedback())))
+    got = repo.attempts(conn, job["id"])[0]["prompt_sha"]
+    assert got == _sha(old.system_prompt + "改一個字") and got != _sha(old.system_prompt)

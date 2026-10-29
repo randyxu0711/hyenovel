@@ -40,6 +40,7 @@ class RunResult:
     duration_ms: int
     message: str | None
     num_turns: int | None = None
+    text: str | None = None  # 模型的原始文字輸出(CLI 的 result);parsed 抽不出時拿它當修補的 previous
 
 
 def build_argv(preset: ClaudePreset, system_prompt_file: Path, schema: dict) -> list[str]:
@@ -99,7 +100,7 @@ def explain(outcome: str, obj: dict | None, err: str, msg: str | None) -> str | 
 
 def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
                 duration_ms: int) -> RunResult:
-    model = tokens = parsed = turns = None
+    model = tokens = parsed = turns = text = None
     if obj is not None:
         turns = obj.get("num_turns")
         usage = obj.get("usage")
@@ -113,8 +114,9 @@ def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
         if isinstance(mu, dict) and mu:
             model = next(iter(mu))
         if outcome == "ok":
-            parsed = extract_json(obj["result"])     # 可能 None:由流水線當閘門失敗處理
-    return RunResult(outcome, parsed, raw, model, tokens, duration_ms, message, turns)
+            text = obj["result"]
+            parsed = extract_json(text)              # 可能 None:由流水線當閘門失敗處理
+    return RunResult(outcome, parsed, raw, model, tokens, duration_ms, message, turns, text)
 
 
 def kill_tree(proc) -> None:

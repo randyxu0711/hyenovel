@@ -27,7 +27,7 @@ def _close_all():
 
 def test_fresh_db_gets_all_tables_and_version():
     conn = _mem()
-    assert db.migrate(conn, None) == 2
+    assert db.migrate(conn, None) == 3
     names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert TABLES <= names
 
@@ -35,7 +35,7 @@ def test_fresh_db_gets_all_tables_and_version():
 def test_migrate_is_idempotent():
     conn = _mem()
     db.migrate(conn, None)
-    assert db.migrate(conn, None) == 2
+    assert db.migrate(conn, None) == 3
 
 
 def test_upgrade_backs_up_first(tmp_path):
@@ -111,3 +111,29 @@ def test_leftover_backup_does_not_block_upgrade(tmp_path):                # fina
     assert db.migrate(conn, p, mig) == 2
     assert (tmp_path / "h.db.bak-v1").read_text() == "舊的備份"          # 不覆蓋既有備份
     assert (tmp_path / "h.db.bak-v1-2").exists()
+
+
+def _cols(conn, table):
+    return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def test_v2_db_upgrades_to_prompt_sha_with_backup(tmp_path):     # Task 9e
+    mig = tmp_path / "mig"
+    mig.mkdir()
+    for f in sorted(db.MIGRATIONS_DIR.glob("*.sql"))[:2]:
+        (mig / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    p = tmp_path / "h.db"
+    conn = db.connect(f"sqlite:///{p}")
+    _open.append(conn)
+    assert db.migrate(conn, p, mig) == 2
+    assert "prompt_sha" not in _cols(conn, "attempt")
+    conn.execute("INSERT INTO story VALUES (1,'s','t',0)")
+    conn.execute("INSERT INTO job (id, kind, story_id, state, params, created_at, updated_at) "
+                 "VALUES (1,'critique',1,'done','{}',0,0)")
+    conn.execute("INSERT INTO attempt (job_id, step, n, runner, created_at) "
+                 "VALUES (1,'analyst',0,'cli',0)")
+    conn.commit()
+    assert db.migrate(conn, p) == 3
+    assert "prompt_sha" in _cols(conn, "attempt")
+    assert conn.execute("SELECT prompt_sha FROM attempt").fetchone()[0] is None
+    assert (tmp_path / "h.db.bak-v2").exists()

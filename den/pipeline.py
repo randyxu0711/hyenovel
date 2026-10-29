@@ -27,6 +27,7 @@ RunFn = Callable[[str, str, dict], Awaitable[RunResult]]
 _USAGE_MSG = "撞到訂閱用量上限，稍後再續（與你在 Claude Code 的對話共用同一份額度）"
 _OVERLOAD_MSG = "Anthropic 服務過載，退避重試後仍失敗，稍後再續"
 _GATE_MSG = "閘門重試後仍未過"
+_NOT_JSON = "輸出不是單一 JSON 物件（可能被截斷或夾了說明文字）"
 
 
 def _check_anomaly(jid: int, step: str, r: RunResult) -> None:
@@ -61,6 +62,8 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
     jid = job["id"]
     n = sum(1 for a in repo.attempts(conn, jid) if a["step"] == step)
     prompt = workpacks.first_input(step, slug, source, analysis)
+    # 該次工人 system prompt 全文的指紋:prompt 是 repo 檔案,改過就重建不出當時那版
+    prompt_sha = repo.sha256_text(pack.system_prompt)[:12]
     gate_retries = transient = 0
 
     def record(outcome: str, r: RunResult | None, gate_verdict=None, artifact_id=None):
@@ -70,7 +73,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
             conn, jid, step, n, runner=runner_name, model=r and r.model, cli_version=cli_version,
             outcome=outcome, raw_output=r and r.raw, parsed=r and r.parsed,
             gate_verdict=gate_verdict, tokens=r and r.tokens, duration_ms=r and r.duration_ms,
-            artifact_id=artifact_id, now=now())
+            artifact_id=artifact_id, now=now(), prompt_sha=prompt_sha)
 
     def stop(outcome: StepOutcome) -> StepOutcome:
         emit(_phase(step, "fail", n))
@@ -88,7 +91,9 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
         log.info("event=attempt job=%s step=%s n=%s outcome=%s", jid, step, n, r.outcome)
 
         if r.outcome == "ok":
-            errs = workpacks.gate(step, r.parsed, source, analysis)
+            # 抽不出 JSON 物件也是格式錯誤:記成 gate、走同一條修補重試,不另開分流
+            errs = ([_NOT_JSON] if r.parsed is None
+                    else workpacks.gate(step, r.parsed, source, analysis))
             if not errs:
                 prov = {"tier": "A", "runner": runner_name, "model": r.model,
                         "cli_version": cli_version, "job": jid, "attempt": n}
@@ -106,7 +111,9 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
             gate_retries += 1
             if gate_retries > config.MAX_GATE_RETRIES:
                 return stop(StepOutcome("paused", "gate", {"message": _GATE_MSG}))
-            prompt = workpacks.repair_input(step, slug, source, analysis, r.parsed, errs)
+            previous = r.parsed if r.parsed is not None else (
+                r.text if r.text is not None else r.raw)
+            prompt = workpacks.repair_input(step, slug, source, analysis, previous, errs)
         else:
             with conn:
                 record(r.outcome, r)
