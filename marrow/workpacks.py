@@ -60,11 +60,16 @@ def first_input(name: str, slug: str, source: str, analysis: dict | None) -> str
 def repair_input(name: str, slug: str, source: str, analysis: dict | None,
                  previous: dict | str, errors: list[str]) -> str:
     """previous 是上一份解析出的物件;解析不出時是原始文字(截前 MAX_PREVIOUS_CHARS 字)。"""
-    prev = (previous[:MAX_PREVIOUS_CHARS] if isinstance(previous, str)
-            else canonical_json(previous))
+    if isinstance(previous, str):         # 解析不出來就沒有「其餘內容」可保留
+        prev = previous[:MAX_PREVIOUS_CHARS]
+        ask = ("上一份輸出無法解析成單一 JSON 物件（可能被截斷了），錯誤如下。"
+               "請依輸出格式從頭重交完整的 JSON：\n")
+    else:
+        prev = canonical_json(previous)
+        ask = "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
     return (first_input(name, slug, source, analysis)
             + f"\n<previous_output>\n{prev}\n</previous_output>\n"
-            + "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
+            + ask
             + "\n".join(f"- {e}" for e in errors))
 
 

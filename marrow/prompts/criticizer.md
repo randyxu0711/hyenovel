@@ -21,8 +21,7 @@ analysis.json 的 `produces`(technique→effect)/`serves`(effect→theme)鏈是�
 
 ## 輸出
 直接輸出一份符合 schema 的 JSON 物件（schema 與格式要求見文末「輸出格式」，系統會以 JSON Schema 驗證）。可選欄位沒有內容時填 `null`。
-這是判斷層的正本(之後會渲染成 feedback.md、並餵進 viz 的常駐「編輯」欄)。結構:
-```json
+這是判斷層的正本(之後會渲染成 feedback.md、並餵進 viz 的常駐「編輯」欄)。結構(示意,實際輸出不要加程式碼框):
 {
   "slug": "<slug>",
   "read": "這篇在做什麼——兩三句,證明你讀懂企圖",
@@ -34,7 +33,6 @@ analysis.json 的 `produces`(technique→effect)/`serves`(effect→theme)鏈是�
   "minor": ["枝節,簡短"],
   "one_line": "如果只能改一件事,改什麼"
 }
-```
 - `key_points` 放**最關鍵的 2–3 件事**(有輕重,別流水帳)。
 - 每點 `quotes` 是**逐字原文**(直接抄 source.md);`refs` 綁到 analysis.json 對應的 **node id**(讓 viz 能把這條回饋錨定到圖上的節點)。
   - **逐字照抄字元**:閘門容許半/全形「標點 ,.!?:;()」與「引號方向/ASCII⇄彎引號」差異,但其餘字元(含 corner bracket 「」、漢字、空白)須與原文一字不差。
