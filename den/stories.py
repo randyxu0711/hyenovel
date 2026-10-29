@@ -1,5 +1,6 @@
 """收原文與討論素材(純 DB 邏輯,路由在 app.py)。呼叫 ingest 的人包 `with conn:`。"""
 from den import config
+from den.views import conclusion_is_stale
 from marrow import ingest as marrow_ingest
 from marrow import repo
 
@@ -49,6 +50,7 @@ def discussion_context(conn, slug: str) -> dict:
         "stale": latest["id"] != analysis["source_version_id"],
         "analysis": analysis["body"],
         "feedback": feedback["body"] if feedback else None,
-        "conclusions": [{k: c[k] for k in ("kind", "text", "refs", "quotes")}
+        "conclusions": [{**{k: c[k] for k in ("kind", "text", "refs", "quotes")},
+                         "stale": conclusion_is_stale(c, analysis["id"])}
                         for c in repo.conclusions(conn, st["id"]) if c["invalidated_at"] is None],
     }

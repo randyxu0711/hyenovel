@@ -45,6 +45,12 @@ def _story(conn, slug: str) -> dict:
     return st
 
 
+def conclusion_is_stale(c: dict, current_analysis_id: int | None) -> bool:
+    """已作廢,或當時對照的 analysis artifact 未知(NULL)/不是現在的 current。views 與討論素材共用。"""
+    return (c["invalidated_at"] is not None or c["analysis_artifact_id"] is None
+            or c["analysis_artifact_id"] != current_analysis_id)
+
+
 def conclusions(conn, slug: str) -> list[dict]:
     """`Conclusion` 形狀。stale = 已作廢,或當時對照的 analysis artifact 未知(NULL)/不是現在的 current。"""
     st = _story(conn, slug)
@@ -53,8 +59,7 @@ def conclusions(conn, slug: str) -> list[dict]:
     return [{
         "id": c["external_id"], "kind": c["kind"], "text": c["text"],
         "refs": c["refs"], "quotes": c["quotes"],
-        "stale": (c["invalidated_at"] is not None or c["analysis_artifact_id"] is None
-                  or c["analysis_artifact_id"] != cur_id),
+        "stale": conclusion_is_stale(c, cur_id),
     } for c in repo.conclusions(conn, st["id"])]
 
 

@@ -416,13 +416,17 @@ def test_render_stale_and_feedback_and_conclusions():
                                   "question": None, "experiment": None}],
                   "minor": ["枝節一"]},
         conclusions=[{"kind": "insight", "text": "結論文", "refs": ["t1"], "quotes": ["CQ"]},
-                     {"kind": "open", "text": "沒錨", "refs": None, "quotes": None}]))
+                     {"kind": "open", "text": "沒錨", "refs": None, "quotes": None, "stale": False},
+                     {"kind": "open", "text": "舊的", "refs": None, "quotes": None, "stale": True}]))
     assert "原文已改稿、分析是舊版的" in out
     assert "S / SB" in out and "K / KB / refs: k1, e1" in out and "枝節一" in out
     assert "  提問:問作者" in out and "  實驗:試試看" in out
     assert out.count("提問:") == 1 and out.count("實驗:") == 1   # null 不出行
     assert "(insight) 結論文 [t1]" in out and "(open) 沒錨" in out
     assert "QQQ" not in out and "PPP" not in out and "CQ" not in out
+    assert "(舊版分析時留下的,可能已不適用) (open) 舊的" in out
+    assert out.count("可能已不適用") == 2    # 一次在 persona 規則、一次在標記;未標記的結論不帶
+    assert "(舊版分析時留下的,可能已不適用) (insight)" not in out and "(舊版分析時留下的,可能已不適用) (open) 沒錨" not in out
 
 
 def test_open_discussion_within_budget():

@@ -124,6 +124,15 @@ def test_conclusion_stale_rules(c):
                       "quotes": ["引"], "stale": False}
 
 
+def test_conclusion_is_stale_predicate():
+    ok = {"invalidated_at": None, "analysis_artifact_id": 5}
+    assert views.conclusion_is_stale(ok, 5) is False
+    assert views.conclusion_is_stale(ok, 6) is True
+    assert views.conclusion_is_stale(ok, None) is True
+    assert views.conclusion_is_stale({**ok, "analysis_artifact_id": None}, 5) is True
+    assert views.conclusion_is_stale({**ok, "invalidated_at": 1.0}, 5) is True
+
+
 def test_conclusions_without_current_analysis_are_stale(c):
     sid, *_ = _story(c)
     repo.add_conclusion(c, sid, "c1", None, "question", "問", [], [], {}, 1.0, None)
