@@ -11,7 +11,8 @@ MINI = Path(__file__).resolve().parent / "fixtures" / "mini"
 ANALYSIS = json.loads((MINI / "analysis.json").read_text(encoding="utf-8"))
 FEEDBACK = json.loads((MINI / "feedback.vizdata.json").read_text(encoding="utf-8"))
 SOURCE = (MINI / "source.md").read_text(encoding="utf-8")
-FB_HEAD = "# 給作者的話 —〈迷你〉"
+TITLE = ANALYSIS["title"]            # 標題以 analysis 為先(分析者決定),story.title 只是退路
+FB_HEAD = f"# 給作者的話 —〈{TITLE}〉"
 
 
 def seed(conn, slug="mini", analysis=True, feedback=True):
@@ -33,7 +34,7 @@ def _body(md):
 def test_build_markdown_feedback_first(conn):
     seed(conn)
     md, _ = export.build(conn, "mini")
-    analysis_md = export.render_analysis({**ANALYSIS, "title": "迷你"}, front_matter=False)
+    analysis_md = export.render_analysis({**ANALYSIS, "title": TITLE}, front_matter=False)
     assert md.index(FB_HEAD) < md.index("\n---\n\n" + analysis_md)
     assert md.endswith(analysis_md)
     assert "tags: [hyenovel, story-feedback, story-analysis]" in md.split("\n---\n", 1)[0]
@@ -44,7 +45,7 @@ def test_build_single_front_matter(conn):
     md, _ = export.build(conn, "mini")
     assert md.count("\ntitle:") == 1 and md.count("\nslug:") == 1
     assert "tags: [hyenovel, story-feedback]" not in md
-    assert "# 迷你 — 結構分析" in md
+    assert f"# {TITLE} — 結構分析" in md
 
 
 def test_build_without_feedback_has_no_separator_section(conn):
@@ -52,7 +53,7 @@ def test_build_without_feedback_has_no_separator_section(conn):
     md, _ = export.build(conn, "mini")
     assert FB_HEAD not in md
     assert md.split("\n---\n", 1)[0].endswith("tags: [hyenovel, story-analysis]")
-    assert _body(md).lstrip() == export.render_analysis({**ANALYSIS, "title": "迷你"}, front_matter=False)
+    assert _body(md).lstrip() == export.render_analysis({**ANALYSIS, "title": TITLE}, front_matter=False)
     assert md.count("\ntitle:") == 1 and md.count("\nslug:") == 1
 
 
@@ -118,3 +119,18 @@ def test_main_not_analyzed_returns_1(file_db, tmp_path, capsys):
 def test_main_bad_slug_returns_1(tmp_path, capsys):
     assert export.main(["../x", "--out", str(tmp_path / "o")]) == 1
     assert "不合法" in capsys.readouterr().err
+
+
+def test_title_order_analysis_then_story_then_slug(conn):
+    seed(conn)
+    md, _ = export.build(conn, "mini")
+    assert f'title: "{TITLE}"' in md and "迷你" not in md.split("\n---\n", 1)[0]
+    # analysis 沒標題 → 退到 story.title;story 也沒有 → slug
+    no_title = {k: v for k, v in ANALYSIS.items() if k != "title"}
+    for slug, story_title, want in (("t1", "迷你", "迷你"), ("t2", None, "t2")):
+        sid = repo.ensure_story(conn, slug, story_title, 1.0)
+        svid, _ = repo.add_source_version(conn, sid, SOURCE, 1.0)
+        aid, _ = repo.add_artifact(conn, sid, svid, "analysis", 1, no_title, {}, 1.0)
+        repo.set_current(conn, sid, "analysis", aid)
+        md, _ = export.build(conn, slug)
+        assert f'title: "{want}"' in md

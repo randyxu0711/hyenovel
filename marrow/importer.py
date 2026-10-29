@@ -59,29 +59,32 @@ def _jsonl(rep, path: Path) -> list[dict]:
     return rows
 
 
-def _artifact_body(rep, story_dir: Path, kind: str) -> dict | None:
+def _artifact_body(rep, story_dir: Path, kind: str) -> tuple[dict | None, bytes | None]:
+    """(body, 原始位元組);位元組同時供指紋與 body 用,只讀一次。"""
     p = story_dir / f"{kind}.json"
     if not p.exists():
-        return None
+        return None, None
     try:
-        body = schema.to_v1(kind, json.loads(p.read_text(encoding="utf-8")))
+        raw = p.read_bytes()
+        body = schema.to_v1(kind, json.loads(raw.decode("utf-8")))
     except json.JSONDecodeError:
         _skip(rep, kind, "bad-json")
-        return None
+        return None, None
     except UnicodeDecodeError:
         _skip(rep, kind, "bad-encoding")
-        return None
+        return None, None
     errors = schema.validate_v1(kind, body)
     if errors:
         _skip(rep, kind, f"schema-v1 {errors[0]}")
-        return None
-    return body
+        return None, None
+    return body, raw
 
 
 def import_story(conn, story_dir: Path, now: float) -> dict:
     rep = {"slug": story_dir.name, "source_versions_added": 0, "artifacts_added": 0,
            "utterances_added": 0, "conclusions_added": 0, "settlements_added": 0, "skipped": []}
-    bodies = {k: _artifact_body(rep, story_dir, k) for k in _KINDS}
+    parsed = {k: _artifact_body(rep, story_dir, k) for k in _KINDS}
+    bodies = {k: v[0] for k, v in parsed.items()}
     title = (bodies["analysis"] or {}).get("title")
     with conn:
         sid = repo.ensure_story(conn, story_dir.name, title, now)
@@ -114,8 +117,7 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                     r.get("anchors") or [], r.get("analysis_fp"))
 
         # 結論當時對照的 analysis 指紋(舊系統:analysis.json 位元組 sha1)對得上 → 回填該 artifact id
-        fp = (hashlib.sha1((story_dir / "analysis.json").read_bytes()).hexdigest()
-              if "analysis" in aids else None)
+        fp = hashlib.sha1(parsed["analysis"][1]).hexdigest() if "analysis" in aids else None
         for c in _jsonl(rep, story_dir / "conclusions.jsonl"):
             prov = c["provenance"]
             rep["conclusions_added"] += repo.add_conclusion(

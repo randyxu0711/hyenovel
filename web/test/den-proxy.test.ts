@@ -18,6 +18,12 @@ describe("dataDir", () => {
   it("XDG_DATA_HOME 優先", () => {
     expect(dataDir({ XDG_DATA_HOME: "/x" } as any)).toBe("/x/hyenovel");
   });
+  it("HYENOVEL_DATA_DIR 最優先,且原樣使用(不加 hyenovel)", () => {
+    expect(dataDir({ HYENOVEL_DATA_DIR: "/d", XDG_DATA_HOME: "/x" } as any)).toBe("/d");
+  });
+  it("HYENOVEL_DATA_DIR 空字串視為未設", () => {
+    expect(dataDir({ HYENOVEL_DATA_DIR: "", XDG_DATA_HOME: "/x" } as any)).toBe("/x/hyenovel");
+  });
   it("否則 ~/.local/share/hyenovel", () => {
     expect(dataDir({} as any)).toMatch(/\.local\/share\/hyenovel$/);
   });

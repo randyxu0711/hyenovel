@@ -235,12 +235,12 @@ describe("SSE 解析", () => {
     expect(await run([f({ event: "state", data: { state: "done" } })])).toEqual([{ event: "done", data: { ok: true } }]);
   });
   it.each(["paused", "failed", "cancelled"])("state:%s → error", async (st) => {
-    const r = await run([f({ event: "state", data: { state: st, error_class: st === "cancelled" ? null : "gate", detail: "d" } })]);
-    expect(r).toEqual([{ event: "error", data: { reason: st === "cancelled" ? "cancelled" : "gate", message: "d" } }]);
+    const r = await run([f({ event: "state", data: { state: st, error_class: st === "cancelled" ? null : "gate", detail: { message: "d", resets_at: 1234 } } })]);
+    expect(r).toEqual([{ event: "error", data: { reason: st === "cancelled" ? "cancelled" : "gate", message: "d", resets_at: 1234 } }]);
   });
   it("error_class / detail 缺 → cancelled / 空字串", async () => {
     expect(await run([f({ event: "state", data: { state: "failed" } })]))
-      .toEqual([{ event: "error", data: { reason: "cancelled", message: "" } }]);
+      .toEqual([{ event: "error", data: { reason: "cancelled", message: "", resets_at: null } }]);
   });
   it("其他 state 原樣穿過", async () => {
     const ev = { event: "state", data: { state: "running" } };

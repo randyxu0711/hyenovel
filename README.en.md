@@ -79,7 +79,7 @@ cd web && npm install && cd ..
 ./dev.sh          # ensures den is running + starts the frontend, Ctrl+C stops the frontend
 ```
 
-(Equivalent to `python -m den` then `cd web && npm run dev`.) Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback. Discussion inside the web app is disabled until slice 4b; discuss in the agent with `open_discussion` (`/story-discuss <slug>`).
+(Equivalent to `python -m den` then `cd web && npm run dev`.) Existing users: after pulling (old server stopped), run `python -m marrow.importer` once so old conclusions link to their analysis. Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback. Discussion inside the web app is disabled until slice 4b; discuss in the agent with `open_discussion` (`/story-discuss <slug>`).
 
 > localhost, single-user only; subscription auth is bound to local credentials — **do not deploy to the cloud**.
 

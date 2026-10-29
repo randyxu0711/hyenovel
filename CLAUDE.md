@@ -12,9 +12,9 @@
 - **觀察與判斷隔離**:analyst 與 criticizer 是**兩個獨立步驟**(den 的工人各自 context),不可在同一 context 兼任,否則判斷獨立性被污染。
 - **每條主張必引逐字原文**;引用閘門(`viz.py:locate`)會在原文搜尋驗證,幻覺引用直接擋(硬閘門)。
 - Obsidian 為可選 viewer(匯出的 md 可放進 vault)。
-- **marrow/(den 切片 1,2026-10-28)**:DB 正本骨架(SQLite)已在,但**過渡期是舊檔案的唯讀鏡像**——
-  舊 server 仍寫 `stories/`,`python -m marrow.importer` 冪等重跑補進 DB。(切片 4a 已翻案:web 改讀 den,
-  舊 `server/` 於切片 5 退役;根目錄 `viz.py`/`render.py` 留作函式庫,供 `export` 使用。)DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
+- **marrow/**:DB 正本(SQLite)。切片 1–3 過渡期它曾是舊檔案的唯讀鏡像(舊 server 寫 `stories/`,
+  `python -m marrow.importer` 冪等補進 DB);切片 4a 起翻案:web 改讀 den、DB 為正本,舊 `server/` 於切片 5 退役,
+  importer 只作舊篇一次性匯入;根目錄 `viz.py`/`render.py` 留作函式庫,供 `export` 使用。DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
   **切片 2 起 den 會寫 DB**:產物 commit 進 `artifact`,`current_artifact` 只在 job **全部步驟成功**時一次換;
   importer 只對「新建」的 artifact 切 current,不覆蓋 den 已換的。
 

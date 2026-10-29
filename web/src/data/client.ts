@@ -89,7 +89,10 @@ function unwrap(ev: SSEEvent): SSEEvent {
       const st = inner.data ?? {};
       if (st.state === "done") return { event: "done", data: { ok: true } };
       if (st.state === "paused" || st.state === "failed" || st.state === "cancelled")
-        return { event: "error", data: { reason: st.error_class ?? "cancelled", message: st.detail ?? "" } };
+        return { event: "error", data: {
+          reason: st.error_class ?? "cancelled", message: st.detail?.message ?? "",
+          resets_at: st.detail?.resets_at ?? null,       // useGestations 讀頂層 resets_at
+        } };
     }
     return inner;
   }

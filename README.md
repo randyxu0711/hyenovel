@@ -79,7 +79,7 @@ cd web && npm install && cd ..
 ./dev.sh          # 確保 den 在跑 + 起前端,Ctrl+C 收前端
 ```
 
-(等同 `python -m den` 再 `cd web && npm run dev`。)開 http://localhost:5173 —— 挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋。網頁內的來回討論在切片 4b 前關閉,討論請在 agent 內用 `open_discussion`(`/story-discuss <slug>`)。
+(等同 `python -m den` 再 `cd web && npm run dev`。)舊用戶:拉新版後(舊 server 先停)跑一次 `python -m marrow.importer`,舊結論才會連回它的分析。開 http://localhost:5173 —— 挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋。網頁內的來回討論在切片 4b 前關閉,討論請在 agent 內用 `open_discussion`(`/story-discuss <slug>`)。
 
 > 只跑 localhost、單人使用;訂閱認證綁本機憑證,**別部署到雲端**。
 

@@ -9,8 +9,9 @@ import type { Plugin } from "vite";
 
 export const DEN_DOWN = "den 沒在跑:先 python -m den,或在 agent 裡用一次 hyenovel MCP";
 
-/** 同 marrow/db.data_dir:XDG_DATA_HOME 或 ~/.local/share,底下 hyenovel。 */
+/** 同 marrow/db.data_dir:HYENOVEL_DATA_DIR 直接用;否則 XDG_DATA_HOME 或 ~/.local/share,底下 hyenovel。 */
 export function dataDir(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.HYENOVEL_DATA_DIR) return env.HYENOVEL_DATA_DIR;
   return join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "hyenovel");
 }
 

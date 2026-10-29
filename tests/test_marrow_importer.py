@@ -250,12 +250,20 @@ def test_importer_leaves_null_when_fp_differs(conn, tmp_path):
 
 
 def test_importer_backfills_existing_conclusion_on_rerun(conn, tmp_path):
-    """結論先匯入(fp 不符)→ 日後 fp 對上:補得進去;已有值則不覆蓋。"""
-    root = make_story(tmp_path, "mini", conclusions=[_conc("x")])
+    """切換現場:DB 裡已有 analysis_artifact_id 為 NULL 的結論(舊版匯入的),
+    再跑 import_story、fp 對上 → 補上;已有值的不被覆蓋。"""
+    import hashlib
+    fp = hashlib.sha1((FIXTURES / "mini/analysis.json").read_bytes()).hexdigest()
+    root = make_story(tmp_path, "mini", conclusions=[_conc(fp)])
     importer.import_story(conn, root / "mini", 10.0)
     sid = repo.story_by_slug(conn, "mini")["id"]
     aid = repo.current_artifact(conn, sid, "analysis")["id"]
-    other, _ = repo.add_artifact(conn, sid, 1, "analysis", 1, {"x": 1}, {}, 0)
-    repo.set_conclusion_artifact(conn, sid, "c0001", aid)
-    repo.set_conclusion_artifact(conn, sid, "c0001", other)       # 已有值,不被覆蓋
+    with conn:       # 還原成升級前的狀態:結論列在、artifact 欄是 NULL
+        conn.execute("UPDATE conclusion SET analysis_artifact_id = NULL WHERE story_id = ?", (sid,))
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] is None
+    importer.import_story(conn, root / "mini", 11.0)
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
+    with conn:
+        other, _ = repo.add_artifact(conn, sid, 1, "analysis", 1, {"x": 1}, {}, 0)
+        repo.set_conclusion_artifact(conn, sid, "c0001", other)   # 已有值,不被覆蓋
     assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
