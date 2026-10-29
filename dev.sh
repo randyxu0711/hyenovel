@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# 一鍵起 hyenovel 開發環境(WSL/本機)。Ctrl+C 前後端一起收。
-#   後端 uvicorn 127.0.0.1:8787(吃訂閱,config.py 會自動拔 ANTHROPIC_API_KEY)
-#   前端 vite   localhost:5173(已 proxy /api → 後端)
+# 一鍵起 hyenovel 開發環境(WSL/本機)。Ctrl+C 收前端。
+#   後端 den    127.0.0.1(吃訂閱;port/token 記在 den.json/den.token,vite 自己讀)
+#   前端 vite   localhost:5173(已 proxy /api → den)
+#
+# den 是單例(檔案鎖),MCP shim 也可能已經把它拉起來。這裡走跟 MCP shim 同一條
+# DenClient.ensure():已有健康的 den 就沿用,沒有才脫離拉起(閒置 3 小時自己結束)。
+# 因為 den 是脫離的、可能被多方共用,所以 Ctrl+C 只收前端,不去殺 den。
 set -euo pipefail
 cd "$(dirname "$0")"
 
-readonly BACKEND_HOST=127.0.0.1
-readonly BACKEND_PORT=8787       # 與 server/config.py 和 web/vite.config.ts 綁定;改這裡要同步那兩處
 readonly FRONTEND_PORT=5173
-readonly LOG_DIR=logs            # server.log(uvicorn)/ web.log(vite)與 logger 的 app.log 同窩
+readonly LOG_DIR=logs            # web.log(vite)
 
 start_backend=true
 start_frontend=true
@@ -17,13 +19,13 @@ usage() {
   cat <<EOF
 用法: ${0##*/} [選項]
 
-  無選項 = 前後端一起起(預設)。
+  無選項 = 確保 den 在跑,並起前端(預設)。
 
-  -b, --backend-only    只起後端 uvicorn(${BACKEND_HOST}:${BACKEND_PORT})
-  -f, --frontend-only   只起前端 vite(localhost:${FRONTEND_PORT})
+  -b, --backend-only    只確保 den 在跑(不起前端)
+  -f, --frontend-only   只起前端 vite(localhost:${FRONTEND_PORT}),不管 den
   -h, --help            顯示此說明
 
-  Ctrl+C 收工,前後端一起關。
+  Ctrl+C 收前端;den 脫離運行,閒置 3 小時自己結束。
 EOF
 }
 
@@ -43,8 +45,8 @@ $start_backend || $start_frontend \
   || die "--backend-only 與 --frontend-only 不能同時給(那樣什麼都不會起)"
 
 # ── 前置檢查(只查要起的那邊)─────────────────────────────
-if $start_backend && [[ ! -x server/.venv/bin/uvicorn ]]; then
-  die "找不到 server/.venv/bin/uvicorn — 先建 venv:python -m venv server/.venv && server/.venv/bin/pip install -r server/requirements.txt"
+if $start_backend && [[ ! -x server/.venv/bin/python ]]; then
+  die "找不到 server/.venv/bin/python — 先建 venv:python -m venv server/.venv && server/.venv/bin/pip install -r server/requirements.txt"
 fi
 if $start_frontend && [[ ! -d web/node_modules ]]; then
   echo "· web/node_modules 不存在,先跑 npm install…"
@@ -52,22 +54,23 @@ if $start_frontend && [[ ! -d web/node_modules ]]; then
 fi
 mkdir -p "$LOG_DIR"
 
-# ── 起服務 + 一起收 ───────────────────────────────────────
+# ── 確保 den + 起前端 ─────────────────────────────────────
 pids=()
 cleanup() {
   echo
-  echo "收工,關閉前後端…"
+  echo "收工,關閉前端…"
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM
 
-backend_pid=
 if $start_backend; then
-  printf '▶ 後端  %-8s →  http://%s:%s\n' uvicorn "$BACKEND_HOST" "$BACKEND_PORT"
-  server/.venv/bin/uvicorn server.app:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" \
-    >"${LOG_DIR}/server.log" 2>&1 &
-  backend_pid=$!
-  pids+=("$backend_pid")
+  echo "▶ 後端  den(沿用已在跑的,否則脫離拉起)"
+  server/.venv/bin/python -c "
+from den.client import DenClient
+from marrow import db
+DenClient(db.data_dir()).ensure()
+" || die "den 起不來 — 手動跑 server/.venv/bin/python -m den 看錯誤"
+  echo "✓ den 就緒"
 fi
 if $start_frontend; then
   printf '▶ 前端  %-8s →  http://localhost:%s\n' vite "$FRONTEND_PORT"
@@ -75,39 +78,10 @@ if $start_frontend; then
   pids+=($!)
 fi
 
-# ── 等後端就緒(前端交給 vite 自己報)───────────────────────
-if $start_backend; then
-  ready=false
-  for _ in $(seq 1 30); do
-    if curl -sf "http://${BACKEND_HOST}:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
-      ready=true
-      break
-    fi
-    kill -0 "$backend_pid" 2>/dev/null \
-      || die "後端啟動即退出 — 看 ${LOG_DIR}/server.log:"$'\n'"$(tail -n 5 "${LOG_DIR}/server.log" 2>/dev/null)"
-    sleep 0.5
-  done
-  $ready \
-    && echo "✓ 後端就緒" \
-    || echo "⚠ 後端 15s 內未回應 /api/health(可能還在起或卡住)— 看 ${LOG_DIR}/server.log" >&2
-fi
-
-# ── 摘要 ──────────────────────────────────────────────────
 if $start_frontend; then
-  open_url="http://localhost:${FRONTEND_PORT}"
-else
-  open_url="http://${BACKEND_HOST}:${BACKEND_PORT}"
+  echo
+  printf '  開啟   http://localhost:%s\n' "$FRONTEND_PORT"
+  printf '  日誌   tail -f %s/web.log\n' "$LOG_DIR"
+  printf '  收工   Ctrl+C\n'
+  wait
 fi
-if $start_backend && $start_frontend; then
-  tail_target="${LOG_DIR}/{server,web}.log"
-elif $start_backend; then
-  tail_target="${LOG_DIR}/server.log"
-else
-  tail_target="${LOG_DIR}/web.log"
-fi
-
-echo
-printf '  開啟   %s\n' "$open_url"
-printf '  日誌   tail -f %s\n' "$tail_target"
-printf '  收工   Ctrl+C\n'
-wait

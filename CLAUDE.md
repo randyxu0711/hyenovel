@@ -34,7 +34,7 @@ MCP start_critique(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ critic
 - `/story-discuss <slug>` — 先 `open_discussion` 取素材再來回討論(出版編輯人格、有據、反諂媚);**結論不會被保存**。
 - `python -m export <slug> [--out DIR]` — 從 DB 匯出 `<slug>.md`(單一 front matter,先回饋後分析)與 `<slug>.html`(viz);預設輸出到 `stories/<slug>/`。
 - `python -m den [--port N]` — 本機 daemon(127.0.0.1:8788,token 在 `~/.local/share/hyenovel/den.token`);
-  只能對**已用 `python -m marrow.importer` 匯入**的故事開 job。工人 env 是白名單(無 `CLAUDE*`、
+  舊 `stories/` 的篇要先 `python -m marrow.importer` 匯入;新篇由 `start_critique` 建立。工人 env 是白名單(無 `CLAUDE*`、
   無 `ANTHROPIC_API_KEY`、無 proxy 變數 / `CLAUDE_CONFIG_DIR`)。
   **MCP shim 會自動把 den 脫離拉起**(`den.json` 探索檔記 port/pid/指紋);den 閒置 3 小時無 job 自己結束。
   版本指紋不符才重啟,**忙碌中的 den 不重啟**(新版等跑完);`git pull` 後在 agent 內跑 `/mcp` 重載 shim。

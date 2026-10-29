@@ -19,7 +19,7 @@ den 沒開時 web 顯示 503 提示。
 
 ## 切換步驟(舊 server → den;手動做一次)
 
-1. 停掉舊 server(及舊 web dev server)。
+1. 停掉舊 server(及舊 web dev server);切換後不要再用 `uvicorn server.app`(它寫的 `stories/` 網頁看不到)。
 2. repo 根 `python -m marrow.importer`,確認輸出的 skipped 為空。
 3. `python -m den`。
 4. `cd web && npm run dev`。

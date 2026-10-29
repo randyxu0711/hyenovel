@@ -46,7 +46,7 @@ You arrive in a starfield where each story is a **data-driven star-bone** (spine
 | **Observe vs. judge** | two isolated subagents: observe first, judge second — judgment stays independent | one model writes it all at once; observation is polluted by judgment |
 | **Citations** | every claim is **pinned to a verbatim quote**; a hard gate verifies it against the source and blocks hallucinated quotes | often riffs from impression, hard to trace back |
 | **Billing** | runs on Claude Code, **on your subscription** — the whole pipeline isn't metered per token. At API price-list rates a single critique costs roughly **$0.7–0.9** (analyst + criticizer + deterministic layer); multi-turn discussion rides the cache and costs less. That delta is what the subscription saves versus per-token billing. | metered per API token; the more you talk, the more it costs |
-| **Privacy** | **localhost, single-user** only; your story is processed through your own Claude Code subscription (Anthropic) — not uploaded to a separate third-party review service, not stored in a vendor database. Your writing stays as local files under `stories/` | content uploaded to a third-party cloud review site |
+| **Privacy** | **localhost, single-user** only; your story is processed through your own Claude Code subscription (Anthropic) — not uploaded to a separate third-party review service, not stored in a vendor database. Your writing stays in a local database | content uploaded to a third-party cloud review site |
 | **Visualization** | intention chain (technique→effect→theme) + text-axis tension curve | plain bulleted text |
 | **Interaction** | **discuss** a piece back and forth — opinionated, anti-sycophancy, asks back | one-shot, tends toward flattering summaries |
 
@@ -76,33 +76,30 @@ cd web && npm install && cd ..
 ### Web app (recommended)
 
 ```bash
-./dev.sh          # starts front + back together, Ctrl+C stops both
+./dev.sh          # ensures den is running + starts the frontend, Ctrl+C stops the frontend
 ```
 
-Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback, or discuss it right there.
+(Equivalent to `python -m den` then `cd web && npm run dev`.) Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback. Discussion inside the web app is disabled until slice 4b; discuss in the agent with `open_discussion` (`/story-discuss <slug>`).
 
 > localhost, single-user only; subscription auth is bound to local credentials — **do not deploy to the cloud**.
 
-### Command line (in a Claude Code session opened in the repo dir)
+### Command line (in a Claude Code session opened in the repo dir; register the hyenovel MCP first, see CLAUDE.md)
 
-1. Put a story at `stories/<slug>/source.md`.
-2. `/story-critique stories/<slug>/source.md` — run the full critique chain, producing analysis + feedback.
-3. `python viz.py <slug>` — build `viz.html` (open in a browser): intention chain + text-axis anatomy.
-4. `/story-discuss <slug>` — discuss the piece back and forth (grounded, sycophancy-free).
+1. `/story-critique <path to .md/.txt>` — send it to den for the full critique chain; results go to the DB and show in the web app.
+2. `/story-discuss <slug>` — discuss the piece back and forth (grounded, sycophancy-free; conclusions are not saved).
+3. `python -m export <slug>` — export a shareable `<slug>.md` and `<slug>.html` (intention chain + text-axis anatomy).
 
 ## How it works
 
 ```
-stories/<slug>/source.md ──analyst (subagent)──▶ analysis.json   observation layer (source of truth)
-                                                      │
-analysis.json + source.md ──criticizer (subagent)──▶ feedback.json  judgment layer (source of truth)
-                                                      │
-                     ┌────────────────┬────────────────┘
-                     ▼                ▼
-        analysis.md / feedback.md (for humans)     viz.py ─▶ viz.html
+start_critique(file path) ─▶ den ─ analyst ▶ criticizer ─▶ DB (source of truth: observation + judgment)
+                                                           │
+                          ┌────────────────┬───────────────┘
+                          ▼                ▼
+                   web (reads den)   python -m export ─▶ md + html
 ```
 
-The observer and the judge are **two subagents with separate contexts** — never the same context — so judgment independence isn't polluted. Their outputs feed the visualization, drawing out the technique → effect → theme intention chain and the text tension curve. **Every claim must match the source verbatim** (a hard gate that blocks hallucinated quotes).
+The observer and the judge are **two independent steps with separate contexts** — never the same context — so judgment independence isn't polluted. Their outputs feed the visualization, drawing out the technique → effect → theme intention chain and the text tension curve. **Every claim must match the source verbatim** (a hard gate that blocks hallucinated quotes).
 
 > For the internal contracts and design: `schemas/analysis.schema.json`, `docs/DESIGN.md`.
 
