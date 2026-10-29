@@ -211,6 +211,53 @@ def test_status_running_step(den):
     assert "評論中" in _text(_call(den.client(), "critique_status", {"job_id": jid}))
 
 
+def test_status_without_id_lists_three_groups(den):
+    done = _make_job(den, "done")
+    paused = _make_job(den, "paused", "usage-limit")
+    queued = _make_job(den, "queued")
+    failed = _make_job(den, "failed", "gate")
+    t = _text(_call(den.client(), "critique_status", {}))
+    assert t.index("進行中") < t.index("可續跑") < t.index("最近完成")
+    run_sec = t[t.index("進行中"):t.index("可續跑")]
+    res_sec = t[t.index("可續跑"):t.index("最近完成")]
+    done_sec = t[t.index("最近完成"):]
+    assert f"job {queued} ·〈極小合成樣本〉(mini) · 排隊中" in run_sec
+    assert f"job {paused} ·〈極小合成樣本〉(mini) · 已暫停(訂閱額度用完)" in res_sec
+    assert f"job {failed} ·〈極小合成樣本〉(mini) · 失敗(引文閘門重試耗盡)" in res_sec
+    assert "resume_critique(job_id=N)" in res_sec
+    assert f"job {done} ·〈極小合成樣本〉(mini) · 完成" in done_sec
+    assert den.paths[-1] == ("GET", "/jobs")
+
+
+def test_status_list_uses_title_and_omits_empty_groups(den):
+    c = den.client()
+    assert c.request("POST", "/stories", json={"text": TEXT, "title": "信"}).json()["slug"] == "d01"
+    conn = _conn(den)
+    try:
+        with conn:
+            st = repo.story_by_slug(conn, "d01")
+            sv = repo.latest_source_version(conn, st["id"])
+            jid = repo.create_job(conn, "critique", st["id"], sv["id"], {}, time.time())
+            repo.set_job_state(conn, jid, "done", time.time())
+    finally:
+        conn.close()
+    t = _text(_call(c, "critique_status", {}))
+    assert f"job {jid} ·〈信〉(d01) · 完成" in t
+    assert "進行中" not in t and "可續跑" not in t and "resume_critique" not in t
+
+
+def test_status_list_empty(den):
+    t = _text(_call(den.client(), "critique_status", {}))
+    assert "目前沒有任何分析紀錄" in t
+
+
+def test_status_description_mentions_listing(den):
+    async def go():
+        async with Client(den_mcp.build_server(den.client())) as c:
+            return {t.name: t.description for t in (await c.list_tools()).tools}
+    assert "不帶 job_id 會列出最近的 job" in anyio.run(go)["critique_status"]
+
+
 def test_status_unknown_job(den):
     r = _call(den.client(), "critique_status", {"job_id": 999})
     assert r.is_error and "999" in _text(r)

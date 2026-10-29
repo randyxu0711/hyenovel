@@ -5,6 +5,8 @@
   GET  /health              → {version, pid, busy}
   POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, runner, note}
                             (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的)
+  GET  /jobs?limit=N        → {"jobs": [{id, slug, title, state, step, error_class, updated_at}]}
+                            (最近更新的在前;limit 預設 20,1–100,超出 422)
   GET  /jobs/{id}           → job 列 + slug + attempts 摘要(不含 raw_output / prompt)
   POST /jobs/{id}/cancel    → 200 {"ok":true} | 409
   POST /jobs/{id}/resume    → 200 {"ok":true} | 409
@@ -42,6 +44,8 @@ _SSE_POLL = 15.0        # SSE 多久沒事件就回頭看 DB(兼 keep-alive)
 _RESTART_DELAY = 1.0    # worker 死掉後隔多久重起(別讓壞 DB 變成熱迴圈)
 _TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞檔
 _ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
+_LIST_KEYS = ("id", "slug", "title", "state", "step", "error_class", "updated_at")
+_LIST_MAX = 100
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
              "error_class", "detail", "params", "created_at", "updated_at")
 
@@ -265,6 +269,14 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
         except ValueError:
             log.info("event=reject where=discussion reason=not-analyzed")
             raise HTTPException(409, "這篇還沒分析完成") from None
+
+    @app.get("/jobs")
+    async def list_jobs(request: Request, limit: int = 20):
+        if not 1 <= limit <= _LIST_MAX:
+            log.info("event=reject where=list-jobs limit=%s", limit)
+            raise HTTPException(422, f"limit 要在 1–{_LIST_MAX}")
+        rows = repo.list_jobs(request.app.state.mgr.conn, limit)
+        return {"jobs": [{k: r[k] for k in _LIST_KEYS} for r in rows]}
 
     @app.get("/jobs/{job_id}")
     async def get_job(job_id: int, request: Request):

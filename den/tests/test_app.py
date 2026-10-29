@@ -646,3 +646,43 @@ def test_idle_watcher_survives_check_error(data, monkeypatch, caplog):
         assert fired.wait(5)
     assert len(n) >= 2
     assert "event=idle-check-failed" in caplog.text
+
+
+# ── 8b:列出 job ──
+
+def test_list_jobs_newest_first_with_slug_title(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "他走進門。", "title": "門"}, headers=h)
+        a = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, a, "done")
+        b = c.post("/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
+        _wait_state(c, h, b, "paused")     # 假分析的引文對不上 d01 原文 → 閘門耗盡
+        r = c.get("/jobs", headers=h)
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        assert [j["id"] for j in jobs] == [b, a]
+        assert jobs[0] == {"id": b, "slug": "d01", "title": "門", "state": "paused",
+                           "step": "analyst", "error_class": "gate",
+                           "updated_at": jobs[0]["updated_at"]}
+        assert (jobs[1]["slug"], jobs[1]["state"]) == ("mini", "done")
+        assert [j["id"] for j in c.get("/jobs?limit=1", headers=h).json()["jobs"]] == [b]
+
+
+def test_list_jobs_empty_and_requires_token(data):
+    with _client(data) as c:
+        assert c.get("/jobs").status_code == 401
+        assert c.get("/jobs", headers=_auth(data[1])).json() == {"jobs": []}
+
+
+@pytest.mark.parametrize("limit", [0, 101, -1])
+def test_list_jobs_limit_out_of_range_422(data, caplog, limit):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 422
+    assert "event=reject where=list-jobs" in caplog.text
+
+
+def test_list_jobs_limit_bounds_ok(data):
+    with _client(data) as c:
+        for limit in (1, 100):
+            assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 200

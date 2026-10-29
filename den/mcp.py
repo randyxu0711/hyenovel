@@ -39,7 +39,8 @@ DESC_START = (
     "請使用者先轉成純文字檢查過)。這是分鐘級的非同步背景工作:立刻回 slug 與 job id,"
     "之後用 critique_status 查進度。改稿重跑請帶上次回的 slug;同一份原文不帶 slug 重送會沿用那篇。"
     "會用使用者同一份 Claude 訂閱額度。")
-DESC_STATUS = "查詢 start_critique 回的 job 進度(排隊/分析/評論/完成/暫停/失敗/取消)與停住的原因。"
+DESC_STATUS = ("查詢 start_critique 回的 job 進度(排隊/分析/評論/完成/暫停/失敗/取消)與停住的原因。"
+               "不帶 job_id 會列出最近的 job,新對話找不到編號時用。")
 DESC_CANCEL = "取消一個排隊中或執行中的評論 job。取消後可用 resume_critique 續跑。"
 DESC_RESUME = "續跑一個已暫停(例:額度用完)、失敗或已取消的評論 job;已完成的步驟不重跑。"
 DESC_OPEN = (
@@ -150,10 +151,14 @@ def _minutes(est: dict | None) -> str:
     return f"預估約 {max(1, round(est['seconds'] / 60))} 分鐘(依過去 {est['basis']} 次紀錄)"
 
 
+def _label(j: dict) -> str:
+    st = j["state"]
+    return _STEPS.get(j.get("step"), "分析中") if st == "running" else _STATES.get(st, st)
+
+
 def _status_text(j: dict) -> str:
     st = j["state"]
-    label = _STEPS.get(j.get("step"), "分析中") if st == "running" else _STATES.get(st, st)
-    lines = [f"job {j['id']}:{label}"]
+    lines = [f"job {j['id']}:{_label(j)}"]
     if j.get("error_class"):
         lines.append(f"原因:{_REASONS.get(j['error_class'], j['error_class'])}")
     if st in _RESUMABLE:
@@ -163,6 +168,27 @@ def _status_text(j: dict) -> str:
     elif st in ("queued", "running"):
         lines.append("還在跑,晚點再問我進度。")
     return "\n".join(lines)
+
+
+def _list_text(jobs: list[dict]) -> str:
+    """三組:進行中 / 可續跑(附原因)/ 最近完成;空的組不出。"""
+    if not jobs:
+        return "目前沒有任何分析紀錄。"
+    groups = (("進行中", ("queued", "running")), ("可續跑", _RESUMABLE), ("最近完成", ("done",)))
+    out = []
+    for head, states in groups:
+        rows = [j for j in jobs if j["state"] in states]
+        if not rows:
+            continue
+        out.append(f"## {head}")
+        for j in rows:
+            why = (f"({_REASONS.get(j['error_class'], j['error_class'])})"
+                   if j.get("error_class") else "")
+            out.append(f"job {j['id']} ·〈{j['title'] or j['slug']}〉({j['slug']}) · {_label(j)}{why}")
+        if head == "可續跑":
+            out.append("用 resume_critique(job_id=N) 續跑(N 換成上面的編號);已完成的步驟不重跑。")
+        out.append("")
+    return "\n".join(out).rstrip()
 
 
 def build_server(den: DenClient) -> MCPServer:
@@ -212,12 +238,14 @@ def build_server(den: DenClient) -> MCPServer:
                              slug: str | None = None) -> str:
         return await guarded(_start(path, title, slug, client_of(ctx)))
 
-    async def _status(job_id: int) -> str:
+    async def _status(job_id: int | None) -> str:
+        if job_id is None:
+            return _list_text((await call("GET", "/jobs"))["jobs"])
         return _status_text(await call("GET", f"/jobs/{job_id}",
                                        on_status={404: f"找不到 job {job_id}。"}))
 
     @server.tool(description=DESC_STATUS)
-    async def critique_status(job_id: int) -> str:
+    async def critique_status(job_id: int | None = None) -> str:
         return await guarded(_status(job_id))
 
     async def _act(job_id: int, verb: str, conflict: str, done: str) -> str:

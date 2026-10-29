@@ -153,3 +153,21 @@ def test_active_job_only_queued_or_running_same_version(conn):
         repo.set_job_state(conn, later, st, 4)
         assert repo.active_job(conn, s, v) is None
     assert repo.active_job(conn, s, v2)["id"] == other
+
+
+def test_list_jobs_joins_story_and_orders_newest_first(conn):
+    s, v = _story(conn)
+    repo.ensure_story(conn, "s1", "標題", 0)
+    t = repo.ensure_story(conn, "s2", None, 0)
+    tv, _ = repo.add_source_version(conn, t, "乙", 0)
+    assert repo.list_jobs(conn, 10) == []
+    a = repo.create_job(conn, "critique", s, v, {}, 1)
+    b = repo.create_job(conn, "critique", t, tv, {}, 1)          # 同 updated_at → id 大的先
+    c = repo.create_job(conn, "critique", s, v, {}, 2)
+    repo.set_job_state(conn, a, "done", 5)
+    rows = repo.list_jobs(conn, 10)
+    assert [r["id"] for r in rows] == [a, c, b]
+    assert (rows[0]["slug"], rows[0]["title"], rows[0]["state"]) == ("s1", "標題", "done")
+    assert (rows[2]["slug"], rows[2]["title"]) == ("s2", None)
+    assert rows[0]["params"] == {}                               # JSON 欄位已 decode
+    assert [r["id"] for r in repo.list_jobs(conn, 2)] == [a, c]

@@ -288,3 +288,11 @@ def active_job(conn, story_id: int, source_version_id: int) -> dict | None:
         "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? "
         "AND state IN ('queued', 'running') ORDER BY id LIMIT 1",
         (story_id, source_version_id)).fetchone())
+
+
+def list_jobs(conn, limit: int) -> list[dict]:
+    """最近的 job(updated_at DESC, id DESC)取 limit 筆,附 story 的 slug、title。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT j.*, st.slug AS slug, st.title AS title FROM job j "
+        "JOIN story st ON st.id = j.story_id "
+        "ORDER BY j.updated_at DESC, j.id DESC LIMIT ?", (limit,))]
