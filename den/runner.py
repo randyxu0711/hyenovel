@@ -206,11 +206,21 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
         result_line = ""
         timed_out = False
         try:
-            proc.stdin.write(user_prompt.encode())
-            await proc.stdin.drain()
-            proc.stdin.close()
             deadline = t0 + timeout
-            while True:
+
+            async def feed():
+                try:
+                    proc.stdin.write(user_prompt.encode())
+                    await proc.stdin.drain()
+                    proc.stdin.close()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass                             # 子行程沒讀就走了:交給 classify 判 crash
+
+            try:                                     # 寫 stdin 也算在同一個 deadline 內
+                await asyncio.wait_for(feed(), timeout)
+            except asyncio.TimeoutError:
+                timed_out = True
+            while not timed_out:
                 try:
                     raw_line = await asyncio.wait_for(
                         proc.stdout.readline(), max(deadline - time.monotonic(), 0))

@@ -19,6 +19,8 @@ elif mode == "sleep":
     child = subprocess.Popen(["sleep", "60"])
     here.with_name("child.pid").write_text(str(child.pid))
     time.sleep(60)
+elif mode == "exit-early":
+    sys.exit(1)                                      # 不讀 stdin 就走
 elif mode.startswith("stream"):
     sys.stdin.read()
     lines = here.with_name("claude_stream_ok.jsonl").read_text().splitlines()

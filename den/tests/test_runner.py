@@ -187,9 +187,9 @@ def test_cancel_kills_process_group(fake, tmp_path):
     asyncio.run(drive())
 
 
-def _chat(exe, timeout=10):
+def _chat(exe, timeout=10, prompt="hi"):
     async def go():
-        return [e async for e in runner.stream_chat(ClaudePreset(exe), "sys", "hi", timeout=timeout)]
+        return [e async for e in runner.stream_chat(ClaudePreset(exe), "sys", prompt, timeout=timeout)]
     return asyncio.run(go())
 
 
@@ -225,6 +225,20 @@ def test_stream_chat_no_result_line_is_crash(fake):
 def test_stream_chat_timeout_kills_group(fake, tmp_path):
     *_, (_, res) = _chat(fake("sleep"), timeout=0.5)
     assert res.outcome == "timeout"
+    pid = _child_pid(tmp_path)
+    assert pid and _dead(pid)
+
+
+def test_stream_chat_child_exits_without_reading_stdin_is_crash(fake):
+    evs = _chat(fake("exit-early"), prompt="x" * (1 << 20))   # 大於 pipe buffer,寫入必遇斷管
+    assert [k for k, _ in evs] == ["result"]
+    assert evs[0][1].outcome == "crash"
+
+
+def test_stream_chat_stdin_write_counts_against_timeout(fake, tmp_path):
+    # sleep 模式不讀 stdin;1MB 塞滿 pipe,drain 會卡住 → 必須走 timeout 而非掛死
+    evs = _chat(fake("sleep"), timeout=1.5, prompt="x" * (1 << 20))
+    assert [k for k, _ in evs] == ["result"] and evs[0][1].outcome == "timeout"
     pid = _child_pid(tmp_path)
     assert pid and _dead(pid)
 
