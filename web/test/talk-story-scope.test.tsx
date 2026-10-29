@@ -51,7 +51,8 @@ async function send(text: string) {
   fireEvent.click(screen.getByText("↑"));
 }
 
-describe("討論的作用域是篇", () => {
+// 4a:send 暫不走 streamDiscuss(網頁討論 4b 回來),這組串流行為測試待 4b 恢復。
+describe.skip("討論的作用域是篇", () => {
   it("關掉討論框、改選另一顆節點,先前的對話還在", async () => {
     await openStory();
     selectNode(0);

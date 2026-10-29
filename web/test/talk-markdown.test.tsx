@@ -55,7 +55,8 @@ const history = (c: HTMLElement, side: "me" | "ed") =>
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-describe("討論框的 markdown", () => {
+// 4a:send 暫不走 streamDiscuss(網頁討論 4b 回來),這組串流行為測試待 4b 恢復。
+describe.skip("討論框的 markdown", () => {
   it("編輯側渲染:`**x**` 變 <strong>,裸星號不留在畫面上", async () => {
     const c = await talk("問一句");
     const ed = live(c, "ed");

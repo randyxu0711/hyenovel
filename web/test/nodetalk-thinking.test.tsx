@@ -26,7 +26,8 @@ async function send() {
   fireEvent.click(screen.getByText("↑"));
 }
 
-describe("NodeTalk 思考可見化", () => {
+// 4a:send 暫不走 streamDiscuss(網頁討論 4b 回來),這組串流行為測試待 4b 恢復。
+describe.skip("NodeTalk 思考可見化", () => {
   it("thinking 串進畫面,且不混進回答本體", async () => {
     const { container } = mount();
     await send();

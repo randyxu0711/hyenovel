@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIndex, getUsageAll } from "../data/client";
+import { getIndex } from "../data/client";
 import { worldPos, WORLD, ringRadii, cameraPose, type Stage } from "../lib/camera";
 import { useViewport } from "../lib/useViewport";
 import Camera from "./Camera";
@@ -11,7 +11,6 @@ import Catalog from "./Catalog";
 import Orbits from "./Orbits";
 import AddStory from "./AddStory";
 import NascentStar from "./NascentStar";
-import UsageMap from "./UsageMap";
 import Single from "./Single";
 import { useGestations } from "./useGestations";
 import { formatResetTime } from "./usageLimit";
@@ -33,9 +32,6 @@ export default function Journey() {
   const [bursting, setBursting] = useState(false);
   const [hatching, setHatching] = useState<string | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
-  const [usageOpen, setUsageOpen] = useState(false);
-  const [usageFrom, setUsageFrom] = useState<{ x: number; y: number } | undefined>();
-  const [spend, setSpend] = useState<number | null>(null);   // 入口上的累計小數字;讀不到就不顯示
   const [blooming, setBlooming] = useState(false);           // 入口點火後,catalog 真物體(種骨/軌道)綻放入場的一次性窗
   const [closing, setClosing] = useState(false);             // 單篇 overlay 淡出中
   const [confirming, setConfirming] = useState<string | null>(null); // 剛孕育完、正擴一圈確認波的那篇(一次性)
@@ -66,11 +62,6 @@ export default function Journey() {
     getIndex().then(i => setEntries(i.stories))
       .catch(e => setErr(String(e instanceof Error ? e.message : e)))
       .finally(() => setLoaded(true));
-  }, []);
-  useEffect(() => {
-    let live = true;
-    getUsageAll().then(a => { if (live && !a.empty) setSpend(a.total.cost_usd); }).catch(() => {});
-    return () => { live = false; };
   }, []);
   useEffect(() => { if (slug) setEntered(true); }, [slug]);
   // 重整後若還有胚胎在孕育,直接落在 catalog
@@ -162,21 +153,7 @@ export default function Journey() {
           onPick={pick} onCancel={cancel} onResume={resume} onReanalyze={reanalyze} />
       </Camera>
       {/* 星圖開著就收起:.nascent 在畫面正中、z-index 比 .umap 高 → 會壓在中央總額上還能點 */}
-      {stage === "catalog" && !usageOpen && <NascentStar onOpen={() => setAdding(true)} igniting={blooming} />}
-      {stage === "catalog" && (
-        // 點它 → 這行小字本身飛到中心、放大成總計(它就是同一個數字)
-        <button className="usage-entry" onClick={e => {
-          const r = (e.currentTarget.querySelector("b") ?? e.currentTarget).getBoundingClientRect();
-          setUsageFrom({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-          setUsageOpen(true);
-        }}>
-          用量{spend !== null && <b>${spend.toFixed(2)}</b>}
-        </button>
-      )}
-      {usageOpen && (
-        <UsageMap entries={entries} ordered={ordered} from={usageFrom} onClose={() => setUsageOpen(false)}
-          onPick={s => { setUsageOpen(false); nav(`/story/${s}`, { state: { tab: "usage" } }); }} />
-      )}
+      {stage === "catalog" && <NascentStar onOpen={() => setAdding(true)} igniting={blooming} />}
       {stage === "overview" && <Overview onEnter={onEntered} />}
       {stage === "single" && <div className={`single-overlay${closing ? " out" : ""}`}><Single /></div>}
       <AddStory open={adding} initialFile={dropFile}
