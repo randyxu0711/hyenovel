@@ -258,6 +258,18 @@ def test_worker_anomaly_warns_any_outcome(conn, caplog):
             "duration_ms=5") == hits[0].getMessage()
 
 
+def test_worker_anomaly_threshold_is_one_turn(conn, caplog):
+    """現行配方每次呼叫 1 輪:2 輪就要警示,1 輪不要(守 ANOMALY_TURNS)。"""
+    job = _job(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job, FakeRun(_with(fail("crash"), turns=1, output=4000)))
+    assert "event=worker-anomaly" not in caplog.text
+    job2 = _job(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job2, FakeRun(_with(fail("crash"), turns=2, output=4000)))
+    assert "event=worker-anomaly" in caplog.text
+
+
 def test_worker_anomaly_on_timeout(conn, caplog):
     """逾時沒有 turns / tokens 也要留痕,欄位當 None。"""
     job = _job(conn)
