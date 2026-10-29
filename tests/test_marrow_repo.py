@@ -171,3 +171,24 @@ def test_list_jobs_joins_story_and_orders_newest_first(conn):
     assert (rows[2]["slug"], rows[2]["title"]) == ("s2", None)
     assert rows[0]["params"] == {}                               # JSON 欄位已 decode
     assert [r["id"] for r in repo.list_jobs(conn, 2)] == [a, c]
+
+
+def test_resumable_job_newest_paused_failed_cancelled_same_version(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    assert repo.resumable_job(conn, s, v) is None
+    other = repo.create_job(conn, "critique", s, v2, {}, 0)
+    repo.set_job_state(conn, other, "paused", 0)                  # 別的版本不算
+    a = repo.create_job(conn, "critique", s, v, {}, 1)
+    b = repo.create_job(conn, "critique", s, v, {}, 2)
+    for st in ("queued", "running", "done"):
+        repo.set_job_state(conn, a, st, 3)
+        repo.set_job_state(conn, b, st, 3)
+        assert repo.resumable_job(conn, s, v) is None
+    for st in ("paused", "failed", "cancelled"):
+        repo.set_job_state(conn, a, st, 4)
+        assert repo.resumable_job(conn, s, v)["id"] == a
+        repo.set_job_state(conn, b, st, 4)
+        assert repo.resumable_job(conn, s, v)["id"] == b          # 最新的優先
+        repo.set_job_state(conn, b, "done", 4)
+    assert repo.resumable_job(conn, s, v2)["id"] == other

@@ -183,6 +183,28 @@ def test_start_twice_while_inflight_no_second_job(data, tmp_path):
         d.stop()
 
 
+def test_start_same_version_after_pause_resumes(den, tmp_path):
+    """同一份原文之前停在半路 → 接續那個 job,不說「已送出」新 job。"""
+    p = str(_write(tmp_path))
+    c = den.client()
+    first = _job_id(_text(_call(c, "start_critique", {"path": p})))
+    conn = _conn(den)
+    try:
+        for _ in range(500):   # 假分析的引文對不上 TEXT → 閘門耗盡 → paused
+            if repo.get_job(conn, first)["state"] == "paused":
+                break
+            time.sleep(0.02)
+        assert repo.get_job(conn, first)["state"] == "paused"
+    finally:
+        conn.close()
+    r = _call(c, "start_critique", {"path": p})
+    assert not r.is_error
+    t = _text(r)
+    assert f"之前跑到一半(job {first}),已接續:已完成的步驟不重跑。" in t
+    assert f"critique_status job_id={first}" in t
+    assert "已送出" not in t
+
+
 def test_start_unknown_slug_is_error(den, tmp_path):
     r = _call(den.client(), "start_critique", {"path": str(_write(tmp_path)), "slug": "d99"})
     assert r.is_error and "unknown slug" in _text(r)

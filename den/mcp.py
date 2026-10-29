@@ -223,6 +223,10 @@ def build_server(den: DenClient) -> MCPServer:
         lines = []
         if s["reused"]:
             lines.append(f"這份原文和 {s['slug']} 的最新版相同,沿用那篇。")
+        if j.get("resumed"):
+            lines += [f"這篇這一版之前跑到一半(job {j['job_id']}),已接續:已完成的步驟不重跑。",
+                      f"好了問我進度(critique_status job_id={j['job_id']})。"]
+            return "\n".join(lines)
         if j["existing"]:
             lines += [f"{s['slug']} 這一版已在分析中:job {j['job_id']}(沒有開新的 job,不會再花額度)。",
                       f"好了問我進度(critique_status job_id={j['job_id']})。"]

@@ -3,8 +3,9 @@
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
   GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
   GET  /health              → {version, pid, busy}
-  POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, runner, note}
-                            (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的)
+  POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, resumed, runner, note}
+                            (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的;
+                             同版停在暫停/失敗/取消 → 接續最新那個,resumed=true)
   GET  /jobs?limit=N        → {"jobs": [{id, slug, title, state, step, error_class, updated_at}]}
                             (最近更新的在前;limit 預設 20,1–100,超出 422)
   GET  /jobs/{id}           → job 列 + slug + attempts 摘要(不含 raw_output / prompt)

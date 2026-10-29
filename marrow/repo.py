@@ -296,3 +296,11 @@ def list_jobs(conn, limit: int) -> list[dict]:
         "SELECT j.*, st.slug AS slug, st.title AS title FROM job j "
         "JOIN story st ON st.id = j.story_id "
         "ORDER BY j.updated_at DESC, j.id DESC LIMIT ?", (limit,))]
+
+
+def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:
+    """同篇同版可續(paused/failed/cancelled)的最新 job(重送自動續跑用:已付的步驟不重花)。"""
+    return _row(conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? "
+        "AND state IN (?, ?, ?) ORDER BY id DESC LIMIT 1",
+        (story_id, source_version_id, *_RESUMABLE)).fetchone())

@@ -106,13 +106,18 @@ class JobManager:
         active = repo.active_job(self.conn, st["id"], sv["id"])
         if active is not None:
             log.info("event=job-deduped job=%s", active["id"])
-            return {"job_id": active["id"], "estimate": est, "existing": True}
+            return {"job_id": active["id"], "estimate": est, "existing": True, "resumed": False}
+        # 同版之前停在半路(暫停/失敗/取消):接續那個 job,已 ok 的步驟不重花錢
+        stuck = repo.resumable_job(self.conn, st["id"], sv["id"])
+        if stuck is not None and self.resume(stuck["id"]):
+            log.info("event=job-auto-resumed job=%s", stuck["id"])
+            return {"job_id": stuck["id"], "estimate": est, "existing": True, "resumed": True}
         with self.conn:
             jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
                                   {"client": client, "runner": runner}, self._now())
         log.info("event=job-submitted job=%s client=%r runner=%s", jid, client, runner)
         self._wake.set()
-        return {"job_id": jid, "estimate": est, "existing": False}
+        return {"job_id": jid, "estimate": est, "existing": False, "resumed": False}
 
     def cancel(self, job_id: int) -> bool:
         if self._current is not None and self._current[0] == job_id:
@@ -133,6 +138,13 @@ class JobManager:
         return False
 
     def resume(self, job_id: int) -> bool:
+        job = repo.get_job(self.conn, job_id)
+        if job is not None:   # 同篇同版已有別的 job 在排隊/跑:再排一個 = 同一份錢花兩次
+            other = repo.active_job(self.conn, job["story_id"], job["source_version_id"])
+            if other is not None and other["id"] != job_id:
+                log.info("event=resume-rejected job=%s reason=active-job other=%s",
+                         job_id, other["id"])
+                return False
         with self.conn:
             ok = repo.requeue_job(self.conn, job_id, self._now())
         if not ok:

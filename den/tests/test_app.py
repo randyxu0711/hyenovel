@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from den import app as den_app
 from den.tests.test_pipeline import _analysis, _feedback, ok
-from marrow import db
+from marrow import db, repo
 from marrow.workpacks import WORKPACKS
 
 
@@ -686,3 +686,41 @@ def test_list_jobs_limit_bounds_ok(data):
     with _client(data) as c:
         for limit in (1, 100):
             assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 200
+
+
+# ── 8c:同版自動續跑、續跑防重 ──
+
+def test_post_job_auto_resumes_cancelled_same_version(data):
+    with _client(data, Run(released=False)) as c:
+        h = _auth(data[1])
+        first = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        assert first["resumed"] is False
+        _wait_state(c, h, first["job_id"], "running")
+        c.post(f"/jobs/{first['job_id']}/cancel", headers=h)
+        _wait_state(c, h, first["job_id"], "cancelled")
+        again = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        assert again.status_code == 202
+        body = again.json()
+        assert (body["job_id"], body["existing"], body["resumed"]) == (first["job_id"], True, True)
+        assert len(c.get("/jobs", headers=h).json()["jobs"]) == 1
+
+
+def test_resume_409_when_other_active_job(data, caplog):
+    with _client(data, Run(released=False)) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        old = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, old, "running")
+        c.post(f"/jobs/{old}/cancel", headers=h)
+        _wait_state(c, h, old, "cancelled")
+        conn = c.app.state.mgr.conn
+        live = []
+
+        async def make():
+            with conn:
+                job = repo.get_job(conn, old)
+                live.append(repo.create_job(conn, "critique", job["story_id"],
+                                            job["source_version_id"], {}, time.time()))
+        c.portal.call(make)
+        assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
+    assert f"event=resume-rejected job={old} reason=active-job other={live[0]}" in caplog.text
+    assert "event=reject where=resume" in caplog.text

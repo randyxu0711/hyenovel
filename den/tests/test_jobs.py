@@ -10,7 +10,7 @@ import pytest
 
 from den import jobs
 from den.pipeline import StepOutcome
-from den.tests.test_pipeline import _analysis, _feedback, ok
+from den.tests.test_pipeline import _analysis, _feedback, fail, ok
 from marrow import repo
 from marrow.workpacks import WORKPACKS
 
@@ -296,3 +296,100 @@ def test_submit_dedupes_inflight_same_version(conn, caplog):
         await _until(lambda: _state(conn, rerun["job_id"]) == "done", "重跑完")
         await _stop(w)
     asyncio.run(main())
+
+
+# ── 8c:同一版自動續跑、續跑防重 ──
+
+class ScriptRun:
+    """run_factory:analyst 一律 ok;criticizer 依 crit 腳本(先吐完再一律 ok)。記每步呼叫數。"""
+
+    def __init__(self, *crit):
+        self.crit = list(crit)
+        self.calls = {"analyst": 0, "criticizer": 0}
+
+    def __call__(self, on_proc):
+        async def run(system_prompt, user_prompt, schema):
+            if schema is WORKPACKS["analyst"].schema:
+                self.calls["analyst"] += 1
+                return ok(_analysis())
+            self.calls["criticizer"] += 1
+            return self.crit.pop(0) if self.crit else ok(_feedback())
+        return run
+
+
+def _job_count(conn):
+    return conn.execute("SELECT COUNT(*) FROM job").fetchone()[0]
+
+
+def test_submit_auto_resumes_paused_same_version(conn, caplog):
+    async def main():
+        run = ScriptRun(fail("usage-limit"))
+        m = _mgr(conn, run)
+        first = m.submit("mini")
+        assert first["resumed"] is False
+        w = asyncio.create_task(m.worker())
+        await _until(lambda: _state(conn, first["job_id"]) == "paused", "撞額度暫停")
+        assert run.calls == {"analyst": 1, "criticizer": 1}
+        with caplog.at_level(logging.INFO, logger="hyenovel"):
+            again = m.submit("mini")
+        assert again == {"job_id": first["job_id"], "estimate": again["estimate"],
+                         "existing": True, "resumed": True}
+        assert f"event=job-auto-resumed job={first['job_id']}" in caplog.text
+        assert _job_count(conn) == 1
+        await _until(lambda: _state(conn, first["job_id"]) == "done", "續跑跑完")
+        assert run.calls == {"analyst": 1, "criticizer": 2}      # analyst 有 ok attempt,不重跑
+        q = m.bus.subscribe(first["job_id"])                     # bus 已 reset:沒有上一輪的 error
+        evs = [q.get_nowait() for _ in range(q.qsize())]
+        assert not any(e["event"] == "error" for e in evs)
+        await _stop(w)
+    asyncio.run(main())
+
+
+def test_submit_auto_resumes_cancelled(conn):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    assert m.cancel(jid) is True
+    again = m.submit("mini")
+    assert (again["job_id"], again["resumed"], again["existing"]) == (jid, True, True)
+    assert _state(conn, jid) == "queued" and _job_count(conn) == 1
+    assert m._wake.is_set()
+
+
+def test_submit_after_done_is_new_job_not_resumed(conn):
+    async def main():
+        m = _mgr(conn, GatedRun(gated=False))
+        first = m.submit("mini")["job_id"]
+        w = asyncio.create_task(m.worker())
+        await _until(lambda: _state(conn, first) == "done", "跑完")
+        again = m.submit("mini")
+        assert again["job_id"] != first and (again["existing"], again["resumed"]) == (False, False)
+        await _until(lambda: _state(conn, again["job_id"]) == "done", "重跑完")
+        await _stop(w)
+    asyncio.run(main())
+
+
+def test_submit_prefers_active_over_resumable(conn):
+    m = _mgr(conn, GatedRun())
+    old = m.submit("mini")["job_id"]
+    m.cancel(old)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        live = repo.create_job(conn, "critique", st["id"],
+                               repo.latest_source_version(conn, st["id"])["id"], {}, 2.0)
+    out = m.submit("mini")
+    assert (out["job_id"], out["existing"], out["resumed"]) == (live, True, False)
+    assert _state(conn, old) == "cancelled"
+
+
+def test_resume_rejected_when_other_active_job(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = m.submit("mini")["job_id"]
+    m.cancel(old)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        live = repo.create_job(conn, "critique", st["id"],
+                               repo.latest_source_version(conn, st["id"])["id"], {}, 2.0)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+    assert f"event=resume-rejected job={old} reason=active-job other={live}" in caplog.text
+    assert _state(conn, old) == "cancelled"
