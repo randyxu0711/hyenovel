@@ -50,14 +50,16 @@ def linked_themes(node, nodes_by_id, edges):
     return out
 
 
-def render_analysis(analysis):
+def render_analysis(analysis, *, front_matter=True):
     title = analysis.get("title") or analysis.get("slug", "")
     slug = analysis.get("slug", "")
     nodes = analysis.get("nodes", [])
     edges = analysis.get("edges", [])
     by_id = {n["id"]: n for n in nodes}
 
-    L = [f"---\ntitle: \"{title}\"\nslug: {slug}\ntags: [hyenovel, story-analysis]\n---", ""]
+    L = []
+    if front_matter:
+        L = [f"---\ntitle: \"{title}\"\nslug: {slug}\ntags: [hyenovel, story-analysis]\n---", ""]
     L.append(f"# {title} — 結構分析\n")
     if analysis.get("synopsis"):
         L.append(f"> {analysis['synopsis']}\n")
@@ -108,11 +110,11 @@ def render_analysis(analysis):
     return "\n".join(L).rstrip() + "\n"
 
 
-def render_feedback(feedback, title):
+def render_feedback(feedback, title, *, front_matter=True):
     def quotes(qs):
         return [f"> 「{q}」" for q in (qs or [])]
 
-    L = ["---\ntags: [hyenovel, story-feedback]\n---", ""]
+    L = ["---\ntags: [hyenovel, story-feedback]\n---", ""] if front_matter else []
     L.append(f"# 給作者的話 —〈{title}〉\n")
     if feedback.get("read"):
         L.append("## 這篇在做什麼(我讀到的)\n")

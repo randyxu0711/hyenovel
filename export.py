@@ -17,24 +17,30 @@ from viz import build_html
 ROOT = Path(__file__).resolve().parent
 
 
+class NotAnalyzed(LookupError):
+    """故事存在但沒有 current analysis。"""
+
+
 def build(conn, slug: str) -> tuple[str, str]:
-    """回 (markdown, html)。找不到故事 → LookupError;沒有 current analysis → ValueError("not-analyzed")。"""
+    """回 (markdown, html)。找不到故事 → LookupError;沒有 current analysis → NotAnalyzed。"""
     story = repo.story_by_slug(conn, slug)
     if story is None:
         raise LookupError(slug)
     art = repo.current_artifact(conn, story["id"], "analysis")
     if art is None:
-        raise ValueError("not-analyzed")
+        raise NotAnalyzed("not-analyzed")
     analysis = art["body"]
     fb = repo.current_artifact(conn, story["id"], "feedback")
     feedback = fb["body"] if fb else None
     # 原文取 analysis 當時對照的那一版;之後改稿不該讓引用對不上。
     source = repo.source_version(conn, art["source_version_id"])["text"]
-    parts = []
+    # 一份文件一個標題、一個 front matter;分析標題也用同一個(淺拷貝,不動 DB body)。
+    title = story["title"] or analysis.get("title") or slug
+    tags = "hyenovel, story-feedback, story-analysis" if feedback is not None else "hyenovel, story-analysis"
+    parts = [f'---\ntitle: "{title}"\nslug: {slug}\ntags: [{tags}]\n---\n\n']
     if feedback is not None:
-        title = story["title"] or analysis.get("title") or slug
-        parts += [render_feedback(feedback, title), "---\n\n"]
-    parts.append(render_analysis(analysis))
+        parts += [render_feedback(feedback, title, front_matter=False), "\n---\n\n"]
+    parts.append(render_analysis({**analysis, "title": title}, front_matter=False))
     return "".join(parts), build_html(viz_payload(slug, analysis, feedback, source), source)
 
 
@@ -51,11 +57,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         db.migrate(conn, db.sqlite_path(url))
         md, html = build(conn, args.slug)
+    except NotAnalyzed:
+        print(f"✗ {args.slug} 還沒分析過,先用 start_critique 送分析。", file=sys.stderr)
+        return 1
     except LookupError:
         print(f"✗ 找不到故事:{args.slug}", file=sys.stderr)
-        return 1
-    except ValueError:
-        print(f"✗ {args.slug} 還沒分析過,先用 start_critique 送分析。", file=sys.stderr)
         return 1
     finally:
         conn.close()

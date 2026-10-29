@@ -24,20 +24,36 @@ def seed(conn, slug="mini", analysis=True, feedback=True):
     return sid
 
 
+def _body(md):
+    """去掉文件開頭唯一的 front matter。"""
+    assert md.startswith("---\n")
+    return md.split("\n---\n", 1)[1]
+
+
 def test_build_markdown_feedback_first(conn):
     seed(conn)
     md, _ = export.build(conn, "mini")
-    analysis_md = export.render_analysis(ANALYSIS)
-    sep = md.index("\n---\n\n" + analysis_md)
-    assert md.index(FB_HEAD) < sep
+    analysis_md = export.render_analysis({**ANALYSIS, "title": "迷你"}, front_matter=False)
+    assert md.index(FB_HEAD) < md.index("\n---\n\n" + analysis_md)
     assert md.endswith(analysis_md)
+    assert "tags: [hyenovel, story-feedback, story-analysis]" in md.split("\n---\n", 1)[0]
+
+
+def test_build_single_front_matter(conn):
+    seed(conn)
+    md, _ = export.build(conn, "mini")
+    assert md.count("\ntitle:") == 1 and md.count("\nslug:") == 1
+    assert "tags: [hyenovel, story-feedback]" not in md
+    assert "# 迷你 — 結構分析" in md
 
 
 def test_build_without_feedback_has_no_separator_section(conn):
     seed(conn, feedback=False)
     md, _ = export.build(conn, "mini")
     assert FB_HEAD not in md
-    assert md == export.render_analysis(ANALYSIS)
+    assert md.split("\n---\n", 1)[0].endswith("tags: [hyenovel, story-analysis]")
+    assert _body(md).lstrip() == export.render_analysis({**ANALYSIS, "title": "迷你"}, front_matter=False)
+    assert md.count("\ntitle:") == 1 and md.count("\nslug:") == 1
 
 
 def test_build_html_uses_analysis_source_version(conn):
@@ -55,7 +71,7 @@ def test_build_unknown_slug(conn):
 
 def test_build_not_analyzed(conn):
     seed(conn, analysis=False, feedback=False)
-    with pytest.raises(ValueError, match="not-analyzed"):
+    with pytest.raises(export.NotAnalyzed):
         export.build(conn, "mini")
 
 
