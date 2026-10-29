@@ -36,6 +36,12 @@ analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
 - `python -m den [--port N]` — 本機 daemon(127.0.0.1:8788,token 在 `~/.local/share/hyenovel/den.token`);
   只能對**已用 `python -m marrow.importer` 匯入**的故事開 job。工人 env 是白名單(無 `CLAUDE*`、
   無 `ANTHROPIC_API_KEY`、無 proxy 變數 / `CLAUDE_CONFIG_DIR`)。
+  **MCP shim 會自動把 den 脫離拉起**(`den.json` 探索檔記 port/pid/指紋);den 閒置 3 小時無 job 自己結束。
+  版本指紋不符才重啟,**忙碌中的 den 不重啟**(新版等跑完);`git pull` 後在 agent 內跑 `/mcp` 重載 shim。
+  MCP 建立的故事 slug 是 `dNN`。
+- 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/server/.venv/bin/python -m den.mcp`。五個 tool:
+  `start_critique`(送文開分析)/ `critique_status`(進度)/ `cancel_critique`(取消)/
+  `resume_critique`(續跑)/ `open_discussion`(取討論素材開聊)。
 - `server/.venv/bin/python -m pytest` — 跑全部測試(零成本、不燒訂閱)。CI 在 push 時跑同一套。
 - subagent 定義在 `.claude/agents/{analyst,criticizer}.md`;skill 在 `.claude/skills/`。
 - **slash command 與 subagent 綁工作目錄**:必須在 `~/projects/hyenovel` 開的 session 才載入。
