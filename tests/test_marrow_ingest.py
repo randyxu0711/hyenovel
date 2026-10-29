@@ -1,4 +1,9 @@
 """marrow.ingest:原文解碼 / 正規化(從 server/ingest.py 原封搬來)。"""
+import io
+import logging
+
+import pytest
+
 from marrow import ingest
 from server import ingest as server_ingest
 
@@ -34,12 +39,6 @@ def test_normalize():
 
 
 # ── extract_text(搬自 server/ingest.py;大小上限是呼叫端的職責)──────────
-
-import io
-import logging
-
-import pytest
-
 
 def test_extract_txt_normalized():
     assert ingest.extract_text("a.txt", b"a  \r\n\r\n\r\n\r\nb") == "a\n\nb\n"
