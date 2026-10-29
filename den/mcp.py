@@ -8,7 +8,6 @@
 """
 import logging
 import sys
-from functools import cache
 from pathlib import Path
 
 import anyio
@@ -17,13 +16,12 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from den.client import DenClient, DenUnavailable
 from den.config import MAX_SOURCE_BYTES, valid_slug
+from den.discuss import render_discussion
 from marrow import db
 from marrow.ingest import decode
 
 log = logging.getLogger("hyenovel")
 
-_STALE_CONCLUSION = "(舊版分析時留下的,可能已不適用)"
-_PROMPT = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "discuss.md"
 _SUFFIXES = (".md", ".txt")
 _CLIENT_MAX = 64   # den 的 ClientIn 上限;超過整個 POST /jobs 會 422
 
@@ -58,60 +56,6 @@ def client_of(ctx: Context) -> dict | None:
         return None
     ver = info.version[:_CLIENT_MAX] if info.version else None
     return {"name": info.name[:_CLIENT_MAX], "version": ver}
-
-
-@cache
-def _persona() -> str:
-    return _PROMPT.read_text(encoding="utf-8")
-
-
-def _refs(refs) -> str:
-    return ", ".join(refs or ())
-
-
-def render_discussion(ctx: dict) -> str:
-    """討論素材:不送 raw JSON,也不送 evidence / quotes 引文(原文已在裡面,引文是它的子字串)。"""
-    out = [_persona().rstrip(), "", "---", f"# 《{ctx['title'] or ctx['slug']}》(slug: {ctx['slug']})"]
-    if ctx["stale"]:
-        out.append("注意:原文已改稿、分析是舊版的——以下原文是當時分析的那一版;"
-                   "討論時要明說,新稿得重跑 start_critique。")
-    out += ["", "## 原文", "<source>", ctx["source"].rstrip(), "</source>", "", "## 分析(精簡)"]
-    a = ctx["analysis"]
-    if a.get("synopsis"):
-        out.append(f"梗概:{a['synopsis']}")
-    out.append("### 節點")
-    for n in a.get("nodes") or ():
-        note = f":{n['note']}" if n.get("note") else ""
-        out.append(f"[{n['id']}] {n['type']} {n['label']}{note}")
-    out.append("### 關係")
-    out += [f"{e['from']} -{e['type']}-> {e['to']}" for e in a.get("edges") or ()]
-    fb = ctx["feedback"]
-    out += ["", "## 編輯回饋"]
-    if fb is None:
-        out.append("(還沒有)")
-    else:
-        out.append(f"讀法:{fb.get('read', '')}")
-        for key, head in (("strengths", "有效之處"), ("key_points", "關鍵")):
-            out.append(f"### {head}")
-            for p in fb.get(key) or ():
-                refs = f" / refs: {_refs(p['refs'])}" if p.get("refs") else ""
-                out.append(f"- {p['title']} / {p['body']}{refs}")
-                if p.get("question"):     # schema:提問是討論的開場
-                    out.append(f"  提問:{p['question']}")
-                if p.get("experiment"):
-                    out.append(f"  實驗:{p['experiment']}")
-        if fb.get("minor"):
-            out.append("### 枝節")
-            out += [f"- {m}" for m in fb["minor"]]
-        out.append(f"如果只改一件事:{fb.get('one_line', '')}")
-    out += ["", "## 已留下的結論"]
-    if not ctx["conclusions"]:
-        out.append("(還沒有)")
-    for c in ctx["conclusions"]:
-        refs = f" [{_refs(c['refs'])}]" if c.get("refs") else ""
-        mark = f"{_STALE_CONCLUSION} " if c.get("stale") else ""
-        out.append(f"{mark}({c['kind']}) {c['text']}{refs}")
-    return "\n".join(out) + "\n"
 
 
 def _reject(reason: str, msg: str) -> ToolError:
