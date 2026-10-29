@@ -19,19 +19,13 @@ from pathlib import Path
 
 import atomicio
 from marrow.gate import _PUNCT, locate  # noqa: F401  (_PUNCT 給測試用)
+from marrow.vizdata import (  # noqa: F401  (NODE_* 給測試/外部用)
+    NODE_COLORS, NODE_CN, build_viz_data, diagnostics, locate_analysis as validate_and_locate,
+    locate_feedback,
+)
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parent
-NODE_COLORS = {
-    "theme": "#c0392b",      # 紅
-    "motif": "#8e44ad",      # 紫
-    "technique": "#2980b9",  # 藍
-    "effect": "#e67e22",     # 橘
-    "character": "#27ae60",  # 綠
-    "beat": "#7f8c8d",       # 灰
-}
-NODE_CN = {"theme": "主題", "motif": "意象", "technique": "技法",
-           "effect": "效果", "character": "角色", "beat": "節拍"}
 
 
 def read_json(path):
@@ -55,43 +49,13 @@ def load(slug):
     return base, analysis, source
 
 
-def validate_and_locate(analysis, source):
-    """就地把命中座標寫進 evidence(_start/_end/_pos),回傳錯誤清單。"""
-    total = len(source) or 1
-    errors = []
-    for node in analysis.get("nodes", []):
-        for ev in node.get("evidence", []) or []:
-            q = ev.get("quote", "")
-            span = locate(q, source) if q else None
-            if span is None:
-                errors.append((node.get("id", "?"), q))
-                ev["_start"] = ev["_end"] = -1
-                ev["_pos"] = None
-            else:
-                ev["_start"], ev["_end"] = span
-                ev["_pos"] = span[0] / total
-    return errors
-
-
 def load_feedback(base, source):
     """讀 feedback.json(可選),就地把 quote 命中座標寫進 _quotes,回傳 (feedback, errors)。"""
     fp = base / "feedback.json"
     if not fp.exists():
         return None, []
     fb = read_json(fp)
-    errors = []
-    for sec in ("strengths", "key_points"):
-        for pt in fb.get(sec, []) or []:
-            loc = []
-            for q in pt.get("quotes", []) or []:
-                span = locate(q, source)
-                if span is None:
-                    errors.append(("feedback:" + pt.get("title", "?")[:14], q))
-                    loc.append({"quote": q, "start": -1, "end": -1})
-                else:
-                    loc.append({"quote": q, "start": span[0], "end": span[1]})
-            pt["_quotes"] = loc
-    return fb, errors
+    return fb, locate_feedback(fb, source)
 
 
 def validate_schemas(base):
@@ -114,78 +78,6 @@ def validate_schemas(base):
             path = "/".join(str(p) for p in e.path) or "(root)"
             errors.append(f"{fname} [{path}]: {e.message}")
     return errors
-
-
-def diagnostics(analysis):
-    """意圖鏈診斷:孤兒技法 / 過載主題 / 空心主題。回傳 {node_id: set(classes)}。"""
-    nodes = {n["id"]: n for n in analysis.get("nodes", [])}
-    edges = analysis.get("edges", [])
-    out_produces = {}   # technique -> [effect]
-    serves_to = {}      # theme -> [effect] (incoming serves)
-    for e in edges:
-        if e["type"] == "produces":
-            out_produces.setdefault(e["from"], []).append(e["to"])
-        if e["type"] == "serves":
-            serves_to.setdefault(e["to"], []).append(e["from"])
-    # motif manifests theme 也算餵養主題
-    manifests_to = {}
-    for e in edges:
-        if e["type"] == "manifests":
-            manifests_to.setdefault(e["to"], []).append(e["from"])
-
-    classes = {}
-    for nid, n in nodes.items():
-        t = n["type"]
-        if t == "technique" and not out_produces.get(nid):
-            classes.setdefault(nid, set()).add("orphan")        # 孤兒技法
-        if t == "theme":
-            feeders = len(serves_to.get(nid, [])) + len(manifests_to.get(nid, []))
-            if feeders == 0:
-                classes.setdefault(nid, set()).add("hollow")    # 空心主題
-            elif feeders >= 4:
-                classes.setdefault(nid, set()).add("overloaded")  # 過載主題
-    return classes
-
-
-def build_viz_data(slug, analysis, source, diag, feedback=None):
-    """組出前端資料契約 dict —— 落成 stories/<slug>/viz.json,也是 build_html 的輸入。
-    與 source 解耦:原文由 source.md 提供(HYENOVEL_SRC),不重複塞進 viz.json。
-    欄位名須與 viz.js 一致(尤其 diag,非 diagnostics)。"""
-    title = analysis.get("title") or slug
-
-    # node 附帶 evidence(座標)給文本軸 + 點擊
-    node_payload = []
-    for n in analysis.get("nodes", []):
-        evs = []
-        for ev in n.get("evidence", []) or []:
-            evs.append({"quote": ev.get("quote", ""), "start": ev.get("_start", -1),
-                        "end": ev.get("_end", -1), "pos": ev.get("_pos")})
-        node_payload.append({"id": n["id"], "type": n["type"],
-                             "label": n.get("label", n["id"]),
-                             "note": n.get("note", ""),
-                             "intensity": n.get("intensity"),
-                             "evidence": evs})
-
-    feedback_payload = None
-    if feedback:
-        def pts(key):
-            out = []
-            for pt in feedback.get(key, []) or []:
-                out.append({"title": pt.get("title", ""), "body": pt.get("body", ""),
-                            "experiment": pt.get("experiment"), "question": pt.get("question"),
-                            "refs": pt.get("refs", []) or [], "quotes": pt.get("_quotes", [])})
-            return out
-        feedback_payload = {"read": feedback.get("read", ""),
-                            "strengths": pts("strengths"), "key_points": pts("key_points"),
-                            "minor": feedback.get("minor", []), "one_line": feedback.get("one_line", "")}
-
-    return {
-        "slug": slug, "title": title,
-        "nodes": node_payload, "edges": analysis.get("edges", []),
-        "colors": NODE_COLORS, "cn": NODE_CN,
-        "diag": {k: sorted(v) for k, v in diag.items()},
-        "feedback": feedback_payload,
-    }
 
 
 def build_html(data, source):

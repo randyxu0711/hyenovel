@@ -1,0 +1,139 @@
+{
+  "slug": "mini",
+  "title": "極小合成樣本",
+  "nodes": [
+    {
+      "id": "b1",
+      "type": "beat",
+      "label": "進門",
+      "note": "",
+      "intensity": 0.3,
+      "evidence": [
+        {
+          "quote": "他走進門。屋裡沒有人。",
+          "start": 0,
+          "end": 11,
+          "pos": 0.0
+        }
+      ]
+    },
+    {
+      "id": "k1",
+      "type": "technique",
+      "label": "物件擬人",
+      "note": "",
+      "intensity": null,
+      "evidence": [
+        {
+          "quote": "像在等誰",
+          "start": 22,
+          "end": 26,
+          "pos": 0.6111111111111112
+        }
+      ]
+    },
+    {
+      "id": "e1",
+      "type": "effect",
+      "label": "空缺感",
+      "note": "",
+      "intensity": 0.6,
+      "evidence": [
+        {
+          "quote": "他把燈關了。",
+          "start": 29,
+          "end": 35,
+          "pos": 0.8055555555555556
+        }
+      ]
+    },
+    {
+      "id": "t1",
+      "type": "theme",
+      "label": "等待的落空",
+      "note": "",
+      "intensity": null,
+      "evidence": [
+        {
+          "quote": "還亮著",
+          "start": 18,
+          "end": 21,
+          "pos": 0.5
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "type": "produces",
+      "from": "k1",
+      "to": "e1"
+    },
+    {
+      "type": "serves",
+      "from": "e1",
+      "to": "t1"
+    }
+  ],
+  "colors": {
+    "theme": "#c0392b",
+    "motif": "#8e44ad",
+    "technique": "#2980b9",
+    "effect": "#e67e22",
+    "character": "#27ae60",
+    "beat": "#7f8c8d"
+  },
+  "cn": {
+    "theme": "主題",
+    "motif": "意象",
+    "technique": "技法",
+    "effect": "效果",
+    "character": "角色",
+    "beat": "節拍"
+  },
+  "diag": {},
+  "feedback": {
+    "read": "一個人進屋、關燈,寫等待的落空。",
+    "strengths": [
+      {
+        "title": "物件擬人",
+        "body": "燈被寫成在等人,空缺感由物而非人說出。",
+        "experiment": null,
+        "question": null,
+        "refs": [
+          "k1"
+        ],
+        "quotes": [
+          {
+            "quote": "像在等誰",
+            "start": 22,
+            "end": 26
+          }
+        ]
+      }
+    ],
+    "key_points": [
+      {
+        "title": "結尾太快",
+        "body": "關燈收得很乾脆。",
+        "experiment": "多留一拍。",
+        "question": "他為什麼不開口?",
+        "refs": [
+          "e1",
+          "t1"
+        ],
+        "quotes": [
+          {
+            "quote": "他把燈關了。",
+            "start": 29,
+            "end": 35
+          }
+        ]
+      }
+    ],
+    "minor": [
+      "標點可再收"
+    ],
+    "one_line": "結尾多留一拍。"
+  }
+}
