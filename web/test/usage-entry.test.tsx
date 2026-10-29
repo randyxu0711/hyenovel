@@ -3,6 +3,7 @@ import { render, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Journey from "../src/journey/Journey";
 import index from "./fixtures/index.json";
+import { denIndex } from "./den-index";
 import viz from "./fixtures/viz.json";
 
 const USAGE_ALL = {
@@ -26,8 +27,8 @@ beforeEach(() => {
   }));
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     const body = url.includes("/api/usage") ? USAGE_ALL
-      : url.includes("index.json") ? index
-      : url.includes("viz.json") ? viz : null;
+      : url === "/api/stories" ? denIndex
+      : url.endsWith("/viz") ? viz : null;
     if (body) return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     return Promise.resolve({ ok: true, text: () => Promise.resolve("　　原文一段。") } as Response);
   }));

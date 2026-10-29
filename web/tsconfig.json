@@ -6,5 +6,5 @@
     "skipLibCheck": true, "noEmit": true,
     "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "test", "vite-plugin-data.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "test", "den-proxy.ts", "vite.config.ts", "vitest.config.ts"]
 }
