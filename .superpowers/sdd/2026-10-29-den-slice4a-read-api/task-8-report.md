@@ -1,0 +1,4 @@
+# Task 8 report
+Changed: .claude/skills/story-critique/SKILL.md (rewritten: start_critique/critique_status/cancel/resume, imperative rules + examples, bans old subagent flow); .claude/skills/story-discuss/SKILL.md (open_discussion first, editor attitude kept, tells user conclusions are not saved, cross-story label-map section removed since open_discussion is single-story); CLAUDE.md (core principles, diagram, usage, export, web, viz.py/render.py as library, server/ retired slice 5); web/README.md (den-only reading, export, cutover section).
+Suites: pytest 916 passed, coverage 100%; vitest 200 passed / 8 skipped; tsc clean.
+Concerns: label-map cross-story guidance dropped from story-discuss (no MCP source for it). Cutover/smoke not done (R4). Root README.md still mentions old flow (not in brief scope).
