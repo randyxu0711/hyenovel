@@ -81,3 +81,19 @@ def test_extract_docx_paragraphs_joined():
     d.save(buf)
     text = ingest.extract_text("a.docx", buf.getvalue())
     assert "他走進門。" in text and "屋裡沒有人。" in text
+
+
+def test_encoding_priority_favors_big5_over_gb18030():
+    """記錄一個刻意的取捨,不是 bug。
+
+    big5 與 gb18030 互相都能「成功」解對方的 bytes(吐亂碼)——這是無 BOM
+    編碼猜測的固有歧義,不引入 chardet 之類的偵測器就無解。
+
+    fallback 鏈把 big5 排在 gb18030 前面 = 押注「使用者寫繁中/台語」。
+    代價:純簡體的 gb18030 檔會被 big5 搶先解成亂碼。這是接受的。
+
+    (真正的 bug 是 utf-16 曾排在最前面 —— 它對任何偶數 bytes 都「成功」,
+     把 big5 和 gb18030 兩行都變成死碼。已修:utf-16 只在有 BOM 時試。)
+    """
+    text = ingest.extract_text("a.txt", "他走進門。".encode("big5"))
+    assert "他走進門。" in text, "繁中 big5 必須正確解出來(這是主要使用情境)"
