@@ -217,3 +217,45 @@ def test_importer_rerun_keeps_den_current(conn, tmp_path):
     repo.set_current(conn, s["id"], "analysis", aid)          # 模擬 den 產出
     importer.import_story(conn, root / "mini", 3.0)
     assert repo.current_artifact(conn, s["id"], "analysis")["id"] == aid
+
+
+# ── 結論回填 analysis_artifact_id(切片 4a)──
+
+def _fp(root, slug="mini"):
+    import hashlib
+    return hashlib.sha1((root / slug / "analysis.json").read_bytes()).hexdigest()
+
+
+def _conc(fp):
+    return {**CONC_A, "provenance": {"session": "s1", "turns": [0, 1], "analysis_fp": fp}}
+
+
+def test_importer_backfills_conclusion_artifact_when_fp_matches(conn, tmp_path):
+    import hashlib
+    fp = hashlib.sha1((FIXTURES / "mini/analysis.json").read_bytes()).hexdigest()
+    root = make_story(tmp_path, "mini", transcript=TWO_SESSIONS, conclusions=[_conc(fp)])
+    importer.import_story(conn, root / "mini", 10.0)
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    aid = repo.current_artifact(conn, sid, "analysis")["id"]
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
+    importer.import_story(conn, root / "mini", 11.0)             # 重跑冪等
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
+
+
+def test_importer_leaves_null_when_fp_differs(conn, tmp_path):
+    root = make_story(tmp_path, "mini", conclusions=[_conc("not-the-fp")])
+    importer.import_story(conn, root / "mini", 10.0)
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] is None
+
+
+def test_importer_backfills_existing_conclusion_on_rerun(conn, tmp_path):
+    """結論先匯入(fp 不符)→ 日後 fp 對上:補得進去;已有值則不覆蓋。"""
+    root = make_story(tmp_path, "mini", conclusions=[_conc("x")])
+    importer.import_story(conn, root / "mini", 10.0)
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    aid = repo.current_artifact(conn, sid, "analysis")["id"]
+    other, _ = repo.add_artifact(conn, sid, 1, "analysis", 1, {"x": 1}, {}, 0)
+    repo.set_conclusion_artifact(conn, sid, "c0001", aid)
+    repo.set_conclusion_artifact(conn, sid, "c0001", other)       # 已有值,不被覆蓋
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid

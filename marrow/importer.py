@@ -12,6 +12,7 @@
     python -m marrow.importer [--stories DIR] [--db URL]
 """
 import argparse
+import hashlib
 import json
 import logging
 import time
@@ -87,6 +88,7 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
         vid, created = repo.add_source_version(
             conn, sid, (story_dir / "source.md").read_text(encoding="utf-8"), now)
         rep["source_versions_added"] += created
+        aids = {}
         for kind, body in bodies.items():
             if body is None:
                 continue
@@ -94,6 +96,7 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                 conn, sid, vid, kind, schema.SCHEMA_VERSION, body,
                 {"tier": "A", "runner": "legacy-sdk", "imported_from": f"{kind}.json"}, now)
             rep["artifacts_added"] += created
+            aids[kind] = aid
             if created:                      # den 已接手的 current 不被舊檔蓋回
                 repo.set_current(conn, sid, kind, aid)
 
@@ -110,12 +113,17 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                     conn, d, seq, r["role"], r["text"], r["ts"], "den",
                     r.get("anchors") or [], r.get("analysis_fp"))
 
+        # 結論當時對照的 analysis 指紋(舊系統:analysis.json 位元組 sha1)對得上 → 回填該 artifact id
+        fp = (hashlib.sha1((story_dir / "analysis.json").read_bytes()).hexdigest()
+              if "analysis" in aids else None)
         for c in _jsonl(rep, story_dir / "conclusions.jsonl"):
+            prov = c["provenance"]
             rep["conclusions_added"] += repo.add_conclusion(
-                conn, sid, c["id"],
-                disc.get(c["provenance"].get("session")) if isinstance(c["provenance"], dict) else None,
+                conn, sid, c["id"], disc.get(prov.get("session")) if isinstance(prov, dict) else None,
                 c["kind"], c["text"],
-                c["refs"], c["quotes"], c["provenance"], c["valid_from"], c.get("invalidated_at"))
+                c["refs"], c["quotes"], prov, c["valid_from"], c.get("invalidated_at"))
+            if fp is not None and isinstance(prov, dict) and prov.get("analysis_fp") == fp:
+                repo.set_conclusion_artifact(conn, sid, c["id"], aids["analysis"])
 
         for s in _jsonl(rep, story_dir / "settled.jsonl"):
             if s.get("ok") and s["session"] in disc:

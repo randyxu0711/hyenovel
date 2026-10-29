@@ -215,3 +215,54 @@ def test_has_newer_done_job_only_later_ids_same_version(conn):
     assert repo.has_newer_done_job(conn, s, v, j2) is False       # 自己不算
     j3 = repo.create_job(conn, "critique", s, v, {}, 4)
     assert repo.has_newer_done_job(conn, s, v, j3) is False       # 較早的 done 不擋重跑
+
+
+# ── 列表用批次查詢 / 逐字 / 結論回填(切片 4a)──
+
+def test_stories_sorted_by_slug(conn):
+    repo.ensure_story(conn, "s2", "乙", 0)
+    repo.ensure_story(conn, "s1", "甲", 0)
+    assert [(s["slug"], s["title"]) for s in repo.stories(conn)] == [("s1", "甲"), ("s2", "乙")]
+
+
+def test_current_artifacts_all_stories_in_one_query(conn):
+    s, v = _story(conn)
+    s2 = repo.ensure_story(conn, "s2", None, 0)
+    v2, _ = repo.add_source_version(conn, s2, "乙", 0)
+    a, _ = repo.add_artifact(conn, s, v, "analysis", 1, {"k": 1}, {}, 0)
+    f, _ = repo.add_artifact(conn, s, v, "feedback", 1, {"k": 2}, {}, 0)
+    b, _ = repo.add_artifact(conn, s2, v2, "analysis", 1, {"k": 3}, {}, 0)
+    for st, kind, aid in ((s, "analysis", a), (s, "feedback", f), (s2, "analysis", b)):
+        repo.set_current(conn, st, kind, aid)
+    got = {(c["story_id"], c["kind"]): c["artifact"] for c in repo.current_artifacts(conn)}
+    assert set(got) == {(s, "analysis"), (s, "feedback"), (s2, "analysis")}
+    assert got[(s, "analysis")]["id"] == a and got[(s, "analysis")]["body"] == {"k": 1}
+    assert "cur_kind" not in got[(s, "analysis")] and got[(s2, "analysis")]["story_id"] == s2
+
+
+def test_latest_jobs_picks_max_id_per_story(conn):
+    s, v = _story(conn)
+    s2 = repo.ensure_story(conn, "s2", None, 0)
+    v2, _ = repo.add_source_version(conn, s2, "乙", 0)
+    repo.create_job(conn, "critique", s, v, {}, 0)
+    j2 = repo.create_job(conn, "critique", s, v, {}, 1)
+    j3 = repo.create_job(conn, "critique", s2, v2, {}, 2)
+    repo.ensure_story(conn, "s3", None, 0)                        # 無 job 的篇不在結果裡
+    got = repo.latest_jobs(conn)
+    assert {k: x["id"] for k, x in got.items()} == {s: j2, s2: j3}
+
+
+def test_discussions_with_utterances_orders_by_ts_then_seq(conn):
+    s, _ = _story(conn)
+    other = repo.ensure_story(conn, "s2", None, 0)
+    da = repo.ensure_discussion(conn, s, "A", "web", None, 0)
+    db_ = repo.ensure_discussion(conn, s, "B", "web", None, 0)
+    dz = repo.ensure_discussion(conn, other, "Z", "web", None, 0)
+    repo.add_utterance(conn, da, 0, "user", "a0", 1.0, "den", ["t1"], None)
+    repo.add_utterance(conn, da, 1, "assistant", "a1", 3.0, "den", [], None)
+    repo.add_utterance(conn, db_, 0, "user", "b0", 2.0, "den", [], None)
+    repo.add_utterance(conn, dz, 0, "user", "z0", 0.5, "den", [], None)
+    got = repo.discussions_with_utterances(conn, s)
+    assert [(u["external_id"], u["text"]) for u in got] == [("A", "a0"), ("B", "b0"), ("A", "a1")]
+    assert got[0]["anchors"] == ["t1"] and set(got[0]) == {
+        "external_id", "seq", "role", "text", "ts", "anchors"}
