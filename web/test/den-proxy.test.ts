@@ -151,6 +151,34 @@ describe("denHandler", () => {
   });
 });
 
+describe("denHandler Host 檢查(DNS rebinding)", () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  afterEach(() => ctx?.close());
+
+  it("Host evil.example + same-origin → 403,上游沒被打到", async () => {
+    ctx = await setup(mk());
+    const r = await ctx.call("/stories", { host: "evil.example:5173", "sec-fetch-site": "same-origin" });
+    expect(r.status).toBe(403);
+    expect(ctx.seen).toHaveLength(0);
+  });
+  it("Host evil.example + 看似合法的 Origin → 403", async () => {
+    ctx = await setup(mk());
+    const r = await ctx.call("/stories", { host: "evil.example:5173", origin: "http://localhost:5173" });
+    expect(r.status).toBe(403);
+    expect(ctx.seen).toHaveLength(0);
+  });
+  it("Host [::1]:5173 + Origin http://[::1]:5173 → 轉發", async () => {
+    ctx = await setup(mk());
+    const r = await ctx.call("/stories", { host: "[::1]:5173", origin: "http://[::1]:5173" });
+    expect(r.status).toBe(201);
+  });
+  it("缺 Host → 403(直接餵 handler)", () => {
+    const res: any = { setHeader: vi.fn(), end: vi.fn(), statusCode: 0 };
+    denHandler(mkdir(full))({ headers: { "sec-fetch-site": "same-origin" }, url: "/x" } as any, res);
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 describe("denHandler 無 den", () => {
   it("503 JSON", async () => {
     const web = createServer(denHandler(mkdir({})));

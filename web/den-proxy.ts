@@ -26,18 +26,29 @@ export function denTarget(dir: string): { url: string; token: string } | null {
   }
 }
 
-/** vite 自己的 origin:Host 標頭的 port,配 localhost / 127.0.0.1。 */
-function allowedOrigins(req: IncomingMessage): string[] {
-  const port = String(req.headers.host ?? "").split(":")[1];
-  const suffix = port ? `:${port}` : "";
-  return [`http://localhost${suffix}`, `http://127.0.0.1${suffix}`];
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
+
+/** 驗 Host 標頭(防 DNS rebinding;不倚賴 vite 的 hostCheck 中介層順序):
+ *  hostname 必須是 loopback,回傳 host 的 port 部分(含冒號,可為空);否則 null。 */
+function loopbackHost(req: IncomingMessage): { port: string } | null {
+  const h = req.headers.host;
+  if (!h) return null;
+  const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec(h);
+  if (!m) return null;
+  const name = m[1].replace(/^\[|\]$/g, "").toLowerCase();
+  return LOOPBACK.has(name) ? { port: m[2] ? `:${m[2]}` : "" } : null;
+}
+
+/** vite 自己的 origin:已驗過的 loopback Host 的 port,配 localhost / 127.0.0.1 / [::1]。 */
+function allowedOrigins(port: string): string[] {
+  return [`http://localhost${port}`, `http://127.0.0.1${port}`, `http://[::1]${port}`];
 }
 
 /** Origin 在白名單,或(沒有 Origin 且瀏覽器自報 same-origin)才放行;
  *  Origin: null、跨站、沒標頭的非瀏覽器請求一律擋。 */
-function originOk(req: IncomingMessage): boolean {
+function originOk(req: IncomingMessage, port: string): boolean {
   const origin = req.headers.origin;
-  if (origin !== undefined) return allowedOrigins(req).includes(String(origin));
+  if (origin !== undefined) return allowedOrigins(port).includes(String(origin));
   return req.headers["sec-fetch-site"] === "same-origin";
 }
 
@@ -50,7 +61,9 @@ function reply(res: ServerResponse, code: number, body: unknown) {
 /** 掛在 /api 底下的純 Node handler(connect 已去掉前綴,req.url 直接是 den 的路徑)。 */
 export function denHandler(dir: string = dataDir()): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
-    if (!originOk(req)) return reply(res, 403, { detail: "Origin 不被允許" });
+    const host = loopbackHost(req);
+    if (!host) return reply(res, 403, { detail: "Host 不被允許" });
+    if (!originOk(req, host.port)) return reply(res, 403, { detail: "Origin 不被允許" });
     const t = denTarget(dir); // 每個請求重讀:den 可能換 port 重啟
     if (!t) return reply(res, 503, { detail: DEN_DOWN });
     const { origin: _o, host: _h, authorization: _a, ...rest } = req.headers;
