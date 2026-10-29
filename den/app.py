@@ -9,6 +9,8 @@
                             ({slug} 讀取路由:不合 slug → 400,不存在 → 404,皆記 reject)
   POST /extract             multipart `file` → {filename, text, chars} | 413 超限 | 400 抽字失敗
   GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
+  POST /discuss/{slug}      {"session_id"?, "message", "anchors"} → SSE token* → message + done | error
+                            (串流前判:422 slug/body、404 無此篇/非此篇的局、409 未分析/該局有一輪在跑)
   GET  /health              → {version, pid, busy}
   POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, resumed, runner, note}
                             (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的;
@@ -31,7 +33,7 @@ import logging
 import os
 import secrets
 import time
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager, nullcontext
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -40,11 +42,12 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import stories, version, views
-from den.config import (HOST, IDLE_CHECK, IDLE_EXIT, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT,
-                        valid_slug)
+from den import discuss, stories, version, views
+from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, MAX_ANCHORS, MAX_CHAT_CHARS,
+                        MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
 from den.jobs import JobManager
-from den.runner import ClaudePreset, cli_version, find_claude, pick_runner, run_job
+from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
+                        stream_chat)
 from marrow import db, ingest, repo, vizdata
 
 log = logging.getLogger("hyenovel")
@@ -77,6 +80,12 @@ class StoryIn(BaseModel):
     text: str
     title: str | None = None
     slug: str | None = None
+
+
+class DiscussIn(BaseModel):
+    session_id: str | None = Field(default=None, max_length=64)
+    message: str = Field(min_length=1, max_length=MAX_CHAT_CHARS)
+    anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
 
 
 def load_token(data_dir: Path) -> str:
@@ -149,6 +158,7 @@ async def _watch_idle(app: FastAPI, idle_exit, idle_check, clock, on_idle) -> No
 
 
 def _default_factory():
+    """claude 只找一次;回 (job 的 run_factory, 討論的 chat_factory, CLI 版本)。"""
     exe = find_claude()
     if exe is None:
         raise RuntimeError("找不到 claude CLI(PATH 上沒有):先安裝 Claude Code 並登入再啟動 den")
@@ -156,18 +166,44 @@ def _default_factory():
 
     def factory(on_proc):
         return functools.partial(run_job, preset, timeout=PHASE_TIMEOUT, on_proc=on_proc)
-    return factory, cli_version(exe)
+
+    def chat_factory():
+        return functools.partial(stream_chat, preset, timeout=CHAT_TIMEOUT)
+    return factory, chat_factory, cli_version(exe)
 
 
 def _sse_line(ev: dict) -> str:
     return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 
 
+_BUSY = {"event": "error", "data": {"where": "discuss", "message": "這一局還有一輪在跑",
+                                   "recoverable": True}}
+
+
+async def _chat_stream(state, lock: asyncio.Lock | None, events):
+    """一輪討論的 SSE 本體:算進開著的串流(閒置退場不砍)、整輪持該局的鎖。
+
+    鎖在這裡拿而非端點:回應若沒開始送,generator 從沒進來,鎖也就不會漏放。
+    被斷線關掉時 aclosing 一路關到 chat,工人隨之被殺。
+    """
+    state.streams += 1
+    try:
+        if lock is not None and lock.locked():   # 端點判過後、開始前被別人搶先(極窄)
+            yield _sse_line(_BUSY)
+            return
+        async with lock or nullcontext(), aclosing(events):
+            async for ev in events:
+                yield _sse_line(ev)
+    finally:
+        state.streams -= 1
+
+
 def _state_event(job: dict) -> dict:
     return {"event": "state", "data": {k: job[k] for k in ("state", "step", "error_class", "detail")}}
 
 
-def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = PORT,
+def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=None,
+               port: int = PORT,
                idle_exit: float = IDLE_EXIT, idle_check: float = IDLE_CHECK,
                on_idle: Callable[[], None] | None = None, clock=time.monotonic) -> FastAPI:
     origins = {f"http://{HOST}:{port}", f"http://localhost:{port}"}
@@ -182,7 +218,13 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
             raise RuntimeError(f"den 已在執行(鎖在 {data_dir / 'den.lock'})") from None
         conn = None
         try:
-            factory, ver = (run_factory, None) if run_factory else _default_factory()
+            if run_factory:   # 只有測試注入;沒注入 chat_factory 時討論端點不可用
+                factory, default_chat, ver = run_factory, None, None
+            else:
+                factory, default_chat, ver = _default_factory()
+            chat_f = chat_factory or default_chat
+            app.state.chat = chat_f() if chat_f else None
+            app.state.chat_locks = {}                   # f"{slug}/{session_id}" → 該局的鎖
             app.state.token = load_token(data_dir)
             app.state.version = version.fingerprint()   # 啟動時算一次;磁碟上現在的值由呼叫者現算比對
             app.state.available = ("claude",)           # 目前唯一 preset;其他家在 backlog
@@ -348,6 +390,31 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
         except ValueError:
             log.info("event=reject where=discussion reason=not-analyzed")
             raise HTTPException(409, "這篇還沒分析完成") from None
+
+    @app.post("/discuss/{slug}")
+    async def discuss_turn(slug: str, body: DiscussIn, request: Request):
+        def reject(code: int, reason: str, detail: str) -> HTTPException:
+            log.info("event=reject where=discuss reason=%s", reason)
+            return HTTPException(code, detail)
+        if not valid_slug(slug):
+            raise reject(422, "bad-slug", "bad slug")
+        state = request.app.state
+        try:
+            turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id)
+        except LookupError:
+            raise reject(404, "unknown-slug", "這篇不在 DB") from None
+        except ValueError:
+            raise reject(409, "not-analyzed", "這篇還沒分析完成") from None
+        except discuss.UnknownSession:
+            raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        lock = None
+        if body.session_id is not None:   # 新局不會撞:id 這輪才發
+            lock = state.chat_locks.setdefault(f"{slug}/{body.session_id}", asyncio.Lock())
+            if lock.locked():
+                raise reject(409, "busy", "這一局還有一輪在跑")
+        events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors)
+        return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/jobs")
     async def list_jobs(request: Request, limit: int = 20):
