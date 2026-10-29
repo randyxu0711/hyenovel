@@ -13,7 +13,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import AsyncIterator, Callable, Mapping
 
 from den import config
 from marrow.jsonout import extract_json
@@ -49,6 +49,15 @@ def build_argv(preset: ClaudePreset, system_prompt_file: Path, schema: dict) -> 
     # 解析(marrow.jsonout)、閘門驗,格式錯誤也成為一筆看得見的 attempt。schema 參數保留不用。
     return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
             "--no-session-persistence", "--output-format", "json",
+            "--model", preset.model,
+            "--system-prompt-file", str(system_prompt_file)]
+
+
+def build_chat_argv(preset: ClaudePreset, system_prompt_file: Path) -> list[str]:
+    # 同 build_argv 的隔離配方,只換成 stream-json 逐字串流
+    return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
+            "--no-session-persistence", "--output-format", "stream-json",
+            "--include-partial-messages", "--verbose",
             "--model", preset.model,
             "--system-prompt-file", str(system_prompt_file)]
 
@@ -109,7 +118,9 @@ def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
                       "output": usage.get("output_tokens"),
                       "cache_read": usage.get("cache_read_input_tokens"),
                       "cache_creation": usage.get("cache_creation_input_tokens"),
-                      "thinking": (usage.get("output_tokens_details") or {}).get("thinking_tokens")}
+                      "thinking": (usage.get("output_tokens_details") or {}).get("thinking_tokens"),
+                      # 每個行程只跑一次,total_cost_usd 就是單次成本(非 SDK 的 client 累計值)
+                      "cost_usd": obj.get("total_cost_usd")}
         mu = obj.get("modelUsage")
         if isinstance(mu, dict) and mu:
             model = next(iter(mu))
@@ -170,6 +181,77 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
         msg = explain(outcome, obj, err.decode("utf-8", "replace"), msg)
         log.info("event=run_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
         return make_result(outcome, obj, raw, msg, ms())
+
+
+async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str,
+                      *, timeout: float) -> AsyncIterator[tuple[str, str | RunResult]]:
+    """逐個 yield ("delta", 文字),最後恰好一次 ("result", RunResult)。
+
+    只認 text_delta(見 #13)。消費端中途 aclose / 取消 / 逾時,finally 一律殺整個行程群組。
+    """
+    t0 = time.monotonic()
+
+    def ms() -> int:
+        return int((time.monotonic() - t0) * 1000)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        sp = Path(tmp) / "system.md"
+        sp.write_text(system_prompt, encoding="utf-8")
+        proc = await asyncio.create_subprocess_exec(
+            *build_chat_argv(preset, sp),
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE, cwd=tmp, env=worker_env(os.environ),
+            start_new_session=True, limit=1 << 24)
+        err_task = asyncio.ensure_future(proc.stderr.read())
+        result_line = ""
+        timed_out = False
+        try:
+            proc.stdin.write(user_prompt.encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
+            deadline = t0 + timeout
+            while True:
+                try:
+                    raw_line = await asyncio.wait_for(
+                        proc.stdout.readline(), max(deadline - time.monotonic(), 0))
+                except asyncio.TimeoutError:
+                    timed_out = True
+                    break
+                if not raw_line:
+                    break
+                try:
+                    ev = json.loads(raw_line)
+                except ValueError:
+                    continue
+                if not isinstance(ev, dict):
+                    continue
+                if ev.get("type") == "result":
+                    result_line = raw_line.decode("utf-8", "replace")
+                elif ev.get("type") == "stream_event":
+                    inner = ev.get("event") or {}
+                    delta = inner.get("delta") or {}
+                    if (inner.get("type") == "content_block_delta"
+                            and delta.get("type") == "text_delta"
+                            and isinstance(delta.get("text"), str)):
+                        yield "delta", delta["text"]
+            if timed_out:
+                kill_tree(proc)
+            await proc.wait()
+            err = (await err_task).decode("utf-8", "replace")
+        finally:
+            kill_tree(proc)
+            await proc.wait()
+            err_task.cancel()
+        if timed_out:
+            log.info("event=chat_done outcome=timeout rc=%s ms=%s", proc.returncode, ms())
+            yield "result", RunResult("timeout", None, "", None, None, ms(), f"逾時 {timeout}s")
+            return
+        outcome, obj, msg = classify(proc.returncode, result_line)
+        msg = explain(outcome, obj, err, msg)
+        log.info("event=chat_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
+        res = make_result(outcome, obj, result_line, msg, ms())
+        res.parsed = None                            # 聊天輸出是自由文字,不抽 JSON
+        yield "result", res
 
 
 def cli_version(exe: str) -> str | None:

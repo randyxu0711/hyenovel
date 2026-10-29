@@ -22,6 +22,7 @@ def fake(tmp_path):
     exe = tmp_path / "claude"
     shutil.copy(FIX / "fake_claude.py", exe)
     shutil.copy(FIX / "claude_ok.json", tmp_path / "claude_ok.json")
+    shutil.copy(FIX / "claude_stream_ok.jsonl", tmp_path / "claude_stream_ok.jsonl")
     exe.chmod(0o755)
 
     def set_mode(mode):
@@ -59,7 +60,8 @@ def test_classify_ok_fixture():
     res = runner.make_result(outcome, obj, json.dumps(OK), msg, 5)
     assert res.model == "claude-haiku-5-5"
     assert res.tokens == {"input": 2, "output": 111, "cache_read": 0,
-                          "cache_creation": 1186, "thinking": 58}
+                          "cache_creation": 1186, "thinking": 58,
+                          "cost_usd": 0.0002929}
     assert res.parsed == {"answer": 2}
     assert res.num_turns == 2
 
@@ -177,6 +179,69 @@ def test_cancel_kills_process_group(fake, tmp_path):
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+        t0 = time.time()
+        while time.time() - t0 < 0.5 and not _dead(pid):
+            await asyncio.sleep(0.02)
+        assert _dead(pid)
+
+    asyncio.run(drive())
+
+
+def _chat(exe, timeout=10):
+    async def go():
+        return [e async for e in runner.stream_chat(ClaudePreset(exe), "sys", "hi", timeout=timeout)]
+    return asyncio.run(go())
+
+
+def test_chat_argv_recipe_locked():
+    argv = runner.build_chat_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"))
+    assert argv == ["/x/claude", "-p", "--safe-mode", "--tools", "",
+                    "--strict-mcp-config", "--no-session-persistence",
+                    "--output-format", "stream-json", "--include-partial-messages", "--verbose",
+                    "--model", "sonnet", "--system-prompt-file", "/t/sys.md"]
+
+
+def test_stream_chat_yields_deltas_then_one_result(fake):
+    evs = _chat(fake("stream"))
+    deltas = "".join(v for k, v in evs if k == "delta")
+    kind, res = evs[-1]
+    assert kind == "result" and res.outcome == "ok" and res.parsed is None
+    assert deltas == res.text                       # 串出去的 = 落盤的
+    assert res.tokens["cost_usd"] is not None
+    assert [k for k, _ in evs].count("result") == 1
+
+
+def test_stream_chat_usage_limit(fake):
+    *_, (_, res) = _chat(fake("stream-429"))
+    assert res.outcome == "usage-limit"
+
+
+def test_stream_chat_no_result_line_is_crash(fake):
+    evs = _chat(fake("stream-cut"))
+    assert [k for k, _ in evs] == ["delta", "delta", "result"]
+    assert evs[-1][1].outcome == "crash"
+
+
+def test_stream_chat_timeout_kills_group(fake, tmp_path):
+    *_, (_, res) = _chat(fake("sleep"), timeout=0.5)
+    assert res.outcome == "timeout"
+    pid = _child_pid(tmp_path)
+    assert pid and _dead(pid)
+
+
+def test_stream_chat_aclose_kills_worker(fake, tmp_path):
+    exe = fake("stream-slow")
+
+    async def drive():
+        gen = runner.stream_chat(ClaudePreset(exe), "s", "u", timeout=10)
+        assert (await gen.__anext__())[0] == "delta"
+        for _ in range(100):
+            if _child_pid(tmp_path):
+                break
+            await asyncio.sleep(0.05)
+        pid = _child_pid(tmp_path)
+        assert pid
+        await gen.aclose()
         t0 = time.time()
         while time.time() - t0 < 0.5 and not _dead(pid):
             await asyncio.sleep(0.02)
