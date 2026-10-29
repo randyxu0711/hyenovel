@@ -112,7 +112,8 @@ class JobManager:
         if stuck is not None and self.resume(stuck["id"]):
             log.info("event=job-auto-resumed job=%s", stuck["id"])
             return {"job_id": stuck["id"], "estimate": est, "existing": True, "resumed": True,
-                    "previous_error_class": stuck["error_class"]}   # requeue 前讀的:停在哪
+                    "previous_state": stuck["state"],                # requeue 前讀的:停在哪
+                    "previous_error_class": stuck["error_class"]}
         with self.conn:
             jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
                                   {"client": client, "runner": runner}, self._now())
@@ -143,8 +144,8 @@ class JobManager:
         sv = job["source_version_id"]
         if repo.latest_source_version(self.conn, job["story_id"])["id"] != sv:
             return "stale-version"   # 跑完會把 current(按篇+種類)換回舊稿的分析
-        if repo.has_done_job(self.conn, sv):
-            return "already-done"    # 這一版已有成品;要重跑請送新 job
+        if repo.has_newer_done_job(self.conn, job["story_id"], sv, job["id"]):
+            return "already-done"    # 已被後來跑完的同版 job 取代;要重跑請送新 job
         other = repo.active_job(self.conn, job["story_id"], sv)
         if other is not None and other["id"] != job["id"]:
             return f"active-job other={other['id']}"   # 再排一個 = 同一份錢花兩次

@@ -189,7 +189,8 @@ def test_start_twice_while_inflight_no_second_job(data, tmp_path):
     ("paused", "usage-limit", "上次停在:訂閱額度用完"),
     ("failed", "gate", "上次停在:引文閘門重試耗盡"),
     ("cancelled", None, "上次是你取消的"),
-], ids=["paused-usage-limit", "failed-gate", "cancelled"])
+    ("failed", None, "上次沒有跑完"),
+], ids=["paused-usage-limit", "failed-gate", "cancelled", "failed-no-class"])
 def test_start_same_version_after_stop_resumes(den, tmp_path, state, cls, why):
     """同一份原文之前停在半路 → 接續那個 job、說出上次停在哪,不說「已送出」新 job。"""
     p = str(_write(tmp_path))
@@ -210,6 +211,8 @@ def test_start_same_version_after_stop_resumes(den, tmp_path, state, cls, why):
     t = _text(r)
     assert f"之前跑到一半(job {first}),已接續:已完成的步驟不重跑。" in t
     assert why in t
+    if state != "cancelled":
+        assert "取消" not in t
     assert f"critique_status job_id={first}" in t
     assert "已送出" not in t
 
@@ -303,7 +306,7 @@ def test_resume_409_message(den):
     r = _call(den.client(), "resume_critique", {"job_id": _make_job(den, "done")})
     t = _text(r)
     assert r.is_error and "這個 job 目前不能續跑" in t
-    assert "已結束" in t and "舊版原文" in t and "同一版已有別的 job 在跑或已完成" in t
+    assert "已結束" in t and "舊版原文" in t and "同一版已有別的 job 在跑,或之後已有一次跑完" in t
 
 
 def test_status_list_marks_stale_version(den):

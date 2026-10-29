@@ -333,7 +333,8 @@ def test_submit_auto_resumes_paused_same_version(conn, caplog):
         with caplog.at_level(logging.INFO, logger="hyenovel"):
             again = m.submit("mini")
         assert again == {"job_id": first["job_id"], "estimate": again["estimate"],
-                         "existing": True, "resumed": True, "previous_error_class": "usage-limit"}
+                         "existing": True, "resumed": True, "previous_state": "paused",
+                         "previous_error_class": "usage-limit"}
         assert f"event=job-auto-resumed job={first['job_id']}" in caplog.text
         assert _job_count(conn) == 1
         await _until(lambda: _state(conn, first["job_id"]) == "done", "續跑跑完")
@@ -438,3 +439,39 @@ def test_resume_rejected_when_version_already_done(conn, caplog):
     assert f"event=resume-rejected job={old} reason=already-done" in caplog.text
     assert out["job_id"] not in (old, sib) and out["resumed"] is False
     assert _state(conn, old) == "paused"
+
+
+def test_rerun_after_done_can_pause_and_resume(conn):
+    """done J1 → 明確重跑 J2 停在半路 → J2 能續(直接 resume 與重送自動續跑都行)。"""
+    async def main():
+        run = ScriptRun()
+        m = _mgr(conn, run)
+        j1 = m.submit("mini")["job_id"]
+        w = asyncio.create_task(m.worker())
+        await _until(lambda: _state(conn, j1) == "done", "J1 跑完")
+        run.crit.append(fail("usage-limit"))
+        j2 = m.submit("mini")["job_id"]
+        assert j2 != j1
+        await _until(lambda: _state(conn, j2) == "paused", "J2 撞額度")
+        again = m.submit("mini")                                   # 自動續跑 J2
+        assert (again["job_id"], again["resumed"]) == (j2, True)
+        await _until(lambda: _state(conn, j2) == "done", "J2 續跑完")
+        assert run.calls == {"analyst": 2, "criticizer": 3}        # J2 的 analyst 沒重跑
+        run.crit.append(fail("usage-limit"))
+        j3 = m.submit("mini")["job_id"]
+        await _until(lambda: _state(conn, j3) == "paused", "J3 撞額度")
+        assert m.resume(j3) is True                                # 直接 resume 也行
+        await _until(lambda: _state(conn, j3) == "done", "J3 續跑完")
+        await _stop(w)
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize("state, cls", [("paused", "usage-limit"), ("failed", None),
+                                        ("cancelled", None)])
+def test_submit_auto_resume_reports_previous_state(conn, state, cls):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    with conn:
+        repo.set_job_state(conn, jid, state, 2.0, error_class=cls)
+    out = m.submit("mini")
+    assert (out["job_id"], out["previous_state"], out["previous_error_class"]) == (jid, state, cls)

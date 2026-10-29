@@ -228,8 +228,13 @@ def build_server(den: DenClient) -> MCPServer:
             lines.append(f"這份原文和 {s['slug']} 的最新版相同,沿用那篇。")
         if j.get("resumed"):
             cls = j.get("previous_error_class")
-            lines += [f"這篇這一版之前跑到一半(job {j['job_id']}),已接續:已完成的步驟不重跑。",
-                      f"上次停在:{_REASONS.get(cls, cls)}" if cls else "上次是你取消的。",
+            if cls:
+                why = f"上次停在:{_REASONS.get(cls, cls)}"
+            elif j.get("previous_state") == "cancelled":
+                why = "上次是你取消的。"
+            else:
+                why = "上次沒有跑完。"
+            lines += [f"這篇這一版之前跑到一半(job {j['job_id']}),已接續:已完成的步驟不重跑。", why,
                       f"好了問我進度(critique_status job_id={j['job_id']})。"]
             return "\n".join(lines)
         if j["existing"]:
@@ -271,7 +276,7 @@ def build_server(den: DenClient) -> MCPServer:
     async def resume_critique(job_id: int) -> str:
         return await guarded(_act(job_id, "resume", ("這個 job 目前不能續跑。可能是:已結束(只有暫停/失敗/取消的可以續);"
                                   "舊版原文(改稿後請用 start_critique 跑新版);"
-                                  "同一版已有別的 job 在跑或已完成。"),
+                                  "同一版已有別的 job 在跑,或之後已有一次跑完。"),
                                   f"job {job_id} 已重新排入;用 critique_status 查進度。"))
 
     async def _open(slug: str) -> str:

@@ -198,16 +198,20 @@ def test_resumable_job_newest_paused_failed_cancelled_same_version(conn):
     assert repo.resumable_job(conn, s, v2)["id"] == other
 
 
-def test_has_done_job_same_version_only(conn):
+def test_has_newer_done_job_only_later_ids_same_version(conn):
     s, v = _story(conn)
     v2, _ = repo.add_source_version(conn, s, "乙", 1)
-    assert repo.has_done_job(conn, v) is False
-    j = repo.create_job(conn, "critique", s, v2, {}, 0)
-    repo.set_job_state(conn, j, "done", 1)
-    assert repo.has_done_job(conn, v) is False
-    k = repo.create_job(conn, "critique", s, v, {}, 0)
+    j1 = repo.create_job(conn, "critique", s, v, {}, 0)
+    assert repo.has_newer_done_job(conn, s, v, j1) is False
+    other = repo.create_job(conn, "critique", s, v2, {}, 0)       # 別的版本不算
+    repo.set_job_state(conn, other, "done", 1)
+    assert repo.has_newer_done_job(conn, s, v, j1) is False
+    j2 = repo.create_job(conn, "critique", s, v, {}, 0)
     for st in ("queued", "running", "paused", "failed", "cancelled"):
-        repo.set_job_state(conn, k, st, 2)
-        assert repo.has_done_job(conn, v) is False
-    repo.set_job_state(conn, k, "done", 3)
-    assert repo.has_done_job(conn, v) is True
+        repo.set_job_state(conn, j2, st, 2)
+        assert repo.has_newer_done_job(conn, s, v, j1) is False
+    repo.set_job_state(conn, j2, "done", 3)
+    assert repo.has_newer_done_job(conn, s, v, j1) is True        # j1 被後來跑完的取代
+    assert repo.has_newer_done_job(conn, s, v, j2) is False       # 自己不算
+    j3 = repo.create_job(conn, "critique", s, v, {}, 4)
+    assert repo.has_newer_done_job(conn, s, v, j3) is False       # 較早的 done 不擋重跑

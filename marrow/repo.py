@@ -304,10 +304,12 @@ def list_jobs(conn, limit: int) -> list[dict]:
     return rows
 
 
-def has_done_job(conn, source_version_id: int) -> bool:
-    """這一版原文是否已有跑完(done)的 job。"""
-    return conn.execute("SELECT 1 FROM job WHERE source_version_id = ? AND state = 'done' "
-                        "LIMIT 1", (source_version_id,)).fetchone() is not None
+def has_newer_done_job(conn, story_id: int, source_version_id: int, job_id: int) -> bool:
+    """同篇同版有 id 比 job_id 大、已 done 的 job(這個 job 已被後來跑完的取代)。
+    較早的 done 不算:跑完後明確重跑的 job 停在半路仍要能續。"""
+    return conn.execute(
+        "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
+        "AND state = 'done' LIMIT 1", (story_id, source_version_id, job_id)).fetchone() is not None
 
 
 def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:
