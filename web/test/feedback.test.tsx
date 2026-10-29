@@ -7,7 +7,7 @@ import viz from "./fixtures/viz.json";
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string) =>
-    url.includes("viz.json")
+    url.endsWith("/viz")
       ? Promise.resolve({ ok: true, json: () => Promise.resolve(viz) } as Response)
       : Promise.resolve({ ok: true, text: () => Promise.resolve("　　原文。") } as Response),
   ));

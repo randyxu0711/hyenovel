@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { getStory, getConclusions } from "../data/client";
 import BoneStage from "../lab/BoneStage";
 import NodeTalk from "../lab/NodeTalk";
 import { embersByRef } from "../data/embers";
 import { useDiscussion } from "./useDiscussion";
 import SourceAnnotated from "./SourceAnnotated";
-import UsagePanel from "./UsagePanel";
 import Dust from "./Dust";
 import type { VizData, FeedbackPoint, Conclusion } from "../types";
 import "../lab/lab.css";
@@ -29,10 +28,7 @@ export default function Single() {
   const [mode, setMode] = useState<Mode>("axis");
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  // 從用量星圖點星進來 → 直接開在用量 tab(route state,不汙染 URL)
-  const wantTab = (useLocation().state as { tab?: string } | null)?.tab;
-  const [text, setText] = useState<null | "source" | "feedback" | "usage">(
-    wantTab === "usage" ? "usage" : null);
+  const [text, setText] = useState<null | "source" | "feedback">(null);
   const [hl, setHl] = useState<{ start: number; end: number } | null>(null);
   const [embers, setEmbers] = useState<Conclusion[]>([]);
   // 討論局活在篇這一層:關掉討論框(取消選取)不該把對話和 session 一起帶走。
@@ -58,11 +54,11 @@ export default function Single() {
   useEffect(() => {
     if (!slug) return;
     setData(null); setErr(null); setSelected(null); setHover(null); setHl(null); setEmbers([]);
-    setText(wantTab === "usage" ? "usage" : null);   // 換篇歸零;但從星圖點進來的意圖要留著
+    setText(null);   // 換篇歸零
     getStory(slug).then(setData).catch(e => setErr(String(e instanceof Error ? e.message : e)));
     // 燼是增益不是主線:抓不到就沒燼,骨架照常(絕不擋主畫面)。
     getConclusions(slug).then(r => setEmbers(r.conclusions)).catch(() => setEmbers([]));
-  }, [slug, wantTab]);
+  }, [slug]);
   const embersByRefMap = useMemo(() => embersByRef(embers), [embers]);
 
   if (err) return <div className="sb"><div className="sb-msg">讀不到「{slug}」的分析:{err}</div></div>;
@@ -85,7 +81,6 @@ export default function Single() {
         <div className="sb-textabs">
           <button className={text === "source" ? "on" : ""} onClick={() => setText(text === "source" ? null : "source")}>原文</button>
           <button className={text === "feedback" ? "on" : ""} onClick={() => setText(text === "feedback" ? null : "feedback")}>回饋</button>
-          <button className={text === "usage" ? "on" : ""} onClick={() => setText(text === "usage" ? null : "usage")}>用量</button>
         </div>
       </div>
 
@@ -131,7 +126,6 @@ export default function Single() {
               <p className="fb-lead one">{fb.one_line}</p>
             </div>
           ) : <p className="sb-msg">這篇還沒有編輯回饋。</p>)}
-          {text === "usage" && <UsagePanel slug={slug!} />}
           </div>
         </div>
       )}

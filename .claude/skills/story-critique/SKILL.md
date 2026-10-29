@@ -1,57 +1,21 @@
 ---
 name: story-critique
-description: 對一篇純文學短篇跑完整評論鏈。編排 analyst(產 analysis.json)→ criticizer(產 feedback.md)→ 渲染 analysis.md → 產 viz.html。用於使用者要「分析/評論一篇故事」「跑 critique」時。輸入是 stories/<slug>/source.md 的路徑或 slug。
+description: 把一篇純文學短篇送進 den 跑完整評論鏈(分析→編輯評論),走 hyenovel MCP 的 start_critique。用於使用者要「分析/評論一篇故事」「跑 critique」「看進度」時。輸入是 .md / .txt 檔案路徑(改稿重跑可帶 slug)。
 ---
 
-# story-critique:故事評論編排
+# story-critique:送文、報預估、查進度
 
-對一篇短篇跑完整鏈:**analyst → criticizer → 渲染 → 視覺化**。
-核心原則:`analysis.json` 是唯一正本,其餘都是它的下游。analyst 與 criticizer **必須用獨立 subagent 跑**(隔離 context,保判斷獨立)。
+評論鏈由 den(背景 daemon)執行,結果寫進 DB,網頁讀得到。你只負責呼叫 MCP tool 並轉告,**不自己分析、不寫檔**。
 
-## 輸入
-使用者給 `stories/<slug>/source.md` 路徑或 `<slug>`。解析出 `<slug>` 與資料夾。
-若 `source.md` 不存在,請使用者先把故事放進去,停止。
+## 規則
+1. **用 `start_critique` 送文,參數是檔案路徑。** 不貼全文、不自己讀完再轉述。
+   例:使用者說「評論 ~/novels/海.md」→ `start_critique(path="~/novels/海.md")`。
+2. **只收 .md / .txt。** 使用者給 pdf/docx 時請他先轉成純文字檢查過,再送。
+3. **改稿重跑要帶上次回的 slug。** 例:使用者說「我改了 d03,再跑一次」→ `start_critique(path=..., slug="d03")`。
+4. **送出後立刻轉告 slug、job id 與預估**(時間、訂閱額度),並說明這是分鐘級背景工作。例:「已送出,slug d03、job 12,預估約 6 分鐘,用的是你的 Claude 訂閱額度。」
+5. **使用者問進度才呼叫 `critique_status`。** 不要自己輪詢。新對話找不到 job 編號時,不帶 job_id 呼叫列出最近的 job。
+6. **停住時講原因並提議續跑。** 狀態是暫停/失敗/取消 → 轉告原因,問使用者要不要 `resume_critique`;要取消用 `cancel_critique`。例:「額度用完而暫停,要我續跑嗎?已完成的步驟不重跑。」
+7. **完成後指路,不自己寫摘要。** 說:網頁(`cd web && npm run dev`)看結果、`/story-discuss <slug>` 來回討論、`python -m export <slug>` 匯出可分享的 md + html。
 
-## 步驟
-
-### 1. analyst(隔離 subagent)
-用 Task 工具呼叫 `analyst` subagent,prompt 給它故事資料夾路徑,要求:
-> 分析 `stories/<slug>/`,讀 source.md 與 schemas/analysis.schema.json,產出 stories/<slug>/analysis.json。
-
-等它完成。確認 `stories/<slug>/analysis.json` 已生成。
-
-### 2. 驗證閘門(schema + 逐字引用)
-跑 `python viz.py <slug> --check`(只驗、不出檔)。兩道閘門:① analysis.json 合 schema ② 每條 quote 對得上原文。
-- 若有 quote 對不上原文 → 把清單回報,**請 analyst 修正**(再呼叫一次 analyst,指出哪些 quote 找不到),直到全通過。
-- 若 schema 不合 → 同樣請 analyst 依 schema 修正。全通過才往下。
-
-### 3. criticizer(隔離 subagent)
-用 Task 工具呼叫 `criticizer` subagent,prompt 給它故事資料夾路徑,要求:
-> 讀 stories/<slug>/analysis.json、source.md 與 schemas/feedback.schema.json,產出 stories/<slug>/feedback.json(發展性、有輕重、不諂媚,每點掛逐字 quotes 並用 refs 綁 node id)。
-
-等它完成。確認 `feedback.json` 已生成。
-
-### 3.5 驗證 feedback 閘門
-再跑一次 `python viz.py <slug> --check`(此時會一併驗 feedback.json 的 schema 與逐字引用)。
-- 若 feedback.json 不合法/quote 對不上 → 回報並**請 criticizer 修正**(SendMessage 接回原 criticizer),直到通過。先過閘門再渲染,避免下游吃到壞資料。
-
-### 4. 渲染 analysis.md / feedback.md(人讀,Obsidian 友善)
-跑 `python render.py <slug>` —— 確定性渲染,讀 analysis.json / feedback.json 直接出兩份 md:
-- `analysis.md`:frontmatter(title、slug、tags);主題/意象/技法/效果/角色/節拍分節,每條附 note 與引文;
-  意象/效果用 `[[wikilink]]` 連到主題;意圖鏈清單(technique →produces→ effect →serves→ theme)。
-- `feedback.md`:依序「這篇在做什麼 / 最有效的地方 / 關鍵 2–3 件(含實驗與提問)/ 枝節 / 一句話」。
-- md 只服務人讀 / Obsidian,**不是前端資料來源**(那是 viz.json);故意做成確定性、可重現,不靠 LLM 手渲染。
-
-### 5. 視覺化
-跑 `python viz.py <slug>` → 先過兩道閘門,再產 `stories/<slug>/viz.json`(前端資料契約正本)+ `viz.html`
-(消費 viz.json,把回饋接進常駐「編輯」欄並錨定節點)。回報路徑。
-
-### 6. 更新全集列表 + 回報
-跑 `python index.py` 重生 `stories/index.json`(全集列表契約,讓新故事進列表)。
-摘要回報:核心主題、criticizer 點出的 2–3 件關鍵事、節點/邊數、viz.html 路徑;
-對照 `docs/RUBRIC.md` 5 條品質驗收(有據已由閘門保證,其餘為判斷提醒)。
-提示使用者可用 `/story-discuss <slug>` 深入討論、或瀏覽器開 viz.html。
-
-## 注意
-- analyst / criticizer 一定要走 subagent(不要自己在主 context 直接寫 json/feedback),否則隔離失效。
-- 全程不需任何 API key、不接 MCP/DB。
+## 禁止
+- 不要派 analyst / criticizer subagent,不要寫 `stories/<slug>/`,不要跑 `viz.py` / `render.py`——那是舊流程,產物網頁看不到。

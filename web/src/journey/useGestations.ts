@@ -83,7 +83,7 @@ export function useGestations(onBorn: (slug: string) => void | Promise<void>) {
                 setUsageLimitResetAt(r);
                 saveUsageLimit(r);
                 put(slug, title, 0, "paused", undefined, reason, r);      // 不 drop:停在原拍,可續跑
-              } else if (reason === "timeout" || reason === "gate" || reason === "crash" || reason === "cancelled") {
+              } else if (reason === "timeout" || reason === "gate" || reason === "crash" || reason === "cancelled" || reason === "overload" || reason === "auth") {
                 put(slug, title, 0, "failed", undefined, reason);         // 不 drop:同上,可續跑/重新分析
               } else {
                 // 後端只在「取消掉一個 fresh 新孕育」時不帶 reason —— 那個目錄已經被刪了,

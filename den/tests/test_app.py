@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
+from den import config as den_config
 from den.tests.test_pipeline import _analysis, _feedback, ok
 from marrow import db, repo
 from marrow.workpacks import WORKPACKS
@@ -739,3 +740,107 @@ def test_resume_409_on_stale_version_and_list_flags_it(data, caplog):
         row = next(j for j in c.get("/jobs", headers=h).json()["jobs"] if j["id"] == old)
         assert row["is_latest_version"] is False
     assert f"event=resume-rejected job={old} reason=stale-version" in caplog.text
+
+
+# ── 讀取端點 + 上傳 ──
+
+_READ_ROUTES = ["/stories", "/stories/mini/viz", "/stories/mini/source",
+                "/stories/mini/conclusions", "/stories/mini/transcript"]
+
+
+def test_stories_list(data):
+    with _client(data) as c:
+        r = c.get("/stories", headers=_auth(data[1]))
+    assert r.status_code == 200 and "mini" in [s["slug"] for s in r.json()["stories"]]
+
+
+def test_viz_200(data):
+    with _client(data) as c:
+        r = c.get("/stories/mini/viz", headers=_auth(data[1]))
+    assert r.status_code == 200 and r.json()["slug"] == "mini"
+
+
+def test_viz_404_when_not_analyzed(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "未分析。"}, headers=h)
+        r = c.get("/stories/d01/viz", headers=h)
+    assert r.status_code == 404
+    assert "event=reject where=viz reason=not-analyzed" in caplog.text
+
+
+def test_source_is_verbatim_text(data):
+    text = '甲</script>"\'乙\n'
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": text}, headers=h)
+        r = c.get("/stories/d01/source", headers=h)   # 未分析 → 最新版
+    assert r.text == text and r.headers["content-type"].startswith("text/plain")
+
+
+def test_source_follows_analysis_version(data):
+    url, d = data
+    conn = db.connect(url)
+    st = repo.story_by_slug(conn, "mini")
+    cur = repo.current_artifact(conn, st["id"], "analysis")
+    old = repo.source_version(conn, cur["source_version_id"])["text"]
+    repo.add_source_version(conn, st["id"], old + "新增的一段。", 9.0)
+    conn.commit()
+    conn.close()
+    with _client(data) as c:
+        r = c.get("/stories/mini/source", headers=_auth(d))
+    assert r.text == old
+
+
+def test_conclusions_200(data):
+    with _client(data) as c:
+        r = c.get("/stories/mini/conclusions", headers=_auth(data[1]))
+    assert r.status_code == 200 and isinstance(r.json()["conclusions"], list)
+
+
+def test_transcript_200(data):
+    with _client(data) as c:
+        r = c.get("/stories/mini/transcript", headers=_auth(data[1]))
+    assert r.status_code == 200 and isinstance(r.json()["turns"], list)
+
+
+@pytest.mark.parametrize("route", [r for r in _READ_ROUTES if r != "/stories"])
+def test_slug_routes_bad_and_unknown(data, caplog, route):
+    tail = route.rsplit("/", 1)[1]
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        assert c.get(f"/stories/-x/{tail}", headers=h).status_code == 400
+        assert c.get(f"/stories/nope/{tail}", headers=h).status_code == 404
+    assert f"event=reject where={tail} reason=bad-slug" in caplog.text
+    assert f"event=reject where={tail} reason=unknown-slug" in caplog.text
+
+
+@pytest.mark.parametrize("route", _READ_ROUTES)
+def test_read_routes_require_token(data, route):
+    with _client(data) as c:
+        assert c.get(route).status_code == 401
+
+
+def test_extract_ok(data):
+    with _client(data) as c:
+        r = c.post("/extract", files={"file": ("a.txt", "你好".encode())}, headers=_auth(data[1]))
+    assert r.status_code == 200 and r.json() == {"filename": "a.txt", "text": "你好\n", "chars": 3}
+
+
+def test_extract_413_logs_reject(data, caplog):
+    big = b"a" * (den_config.MAX_SOURCE_BYTES + 1)
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = c.post("/extract", files={"file": ("a.txt", big)}, headers=_auth(data[1]))
+    assert r.status_code == 413
+    assert f"event=reject where=upload bytes={den_config.MAX_SOURCE_BYTES + 1}" in caplog.text
+
+
+def test_extract_bad_pdf_400(data):
+    with _client(data) as c:
+        r = c.post("/extract", files={"file": ("a.pdf", b"%PDF-garbage")}, headers=_auth(data[1]))
+    assert r.status_code == 400
+
+
+def test_extract_requires_token(data):
+    with _client(data) as c:
+        assert c.post("/extract", files={"file": ("a.txt", b"x")}).status_code == 401

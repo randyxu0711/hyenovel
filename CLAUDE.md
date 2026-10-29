@@ -7,43 +7,45 @@
 設計全貌見 `docs/DESIGN.md`;當前進度與待辦見 `docs/STATUS.md`。**動工前先讀這兩份。**
 
 ## 核心原則
-- **`analysis.json` = 觀察層正本**(analyst 產);**`feedback.json` = 判斷層正本**(criticizer 產)。
-  其餘(analysis.md / feedback.md / viz.html)都是它們的下游消費者。
-- **觀察與判斷隔離**:analyst 與 criticizer 是**兩個獨立 subagent**(各自 context),不可在同一 context 兼任,否則判斷獨立性被污染。
-- **每條主張必引逐字原文**;`viz.py` 會在 source.md 搜尋驗證,幻覺引用直接擋(硬閘門)。
-- v1 **不接任何 DB**(MemPalace 退到 L3);Obsidian 為可選 viewer(`stories/` 即 vault)。
-- **marrow/(den 切片 1,2026-10-28)**:DB 正本骨架(SQLite)已在,但**過渡期是舊檔案的唯讀鏡像**——
-  舊 server 仍寫 `stories/`,`python -m marrow.importer` 冪等重跑補進 DB。本段前述「analysis.json 正本」
-  「不接 DB」到切片 4 web 改接 den 時才翻案。DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
+- **DB(marrow,SQLite)= 正本**(切片 4a 起):觀察層(analysis)與判斷層(feedback)由 den 的 job 寫進 `artifact`,
+  web 只讀 den。`stories/<slug>/*.json` 是舊流程/匯入來源,**不再是正本**。分享檔用 `python -m export <slug>` 從 DB 匯出。
+- **觀察與判斷隔離**:analyst 與 criticizer 是**兩個獨立步驟**(den 的工人各自 context),不可在同一 context 兼任,否則判斷獨立性被污染。
+- **每條主張必引逐字原文**;引用閘門(`viz.py:locate`)會在原文搜尋驗證,幻覺引用直接擋(硬閘門)。
+- Obsidian 為可選 viewer(匯出的 md 可放進 vault)。
+- **marrow/**:DB 正本(SQLite)。切片 1–3 過渡期它曾是舊檔案的唯讀鏡像(舊 server 寫 `stories/`,
+  `python -m marrow.importer` 冪等補進 DB);切片 4a 起翻案:web 改讀 den、DB 為正本,舊 `server/` 於切片 5 退役,
+  importer 只作舊篇一次性匯入;根目錄 `viz.py`/`render.py` 留作函式庫,供 `export` 使用。DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
   **切片 2 起 den 會寫 DB**:產物 commit 進 `artifact`,`current_artifact` 只在 job **全部步驟成功**時一次換;
   importer 只對「新建」的 artifact 切 current,不覆蓋 den 已換的。
 
 ## 架構與資料流
 ```
-stories/<slug>/source.md ──analyst(subagent)──▶ analysis.json
-                                                     │
-analysis.json + source.md ──criticizer(subagent)──▶ feedback.json
-                                                     │
-       ┌──────────────┬──────────────────────────────┘
-       ▼              ▼
-  analysis.md / feedback.md(人讀,Obsidian 友善)   viz.py ─▶ viz.html
+MCP start_critique(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ criticizer ─▶ DB(artifact)
+                                                                            │
+                                 ┌──────────────────────────────────────────┤
+                                 ▼                  ▼                        ▼
+                         web(讀 den /api)   open_discussion(MCP)   python -m export <slug>
+                                                                    ─▶ <slug>.md + <slug>.html
 ```
+(舊流程:`stories/<slug>/source.md` → subagent → analysis.json/feedback.json → viz.py;已不再由 skill 觸發。)
 
 ## 怎麼用(在本專案目錄開的 session)
-- `/story-critique stories/<slug>/source.md` — 跑完整鏈(analyst→引用閘門→criticizer→渲染→viz)。
-- `/story-discuss <slug>` — 就一篇來回討論(出版編輯人格、有據、反諂媚)。
-- `python viz.py <slug>` — 出 viz.html;`python viz.py <slug> --check` — 只驗引用(編排當閘門用)。
+- `/story-critique <檔案路徑>` — 呼叫 MCP `start_critique` 送文、轉告預估、問進度時 `critique_status`。
+- `/story-discuss <slug>` — 先 `open_discussion` 取素材再來回討論(出版編輯人格、有據、反諂媚);**結論不會被保存**。
+- `python -m export <slug> [--out DIR]` — 從 DB 匯出 `<slug>.md`(單一 front matter,先回饋後分析)與 `<slug>.html`(viz);預設輸出到 `stories/<slug>/`。
 - `python -m den [--port N]` — 本機 daemon(127.0.0.1:8788,token 在 `~/.local/share/hyenovel/den.token`);
-  只能對**已用 `python -m marrow.importer` 匯入**的故事開 job。工人 env 是白名單(無 `CLAUDE*`、
+  舊 `stories/` 的篇要先 `python -m marrow.importer` 匯入;新篇由 `start_critique` 建立。工人 env 是白名單(無 `CLAUDE*`、
   無 `ANTHROPIC_API_KEY`、無 proxy 變數 / `CLAUDE_CONFIG_DIR`)。
   **MCP shim 會自動把 den 脫離拉起**(`den.json` 探索檔記 port/pid/指紋);den 閒置 3 小時無 job 自己結束。
   版本指紋不符才重啟,**忙碌中的 den 不重啟**(新版等跑完);`git pull` 後在 agent 內跑 `/mcp` 重載 shim。
   MCP 建立的故事 slug 是 `dNN`。
+- web:`cd web && npm run dev`(vite 代理 `/api` 到 den 並帶 token)。網頁討論與用量面板在切片 4b 前關閉(討論改用 `open_discussion`)。
 - 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/server/.venv/bin/python -m den.mcp`。五個 tool:
   `start_critique`(送文開分析)/ `critique_status`(進度)/ `cancel_critique`(取消)/
   `resume_critique`(續跑)/ `open_discussion`(取討論素材開聊)。
+- `python viz.py <slug> [--check]` — 舊式出圖/驗引用(函式庫仍在,`export` 內部使用)。
 - `server/.venv/bin/python -m pytest` — 跑全部測試(零成本、不燒訂閱)。CI 在 push 時跑同一套。
-- subagent 定義在 `.claude/agents/{analyst,criticizer}.md`;skill 在 `.claude/skills/`。
+- subagent 定義在 `.claude/agents/{analyst,criticizer}.md`(den 工人沿用);skill 在 `.claude/skills/`。
 - **slash command 與 subagent 綁工作目錄**:必須在 `~/projects/hyenovel` 開的 session 才載入。
 
 ## 慣例

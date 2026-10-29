@@ -98,7 +98,27 @@ def test_discussion_context_hides_invalidated_conclusions(conn):
         repo.add_conclusion(conn, sid, "c1", None, "reading", "活的", ["m1"], ["q"], {}, 1.0, None)
         repo.add_conclusion(conn, sid, "c2", None, "reading", "死的", [], [], {}, 2.0, 3.0)
     out = stories.discussion_context(conn, "mini")
-    assert out["conclusions"] == [{"kind": "reading", "text": "活的", "refs": ["m1"], "quotes": ["q"]}]
+    assert out["conclusions"] == [{"kind": "reading", "text": "活的", "refs": ["m1"], "quotes": ["q"],
+                                   "stale": True}]   # artifact 未知 → 舊
+
+
+def test_discussion_context_conclusion_staleness_follows_current_analysis(conn):
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    a = repo.current_artifact(conn, sid, "analysis")
+    with conn:
+        repo.add_conclusion(conn, sid, "c1", None, "reading", "對得上", [], [], {}, 1.0, None)
+        repo.set_conclusion_artifact(conn, sid, "c1", a["id"])
+        repo.add_conclusion(conn, sid, "c2", None, "reading", "對舊稿", [], [], {}, 2.0, None)
+        repo.set_conclusion_artifact(conn, sid, "c2", a["id"])
+        new, _ = repo.add_artifact(conn, sid, a["source_version_id"], "analysis", 1, {"x": 1}, {}, 9.0)
+        repo.add_conclusion(conn, sid, "c3", None, "reading", "對新稿", [], [], {}, 3.0, None)
+        repo.set_conclusion_artifact(conn, sid, "c3", new)
+    before = {c["text"]: c["stale"] for c in stories.discussion_context(conn, "mini")["conclusions"]}
+    assert before == {"對得上": False, "對舊稿": False, "對新稿": True}
+    with conn:
+        repo.set_current(conn, sid, "analysis", new)
+    after = {c["text"]: c["stale"] for c in stories.discussion_context(conn, "mini")["conclusions"]}
+    assert after == {"對得上": True, "對舊稿": True, "對新稿": False}
 
 
 def test_discussion_context_feedback_when_present(conn):

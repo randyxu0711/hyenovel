@@ -150,6 +150,15 @@ describe("useGestations", () => {
     expect(result.current.gestations.get("h")?.reason).toBe("crash");
   });
 
+  it.each(["overload", "auth"])("error reason=%s → 不 drop,標 failed 可續跑", async (reason) => {
+    running.mockResolvedValue([]);
+    stream.mockReturnValue(gen([{ event: "error", data: { reason } }]));
+    const { result } = renderHook(() => useGestations(() => {}));
+    act(() => result.current.begin("o-" + reason, "忙"));
+    await waitFor(() => expect(result.current.gestations.get("o-" + reason)?.status).toBe("failed"));
+    expect(result.current.gestations.get("o-" + reason)?.reason).toBe(reason);
+  });
+
   it("error reason=cancelled(取消既有故事)→ 不 drop,標 failed 讓星停住可續", async () => {
     running.mockResolvedValue([]);
     stream.mockReturnValue(gen([{ event: "error", data: { where: "cancel", message: "已取消", reason: "cancelled" } }]));

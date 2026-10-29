@@ -12,6 +12,7 @@
     python -m marrow.importer [--stories DIR] [--db URL]
 """
 import argparse
+import hashlib
 import json
 import logging
 import time
@@ -58,35 +59,39 @@ def _jsonl(rep, path: Path) -> list[dict]:
     return rows
 
 
-def _artifact_body(rep, story_dir: Path, kind: str) -> dict | None:
+def _artifact_body(rep, story_dir: Path, kind: str) -> tuple[dict | None, bytes | None]:
+    """(body, 原始位元組);位元組同時供指紋與 body 用,只讀一次。"""
     p = story_dir / f"{kind}.json"
     if not p.exists():
-        return None
+        return None, None
     try:
-        body = schema.to_v1(kind, json.loads(p.read_text(encoding="utf-8")))
+        raw = p.read_bytes()
+        body = schema.to_v1(kind, json.loads(raw.decode("utf-8")))
     except json.JSONDecodeError:
         _skip(rep, kind, "bad-json")
-        return None
+        return None, None
     except UnicodeDecodeError:
         _skip(rep, kind, "bad-encoding")
-        return None
+        return None, None
     errors = schema.validate_v1(kind, body)
     if errors:
         _skip(rep, kind, f"schema-v1 {errors[0]}")
-        return None
-    return body
+        return None, None
+    return body, raw
 
 
 def import_story(conn, story_dir: Path, now: float) -> dict:
     rep = {"slug": story_dir.name, "source_versions_added": 0, "artifacts_added": 0,
            "utterances_added": 0, "conclusions_added": 0, "settlements_added": 0, "skipped": []}
-    bodies = {k: _artifact_body(rep, story_dir, k) for k in _KINDS}
+    parsed = {k: _artifact_body(rep, story_dir, k) for k in _KINDS}
+    bodies = {k: v[0] for k, v in parsed.items()}
     title = (bodies["analysis"] or {}).get("title")
     with conn:
         sid = repo.ensure_story(conn, story_dir.name, title, now)
         vid, created = repo.add_source_version(
             conn, sid, (story_dir / "source.md").read_text(encoding="utf-8"), now)
         rep["source_versions_added"] += created
+        aids = {}
         for kind, body in bodies.items():
             if body is None:
                 continue
@@ -94,7 +99,10 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                 conn, sid, vid, kind, schema.SCHEMA_VERSION, body,
                 {"tier": "A", "runner": "legacy-sdk", "imported_from": f"{kind}.json"}, now)
             rep["artifacts_added"] += created
-            if created:                      # den 已接手的 current 不被舊檔蓋回
+            aids[kind] = aid
+            cur = repo.current_artifact(conn, sid, kind)
+            # den 已接手的 current 不被舊檔蓋回——連「接手後舊 server 又重跑寫檔」也算
+            if created and (cur is None or cur["provenance"].get("runner") == "legacy-sdk"):
                 repo.set_current(conn, sid, kind, aid)
 
         sessions: dict[str, list[dict]] = {}
@@ -110,12 +118,16 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
                     conn, d, seq, r["role"], r["text"], r["ts"], "den",
                     r.get("anchors") or [], r.get("analysis_fp"))
 
+        # 結論當時對照的 analysis 指紋(舊系統:analysis.json 位元組 sha1)對得上 → 回填該 artifact id
+        fp = hashlib.sha1(parsed["analysis"][1]).hexdigest() if "analysis" in aids else None
         for c in _jsonl(rep, story_dir / "conclusions.jsonl"):
+            prov = c["provenance"]
             rep["conclusions_added"] += repo.add_conclusion(
-                conn, sid, c["id"],
-                disc.get(c["provenance"].get("session")) if isinstance(c["provenance"], dict) else None,
+                conn, sid, c["id"], disc.get(prov.get("session")) if isinstance(prov, dict) else None,
                 c["kind"], c["text"],
-                c["refs"], c["quotes"], c["provenance"], c["valid_from"], c.get("invalidated_at"))
+                c["refs"], c["quotes"], prov, c["valid_from"], c.get("invalidated_at"))
+            if fp is not None and isinstance(prov, dict) and prov.get("analysis_fp") == fp:
+                repo.set_conclusion_artifact(conn, sid, c["id"], aids["analysis"])
 
         for s in _jsonl(rep, story_dir / "settled.jsonl"):
             if s.get("ok") and s["session"] in disc:

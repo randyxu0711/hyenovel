@@ -1,0 +1,12 @@
+{
+  "slug": "mini",
+  "read": "一個人進屋、關燈,寫等待的落空。",
+  "strengths": [
+    {"title": "物件擬人", "quotes": ["像在等誰"], "refs": ["k1"], "body": "燈被寫成在等人,空缺感由物而非人說出。"}
+  ],
+  "key_points": [
+    {"title": "結尾太快", "quotes": ["他把燈關了。"], "refs": ["e1", "t1"], "body": "關燈收得很乾脆。", "experiment": "多留一拍。", "question": "他為什麼不開口?"}
+  ],
+  "minor": ["標點可再收"],
+  "one_line": "結尾多留一拍。"
+}

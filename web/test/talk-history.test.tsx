@@ -16,6 +16,7 @@ import NodeTalk from "./talk-harness";
 import type { VizNode } from "../src/types";
 
 const h = vi.hoisted(() => ({
+  streamDiscuss: vi.fn(),
   getTranscript: vi.fn(async () => ({
     turns: [
       { ts: 1, session: "a1", role: "user", text: "過去的問題", anchors: ["m2"] },
@@ -26,10 +27,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock("../src/data/client", () => ({
   getTranscript: (...a: unknown[]) => h.getTranscript(...(a as [])),
-  streamDiscuss: () => (async function* () {
-    yield { event: "token", data: { text: "現在的回答" } };
-    yield { event: "done", data: { ok: true, cost_usd: 0, session_id: "sid-1" } };
-  })(),
+  streamDiscuss: (...a: unknown[]) => h.streamDiscuss(...a),
 }));
 
 const node: VizNode = { id: "m2", type: "motif", label: "破帽", note: "", intensity: null, evidence: [] };
@@ -60,6 +58,15 @@ describe("討論的逐字歷史", () => {
     mount();
     fireEvent.change(await screen.findByPlaceholderText(/說…/), { target: { value: "照樣能聊" } });
     fireEvent.click(screen.getByText("↑"));
-    await waitFor(() => expect(screen.getByText("現在的回答")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/網頁討論搬家中/)).toBeTruthy());
+  });
+
+  it("4a:送出不打網路,只在尾端加搬家說明(指向 open_discussion)", async () => {
+    mount();
+    fireEvent.change(await screen.findByPlaceholderText(/說…/), { target: { value: "想聊" } });
+    fireEvent.click(screen.getByText("↑"));
+    await waitFor(() => expect(screen.getByText(
+      "網頁討論搬家中(下一版回來)。現在請在 Claude Code 對 hyenovel 說「討論 s1」(open_discussion)。")).toBeTruthy());
+    expect(h.streamDiscuss).not.toHaveBeenCalled();
   });
 });

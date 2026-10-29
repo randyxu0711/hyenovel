@@ -1,15 +1,27 @@
-# hyenovel web (L4 前端骨架)
+# hyenovel web (L4 前端)
 
-Vite + React + TS。讀既有靜態資料契約(index.json / viz.json / source.md)呈現分析旅程。
+Vite + React + TS。**只讀 den 的 DB**(切片 4a):`/api` 由 vite 代理到 den 並帶 token。
 
 ## 開發
 
-1. repo 根先 `python index.py`(生 stories/index.json)。
+1. 起 den:`python -m den`(或用任何 MCP tool,shim 會自動拉起)。
 2. `cd web && npm install && npm run dev` → 開 localhost:5173。
-   dev server 把 repo `stories/` 唯讀映射到 `/data`(見 vite-plugin-data.ts)。
 3. 測試 `npm test`、型別 `npm run typecheck`。
+
+網頁討論 4a 期間關閉(輸入框提示改用 MCP 的 `open_discussion`),用量面板隱藏;4b 恢復。
+den 沒開時 web 顯示 503 提示。
 
 ## 邊界
 
-- `src/data/client.ts` 是唯一 IO。之後接後端(＋新增故事 / 即時討論)只改這層。
-- 不重算座標/診斷(viz.py 已產於 viz.json)。
+- `src/data/client.ts` 是唯一 IO。
+- 不重算座標/診斷(由 den 端產出)。
+- 分享檔:`python -m export <slug> [--out DIR]` 產 `<slug>.md` + `<slug>.html`。
+
+## 切換步驟(舊 server → den;手動做一次)
+
+1. 停掉舊 server(及舊 web dev server);切換後不要再用 `uvicorn server.app`(它寫的 `stories/` 網頁看不到)。
+2. repo 根 `python -m marrow.importer`,確認輸出的 skipped 為空。
+3. `python -m den`。
+4. `cd web && npm run dev`。
+5. 驗收:列表張數 = DB 故事數(扣隱形);開 s08 見骨架圖、原文、結論、逐字;新上傳一篇走完誕生動畫;
+   討論輸入回搬家訊息;關掉 den 後 web 顯示 503 提示。

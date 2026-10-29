@@ -217,3 +217,78 @@ def test_importer_rerun_keeps_den_current(conn, tmp_path):
     repo.set_current(conn, s["id"], "analysis", aid)          # 模擬 den 產出
     importer.import_story(conn, root / "mini", 3.0)
     assert repo.current_artifact(conn, s["id"], "analysis")["id"] == aid
+
+
+def test_importer_changed_legacy_file_keeps_den_current(conn, tmp_path):
+    root = make_story(tmp_path, "mini")
+    importer.import_story(conn, root / "mini", 1.0)
+    s = repo.story_by_slug(conn, "mini")
+    v = repo.latest_source_version(conn, s["id"])
+    body = dict(repo.current_artifact(conn, s["id"], "analysis")["body"], title="den 版")
+    aid, _ = repo.add_artifact(conn, s["id"], v["id"], "analysis", 1, body, {"runner": "den"}, 2.0)
+    repo.set_current(conn, s["id"], "analysis", aid)          # 模擬 den 產出
+    path = root / "mini/analysis.json"                        # 舊 server 之後又重跑寫了檔
+    path.write_text(json.dumps(dict(json.loads(path.read_text()), title="舊路徑重跑")))
+    rep = importer.import_story(conn, root / "mini", 3.0)
+    assert rep["artifacts_added"] == 1                        # 照樣收進 DB,只是不搶 current
+    assert repo.current_artifact(conn, s["id"], "analysis")["id"] == aid
+
+
+def test_importer_changed_legacy_file_replaces_legacy_current(conn, tmp_path):
+    root = make_story(tmp_path, "mini")
+    importer.import_story(conn, root / "mini", 1.0)
+    path = root / "mini/analysis.json"
+    path.write_text(json.dumps(dict(json.loads(path.read_text()), title="舊路徑重跑")))
+    importer.import_story(conn, root / "mini", 2.0)
+    s = repo.story_by_slug(conn, "mini")
+    assert repo.current_artifact(conn, s["id"], "analysis")["body"]["title"] == "舊路徑重跑"
+
+
+# ── 結論回填 analysis_artifact_id(切片 4a)──
+
+def _fp(root, slug="mini"):
+    import hashlib
+    return hashlib.sha1((root / slug / "analysis.json").read_bytes()).hexdigest()
+
+
+def _conc(fp):
+    return {**CONC_A, "provenance": {"session": "s1", "turns": [0, 1], "analysis_fp": fp}}
+
+
+def test_importer_backfills_conclusion_artifact_when_fp_matches(conn, tmp_path):
+    import hashlib
+    fp = hashlib.sha1((FIXTURES / "mini/analysis.json").read_bytes()).hexdigest()
+    root = make_story(tmp_path, "mini", transcript=TWO_SESSIONS, conclusions=[_conc(fp)])
+    importer.import_story(conn, root / "mini", 10.0)
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    aid = repo.current_artifact(conn, sid, "analysis")["id"]
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
+    importer.import_story(conn, root / "mini", 11.0)             # 重跑冪等
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
+
+
+def test_importer_leaves_null_when_fp_differs(conn, tmp_path):
+    root = make_story(tmp_path, "mini", conclusions=[_conc("not-the-fp")])
+    importer.import_story(conn, root / "mini", 10.0)
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] is None
+
+
+def test_importer_backfills_existing_conclusion_on_rerun(conn, tmp_path):
+    """切換現場:DB 裡已有 analysis_artifact_id 為 NULL 的結論(舊版匯入的),
+    再跑 import_story、fp 對上 → 補上;已有值的不被覆蓋。"""
+    import hashlib
+    fp = hashlib.sha1((FIXTURES / "mini/analysis.json").read_bytes()).hexdigest()
+    root = make_story(tmp_path, "mini", conclusions=[_conc(fp)])
+    importer.import_story(conn, root / "mini", 10.0)
+    sid = repo.story_by_slug(conn, "mini")["id"]
+    aid = repo.current_artifact(conn, sid, "analysis")["id"]
+    with conn:       # 還原成升級前的狀態:結論列在、artifact 欄是 NULL
+        conn.execute("UPDATE conclusion SET analysis_artifact_id = NULL WHERE story_id = ?", (sid,))
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] is None
+    importer.import_story(conn, root / "mini", 11.0)
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid
+    with conn:
+        other, _ = repo.add_artifact(conn, sid, 1, "analysis", 1, {"x": 1}, {}, 0)
+        repo.set_conclusion_artifact(conn, sid, "c0001", other)   # 已有值,不被覆蓋
+    assert repo.conclusions(conn, sid)[0]["analysis_artifact_id"] == aid

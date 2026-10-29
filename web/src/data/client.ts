@@ -1,4 +1,34 @@
-import type { IndexFile, VizData, UsageAggregate, UsageAll, Conclusion, Turn } from "../types";
+import type { IndexFile, IndexEntry, VizData, UsageAggregate, UsageAll, Conclusion, Turn } from "../types";
+
+// ── den 的領域形狀 → 畫面要的 IndexFile(adapter 在 client 這側,den 不綁前端) ──
+
+type DenArtifact = { id: number; created_at: number } | null;
+type DenJob = { id: number; state: string; step: string | null; error_class: string | null; updated_at: number };
+type DenStory = {
+  slug: string; title: string; synopsis: string; nodes: number; edges: number;
+  current: { analysis: DenArtifact; feedback: DenArtifact }; latest_job: DenJob | null;
+};
+export type DenStories = { stories: DenStory[] };
+
+function jobView(j: DenJob | null): Pick<IndexEntry, "status" | "stage" | "resumable" | "reason"> {
+  if (!j || j.state === "done") return { status: "done", stage: "done", resumable: false, reason: null };
+  const stage = j.step ?? "analyst";
+  if (j.state === "queued" || j.state === "running") return { status: "running", stage, resumable: false, reason: null };
+  if (j.state === "paused") return { status: "paused", stage: j.step ?? "analyst", resumable: true, reason: j.error_class };
+  return { status: "failed", stage: j.step ?? "analyst", resumable: true, reason: j.error_class ?? "cancelled" };
+}
+
+export function toIndexFile(res: DenStories): IndexFile {
+  const stories = res.stories.map((s): IndexEntry => {
+    const t = Math.max(s.current.analysis?.created_at ?? 0, s.current.feedback?.created_at ?? 0, s.latest_job?.updated_at ?? 0);
+    return {
+      slug: s.slug, title: s.title, synopsis: s.synopsis, nodes: s.nodes, edges: s.edges,
+      has_viz: s.current.analysis != null, has_feedback: s.current.feedback != null,
+      updated: new Date(t * 1000).toISOString(), ...jobView(s.latest_job),
+    };
+  });
+  return { generated: new Date().toISOString(), count: stories.length, stories };
+}
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -11,14 +41,14 @@ async function getText(url: string): Promise<string> {
   return res.text();
 }
 
-export const getIndex = () => getJSON<IndexFile>("/data/index.json");
-export const getViz = (slug: string) => getJSON<VizData>(`/data/${slug}/viz.json`);
-export const getSource = (slug: string) => getText(`/data/${slug}/source.md`);
+export const getIndex = async () => toIndexFile(await getJSON<DenStories>("/api/stories"));
+export const getViz = (slug: string) => getJSON<VizData>(`/api/stories/${slug}/viz`);
+export const getSource = (slug: string) => getText(`/api/stories/${slug}/source`);
 export const getConclusions = (slug: string) =>
-  getJSON<{ conclusions: Conclusion[] }>(`/api/conclusions/${slug}`);
-/** 這篇的討論逐字歷史。F5 之後畫面靠它接回來 —— 正本一直在磁碟上。 */
+  getJSON<{ conclusions: Conclusion[] }>(`/api/stories/${slug}/conclusions`);
+/** 這篇的討論逐字歷史。F5 之後畫面靠它接回來 —— 正本一直在 DB 裡。 */
 export const getTranscript = (slug: string) =>
-  getJSON<{ turns: Turn[] }>(`/api/transcript/${slug}`);
+  getJSON<{ turns: Turn[] }>(`/api/stories/${slug}/transcript`);
 export const getUsage = (slug: string) => getJSON<UsageAggregate>(`/api/usage/${slug}`);
 export const getUsageAll = () => getJSON<UsageAll>("/api/usage");
 export async function getStory(slug: string): Promise<{ viz: VizData; source: string }> {
@@ -49,13 +79,29 @@ function parseFrame(frame: string): SSEEvent | null {
   }
 }
 
-/** 用 fetch + ReadableStream 讀 SSE(EventSource 不支援 POST,故手刻)。 */
-async function* sseStream(url: string, body: unknown): AsyncGenerator<SSEEvent> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
+/** den 的 frame 沒有 event: 行,事件名在 JSON 裡({event,data});解包成呼叫端一直拿到的形狀。 */
+function unwrap(ev: SSEEvent): SSEEvent {
+  const d = ev.data;
+  if (ev.event === "message" && d && typeof d === "object" && typeof d.event === "string" && "data" in d) {
+    const inner: SSEEvent = { event: d.event, data: d.data };
+    // den 對「已結束的 job」不重播,只送 state 現況;翻成呼叫端認得的收尾事件。
+    if (inner.event === "state") {
+      const st = inner.data ?? {};
+      if (st.state === "done") return { event: "done", data: { ok: true } };
+      if (st.state === "paused" || st.state === "failed" || st.state === "cancelled")
+        return { event: "error", data: {
+          reason: st.error_class ?? "cancelled", message: st.detail?.message ?? "",
+          resets_at: st.detail?.resets_at ?? null,       // useGestations 讀頂層 resets_at
+        } };
+    }
+    return inner;
+  }
+  return ev;
+}
+
+/** 用 fetch + ReadableStream 讀 SSE(EventSource 不支援 POST,故手刻)。POST / GET 共用。 */
+async function* sseFetch(url: string, init?: RequestInit): AsyncGenerator<SSEEvent> {
+  const res = await fetch(url, init);
   if (!res.ok || !res.body) throw new Error(`${url}(${res.status})`);
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -69,39 +115,59 @@ async function* sseStream(url: string, body: unknown): AsyncGenerator<SSEEvent> 
       const frame = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
       const ev = parseFrame(frame);
-      if (ev) yield ev;
+      if (ev) yield unwrap(ev);
     }
   }
 }
 
-/** 觸發-或-接上完整 critique 鏈;串 phase 進度,done 後呼叫端應重 fetch viz.json + index。
- *  後端是背景 Run:重整後用同一 slug 再呼一次就會補播已發事件並續播(不會重複派工)。
- *  fresh=這是新孕育(取消時後端可清掉剛 ingest 的孤兒);既有故事再評論不要帶,取消才不會刪 source.md。 */
-export const streamCritique = (slug: string, title?: string, fresh = false) =>
-  sseStream(`/api/critique/${slug}`, { title: title ?? "", fresh });
+const sseStream = (url: string, body: unknown) =>
+  sseFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
 
-/** 重新分析已完成故事:同一個 POST 先觸發後端 reanalyze(snapshot 舊產物、resume_point 重置到 analyst),
- *  再接上同一條 SSE 串流(與 streamCritique 同構,呼叫端一樣 for-await 消費)。
- *  故事未完整時後端回 409,呼叫端自行接。 */
-export const reanalyzeCritique = (slug: string, title?: string) =>
-  sseStream(`/api/critique/${slug}`, { title: title ?? "", mode: "reanalyze" });
+/** 送一個 critique job(den 對同一篇已有進行中的 job 會回既有的,不重複派工),再串它的事件。
+ *  title / fresh 保留簽名但不送:title 由 analyst 定,取消不刪故事。 */
+async function* critiqueJob(slug: string): AsyncGenerator<SSEEvent> {
+  const res = await fetch("/api/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "critique", slug }),
+  });
+  if (!res.ok) throw new Error(`/api/jobs(${res.status})`);
+  const { job_id } = await res.json();
+  yield* sseFetch(`/api/jobs/${job_id}/events`);
+}
+
+/** 觸發-或-接上完整 critique 鏈;串 phase 進度,done 後呼叫端應重 fetch viz + index。 */
+export const streamCritique = (slug: string, _title?: string, _fresh = false) => critiqueJob(slug);
+
+/** 重新分析:den 的 job 本身就是從頭或續跑,與 streamCritique 同構。 */
+export const reanalyzeCritique = (slug: string, _title?: string) => critiqueJob(slug);
 
 export type RunningCritique = { slug: string; title: string; status: string; step: number };
 
-/** 還在跑的 critique(重整後用來重新接上成形動畫)。 */
+/** 還在跑的 critique(重整後用來重新接上成形動畫)。den 是唯一真相,每次現查。 */
 export async function getRunningCritiques(): Promise<RunningCritique[]> {
   try {
-    const res = await fetch("/api/critique/running");
+    const res = await fetch("/api/stories");
     if (!res.ok) return [];
-    return (await res.json()).running ?? [];
+    const { stories } = (await res.json()) as DenStories;
+    return stories
+      .filter(s => s.latest_job && (s.latest_job.state === "queued" || s.latest_job.state === "running"))
+      .map(s => ({
+        slug: s.slug, title: s.title, status: "running",
+        step: ({ analyst: 1, criticizer: 2 } as Record<string, number>)[s.latest_job!.step ?? ""] ?? 0,
+      }));
   } catch { return []; }
 }
 
-/** 取消進行中的 critique(cancel 背景 Task → 收掉 claude 行程)。 */
+/** 取消進行中的 critique:現查該篇 latest_job,進行中才打 cancel。 */
 export async function cancelCritique(slug: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/critique/${slug}`, { method: "DELETE" });
-    return res.ok ? ((await res.json()).cancelled ?? false) : false;
+    const res = await fetch("/api/stories");
+    if (!res.ok) return false;
+    const { stories } = (await res.json()) as DenStories;
+    const j = stories.find(s => s.slug === slug)?.latest_job;
+    if (!j || (j.state !== "queued" && j.state !== "running")) return false;
+    return (await fetch(`/api/jobs/${j.id}/cancel`, { method: "POST" })).ok;
   } catch { return false; }
 }
 
@@ -116,7 +182,7 @@ export const streamDiscuss = (slug: string, sessionId: string | null, message: s
 export async function extractStory(file: File): Promise<{ filename: string; text: string; chars: number }> {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch("/api/stories/extract", { method: "POST", body: fd });
+  const res = await fetch("/api/extract", { method: "POST", body: fd });
   if (!res.ok) throw new Error(`抽文字失敗(${res.status})`);
   return res.json();
 }

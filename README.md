@@ -46,7 +46,7 @@
 | **觀察 vs 判斷** | 兩個隔離的 subagent:先觀察、再判斷,判斷獨立 | 單一模型一口氣寫完,觀察被判斷污染 |
 | **引用** | 每條主張**必附逐字原文**;硬閘門搜原文驗證,幻覺引用直接擋 | 常憑印象發揮,難回溯到原文 |
 | **計費** | 跑在 Claude Code、**吃訂閱**,整條 pipeline 不另按 token 計價;以 API 價目表估算,單篇 critique 約 **$0.7–0.9**(analyst + criticizer + 確定性層),多輪討論走快取更便宜 —— 這就是訂閱相對按 token 付費省下的部分 | 按 API token 計費,越聊越貴 |
-| **隱私** | 只跑 **localhost、單人**;故事經你自己的 Claude Code 訂閱送給 Anthropic 處理,不進任何第三方審稿服務、也不另存廠商資料庫,創作以本地檔案(stories/)形式留在本機 | 內容上傳雲端第三方審稿網站 |
+| **隱私** | 只跑 **localhost、單人**;故事經你自己的 Claude Code 訂閱送給 Anthropic 處理,不進任何第三方審稿服務、也不另存廠商資料庫,創作留在本機資料庫 | 內容上傳雲端第三方審稿網站 |
 | **視覺化** | 意圖鏈(技法→效果→主題)+ 文本軸張力曲線 | 純文字條列 |
 | **互動** | 能就一篇**來回討論**,反諂媚、有主見、會反問 | 一次性、傾向諂媚綜述 |
 
@@ -76,33 +76,30 @@ cd web && npm install && cd ..
 ### Web app(推薦)
 
 ```bash
-./dev.sh          # 一鍵起前後端,Ctrl+C 一起收
+./dev.sh          # 確保 den 在跑 + 起前端,Ctrl+C 收前端
 ```
 
-開 http://localhost:5173 —— 挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋,或就地來回討論。
+(等同 `python -m den` 再 `cd web && npm run dev`。)舊用戶:拉新版後(舊 server 先停)跑一次 `python -m marrow.importer`,舊結論才會連回它的分析。開 http://localhost:5173 —— 挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋。網頁內的來回討論在切片 4b 前關閉,討論請在 agent 內用 `open_discussion`(`/story-discuss <slug>`)。
 
 > 只跑 localhost、單人使用;訂閱認證綁本機憑證,**別部署到雲端**。
 
-### 命令列(在 repo 目錄開的 Claude Code session)
+### 命令列(在 repo 目錄開的 Claude Code session,需先註冊 hyenovel MCP,見 CLAUDE.md)
 
-1. 把故事放成 `stories/<slug>/source.md`。
-2. `/story-critique stories/<slug>/source.md` —— 跑完整評論鏈,產出分析 + 回饋。
-3. `python viz.py <slug>` —— 出 `viz.html`(瀏覽器開):意圖鏈 + 文本軸解剖。
-4. `/story-discuss <slug>` —— 就這篇來回討論(有據、不諂媚)。
+1. `/story-critique <.md/.txt 檔案路徑>` —— 送進 den 跑完整評論鏈,結果寫進 DB,網頁讀得到。
+2. `/story-discuss <slug>` —— 就這篇來回討論(有據、不諂媚;結論不會保存)。
+3. `python -m export <slug>` —— 匯出可分享的 `<slug>.md` 與 `<slug>.html`(意圖鏈 + 文本軸解剖)。
 
 ## 運作原理
 
 ```
-stories/<slug>/source.md ──analyst(subagent)──▶ analysis.json   觀察層正本
-                                                     │
-analysis.json + source.md ──criticizer(subagent)──▶ feedback.json 判斷層正本
-                                                     │
-                    ┌────────────────┬────────────────┘
-                    ▼                ▼
-        analysis.md / feedback.md(人讀)      viz.py ─▶ viz.html
+start_critique(檔案路徑) ─▶ den ─ analyst ▶ criticizer ─▶ DB(正本:觀察層 + 判斷層)
+                                                          │
+                         ┌────────────────┬───────────────┘
+                         ▼                ▼
+                  web(讀 den)     python -m export ─▶ md + html
 ```
 
-觀察者與判斷者是**兩個各自 context 的 subagent**,不在同一 context 兼任 —— 判斷獨立性才不被污染。兩者的產物再餵給視覺化,把「技法 → 效果 → 主題」的意圖鏈與文本張力曲線畫出來。**每條主張都必須逐字對得上原文**(硬閘門,擋幻覺引用)。
+觀察者與判斷者是**兩個各自 context 的獨立步驟**,不在同一 context 兼任 —— 判斷獨立性才不被污染。兩者的產物再餵給視覺化,把「技法 → 效果 → 主題」的意圖鏈與文本張力曲線畫出來。**每條主張都必須逐字對得上原文**(硬閘門,擋幻覺引用)。
 
 > 想看內部契約與設計:`schemas/analysis.schema.json`、`docs/DESIGN.md`。
 

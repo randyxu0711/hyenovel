@@ -52,20 +52,23 @@ async function send(text: string) {
 }
 
 describe("討論的作用域是篇", () => {
-  it("關掉討論框、改選另一顆節點,先前的對話還在", async () => {
+  it("關掉討論框、改選另一顆節點,先前的對話還在(4a:stub 搬家訊息)", async () => {
     await openStory();
     selectNode(0);
     await send("這個比喻是不是落錯位置?");
-    await waitFor(() => expect(screen.getByText("回答1")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/網頁討論搬家中/)).toBeTruthy());
 
     fireEvent.click(screen.getByText("✕"));               // 取消選取
     await waitFor(() => expect(screen.queryByPlaceholderText(/說…/)).toBeNull());
     selectNode(1);                                        // 換一顆節點再開
 
-    await waitFor(() => expect(screen.getByText("回答1")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/網頁討論搬家中/)).toBeTruthy());
+    expect(screen.getByText("這個比喻是不是落錯位置?")).toBeTruthy();
+    expect(spy.stream).not.toHaveBeenCalled();
   });
 
-  it("關掉再開不重開局:續用同一個 session,不再付一次開場成本", async () => {
+// TODO(4b): web 討論接回 den 後恢復
+  it.skip("關掉再開不重開局:續用同一個 session,不再付一次開場成本", async () => {
     await openStory();
     selectNode(0);
     await send("第一句");

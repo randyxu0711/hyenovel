@@ -3,6 +3,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Journey from "../src/journey/Journey";
 import index from "./fixtures/index.json";
+import { denIndex } from "./den-index";
 import viz from "./fixtures/viz.json";
 
 beforeEach(() => {
@@ -10,7 +11,7 @@ beforeEach(() => {
     clearRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
   } as unknown as CanvasRenderingContext2D);
   vi.stubGlobal("fetch", vi.fn((url: string) => {
-    const body = url.includes("index.json") ? index : url.includes("viz.json") ? viz : null;
+    const body = url === "/api/stories" ? denIndex : url.endsWith("/viz") ? viz : null;
     if (body) return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     return Promise.resolve({ ok: true, text: () => Promise.resolve("　　原文一段。") } as Response);
   }));

@@ -153,6 +153,14 @@ def utterances(conn, discussion_id: int) -> list[dict]:
         "SELECT * FROM utterance WHERE discussion_id = ? ORDER BY seq", (discussion_id,))]
 
 
+def discussions_with_utterances(conn, story_id: int) -> list[dict]:
+    """一篇所有討論局的逐字,依 ts, seq 排;一次查完。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
+        "u.ts AS ts, u.anchors AS anchors FROM utterance u JOIN discussion d "
+        "ON d.id = u.discussion_id WHERE d.story_id = ? ORDER BY u.ts, u.seq", (story_id,))]
+
+
 # ── conclusion / settlement ──
 
 def add_conclusion(conn, story_id: int, external_id: str, discussion_id: int | None, kind: str,
@@ -172,11 +180,43 @@ def conclusions(conn, story_id: int) -> list[dict]:
         "SELECT * FROM conclusion WHERE story_id = ? ORDER BY valid_from", (story_id,))]
 
 
+def set_conclusion_artifact(conn, story_id: int, external_id: str, artifact_id: int) -> None:
+    """回填結論當時對照的 analysis artifact;只在尚未記錄時寫(已有的不被覆蓋)。"""
+    conn.execute("UPDATE conclusion SET analysis_artifact_id = ? WHERE story_id = ? "
+                 "AND external_id = ? AND analysis_artifact_id IS NULL",
+                 (artifact_id, story_id, external_id))
+
+
 def add_settlement(conn, discussion_id: int, settled_at: float, written: int) -> bool:
     cur = conn.execute("INSERT INTO settlement (discussion_id, settled_at, written) "
                        "VALUES (?, ?, ?) ON CONFLICT (discussion_id) DO NOTHING",
                        (discussion_id, settled_at, written))
     return cur.rowcount == 1
+
+
+# ── 列表用批次查詢(固定次數,不隨篇數成長) ──
+
+def stories(conn) -> list[dict]:
+    return [_row(r) for r in conn.execute("SELECT * FROM story ORDER BY slug")]
+
+
+def current_artifacts(conn) -> list[dict]:
+    """所有篇的 current:`{story_id, kind, artifact}`,一次查完。"""
+    out = []
+    for r in conn.execute(
+            "SELECT c.story_id AS cur_story_id, c.kind AS cur_kind, a.* FROM current_artifact c "
+            "JOIN artifact a ON a.id = c.artifact_id"):
+        art = _row(r)
+        out.append({"story_id": art.pop("cur_story_id"), "kind": art.pop("cur_kind"),
+                    "artifact": art})
+    return out
+
+
+def latest_jobs(conn) -> dict[int, dict]:
+    """story_id → 該篇 id 最大的 job。"""
+    return {r["story_id"]: _row(r) for r in conn.execute(
+        "SELECT j.* FROM job j WHERE j.story_id IS NOT NULL "
+        "AND j.id = (SELECT MAX(id) FROM job WHERE story_id = j.story_id)")}
 
 
 # ── artifact 單筆 ──

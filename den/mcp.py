@@ -22,6 +22,7 @@ from marrow.ingest import decode
 
 log = logging.getLogger("hyenovel")
 
+_STALE_CONCLUSION = "(舊版分析時留下的,可能已不適用)"
 _PROMPT = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "discuss.md"
 _SUFFIXES = (".md", ".txt")
 _CLIENT_MAX = 64   # den 的 ClientIn 上限;超過整個 POST /jobs 會 422
@@ -108,7 +109,8 @@ def render_discussion(ctx: dict) -> str:
         out.append("(還沒有)")
     for c in ctx["conclusions"]:
         refs = f" [{_refs(c['refs'])}]" if c.get("refs") else ""
-        out.append(f"({c['kind']}) {c['text']}{refs}")
+        mark = f"{_STALE_CONCLUSION} " if c.get("stale") else ""
+        out.append(f"{mark}({c['kind']}) {c['text']}{refs}")
     return "\n".join(out) + "\n"
 
 

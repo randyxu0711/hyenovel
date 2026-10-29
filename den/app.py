@@ -1,6 +1,13 @@
 """den 的 HTTP 入口:job API + SSE,本機安全三件套(綁 127.0.0.1、Origin、token)、單一實例鎖。
 
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
+  GET  /stories             → {"stories": [...]}(領域形狀,見 den.views)
+  GET  /stories/{slug}/viz  → VizData | 404 無 current analysis
+  GET  /stories/{slug}/source → text/plain,current analysis 所對照那一版的原文(無則最新版)
+  GET  /stories/{slug}/conclusions → {"conclusions": [...]}
+  GET  /stories/{slug}/transcript  → {"turns": [...]}
+                            ({slug} 讀取路由:不合 slug → 400,不存在 → 404,皆記 reject)
+  POST /extract             multipart `file` → {filename, text, chars} | 413 超限 | 400 抽字失敗
   GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
   GET  /health              → {version, pid, busy}
   POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, resumed, runner, note}
@@ -29,15 +36,16 @@ from pathlib import Path
 from typing import Callable, Literal
 
 import filelock
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import stories, version
-from den.config import HOST, IDLE_CHECK, IDLE_EXIT, PHASE_TIMEOUT, PORT, valid_slug
+from den import stories, version, views
+from den.config import (HOST, IDLE_CHECK, IDLE_EXIT, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT,
+                        valid_slug)
 from den.jobs import JobManager
 from den.runner import ClaudePreset, cli_version, find_claude, pick_runner, run_job
-from marrow import db, repo
+from marrow import db, ingest, repo, vizdata
 
 log = logging.getLogger("hyenovel")
 
@@ -258,6 +266,74 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, port: int = P
         except ValueError as e:
             log.info("event=reject where=stories reason=%s", e)
             raise HTTPException(422, str(e)) from None
+
+    def _slug_ok(slug: str, where: str) -> None:
+        if not valid_slug(slug):
+            log.info("event=reject where=%s reason=bad-slug slug=%r", where, slug[:64])
+            raise HTTPException(400, "bad slug")
+
+    def _unknown(where: str) -> HTTPException:
+        log.info("event=reject where=%s reason=unknown-slug", where)
+        return HTTPException(404, "這篇不在 DB")
+
+    @app.get("/stories")
+    async def list_stories(request: Request):
+        return {"stories": views.stories(request.app.state.mgr.conn)}
+
+    @app.get("/stories/{slug}/viz")
+    async def get_viz(slug: str, request: Request):
+        _slug_ok(slug, "viz")
+        conn = request.app.state.mgr.conn
+        st = repo.story_by_slug(conn, slug)
+        if st is None:
+            raise _unknown("viz")
+        ana = repo.current_artifact(conn, st["id"], "analysis")
+        if ana is None:
+            log.info("event=reject where=viz reason=not-analyzed")
+            raise HTTPException(404, "這篇還沒分析完成")
+        fb = repo.current_artifact(conn, st["id"], "feedback")
+        src = repo.source_version(conn, ana["source_version_id"])["text"]
+        return vizdata.viz_payload(slug, ana["body"], fb["body"] if fb else None, src)
+
+    @app.get("/stories/{slug}/source")
+    async def get_source(slug: str, request: Request):
+        _slug_ok(slug, "source")
+        conn = request.app.state.mgr.conn
+        st = repo.story_by_slug(conn, slug)
+        if st is None:
+            raise _unknown("source")
+        ana = repo.current_artifact(conn, st["id"], "analysis")
+        sv = (repo.source_version(conn, ana["source_version_id"]) if ana
+              else repo.latest_source_version(conn, st["id"]))
+        return PlainTextResponse(sv["text"], media_type="text/plain; charset=utf-8")
+
+    @app.get("/stories/{slug}/conclusions")
+    async def get_conclusions(slug: str, request: Request):
+        _slug_ok(slug, "conclusions")
+        try:
+            return {"conclusions": views.conclusions(request.app.state.mgr.conn, slug)}
+        except LookupError:
+            raise _unknown("conclusions") from None
+
+    @app.get("/stories/{slug}/transcript")
+    async def get_transcript(slug: str, request: Request):
+        _slug_ok(slug, "transcript")
+        try:
+            return {"turns": views.transcript(request.app.state.mgr.conn, slug)}
+        except LookupError:
+            raise _unknown("transcript") from None
+
+    @app.post("/extract")
+    async def extract(file: UploadFile):
+        data = await file.read(MAX_SOURCE_BYTES + 1)
+        if len(data) > MAX_SOURCE_BYTES:
+            log.info("event=reject where=upload bytes=%s", len(data))
+            raise HTTPException(413, "檔案太大")
+        try:
+            text = ingest.extract_text(file.filename or "", data)
+        except ValueError as e:   # extract_text 內已記 event=extract-fail
+            raise HTTPException(400, str(e)) from None
+        return {"filename": file.filename, "text": text, "chars": len(text)}
 
     @app.get("/stories/{slug}/discussion")
     async def get_discussion(slug: str, request: Request):
