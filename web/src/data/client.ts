@@ -82,8 +82,17 @@ function parseFrame(frame: string): SSEEvent | null {
 /** den 的 frame 沒有 event: 行,事件名在 JSON 裡({event,data});解包成呼叫端一直拿到的形狀。 */
 function unwrap(ev: SSEEvent): SSEEvent {
   const d = ev.data;
-  if (ev.event === "message" && d && typeof d === "object" && typeof d.event === "string" && "data" in d)
-    return { event: d.event, data: d.data };
+  if (ev.event === "message" && d && typeof d === "object" && typeof d.event === "string" && "data" in d) {
+    const inner: SSEEvent = { event: d.event, data: d.data };
+    // den 對「已結束的 job」不重播,只送 state 現況;翻成呼叫端認得的收尾事件。
+    if (inner.event === "state") {
+      const st = inner.data ?? {};
+      if (st.state === "done") return { event: "done", data: { ok: true } };
+      if (st.state === "paused" || st.state === "failed" || st.state === "cancelled")
+        return { event: "error", data: { reason: st.error_class ?? "cancelled", message: st.detail ?? "" } };
+    }
+    return inner;
+  }
   return ev;
 }
 

@@ -136,16 +136,15 @@ describe("critique 走 job", () => {
     `data: ${JSON.stringify({ event: "phase", data: { name: "analyst", status: "start", attempt: 1 } })}\n\n` +
     `data: ${JSON.stringify({ event: "done", data: { ok: true } })}\n\n`;
 
-  function critiqueFetch(extra: Record<string, unknown> = {}) {
+  function critiqueFetch(stream: string = frames) {
     const calls: { url: string; init?: RequestInit }[] = [];
     const fn = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
       if (url === "/api/jobs" && init?.method === "POST")
         return { ok: true, status: 202, json: async () => ({ job_id: 9 }) } as Response;
-      if (url === "/api/jobs/9/events") return sseResponse(frames);
+      if (url === "/api/jobs/9/events") return sseResponse(stream);
       return { ok: false, status: 404 } as Response;
     });
-    void extra;
     return { fn, calls };
   }
 
@@ -202,10 +201,50 @@ describe("critique 走 job", () => {
     expect(await cancelCritique("nope")).toBe(false);
     expect(calls.every(c => c.init?.method !== "POST")).toBe(true);
   });
-  it("cancelCritique 409 → false", async () => {
-    const { fn } = routes({ "GET /api/stories": { stories: [entry({ latest_job: job("running", "analyst") })] } });
-    vi.stubGlobal("fetch", fn);
+  it("cancelCritique 打到 cancel 但 den 回 409 → false", async () => {
+    const stories = { stories: [entry({ latest_job: job("running", "analyst") })] };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      url === "/api/stories"
+        ? ({ ok: true, status: 200, json: async () => stories } as Response)
+        : ({ ok: false, status: 409 } as Response)));
     expect(await cancelCritique("d01")).toBe(false);
+  });
+});
+
+describe("SSE 解析", () => {
+  const f = (o: any) => `data: ${JSON.stringify(o)}\n\n`;
+  async function run(chunks: string[]) {
+    const enc = new TextEncoder();
+    let i = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/jobs"
+      ? ({ ok: true, json: async () => ({ job_id: 9 }) } as Response)
+      : ({ ok: true, body: { getReader: () => ({ read: async () =>
+          i < chunks.length ? { done: false, value: enc.encode(chunks[i++]) } : { done: true, value: undefined } }) } } as unknown as Response)));
+    const got: any[] = [];
+    for await (const e of streamCritique("d01")) got.push(e);
+    return got;
+  }
+  it("frame 被切在 chunk 中間也能拼回", async () => {
+    const all = f({ event: "phase", data: { name: "analyst" } }) + f({ event: "done", data: { ok: true } });
+    const cut = 17;
+    expect(await run([all.slice(0, cut), all.slice(cut, cut + 30), all.slice(cut + 30)])).toEqual([
+      { event: "phase", data: { name: "analyst" } }, { event: "done", data: { ok: true } },
+    ]);
+  });
+  it("state:done → done", async () => {
+    expect(await run([f({ event: "state", data: { state: "done" } })])).toEqual([{ event: "done", data: { ok: true } }]);
+  });
+  it.each(["paused", "failed", "cancelled"])("state:%s → error", async (st) => {
+    const r = await run([f({ event: "state", data: { state: st, error_class: st === "cancelled" ? null : "gate", detail: "d" } })]);
+    expect(r).toEqual([{ event: "error", data: { reason: st === "cancelled" ? "cancelled" : "gate", message: "d" } }]);
+  });
+  it("error_class / detail 缺 → cancelled / 空字串", async () => {
+    expect(await run([f({ event: "state", data: { state: "failed" } })]))
+      .toEqual([{ event: "error", data: { reason: "cancelled", message: "" } }]);
+  });
+  it("其他 state 原樣穿過", async () => {
+    const ev = { event: "state", data: { state: "running" } };
+    expect(await run([f(ev)])).toEqual([ev]);
   });
 });
 
