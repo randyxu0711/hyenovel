@@ -176,7 +176,7 @@ export async function cancelCritique(slug: string): Promise<boolean> {
 export const streamDiscuss = (slug: string, sessionId: string | null, message: string, anchors: string[] = []) =>
   sseStream(`/api/discuss/${slug}`, { session_id: sessionId, message, anchors });
 
-// 收束沒有前端入口:討論局被回收後由後端 settle worker 自己煉(server/settle.py)。
+// 收束沒有前端入口;收束暫無,另開切片。
 
 /** 上傳檔案抽文字(只抽不寫,給前端預覽改字)。 */
 export async function extractStory(file: File): Promise<{ filename: string; text: string; chars: number }> {
