@@ -111,7 +111,8 @@ class JobManager:
         stuck = repo.resumable_job(self.conn, st["id"], sv["id"])
         if stuck is not None and self.resume(stuck["id"]):
             log.info("event=job-auto-resumed job=%s", stuck["id"])
-            return {"job_id": stuck["id"], "estimate": est, "existing": True, "resumed": True}
+            return {"job_id": stuck["id"], "estimate": est, "existing": True, "resumed": True,
+                    "previous_error_class": stuck["error_class"]}   # requeue 前讀的:停在哪
         with self.conn:
             jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
                                   {"client": client, "runner": runner}, self._now())
@@ -137,14 +138,24 @@ class JobManager:
         log.info("event=cancel-rejected job=%s", job_id)
         return False
 
+    def _resume_blocker(self, job: dict) -> str | None:
+        """續跑會出錯的情況(回 log 用的 reason 字串);沒有就 None。"""
+        sv = job["source_version_id"]
+        if repo.latest_source_version(self.conn, job["story_id"])["id"] != sv:
+            return "stale-version"   # 跑完會把 current(按篇+種類)換回舊稿的分析
+        if repo.has_done_job(self.conn, sv):
+            return "already-done"    # 這一版已有成品;要重跑請送新 job
+        other = repo.active_job(self.conn, job["story_id"], sv)
+        if other is not None and other["id"] != job["id"]:
+            return f"active-job other={other['id']}"   # 再排一個 = 同一份錢花兩次
+        return None
+
     def resume(self, job_id: int) -> bool:
         job = repo.get_job(self.conn, job_id)
-        if job is not None:   # 同篇同版已有別的 job 在排隊/跑:再排一個 = 同一份錢花兩次
-            other = repo.active_job(self.conn, job["story_id"], job["source_version_id"])
-            if other is not None and other["id"] != job_id:
-                log.info("event=resume-rejected job=%s reason=active-job other=%s",
-                         job_id, other["id"])
-                return False
+        blocker = job and self._resume_blocker(job)
+        if blocker:
+            log.info("event=resume-rejected job=%s reason=%s", job_id, blocker)
+            return False
         with self.conn:
             ok = repo.requeue_job(self.conn, job_id, self._now())
         if not ok:

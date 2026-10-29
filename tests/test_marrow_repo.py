@@ -170,6 +170,10 @@ def test_list_jobs_joins_story_and_orders_newest_first(conn):
     assert (rows[0]["slug"], rows[0]["title"], rows[0]["state"]) == ("s1", "標題", "done")
     assert (rows[2]["slug"], rows[2]["title"]) == ("s2", None)
     assert rows[0]["params"] == {}                               # JSON 欄位已 decode
+    assert all(r["is_latest_version"] is True for r in rows)
+    repo.add_source_version(conn, s, "甲改", 6)                   # s1 改稿:舊版的 job 不再是最新版
+    flags = {r["id"]: r["is_latest_version"] for r in repo.list_jobs(conn, 10)}
+    assert flags == {a: False, c: False, b: True}
     assert [r["id"] for r in repo.list_jobs(conn, 2)] == [a, c]
 
 
@@ -192,3 +196,18 @@ def test_resumable_job_newest_paused_failed_cancelled_same_version(conn):
         assert repo.resumable_job(conn, s, v)["id"] == b          # 最新的優先
         repo.set_job_state(conn, b, "done", 4)
     assert repo.resumable_job(conn, s, v2)["id"] == other
+
+
+def test_has_done_job_same_version_only(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    assert repo.has_done_job(conn, v) is False
+    j = repo.create_job(conn, "critique", s, v2, {}, 0)
+    repo.set_job_state(conn, j, "done", 1)
+    assert repo.has_done_job(conn, v) is False
+    k = repo.create_job(conn, "critique", s, v, {}, 0)
+    for st in ("queued", "running", "paused", "failed", "cancelled"):
+        repo.set_job_state(conn, k, st, 2)
+        assert repo.has_done_job(conn, v) is False
+    repo.set_job_state(conn, k, "done", 3)
+    assert repo.has_done_job(conn, v) is True

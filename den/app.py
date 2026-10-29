@@ -6,7 +6,8 @@
   POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, resumed, runner, note}
                             (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的;
                              同版停在暫停/失敗/取消 → 接續最新那個,resumed=true)
-  GET  /jobs?limit=N        → {"jobs": [{id, slug, title, state, step, error_class, updated_at}]}
+  GET  /jobs?limit=N        → {"jobs": [{id, slug, title, state, step, error_class, updated_at,
+                                       is_latest_version}]}
                             (最近更新的在前;limit 預設 20,1–100,超出 422)
   GET  /jobs/{id}           → job 列 + slug + attempts 摘要(不含 raw_output / prompt)
   POST /jobs/{id}/cancel    → 200 {"ok":true} | 409
@@ -45,7 +46,8 @@ _SSE_POLL = 15.0        # SSE 多久沒事件就回頭看 DB(兼 keep-alive)
 _RESTART_DELAY = 1.0    # worker 死掉後隔多久重起(別讓壞 DB 變成熱迴圈)
 _TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞檔
 _ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
-_LIST_KEYS = ("id", "slug", "title", "state", "step", "error_class", "updated_at")
+_LIST_KEYS = ("id", "slug", "title", "state", "step", "error_class", "updated_at",
+              "is_latest_version")
 _LIST_MAX = 100
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
              "error_class", "detail", "params", "created_at", "updated_at")

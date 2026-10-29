@@ -33,6 +33,7 @@ _REASONS = {"usage-limit": "訂閱額度用完", "gate": "引文閘門重試耗�
             "overload": "服務過載", "auth": "Claude CLI 未登入或登入失效",
             "crash": "工人失敗", "timeout": "工人失敗(逾時)"}
 _RESUMABLE = ("paused", "failed", "cancelled")
+_STALE = "舊版原文,不能續跑——改稿後請用 start_critique 跑新版"
 
 DESC_START = (
     "把一篇純文學短篇送去分析+編輯評論。只收本機 .md / .txt 檔案路徑(不收全文、不收 pdf/docx——"
@@ -184,8 +185,10 @@ def _list_text(jobs: list[dict]) -> str:
         for j in rows:
             why = (f"({_REASONS.get(j['error_class'], j['error_class'])})"
                    if j.get("error_class") else "")
-            out.append(f"job {j['id']} ·〈{j['title'] or j['slug']}〉({j['slug']}) · {_label(j)}{why}")
-        if head == "可續跑":
+            stale = head == "可續跑" and not j.get("is_latest_version", True)
+            out.append(f"job {j['id']} ·〈{j['title'] or j['slug']}〉({j['slug']}) · {_label(j)}{why}"
+                       + (f" · {_STALE}" if stale else ""))
+        if head == "可續跑" and any(j.get("is_latest_version", True) for j in rows):
             out.append("用 resume_critique(job_id=N) 續跑(N 換成上面的編號);已完成的步驟不重跑。")
         out.append("")
     return "\n".join(out).rstrip()
@@ -224,7 +227,9 @@ def build_server(den: DenClient) -> MCPServer:
         if s["reused"]:
             lines.append(f"這份原文和 {s['slug']} 的最新版相同,沿用那篇。")
         if j.get("resumed"):
+            cls = j.get("previous_error_class")
             lines += [f"這篇這一版之前跑到一半(job {j['job_id']}),已接續:已完成的步驟不重跑。",
+                      f"上次停在:{_REASONS.get(cls, cls)}" if cls else "上次是你取消的。",
                       f"好了問我進度(critique_status job_id={j['job_id']})。"]
             return "\n".join(lines)
         if j["existing"]:
@@ -264,7 +269,9 @@ def build_server(den: DenClient) -> MCPServer:
 
     @server.tool(description=DESC_RESUME)
     async def resume_critique(job_id: int) -> str:
-        return await guarded(_act(job_id, "resume", "這個 job 目前不能續跑(只有暫停/失敗/取消的可以)。",
+        return await guarded(_act(job_id, "resume", ("這個 job 目前不能續跑。可能是:已結束(只有暫停/失敗/取消的可以續);"
+                                  "舊版原文(改稿後請用 start_critique 跑新版);"
+                                  "同一版已有別的 job 在跑或已完成。"),
                                   f"job {job_id} 已重新排入;用 critique_status 查進度。"))
 
     async def _open(slug: str) -> str:

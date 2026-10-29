@@ -333,7 +333,7 @@ def test_submit_auto_resumes_paused_same_version(conn, caplog):
         with caplog.at_level(logging.INFO, logger="hyenovel"):
             again = m.submit("mini")
         assert again == {"job_id": first["job_id"], "estimate": again["estimate"],
-                         "existing": True, "resumed": True}
+                         "existing": True, "resumed": True, "previous_error_class": "usage-limit"}
         assert f"event=job-auto-resumed job={first['job_id']}" in caplog.text
         assert _job_count(conn) == 1
         await _until(lambda: _state(conn, first["job_id"]) == "done", "續跑跑完")
@@ -351,6 +351,7 @@ def test_submit_auto_resumes_cancelled(conn):
     assert m.cancel(jid) is True
     again = m.submit("mini")
     assert (again["job_id"], again["resumed"], again["existing"]) == (jid, True, True)
+    assert again["previous_error_class"] is None                # 取消的沒有 error_class
     assert _state(conn, jid) == "queued" and _job_count(conn) == 1
     assert m._wake.is_set()
 
@@ -393,3 +394,47 @@ def test_resume_rejected_when_other_active_job(conn, caplog):
         assert m.resume(old) is False
     assert f"event=resume-rejected job={old} reason=active-job other={live}" in caplog.text
     assert _state(conn, old) == "cancelled"
+
+
+def test_submit_auto_resume_reports_failed_gate_class(conn):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    with conn:
+        repo.set_job_state(conn, jid, "failed", 2.0, error_class="gate")
+    again = m.submit("mini")
+    assert (again["job_id"], again["previous_error_class"]) == (jid, "gate")
+    assert repo.get_job(conn, jid)["error_class"] is None          # requeue 清掉了,回傳的是之前的
+
+
+def _paused(m, conn):
+    jid = m.submit("mini")["job_id"]
+    with conn:
+        repo.set_job_state(conn, jid, "paused", 2.0, error_class="usage-limit")
+    return jid
+
+
+def test_resume_rejected_on_stale_version(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = _paused(m, conn)
+    with conn:   # 改稿:v1 的 job 跑完會把 current 換回舊分析
+        repo.add_source_version(conn, repo.story_by_slug(conn, "mini")["id"], "改過的稿。", 3.0)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+    assert f"event=resume-rejected job={old} reason=stale-version" in caplog.text
+    assert _state(conn, old) == "paused"
+
+
+def test_resume_rejected_when_version_already_done(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = _paused(m, conn)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        sib = repo.create_job(conn, "critique", st["id"],
+                              repo.latest_source_version(conn, st["id"])["id"], {}, 3.0)
+        repo.set_job_state(conn, sib, "done", 4.0)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+        out = m.submit("mini")                                      # done 過 = 明確重跑:新 job
+    assert f"event=resume-rejected job={old} reason=already-done" in caplog.text
+    assert out["job_id"] not in (old, sib) and out["resumed"] is False
+    assert _state(conn, old) == "paused"

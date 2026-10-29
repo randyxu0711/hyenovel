@@ -291,11 +291,23 @@ def active_job(conn, story_id: int, source_version_id: int) -> dict | None:
 
 
 def list_jobs(conn, limit: int) -> list[dict]:
-    """最近的 job(updated_at DESC, id DESC)取 limit 筆,附 story 的 slug、title。"""
-    return [_row(r) for r in conn.execute(
-        "SELECT j.*, st.slug AS slug, st.title AS title FROM job j "
-        "JOIN story st ON st.id = j.story_id "
+    """最近的 job(updated_at DESC, id DESC)取 limit 筆,附 story 的 slug、title,
+    與 is_latest_version(這個 job 的原文是不是該篇最新版;舊版不能續跑)。"""
+    rows = [_row(r) for r in conn.execute(
+        "SELECT j.*, st.slug AS slug, st.title AS title, "
+        "CASE WHEN j.source_version_id = (SELECT id FROM source_version "
+        "WHERE story_id = j.story_id ORDER BY n DESC LIMIT 1) THEN 1 ELSE 0 END "
+        "AS is_latest_version FROM job j JOIN story st ON st.id = j.story_id "
         "ORDER BY j.updated_at DESC, j.id DESC LIMIT ?", (limit,))]
+    for r in rows:
+        r["is_latest_version"] = bool(r["is_latest_version"])
+    return rows
+
+
+def has_done_job(conn, source_version_id: int) -> bool:
+    """這一版原文是否已有跑完(done)的 job。"""
+    return conn.execute("SELECT 1 FROM job WHERE source_version_id = ? AND state = 'done' "
+                        "LIMIT 1", (source_version_id,)).fetchone() is not None
 
 
 def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:

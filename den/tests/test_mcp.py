@@ -6,8 +6,10 @@ data dir 一律 tmp_path。
 import json
 import logging
 import os
+import queue
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -183,24 +185,31 @@ def test_start_twice_while_inflight_no_second_job(data, tmp_path):
         d.stop()
 
 
-def test_start_same_version_after_pause_resumes(den, tmp_path):
-    """同一份原文之前停在半路 → 接續那個 job,不說「已送出」新 job。"""
+@pytest.mark.parametrize("state, cls, why", [
+    ("paused", "usage-limit", "上次停在:訂閱額度用完"),
+    ("failed", "gate", "上次停在:引文閘門重試耗盡"),
+    ("cancelled", None, "上次是你取消的"),
+], ids=["paused-usage-limit", "failed-gate", "cancelled"])
+def test_start_same_version_after_stop_resumes(den, tmp_path, state, cls, why):
+    """同一份原文之前停在半路 → 接續那個 job、說出上次停在哪,不說「已送出」新 job。"""
     p = str(_write(tmp_path))
     c = den.client()
     first = _job_id(_text(_call(c, "start_critique", {"path": p})))
     conn = _conn(den)
     try:
-        for _ in range(500):   # 假分析的引文對不上 TEXT → 閘門耗盡 → paused
+        for _ in range(500):   # 假分析的引文對不上 TEXT → 閘門耗盡 → paused;worker 就此閒下
             if repo.get_job(conn, first)["state"] == "paused":
                 break
             time.sleep(0.02)
-        assert repo.get_job(conn, first)["state"] == "paused"
+        with conn:
+            repo.set_job_state(conn, first, state, time.time(), error_class=cls)
     finally:
         conn.close()
     r = _call(c, "start_critique", {"path": p})
     assert not r.is_error
     t = _text(r)
     assert f"之前跑到一半(job {first}),已接續:已完成的步驟不重跑。" in t
+    assert why in t
     assert f"critique_status job_id={first}" in t
     assert "已送出" not in t
 
@@ -292,7 +301,24 @@ def test_cancel_409_message(den):
 
 def test_resume_409_message(den):
     r = _call(den.client(), "resume_critique", {"job_id": _make_job(den, "done")})
-    assert r.is_error and "這個 job 目前不能續跑" in _text(r)
+    t = _text(r)
+    assert r.is_error and "這個 job 目前不能續跑" in t
+    assert "已結束" in t and "舊版原文" in t and "同一版已有別的 job 在跑或已完成" in t
+
+
+def test_status_list_marks_stale_version(den):
+    jid = _make_job(den, "paused", "usage-limit")
+    conn = _conn(den)
+    try:
+        with conn:
+            repo.add_source_version(conn, repo.story_by_slug(conn, "mini")["id"], "改過的稿。",
+                                    time.time())
+    finally:
+        conn.close()
+    t = _text(_call(den.client(), "critique_status", {}))
+    assert f"job {jid} ·〈極小合成樣本〉(mini) · 已暫停(訂閱額度用完)" in t
+    assert "舊版原文,不能續跑——改稿後請用 start_critique 跑新版" in t
+    assert "resume_critique" not in t       # 組內只有舊版:不給續跑提示
 
 
 def test_resume_ok(den):
@@ -421,19 +447,50 @@ def test_open_discussion_within_budget():
 # ── 入口 ──
 
 def test_main_keeps_stdout_clean(tmp_path):
+    """真 client 會開著 stdin:一問一答地送,收到回覆才送下一則(一次寫完再關 stdin,
+    server 可能先看到 EOF 就退出,tools/list 沒回 → 偶發失敗)。"""
     env = {**os.environ, "HYENOVEL_DATA_DIR": str(tmp_path)}
-    msgs = [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-         "params": {"protocolVersion": "2025-11-25", "capabilities": {},
-                    "clientInfo": {"name": "t", "version": "0"}}},
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-    ]
-    p = subprocess.run([sys.executable, "-m", "den.mcp"], cwd=_REPO, env=env,
-                       input="".join(json.dumps(m) + "\n" for m in msgs),
-                       capture_output=True, text=True, timeout=60)
-    lines = [ln for ln in p.stdout.splitlines() if ln.strip()]
-    got = [json.loads(ln) for ln in lines]
-    listed = next(m for m in got if m.get("id") == 2)
+    p = subprocess.Popen([sys.executable, "-m", "den.mcp"], cwd=_REPO, env=env,
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         text=True)
+    lines: queue.Queue = queue.Queue()
+    threading.Thread(target=lambda: [lines.put(ln) for ln in p.stdout], daemon=True).start()
+    seen: list[str] = []
+
+    def send(msg):
+        p.stdin.write(json.dumps(msg) + "\n")
+        p.stdin.flush()
+
+    def reply(mid):
+        end = time.monotonic() + 60
+        while time.monotonic() < end:
+            try:
+                ln = lines.get(timeout=max(0.0, end - time.monotonic()))
+            except queue.Empty:
+                break
+            if ln.strip():
+                seen.append(ln)
+                msg = json.loads(ln)          # 每一行都得是 JSON
+                if msg.get("id") == mid:
+                    return msg
+        raise AssertionError(f"等不到 id={mid} 的回覆;收到 {seen!r}")
+
+    try:
+        send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+              "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                         "clientInfo": {"name": "t", "version": "0"}}})
+        reply(1)
+        send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        listed = reply(2)
+        p.stdin.close()
+        p.wait(timeout=30)
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.wait()
+    for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
+        if ln.strip():
+            json.loads(ln)
     assert len(listed["result"]["tools"]) == 5
     assert not (tmp_path / "den.json").exists()   # 沒拉起 den

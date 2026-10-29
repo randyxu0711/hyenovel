@@ -664,7 +664,7 @@ def test_list_jobs_newest_first_with_slug_title(data):
         assert [j["id"] for j in jobs] == [b, a]
         assert jobs[0] == {"id": b, "slug": "d01", "title": "門", "state": "paused",
                            "step": "analyst", "error_class": "gate",
-                           "updated_at": jobs[0]["updated_at"]}
+                           "updated_at": jobs[0]["updated_at"], "is_latest_version": True}
         assert (jobs[1]["slug"], jobs[1]["state"]) == ("mini", "done")
         assert [j["id"] for j in c.get("/jobs?limit=1", headers=h).json()["jobs"]] == [b]
 
@@ -702,6 +702,7 @@ def test_post_job_auto_resumes_cancelled_same_version(data):
         assert again.status_code == 202
         body = again.json()
         assert (body["job_id"], body["existing"], body["resumed"]) == (first["job_id"], True, True)
+        assert body["previous_error_class"] is None
         assert len(c.get("/jobs", headers=h).json()["jobs"]) == 1
 
 
@@ -724,3 +725,17 @@ def test_resume_409_when_other_active_job(data, caplog):
         assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
     assert f"event=resume-rejected job={old} reason=active-job other={live[0]}" in caplog.text
     assert "event=reject where=resume" in caplog.text
+
+
+def test_resume_409_on_stale_version_and_list_flags_it(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "第一版。"}, headers=h)
+        old = c.post("/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
+        _wait_state(c, h, old, "paused")                    # 閘門耗盡
+        assert c.post("/stories", json={"text": "改過的第二版。", "slug": "d01"},
+                      headers=h).json()["version"] == 2
+        assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
+        row = next(j for j in c.get("/jobs", headers=h).json()["jobs"] if j["id"] == old)
+        assert row["is_latest_version"] is False
+    assert f"event=resume-rejected job={old} reason=stale-version" in caplog.text
