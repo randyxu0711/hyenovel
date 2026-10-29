@@ -92,7 +92,7 @@ class JobManager:
         for jid in ids:
             log.info("event=job-recovered job=%s", jid)
 
-    def submit(self, slug: str) -> dict:
+    def submit(self, slug: str, client: dict | None = None, runner: str | None = None) -> dict:
         st = repo.story_by_slug(self.conn, slug)
         if st is None:
             log.info("event=submit-rejected reason=unknown-slug")
@@ -101,11 +101,25 @@ class JobManager:
         # 預估在 create_job 之前算:算壞了不能留下一個 client 不知道的 job
         est = estimate({s: repo.attempt_history(self.conn, s) for s in pipeline.CRITIQUE},
                        len(sv["text"]))
+        # 同篇同版已在排隊 / 執行:回那個 job,不排第二份花費(重送、帶 slug 沒改稿)。
+        # done 之後再送 = 明確要重跑,照建新 job。
+        active = repo.active_job(self.conn, st["id"], sv["id"])
+        if active is not None:
+            log.info("event=job-deduped job=%s", active["id"])
+            return {"job_id": active["id"], "estimate": est, "existing": True, "resumed": False}
+        # 同版之前停在半路(暫停/失敗/取消):接續那個 job,已 ok 的步驟不重花錢
+        stuck = repo.resumable_job(self.conn, st["id"], sv["id"])
+        if stuck is not None and self.resume(stuck["id"]):
+            log.info("event=job-auto-resumed job=%s", stuck["id"])
+            return {"job_id": stuck["id"], "estimate": est, "existing": True, "resumed": True,
+                    "previous_state": stuck["state"],                # requeue 前讀的:停在哪
+                    "previous_error_class": stuck["error_class"]}
         with self.conn:
-            jid = repo.create_job(self.conn, "critique", st["id"], sv["id"], {}, self._now())
-        log.info("event=job-submitted job=%s", jid)
+            jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
+                                  {"client": client, "runner": runner}, self._now())
+        log.info("event=job-submitted job=%s client=%r runner=%s", jid, client, runner)
         self._wake.set()
-        return {"job_id": jid, "estimate": est}
+        return {"job_id": jid, "estimate": est, "existing": False, "resumed": False}
 
     def cancel(self, job_id: int) -> bool:
         if self._current is not None and self._current[0] == job_id:
@@ -125,7 +139,26 @@ class JobManager:
         log.info("event=cancel-rejected job=%s", job_id)
         return False
 
+    def _resume_blocker(self, job: dict) -> str | None:
+        """續跑會出錯的情況(回 log 用的 reason 字串);沒有就 None。"""
+        sv = job["source_version_id"]
+        if repo.latest_source_version(self.conn, job["story_id"])["id"] != sv:
+            return "stale-version"   # 跑完會把 current(按篇+種類)換回舊稿的分析
+        if repo.has_newer_done_job(self.conn, job["story_id"], sv, job["id"]):
+            return "already-done"    # 已被後來跑完的同版 job 取代;要重跑請送新 job
+        if repo.has_newer_resumable_job(self.conn, job["story_id"], sv, job["id"]):
+            return "superseded"      # 同版有更新的可續 job;續舊的會重複花錢
+        other = repo.active_job(self.conn, job["story_id"], sv)
+        if other is not None and other["id"] != job["id"]:
+            return f"active-job other={other['id']}"   # 再排一個 = 同一份錢花兩次
+        return None
+
     def resume(self, job_id: int) -> bool:
+        job = repo.get_job(self.conn, job_id)
+        blocker = job and self._resume_blocker(job)
+        if blocker:
+            log.info("event=resume-rejected job=%s reason=%s", job_id, blocker)
+            return False
         with self.conn:
             ok = repo.requeue_job(self.conn, job_id, self._now())
         if not ok:

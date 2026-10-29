@@ -98,3 +98,120 @@ def test_reverted_edit_is_a_new_version(conn):                            # fina
     v3, created = repo.add_source_version(conn, s, "甲", 2)
     latest = repo.latest_source_version(conn, s)
     assert created and latest["id"] == v3 and latest["n"] == 3 and latest["text"] == "甲"
+
+
+def test_next_den_slug_empty_is_d01(conn):
+    assert repo.next_den_slug(conn) == "d01"
+
+
+def test_next_den_slug_ignores_s_prefix(conn):
+    repo.ensure_story(conn, "s01", None, 0)
+    repo.ensure_story(conn, "s07", None, 0)
+    assert repo.next_den_slug(conn) == "d01"
+
+
+def test_next_den_slug_increments(conn):
+    repo.ensure_story(conn, "d01", None, 0)
+    repo.ensure_story(conn, "d09", None, 0)
+    repo.ensure_story(conn, "dx", None, 0)
+    assert repo.next_den_slug(conn) == "d10"
+
+
+def test_story_by_latest_sha_matches_latest_only(conn):
+    s = repo.ensure_story(conn, "s1", None, 0)
+    repo.add_source_version(conn, s, "甲", 0)
+    repo.add_source_version(conn, s, "乙", 1)
+    assert repo.story_by_latest_sha(conn, repo.sha256_text("甲")) is None
+    assert repo.story_by_latest_sha(conn, repo.sha256_text("乙"))["id"] == s
+
+
+def test_has_pending_jobs(conn):
+    s, v = _story(conn)
+    assert repo.has_pending_jobs(conn) is False
+    j = repo.create_job(conn, "critique", s, v, {}, 0)
+    assert repo.has_pending_jobs(conn) is True            # queued
+    repo.set_job_state(conn, j, "running", 1)
+    assert repo.has_pending_jobs(conn) is True
+    for st in ("done", "failed", "cancelled", "paused"):
+        repo.set_job_state(conn, j, st, 2)
+        assert repo.has_pending_jobs(conn) is False
+
+
+def test_active_job_only_queued_or_running_same_version(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    assert repo.active_job(conn, s, v) is None
+    other = repo.create_job(conn, "critique", s, v2, {}, 0)       # 別的版本不算
+    assert repo.active_job(conn, s, v) is None
+    j = repo.create_job(conn, "critique", s, v, {}, 1)
+    later = repo.create_job(conn, "critique", s, v, {}, 2)
+    assert repo.active_job(conn, s, v)["id"] == j                 # 最舊的優先
+    repo.set_job_state(conn, j, "running", 3)
+    assert repo.active_job(conn, s, v)["id"] == j
+    for st in ("done", "failed", "paused", "cancelled"):
+        repo.set_job_state(conn, j, st, 4)
+        repo.set_job_state(conn, later, st, 4)
+        assert repo.active_job(conn, s, v) is None
+    assert repo.active_job(conn, s, v2)["id"] == other
+
+
+def test_list_jobs_joins_story_and_orders_newest_first(conn):
+    s, v = _story(conn)
+    repo.ensure_story(conn, "s1", "標題", 0)
+    t = repo.ensure_story(conn, "s2", None, 0)
+    tv, _ = repo.add_source_version(conn, t, "乙", 0)
+    assert repo.list_jobs(conn, 10) == []
+    a = repo.create_job(conn, "critique", s, v, {}, 1)
+    b = repo.create_job(conn, "critique", t, tv, {}, 1)          # 同 updated_at → id 大的先
+    c = repo.create_job(conn, "critique", s, v, {}, 2)
+    repo.set_job_state(conn, a, "done", 5)
+    rows = repo.list_jobs(conn, 10)
+    assert [r["id"] for r in rows] == [a, c, b]
+    assert (rows[0]["slug"], rows[0]["title"], rows[0]["state"]) == ("s1", "標題", "done")
+    assert (rows[2]["slug"], rows[2]["title"]) == ("s2", None)
+    assert rows[0]["params"] == {}                               # JSON 欄位已 decode
+    assert all(r["is_latest_version"] is True for r in rows)
+    repo.add_source_version(conn, s, "甲改", 6)                   # s1 改稿:舊版的 job 不再是最新版
+    flags = {r["id"]: r["is_latest_version"] for r in repo.list_jobs(conn, 10)}
+    assert flags == {a: False, c: False, b: True}
+    assert [r["id"] for r in repo.list_jobs(conn, 2)] == [a, c]
+
+
+def test_resumable_job_newest_paused_failed_cancelled_same_version(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    assert repo.resumable_job(conn, s, v) is None
+    other = repo.create_job(conn, "critique", s, v2, {}, 0)
+    repo.set_job_state(conn, other, "paused", 0)                  # 別的版本不算
+    a = repo.create_job(conn, "critique", s, v, {}, 1)
+    b = repo.create_job(conn, "critique", s, v, {}, 2)
+    for st in ("queued", "running", "done"):
+        repo.set_job_state(conn, a, st, 3)
+        repo.set_job_state(conn, b, st, 3)
+        assert repo.resumable_job(conn, s, v) is None
+    for st in ("paused", "failed", "cancelled"):
+        repo.set_job_state(conn, a, st, 4)
+        assert repo.resumable_job(conn, s, v)["id"] == a
+        repo.set_job_state(conn, b, st, 4)
+        assert repo.resumable_job(conn, s, v)["id"] == b          # 最新的優先
+        repo.set_job_state(conn, b, "done", 4)
+    assert repo.resumable_job(conn, s, v2)["id"] == other
+
+
+def test_has_newer_done_job_only_later_ids_same_version(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    j1 = repo.create_job(conn, "critique", s, v, {}, 0)
+    assert repo.has_newer_done_job(conn, s, v, j1) is False
+    other = repo.create_job(conn, "critique", s, v2, {}, 0)       # 別的版本不算
+    repo.set_job_state(conn, other, "done", 1)
+    assert repo.has_newer_done_job(conn, s, v, j1) is False
+    j2 = repo.create_job(conn, "critique", s, v, {}, 0)
+    for st in ("queued", "running", "paused", "failed", "cancelled"):
+        repo.set_job_state(conn, j2, st, 2)
+        assert repo.has_newer_done_job(conn, s, v, j1) is False
+    repo.set_job_state(conn, j2, "done", 3)
+    assert repo.has_newer_done_job(conn, s, v, j1) is True        # j1 被後來跑完的取代
+    assert repo.has_newer_done_job(conn, s, v, j2) is False       # 自己不算
+    j3 = repo.create_job(conn, "critique", s, v, {}, 4)
+    assert repo.has_newer_done_job(conn, s, v, j3) is False       # 較早的 done 不擋重跑

@@ -10,7 +10,7 @@ import pytest
 
 from den import jobs
 from den.pipeline import StepOutcome
-from den.tests.test_pipeline import _analysis, _feedback, ok
+from den.tests.test_pipeline import _analysis, _feedback, fail, ok
 from marrow import repo
 from marrow.workpacks import WORKPACKS
 
@@ -82,7 +82,11 @@ def test_worker_runs_one_at_a_time(conn):
     async def main():
         run = GatedRun()
         m = _mgr(conn, run)
-        a, b = m.submit("mini")["job_id"], m.submit("mini")["job_id"]
+        with conn:   # 第二篇(同文,假分析的引文才對得上):同篇同版會被去重,不會排出第二個 job
+            text = repo.latest_source_version(conn, repo.story_by_slug(conn, "mini")["id"])["text"]
+            sid = repo.ensure_story(conn, "other", None, 0)
+            repo.add_source_version(conn, sid, text, 0)
+        a, b = m.submit("mini")["job_id"], m.submit("other")["job_id"]
         w = asyncio.create_task(m.worker())
         await asyncio.wait_for(run.started.wait(), 5)
         assert (_state(conn, a), _state(conn, b)) == ("running", "queued")
@@ -268,3 +272,223 @@ def test_submit_estimate_failure_leaves_no_job(conn, monkeypatch):
     with pytest.raises(ZeroDivisionError):
         m.submit("mini")
     assert conn.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 0
+
+
+def test_submit_dedupes_inflight_same_version(conn, caplog):
+    """同篇同版還在 queued/running → 回同一個 job,不建第二個(第二份花費)。"""
+    async def main():
+        run = GatedRun()
+        m = _mgr(conn, run)
+        first = m.submit("mini")
+        assert first["existing"] is False
+        with caplog.at_level(logging.INFO, logger="hyenovel"):
+            again = m.submit("mini")                       # queued
+        assert again == {**first, "existing": True}
+        assert f"event=job-deduped job={first['job_id']}" in caplog.text
+        w = asyncio.create_task(m.worker())
+        await asyncio.wait_for(run.started.wait(), 5)
+        assert m.submit("mini")["job_id"] == first["job_id"]   # running
+        assert conn.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 1
+        run.gate.set()
+        await _until(lambda: _state(conn, first["job_id"]) == "done", "跑完")
+        rerun = m.submit("mini")                           # done 之後明確重跑 = 新 job
+        assert rerun["existing"] is False and rerun["job_id"] != first["job_id"]
+        await _until(lambda: _state(conn, rerun["job_id"]) == "done", "重跑完")
+        await _stop(w)
+    asyncio.run(main())
+
+
+# ── 8c:同一版自動續跑、續跑防重 ──
+
+class ScriptRun:
+    """run_factory:analyst 一律 ok;criticizer 依 crit 腳本(先吐完再一律 ok)。記每步呼叫數。"""
+
+    def __init__(self, *crit):
+        self.crit = list(crit)
+        self.calls = {"analyst": 0, "criticizer": 0}
+
+    def __call__(self, on_proc):
+        async def run(system_prompt, user_prompt, schema):
+            if schema is WORKPACKS["analyst"].schema:
+                self.calls["analyst"] += 1
+                return ok(_analysis())
+            self.calls["criticizer"] += 1
+            return self.crit.pop(0) if self.crit else ok(_feedback())
+        return run
+
+
+def _job_count(conn):
+    return conn.execute("SELECT COUNT(*) FROM job").fetchone()[0]
+
+
+def test_submit_auto_resumes_paused_same_version(conn, caplog):
+    async def main():
+        run = ScriptRun(fail("usage-limit"))
+        m = _mgr(conn, run)
+        first = m.submit("mini")
+        assert first["resumed"] is False
+        w = asyncio.create_task(m.worker())
+        await _until(lambda: _state(conn, first["job_id"]) == "paused", "撞額度暫停")
+        assert run.calls == {"analyst": 1, "criticizer": 1}
+        with caplog.at_level(logging.INFO, logger="hyenovel"):
+            again = m.submit("mini")
+        assert again == {"job_id": first["job_id"], "estimate": again["estimate"],
+                         "existing": True, "resumed": True, "previous_state": "paused",
+                         "previous_error_class": "usage-limit"}
+        assert f"event=job-auto-resumed job={first['job_id']}" in caplog.text
+        assert _job_count(conn) == 1
+        await _until(lambda: _state(conn, first["job_id"]) == "done", "續跑跑完")
+        assert run.calls == {"analyst": 1, "criticizer": 2}      # analyst 有 ok attempt,不重跑
+        q = m.bus.subscribe(first["job_id"])                     # bus 已 reset:沒有上一輪的 error
+        evs = [q.get_nowait() for _ in range(q.qsize())]
+        assert not any(e["event"] == "error" for e in evs)
+        await _stop(w)
+    asyncio.run(main())
+
+
+def test_submit_auto_resumes_cancelled(conn):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    assert m.cancel(jid) is True
+    again = m.submit("mini")
+    assert (again["job_id"], again["resumed"], again["existing"]) == (jid, True, True)
+    assert again["previous_error_class"] is None                # 取消的沒有 error_class
+    assert _state(conn, jid) == "queued" and _job_count(conn) == 1
+    assert m._wake.is_set()
+
+
+def test_submit_after_done_is_new_job_not_resumed(conn):
+    async def main():
+        m = _mgr(conn, GatedRun(gated=False))
+        first = m.submit("mini")["job_id"]
+        w = asyncio.create_task(m.worker())
+        await _until(lambda: _state(conn, first) == "done", "跑完")
+        again = m.submit("mini")
+        assert again["job_id"] != first and (again["existing"], again["resumed"]) == (False, False)
+        await _until(lambda: _state(conn, again["job_id"]) == "done", "重跑完")
+        await _stop(w)
+    asyncio.run(main())
+
+
+def test_submit_prefers_active_over_resumable(conn):
+    m = _mgr(conn, GatedRun())
+    old = m.submit("mini")["job_id"]
+    m.cancel(old)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        live = repo.create_job(conn, "critique", st["id"],
+                               repo.latest_source_version(conn, st["id"])["id"], {}, 2.0)
+    out = m.submit("mini")
+    assert (out["job_id"], out["existing"], out["resumed"]) == (live, True, False)
+    assert _state(conn, old) == "cancelled"
+
+
+def test_resume_rejected_when_other_active_job(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = m.submit("mini")["job_id"]
+    m.cancel(old)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        live = repo.create_job(conn, "critique", st["id"],
+                               repo.latest_source_version(conn, st["id"])["id"], {}, 2.0)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+    assert f"event=resume-rejected job={old} reason=active-job other={live}" in caplog.text
+    assert _state(conn, old) == "cancelled"
+
+
+def test_submit_auto_resume_reports_failed_gate_class(conn):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    with conn:
+        repo.set_job_state(conn, jid, "failed", 2.0, error_class="gate")
+    again = m.submit("mini")
+    assert (again["job_id"], again["previous_error_class"]) == (jid, "gate")
+    assert repo.get_job(conn, jid)["error_class"] is None          # requeue 清掉了,回傳的是之前的
+
+
+def _paused(m, conn):
+    jid = m.submit("mini")["job_id"]
+    with conn:
+        repo.set_job_state(conn, jid, "paused", 2.0, error_class="usage-limit")
+    return jid
+
+
+def test_resume_rejected_on_stale_version(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = _paused(m, conn)
+    with conn:   # 改稿:v1 的 job 跑完會把 current 換回舊分析
+        repo.add_source_version(conn, repo.story_by_slug(conn, "mini")["id"], "改過的稿。", 3.0)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+    assert f"event=resume-rejected job={old} reason=stale-version" in caplog.text
+    assert _state(conn, old) == "paused"
+
+
+def test_resume_rejected_when_version_already_done(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = _paused(m, conn)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        sib = repo.create_job(conn, "critique", st["id"],
+                              repo.latest_source_version(conn, st["id"])["id"], {}, 3.0)
+        repo.set_job_state(conn, sib, "done", 4.0)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+        out = m.submit("mini")                                      # done 過 = 明確重跑:新 job
+    assert f"event=resume-rejected job={old} reason=already-done" in caplog.text
+    assert out["job_id"] not in (old, sib) and out["resumed"] is False
+    assert _state(conn, old) == "paused"
+
+
+def test_resume_rejected_when_newer_resumable_sibling(conn, caplog):
+    """auto-resume 之前留下的兩個可續 job:續舊的會跟新的重複花錢。"""
+    m = _mgr(conn, GatedRun())
+    old = _paused(m, conn)
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        new = repo.create_job(conn, "critique", st["id"],
+                              repo.latest_source_version(conn, st["id"])["id"], {}, 3.0)
+        repo.set_job_state(conn, new, "failed", 4.0, error_class="crash")
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert m.resume(old) is False
+    assert f"event=resume-rejected job={old} reason=superseded" in caplog.text
+    assert _state(conn, old) == "paused"
+    out = m.submit("mini")                       # 自動續跑照挑最新的可續 job
+    assert (out["job_id"], out["resumed"]) == (new, True)
+
+
+def test_rerun_after_done_can_pause_and_resume(conn):
+    """done J1 → 明確重跑 J2 停在半路 → J2 能續(直接 resume 與重送自動續跑都行)。"""
+    async def main():
+        run = ScriptRun()
+        m = _mgr(conn, run)
+        j1 = m.submit("mini")["job_id"]
+        w = asyncio.create_task(m.worker())
+        await _until(lambda: _state(conn, j1) == "done", "J1 跑完")
+        run.crit.append(fail("usage-limit"))
+        j2 = m.submit("mini")["job_id"]
+        assert j2 != j1
+        await _until(lambda: _state(conn, j2) == "paused", "J2 撞額度")
+        again = m.submit("mini")                                   # 自動續跑 J2
+        assert (again["job_id"], again["resumed"]) == (j2, True)
+        await _until(lambda: _state(conn, j2) == "done", "J2 續跑完")
+        assert run.calls == {"analyst": 2, "criticizer": 3}        # J2 的 analyst 沒重跑
+        run.crit.append(fail("usage-limit"))
+        j3 = m.submit("mini")["job_id"]
+        await _until(lambda: _state(conn, j3) == "paused", "J3 撞額度")
+        assert m.resume(j3) is True                                # 直接 resume 也行
+        await _until(lambda: _state(conn, j3) == "done", "J3 續跑完")
+        await _stop(w)
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize("state, cls", [("paused", "usage-limit"), ("failed", None),
+                                        ("cancelled", None)])
+def test_submit_auto_resume_reports_previous_state(conn, state, cls):
+    m = _mgr(conn, GatedRun())
+    jid = m.submit("mini")["job_id"]
+    with conn:
+        repo.set_job_state(conn, jid, state, 2.0, error_class=cls)
+    out = m.submit("mini")
+    assert (out["job_id"], out["previous_state"], out["previous_error_class"]) == (jid, state, cls)

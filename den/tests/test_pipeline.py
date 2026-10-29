@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+import logging
 
 import pytest
 
@@ -235,3 +236,177 @@ def test_cancel_records_attempt_and_reraises(conn):
     assert _current(conn, job, "analysis")["id"] == before
     assert _current(conn, job, "feedback") is None
 
+
+
+# ── 8a 工人異常 ──
+
+def _with(r, *, turns, output):
+    r.num_turns = turns
+    r.tokens = None if output is None else {"output": output}
+    return r
+
+
+def test_worker_anomaly_warns_any_outcome(conn, caplog):
+    """CLI 多跑輪 / 吐爆量(smoke:4 輪、132,533 tokens)→ WARNING,不論 outcome。"""
+    job = _job(conn)
+    run = FakeRun(_with(fail("crash"), turns=2, output=132533))
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job, run)
+    hits = [r for r in caplog.records if "event=worker-anomaly" in r.getMessage()]
+    assert len(hits) == 1 and hits[0].levelno == logging.WARNING
+    assert (f"event=worker-anomaly job={job['id']} step=analyst turns=2 output_tokens=132533 "
+            "duration_ms=5") == hits[0].getMessage()
+
+
+def test_worker_anomaly_threshold_is_one_turn(conn, caplog):
+    """現行配方每次呼叫 1 輪:2 輪就要警示,1 輪不要(守 ANOMALY_TURNS)。"""
+    job = _job(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job, FakeRun(_with(fail("crash"), turns=1, output=4000)))
+    assert "event=worker-anomaly" not in caplog.text
+    job2 = _job(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job2, FakeRun(_with(fail("crash"), turns=2, output=4000)))
+    assert "event=worker-anomaly" in caplog.text
+
+
+def test_worker_anomaly_on_timeout(conn, caplog):
+    """逾時沒有 turns / tokens 也要留痕,欄位當 None。"""
+    job = _job(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out, _, _ = _drive(conn, job, FakeRun(fail("timeout")))
+    assert out.error_class == "timeout"
+    hits = [r for r in caplog.records if "event=worker-anomaly" in r.getMessage()]
+    assert len(hits) == 1 and hits[0].levelno == logging.WARNING
+    assert "reason=timeout" in hits[0].getMessage()
+    assert f"job={job['id']} step=analyst" in hits[0].getMessage()
+
+
+def test_worker_anomaly_turns_on_ok(conn, caplog):
+    job = _job(conn)
+    run = FakeRun(_with(ok(_analysis()), turns=4, output=132533),
+                  _with(ok(_feedback()), turns=1, output=4000))
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out, _, _ = _drive(conn, job, run)
+    assert out.state == "done"
+    hits = [r.getMessage() for r in caplog.records if "event=worker-anomaly" in r.getMessage()]
+    assert hits == [f"event=worker-anomaly job={job['id']} step=analyst turns=4 "
+                    "output_tokens=132533 duration_ms=5"]
+
+
+@pytest.mark.parametrize("turns,output", [(1, 4000), (1, 20000), (None, None), (None, 4000)],
+                         ids=["normal", "at-threshold", "missing", "no-turns"])
+def test_worker_anomaly_quiet_when_normal_or_missing(conn, caplog, turns, output):
+    job = _job(conn)
+    run = FakeRun(_with(ok(_analysis()), turns=turns, output=output),
+                  _with(ok(_feedback()), turns=turns, output=output))
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out, _, _ = _drive(conn, job, run)
+    assert out.state == "done"
+    assert "event=worker-anomaly" not in caplog.text
+
+
+def test_worker_anomaly_tokens_without_output_key(conn, caplog):
+    job = _job(conn)
+    r = fail("crash")
+    r.num_turns, r.tokens = 5, {"input": 3}
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        _drive(conn, job, FakeRun(r))
+    assert "turns=5 output_tokens=None" in caplog.text
+
+
+# ── Task 9d:工人 ok 但抽不出 JSON 物件 → 視同閘門失敗 ──
+
+_NOT_JSON = "輸出不是單一 JSON 物件（可能被截斷或夾了說明文字）"
+
+
+def unparsed(text, *, with_text=True):
+    """CLI 正常結束、result 是文字但抽不出物件;raw 是 CLI 的 envelope。"""
+    return RunResult("ok", None, json.dumps({"result": text}, ensure_ascii=False),
+                     "claude-sonnet", {"output": 10}, 5, None,
+                     text=text if with_text else None)
+
+
+def test_unparsable_output_retries_with_raw_text(conn):
+    job = _job(conn)
+    run = FakeRun(unparsed("好的，以下是分析：{\"slug\": \"mini\", \"nodes\": [截斷"),
+                  ok(_analysis()), ok(_feedback()))
+    out, events, _ = _drive(conn, job, run)
+    assert out.state == "done"
+    assert _outcomes(conn, job, "analyst") == ["gate", "ok"]
+    gate_att = repo.attempts(conn, job["id"])[0]
+    assert gate_att["gate_verdict"] == {"errors": [_NOT_JSON]}
+    assert gate_att["parsed"] is None
+    second = run.calls[1][1]
+    assert "<previous_output>\n好的，以下是分析：{\"slug\": \"mini\", \"nodes\": [截斷\n" in second
+    assert _NOT_JSON in second
+    retry = [e for e in events if e["data"].get("status") == "retry"]
+    assert len(retry) == 1 and retry[0]["data"]["detail"] == _NOT_JSON
+
+
+def test_unparsable_without_text_falls_back_to_raw(conn):
+    job = _job(conn)
+    r = unparsed("我做不到", with_text=False)
+    run = FakeRun(r, ok(_analysis()), ok(_feedback()))
+    _drive(conn, job, run)
+    assert f"<previous_output>\n{r.raw}\n" in run.calls[1][1]
+
+
+def test_unparsable_exhausted_pauses_gate(conn):
+    job = _job(conn)
+    out, events, _ = _drive(conn, job, FakeRun(*[unparsed("不是 JSON")] * 3))
+    assert (out.state, out.error_class) == ("paused", "gate")
+    assert _outcomes(conn, job) == ["gate"] * 3
+    assert events[-1]["event"] == "error" and events[-1]["data"]["reason"] == "gate"
+
+
+def test_unparsable_criticizer_does_not_rerun_analyst(conn):
+    job = _job(conn)
+    run = FakeRun(ok(_analysis()), *[unparsed("不是 JSON")] * 3)
+    out, _, _ = _drive(conn, job, run)
+    assert (out.state, out.error_class) == ("paused", "gate")
+    assert [c[0] for c in run.calls] == [WORKPACKS["analyst"].system_prompt] + \
+        [WORKPACKS["criticizer"].system_prompt] * 3
+    run2 = FakeRun(unparsed("還是不行"), ok(_feedback()))         # 續跑:只重跑被擋的那步
+    out, _, _ = _drive(conn, job, run2)
+    assert out.state == "done"
+    assert [c[0] for c in run2.calls] == [WORKPACKS["criticizer"].system_prompt] * 2
+    assert _outcomes(conn, job, "analyst") == ["ok"]
+    assert _outcomes(conn, job, "criticizer") == ["gate"] * 4 + ["ok"]
+
+
+# ── Task 9e:attempt 記 system prompt 指紋 ──
+
+def _sha(text):
+    return repo.sha256_text(text)[:12]
+
+
+def test_attempts_record_prompt_sha(conn):
+    job = _job(conn)
+    run = FakeRun(fail("transient"), ok(_bad_analysis()), ok(_analysis()), ok(_feedback()))
+    _drive(conn, job, run)
+    atts = repo.attempts(conn, job["id"])
+    assert [a["outcome"] for a in atts] == ["transient", "gate", "ok", "ok"]
+    for a in atts:
+        assert a["prompt_sha"] == _sha(WORKPACKS[a["step"]].system_prompt)
+    assert len(atts[0]["prompt_sha"]) == 12
+    assert atts[0]["prompt_sha"] != atts[-1]["prompt_sha"]
+
+
+def test_cancelled_attempt_records_prompt_sha(conn):
+    job = _job(conn)
+    with pytest.raises(asyncio.CancelledError):
+        _drive(conn, job, FakeRun(asyncio.CancelledError()))
+    (a,) = repo.attempts(conn, job["id"])
+    assert a["outcome"] == "cancelled" and a["prompt_sha"] == _sha(WORKPACKS["analyst"].system_prompt)
+
+
+def test_prompt_change_changes_sha(conn, monkeypatch):
+    import dataclasses
+    old = WORKPACKS["analyst"]
+    monkeypatch.setitem(WORKPACKS, "analyst",
+                        dataclasses.replace(old, system_prompt=old.system_prompt + "改一個字"))
+    job = _job(conn)
+    _drive(conn, job, FakeRun(ok(_analysis()), ok(_feedback())))
+    got = repo.attempts(conn, job["id"])[0]["prompt_sha"]
+    assert got == _sha(old.system_prompt + "改一個字") and got != _sha(old.system_prompt)

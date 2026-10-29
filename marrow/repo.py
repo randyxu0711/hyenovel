@@ -10,6 +10,7 @@
 """
 import hashlib
 import json
+import re
 import sqlite3
 
 _JSON_COLS = {"body", "provenance", "anchors", "refs", "quotes",
@@ -44,6 +45,21 @@ def ensure_story(conn, slug: str, title: str | None, now: float) -> int:
     if title is not None:
         conn.execute("UPDATE story SET title = ? WHERE slug = ?", (title, slug))
     return _id(conn, "SELECT id FROM story WHERE slug = ?", (slug,))
+
+
+def next_den_slug(conn) -> str:
+    """den 建的故事用 d01, d02…:掃 `^d(\\d+)$` 最大值 +1。只看 d 前綴,舊 web 的 sNN 不影響。"""
+    nums = [int(m.group(1)) for (slug,) in conn.execute("SELECT slug FROM story")
+            if (m := re.fullmatch(r"d(\d+)", slug))]
+    return f"d{(max(nums) + 1) if nums else 1:02d}"
+
+
+def story_by_latest_sha(conn, sha256: str) -> dict | None:
+    """「最新版」source_version 的 sha 等於它的那篇;舊版吻合不算(改稿後舊稿不該認回來)。"""
+    return _row(conn.execute(
+        "SELECT st.* FROM story st JOIN source_version sv ON sv.story_id = st.id "
+        "WHERE sv.sha256 = ? AND sv.n = (SELECT MAX(n) FROM source_version WHERE story_id = st.id) "
+        "ORDER BY st.id LIMIT 1", (sha256,)).fetchone())
 
 
 def story(conn, story_id: int) -> dict | None:
@@ -228,15 +244,16 @@ def recover_running_jobs(conn, now: float) -> list[int]:
 def add_attempt(conn, job_id: int, step: str, n: int, *, runner: str, model: str | None,
                 cli_version: str | None, outcome: str, raw_output: str | None,
                 parsed: dict | None, gate_verdict: dict | None, tokens: dict | None,
-                duration_ms: int | None, artifact_id: int | None, now: float) -> int:
+                duration_ms: int | None, artifact_id: int | None, now: float,
+                prompt_sha: str | None = None) -> int:
     def j(o):
         return None if o is None else canonical_json(o)
     cur = conn.execute(
         "INSERT INTO attempt (job_id, step, n, runner, model, cli_version, outcome, raw_output, "
-        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at, prompt_sha) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (job_id, step, n, runner, model, cli_version, outcome, raw_output, j(parsed),
-         j(gate_verdict), j(tokens), duration_ms, artifact_id, now))
+         j(gate_verdict), j(tokens), duration_ms, artifact_id, now, prompt_sha))
     return cur.lastrowid
 
 
@@ -253,9 +270,62 @@ def ok_attempt(conn, job_id: int, step: str) -> dict | None:
 
 
 def attempt_history(conn, step: str) -> list[dict]:
-    """所有成功 attempt 的 {chars, duration_ms, tokens}(chars = 該 job 原文長度)。"""
+    """所有成功 attempt 的 {chars, duration_ms, tokens}(chars = 該 job 原文長度)。
+    prompt_sha NULL = 舊 --json-schema 配方的樣本,不代表現行速度,排除。"""
     return [_row(r) for r in conn.execute(
         "SELECT LENGTH(sv.text) AS chars, a.duration_ms AS duration_ms, a.tokens AS tokens "
         "FROM attempt a JOIN job j ON j.id = a.job_id "
         "JOIN source_version sv ON sv.id = j.source_version_id "
-        "WHERE a.step = ? AND a.outcome = 'ok' ORDER BY a.id", (step,))]
+        "WHERE a.step = ? AND a.outcome = 'ok' AND a.prompt_sha IS NOT NULL "
+        "ORDER BY a.id", (step,))]
+
+
+def has_pending_jobs(conn) -> bool:
+    return conn.execute("SELECT 1 FROM job WHERE state IN ('queued', 'running') LIMIT 1"
+                        ).fetchone() is not None
+
+
+def active_job(conn, story_id: int, source_version_id: int) -> dict | None:
+    """同篇同版還在排隊 / 執行中的最舊 job(重送去重用:同一份原文不該花兩次錢)。"""
+    return _row(conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? "
+        "AND state IN ('queued', 'running') ORDER BY id LIMIT 1",
+        (story_id, source_version_id)).fetchone())
+
+
+def list_jobs(conn, limit: int) -> list[dict]:
+    """最近的 job(updated_at DESC, id DESC)取 limit 筆,附 story 的 slug、title,
+    與 is_latest_version(這個 job 的原文是不是該篇最新版;舊版不能續跑)。"""
+    rows = [_row(r) for r in conn.execute(
+        "SELECT j.*, st.slug AS slug, st.title AS title, "
+        "CASE WHEN j.source_version_id = (SELECT id FROM source_version "
+        "WHERE story_id = j.story_id ORDER BY n DESC LIMIT 1) THEN 1 ELSE 0 END "
+        "AS is_latest_version FROM job j JOIN story st ON st.id = j.story_id "
+        "ORDER BY j.updated_at DESC, j.id DESC LIMIT ?", (limit,))]
+    for r in rows:
+        r["is_latest_version"] = bool(r["is_latest_version"])
+    return rows
+
+
+def has_newer_done_job(conn, story_id: int, source_version_id: int, job_id: int) -> bool:
+    """同篇同版有 id 比 job_id 大、已 done 的 job(這個 job 已被後來跑完的取代)。
+    較早的 done 不算:跑完後明確重跑的 job 停在半路仍要能續。"""
+    return conn.execute(
+        "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
+        "AND state = 'done' LIMIT 1", (story_id, source_version_id, job_id)).fetchone() is not None
+
+
+def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:
+    """同篇同版可續(paused/failed/cancelled)的最新 job(重送自動續跑用:已付的步驟不重花)。"""
+    return _row(conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? "
+        "AND state IN (?, ?, ?) ORDER BY id DESC LIMIT 1",
+        (story_id, source_version_id, *_RESUMABLE)).fetchone())
+
+
+def has_newer_resumable_job(conn, story_id: int, source_version_id: int, job_id: int) -> bool:
+    """同篇同版有 id 比 job_id 大、可續(paused/failed/cancelled)的 job:續舊的會跟新的重複花錢。"""
+    return conn.execute(
+        "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
+        "AND state IN (?, ?, ?) LIMIT 1",
+        (story_id, source_version_id, job_id, *_RESUMABLE)).fetchone() is not None

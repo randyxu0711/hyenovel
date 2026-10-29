@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from den import config
+from marrow.jsonout import extract_json
 
 log = logging.getLogger("hyenovel")
 
@@ -38,17 +39,18 @@ class RunResult:
     tokens: dict | None
     duration_ms: int
     message: str | None
+    num_turns: int | None = None
+    text: str | None = None  # 模型的原始文字輸出(CLI 的 result);parsed 抽不出時拿它當修補的 previous
 
 
 def build_argv(preset: ClaudePreset, system_prompt_file: Path, schema: dict) -> list[str]:
-    # CLI 的 validator 解析不了 draft 2020-12 的 meta-schema URI($schema),會直接拒收
-    # (2026-10-29 真 smoke 發現);傳給 CLI 時拿掉頂層 $schema,不動呼叫者的 dict。
-    cli_schema = {k: v for k, v in schema.items() if k != "$schema"}
+    # 不帶 --json-schema:CLI 會在內部自己驗格式、自己重試(smoke:一次 num_turns=4、13 萬
+    # output tokens),那段我們的閘門與 log 都看不到。schema 已附在 system prompt,JSON 由我們
+    # 解析(marrow.jsonout)、閘門驗,格式錯誤也成為一筆看得見的 attempt。schema 參數保留不用。
     return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
             "--no-session-persistence", "--output-format", "json",
             "--model", preset.model,
-            "--system-prompt-file", str(system_prompt_file),
-            "--json-schema", json.dumps(cli_schema, ensure_ascii=False)]
+            "--system-prompt-file", str(system_prompt_file)]
 
 
 def worker_env(env: Mapping[str, str]) -> dict[str, str]:
@@ -70,13 +72,13 @@ def classify(rc: int, stdout: str) -> tuple[str, dict | None, str | None]:
         return "usage-limit", obj, "用量已達上限"
     if status in (500, 529):
         return "transient", obj, f"API 暫時錯誤 ({status})"
-    # 文字判斷只在 is_error 時用:成功時 result 是 structured_output 的 JSON,可能逐字含使用者原文
+    # 文字判斷只在 is_error 時用:成功時 result 是模型輸出的 JSON 文字,可能逐字含使用者原文
     if status == 401 or (obj.get("is_error") and ("/login" in text or "Not logged in" in text)):
         return "auth", obj, _AUTH_MSG
     if obj.get("is_error"):
         return "crash", obj, f"CLI 回報錯誤 subtype={obj.get('subtype')}"
-    if not isinstance(obj.get("structured_output"), dict):
-        return "crash", obj, "沒有結構化輸出"
+    if not isinstance(obj.get("result"), str):
+        return "crash", obj, "CLI 輸出沒有 result 文字"
     return "ok", obj, None
 
 
@@ -98,8 +100,9 @@ def explain(outcome: str, obj: dict | None, err: str, msg: str | None) -> str | 
 
 def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
                 duration_ms: int) -> RunResult:
-    model = tokens = parsed = None
+    model = tokens = parsed = turns = text = None
     if obj is not None:
+        turns = obj.get("num_turns")
         usage = obj.get("usage")
         if isinstance(usage, dict):
             tokens = {"input": usage.get("input_tokens"),
@@ -111,8 +114,9 @@ def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
         if isinstance(mu, dict) and mu:
             model = next(iter(mu))
         if outcome == "ok":
-            parsed = obj["structured_output"]
-    return RunResult(outcome, parsed, raw, model, tokens, duration_ms, message)
+            text = obj["result"]
+            parsed = extract_json(text)              # 可能 None:由流水線當閘門失敗處理
+    return RunResult(outcome, parsed, raw, model, tokens, duration_ms, message, turns, text)
 
 
 def kill_tree(proc) -> None:
@@ -126,6 +130,10 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
                   *, timeout: float,
                   on_proc: Callable[[asyncio.subprocess.Process | None], None] | None = None
                   ) -> RunResult:
+    """schema 不傳給 CLI(見 build_argv);保留在簽名上是因 RunFn 介面不變,非 CLI runner 與測試假體會用。
+
+    ok 只代表工人正常結束且有 result 文字;parsed 可能是 None(抽不出 JSON 物件),由流水線處理。
+    """
     t0 = time.monotonic()
 
     def ms() -> int:
@@ -174,3 +182,12 @@ def cli_version(exe: str) -> str | None:
 
 def find_claude() -> str | None:
     return shutil.which("claude")
+
+
+def pick_runner(client_name: str | None, available: tuple[str, ...]) -> str | None:
+    """clientInfo 對得到且可用就用它;否則照 RUNNER_ORDER 取第一個可用;都沒有 → None。"""
+    name = (client_name or "").lower()
+    for key, runner in config.CLIENT_RUNNERS.items():
+        if key in name and runner in available:
+            return runner
+    return next((r for r in config.RUNNER_ORDER if r in available), None)

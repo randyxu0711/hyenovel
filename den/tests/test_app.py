@@ -6,6 +6,7 @@ TestClient 當 context manager 才會跑 lifespan;run_factory 一律注入假的
 import asyncio
 import json
 import logging
+import os
 import stat
 import threading
 import time
@@ -14,9 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
-from den.tests.conftest import FIXTURES
 from den.tests.test_pipeline import _analysis, _feedback, ok
-from marrow import db, importer
+from marrow import db, repo
 from marrow.workpacks import WORKPACKS
 
 
@@ -34,17 +34,6 @@ class Run:
                 await asyncio.sleep(0.01)
             return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _feedback())
         return run
-
-
-@pytest.fixture
-def data(tmp_path):
-    """tmp_path 當 data_dir,檔案 DB 預先 migrate + 匯入 mini。"""
-    url = f"sqlite:///{tmp_path}/t.db"
-    c = db.connect(url)
-    db.migrate(c, tmp_path / "t.db")
-    importer.import_story(c, FIXTURES / "mini", 1.0)
-    c.close()
-    return url, tmp_path
 
 
 def _client(data, run=None, **kw):
@@ -153,13 +142,37 @@ def test_post_job_returns_202_and_persists(data):
         r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
         assert r.status_code == 202
         body = r.json()
-        assert body["runner"] == "claude-cli"
+        assert body["runner"] == "claude"
         assert body["note"] == "會用你同一份訂閱額度"
         assert "estimate" in body
         jid = body["job_id"]
     c2 = db.connect(data[0])
     assert c2.execute("SELECT kind FROM job WHERE id = ?", (jid,)).fetchone()[0] == "critique"
     c2.close()
+
+
+def test_post_job_twice_while_inflight_dedupes(data):
+    with _client(data, Run(released=False)) as c:
+        h = _auth(data[1])
+        first = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        assert first["existing"] is False
+        queued = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        _wait_state(c, h, first["job_id"], "running")
+        running = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        for again in (queued, running):
+            assert again["job_id"] == first["job_id"] and again["existing"] is True
+            assert again["runner"] == "claude" and "estimate" in again
+        c.app.state.mgr.cancel(first["job_id"])
+    c2 = db.connect(data[0])
+    assert c2.execute("SELECT COUNT(*) FROM job").fetchone()[0] == 1
+    c2.close()
+
+
+def test_get_job_has_slug(data):
+    with _client(data, Run(released=False)) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        assert c.get(f"/jobs/{jid}", headers=h).json()["slug"] == "mini"
 
 
 def test_unknown_slug_404_mentions_importer(data):
@@ -373,3 +386,356 @@ def test_worker_death_is_logged_and_restarted(caplog, monkeypatch):
     assert m.startups == 1                                  # 重起前把孤兒 running 收成 crash
     assert "event=worker-died" in caplog.text
     assert "database is locked" in caplog.text              # 有 traceback
+
+
+# ── 切片 3:收原文 / 討論素材 / health / client → runner ──
+
+def test_health_requires_token(data):
+    with _client(data) as c:
+        assert c.get("/health").status_code == 401
+
+
+def test_health_returns_version(data):
+    with _client(data) as c:
+        r = c.get("/health", headers=_auth(data[1]))
+    body = r.json()
+    assert r.status_code == 200
+    assert body["version"] == c.app.state.version and len(body["version"]) == 12
+    assert body["pid"] == os.getpid() and body["busy"] is False
+
+
+def test_post_stories_201(data):
+    with _client(data) as c:
+        r = c.post("/stories", json={"text": "他走進門。", "title": "T", "slug": None},
+                   headers=_auth(data[1]))
+    assert r.status_code == 201
+    assert r.json()["slug"] == "d01" and r.json()["version"] == 1
+
+
+def test_post_stories_422_blank(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = c.post("/stories", json={"text": "  ", "title": None, "slug": None},
+                   headers=_auth(data[1]))
+    assert r.status_code == 422 and "空白故事" in r.json()["detail"]
+    assert "event=reject where=stories" in caplog.text
+
+
+def test_discussion_404(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert c.get("/stories/nope/discussion", headers=_auth(data[1])).status_code == 404
+    assert "event=reject where=discussion reason=unknown-slug" in caplog.text
+
+
+def test_post_stories_422_unknown_slug(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = c.post("/stories", json={"text": "x", "slug": "s07"}, headers=_auth(data[1]))
+    assert r.status_code == 422
+    assert "event=reject where=stories reason=unknown slug" in caplog.text
+
+
+def test_discussion_422_bad_slug(data):
+    with _client(data) as c:
+        assert c.get("/stories/-x/discussion", headers=_auth(data[1])).status_code == 422
+
+
+def test_discussion_409(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "未分析。"}, headers=h)
+        r = c.get("/stories/d01/discussion", headers=h)
+    assert r.status_code == 409 and r.json() == {"detail": "這篇還沒分析完成"}
+
+
+def test_discussion_200(data):
+    with _client(data) as c:
+        r = c.get("/stories/mini/discussion", headers=_auth(data[1]))
+    assert r.status_code == 200 and r.json()["slug"] == "mini"
+
+
+def test_post_job_records_client_and_runner(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini",
+                                  "client": {"name": "claude-code", "version": "2.1.312"}}, headers=h)
+        assert r.status_code == 202 and r.json()["runner"] == "claude"
+        job = c.get(f"/jobs/{r.json()['job_id']}", headers=h).json()
+    assert job["params"] == {"client": {"name": "claude-code", "version": "2.1.312"},
+                             "runner": "claude"}
+
+
+def test_post_job_without_client_still_ok(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        job = c.get(f"/jobs/{r.json()['job_id']}", headers=h).json()
+    assert r.status_code == 202 and job["params"] == {"client": None, "runner": "claude"}
+
+
+def test_post_job_client_name_too_long_422(data):
+    with _client(data) as c:
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini",
+                                  "client": {"name": "x" * 65}}, headers=_auth(data[1]))
+    assert r.status_code == 422
+
+
+def test_post_job_no_runner_503(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        c.app.state.available = ()
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=_auth(data[1]))
+    assert r.status_code == 503 and "沒有可用的 runner" in r.json()["detail"]
+    assert "event=reject where=runner" in caplog.text
+
+
+# ── 生命週期:den.json、閒置退場 ──
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def _poll(pred, limit=5.0):
+    end = time.monotonic() + limit
+    while time.monotonic() < end:
+        if pred():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def _idle_client(data, run=None, clk=None, fired=None):
+    return _client(data, run, port=9999, idle_exit=10, idle_check=0.01, clock=clk,
+                   on_idle=fired.set if fired is not None else None)
+
+
+def test_den_json_written_and_removed(data):
+    p = data[1] / "den.json"
+    with _client(data, port=9999) as c:
+        assert json.loads(p.read_text()) == {"port": 9999, "pid": os.getpid(),
+                                             "version": c.app.state.version}
+        assert stat.S_IMODE(p.stat().st_mode) == 0o600
+    assert not p.exists()
+
+
+def test_den_json_not_removed_if_other_pid(data):
+    p = data[1] / "den.json"
+    with _client(data):
+        p.write_text(json.dumps({"port": 1, "pid": os.getpid() + 1, "version": "x"}))
+    assert p.exists()
+
+
+def test_den_json_unreadable_at_exit_is_left_alone(data):
+    p = data[1] / "den.json"
+    with _client(data):
+        p.write_text("not json")
+    assert p.read_text() == "not json"
+
+
+def test_idle_exit_fires_after_threshold(data):
+    clk, fired = Clock(), threading.Event()
+    with _idle_client(data, clk=clk, fired=fired):
+        time.sleep(0.1)
+        assert not fired.is_set()
+        clk.t = 11
+        assert fired.wait(5)
+
+
+def test_idle_exit_called_exactly_once(data):
+    clk, calls = Clock(), []
+    url, d = data
+    app = den_app.create_app(url, d, run_factory=Run(), idle_exit=10, idle_check=0.01,
+                             clock=clk, on_idle=lambda: calls.append(1))
+    with TestClient(app):
+        clk.t = 11
+        assert _poll(lambda: calls)
+        time.sleep(0.15)
+    assert calls == [1]
+
+
+def test_no_watcher_without_on_idle(data):
+    clk = Clock()
+    with _client(data, idle_exit=10, idle_check=0.01, clock=clk) as c:
+        clk.t = 100
+        time.sleep(0.05)
+        assert c.get("/health", headers=_auth(data[1])).status_code == 200
+
+
+def test_request_resets_idle(data):
+    clk, fired = Clock(), threading.Event()
+    with _idle_client(data, clk=clk, fired=fired) as c:
+        clk.t = 9
+        assert c.get("/health", headers=_auth(data[1])).status_code == 200
+        clk.t = 18
+        time.sleep(0.15)
+        assert not fired.is_set()
+        clk.t = 19.5
+        assert fired.wait(5)
+
+
+def test_rejected_request_does_not_reset_idle(data):
+    clk, fired = Clock(), threading.Event()
+    with _idle_client(data, clk=clk, fired=fired) as c:
+        clk.t = 9
+        assert c.get("/health").status_code == 401
+        clk.t = 11
+        assert fired.wait(5)
+
+
+def test_idle_exit_waits_for_pending_jobs(data):
+    clk, fired, run = Clock(), threading.Event(), Run(released=False)
+    with _idle_client(data, run, clk, fired) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, jid, "running")
+        clk.t = 11
+        time.sleep(0.15)
+        assert not fired.is_set()
+        run.release.set()
+        _wait_state(c, h, jid, "done")
+        clk.t = 25
+        assert fired.wait(5)
+
+
+def test_idle_exit_waits_for_open_stream(data):
+    clk, fired, run = Clock(), threading.Event(), Run(released=False)
+    with _idle_client(data, run, clk, fired) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, jid, "running")
+        c.post(f"/jobs/{jid}/cancel", headers=h)
+        _wait_state(c, h, jid, "cancelled")   # 沒有 pending job 了
+        # 開一條不會收尾的串流:手動把計數撐著(cancelled 是終態,真串流會立刻收尾)
+        c.app.state.streams += 1
+        clk.t = 11
+        time.sleep(0.15)
+        assert not fired.is_set()
+        c.app.state.streams -= 1
+        clk.t = 25
+        assert fired.wait(5)
+
+
+def test_stream_count_tracks_open_streams(data):
+    run = Run(released=False)
+    with _client(data, run) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, jid, "running")
+        got = []
+        t = threading.Thread(target=lambda: got.extend(_read_sse(c, h, jid)), daemon=True)
+        t.start()
+        assert _poll(lambda: c.app.state.streams == 1)
+        run.release.set()
+        t.join(10)
+        assert _poll(lambda: c.app.state.streams == 0)
+
+
+def test_idle_watcher_survives_check_error(data, monkeypatch, caplog):
+    real, n = den_app.repo.has_pending_jobs, []
+
+    def flaky(conn):
+        n.append(1)
+        if len(n) == 1:
+            raise RuntimeError("database is locked")
+        return real(conn)
+    monkeypatch.setattr(den_app.repo, "has_pending_jobs", flaky)
+    clk, fired = Clock(), threading.Event()
+    with caplog.at_level(logging.INFO, logger="hyenovel"), _idle_client(data, clk=clk, fired=fired):
+        clk.t = 11
+        assert fired.wait(5)
+    assert len(n) >= 2
+    assert "event=idle-check-failed" in caplog.text
+
+
+# ── 8b:列出 job ──
+
+def test_list_jobs_newest_first_with_slug_title(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "他走進門。", "title": "門"}, headers=h)
+        a = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, a, "done")
+        b = c.post("/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
+        _wait_state(c, h, b, "paused")     # 假分析的引文對不上 d01 原文 → 閘門耗盡
+        r = c.get("/jobs", headers=h)
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        assert [j["id"] for j in jobs] == [b, a]
+        assert jobs[0] == {"id": b, "slug": "d01", "title": "門", "state": "paused",
+                           "step": "analyst", "error_class": "gate",
+                           "updated_at": jobs[0]["updated_at"], "is_latest_version": True}
+        assert (jobs[1]["slug"], jobs[1]["state"]) == ("mini", "done")
+        assert [j["id"] for j in c.get("/jobs?limit=1", headers=h).json()["jobs"]] == [b]
+
+
+def test_list_jobs_empty_and_requires_token(data):
+    with _client(data) as c:
+        assert c.get("/jobs").status_code == 401
+        assert c.get("/jobs", headers=_auth(data[1])).json() == {"jobs": []}
+
+
+@pytest.mark.parametrize("limit", [0, 101, -1])
+def test_list_jobs_limit_out_of_range_422(data, caplog, limit):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 422
+    assert "event=reject where=list-jobs" in caplog.text
+
+
+def test_list_jobs_limit_bounds_ok(data):
+    with _client(data) as c:
+        for limit in (1, 100):
+            assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 200
+
+
+# ── 8c:同版自動續跑、續跑防重 ──
+
+def test_post_job_auto_resumes_cancelled_same_version(data):
+    with _client(data, Run(released=False)) as c:
+        h = _auth(data[1])
+        first = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        assert first["resumed"] is False
+        _wait_state(c, h, first["job_id"], "running")
+        c.post(f"/jobs/{first['job_id']}/cancel", headers=h)
+        _wait_state(c, h, first["job_id"], "cancelled")
+        again = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        assert again.status_code == 202
+        body = again.json()
+        assert (body["job_id"], body["existing"], body["resumed"]) == (first["job_id"], True, True)
+        assert body["previous_error_class"] is None
+        assert len(c.get("/jobs", headers=h).json()["jobs"]) == 1
+
+
+def test_resume_409_when_other_active_job(data, caplog):
+    with _client(data, Run(released=False)) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        old = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        _wait_state(c, h, old, "running")
+        c.post(f"/jobs/{old}/cancel", headers=h)
+        _wait_state(c, h, old, "cancelled")
+        conn = c.app.state.mgr.conn
+        live = []
+
+        async def make():
+            with conn:
+                job = repo.get_job(conn, old)
+                live.append(repo.create_job(conn, "critique", job["story_id"],
+                                            job["source_version_id"], {}, time.time()))
+        c.portal.call(make)
+        assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
+    assert f"event=resume-rejected job={old} reason=active-job other={live[0]}" in caplog.text
+    assert "event=reject where=resume" in caplog.text
+
+
+def test_resume_409_on_stale_version_and_list_flags_it(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "第一版。"}, headers=h)
+        old = c.post("/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
+        _wait_state(c, h, old, "paused")                    # 閘門耗盡
+        assert c.post("/stories", json={"text": "改過的第二版。", "slug": "d01"},
+                      headers=h).json()["version"] == 2
+        assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
+        row = next(j for j in c.get("/jobs", headers=h).json()["jobs"] if j["id"] == old)
+        assert row["is_latest_version"] is False
+    assert f"event=resume-rejected job={old} reason=stale-version" in caplog.text
