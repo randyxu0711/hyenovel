@@ -418,20 +418,6 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise HTTPException(400, str(e)) from None
         return {"filename": file.filename, "text": text, "chars": len(text)}
 
-    @app.get("/stories/{slug}/discussion")
-    async def get_discussion(slug: str, request: Request):
-        if not valid_slug(slug):
-            log.info("event=reject where=slug slug=%r", slug[:64])
-            raise HTTPException(422, "bad slug")
-        try:
-            return stories.discussion_context(request.app.state.mgr.conn, slug)
-        except LookupError:
-            log.info("event=reject where=discussion reason=unknown-slug")
-            raise HTTPException(404, "這篇不在 DB") from None
-        except ValueError:
-            log.info("event=reject where=discussion reason=not-analyzed")
-            raise HTTPException(409, "這篇還沒分析完成") from None
-
     @app.post("/discuss/{slug}")
     async def discuss_turn(slug: str, body: DiscussIn, request: Request):
         def reject(code: int, reason: str, detail: str) -> HTTPException:

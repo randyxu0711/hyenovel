@@ -113,7 +113,7 @@ def test_main_not_analyzed_returns_1(file_db, tmp_path, capsys):
     seed(file_db, analysis=False, feedback=False)
     file_db.commit()
     assert export.main(["mini", "--out", str(tmp_path / "o")]) == 1
-    assert "start_critique" in capsys.readouterr().err
+    assert "submit_work" in capsys.readouterr().err
 
 
 def test_main_bad_slug_returns_1(tmp_path, capsys):

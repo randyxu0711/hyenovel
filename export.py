@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         db.migrate(conn, db.sqlite_path(url))
         md, html = build(conn, args.slug)
     except NotAnalyzed:
-        print(f"✗ {args.slug} 還沒分析過,先用 start_critique 送分析。", file=sys.stderr)
+        print(f"✗ {args.slug} 還沒分析過,先用 submit_work 交稿分析。", file=sys.stderr)
         return 1
     except LookupError:
         print(f"✗ 找不到故事:{args.slug}", file=sys.stderr)

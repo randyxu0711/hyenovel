@@ -79,20 +79,20 @@ cd web && npm install && cd ..
 ./dev.sh          # ensures den is running + starts the frontend, Ctrl+C stops the frontend
 ```
 
-(Equivalent to `python -m den` then `cd web && npm run dev`.) Existing users: after pulling (old server stopped), run `python -m marrow.importer` once so old conclusions link to their analysis. Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback. Discussion inside the web app is disabled until slice 4b; discuss in the agent with `open_discussion` (`/story-discuss <slug>`).
+(Equivalent to `python -m den` then `cd web && npm run dev`.) Existing users: after pulling (old server stopped), run `python -m marrow.importer` once so old conclusions link to their analysis. Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback. To talk with the companion in the agent, use `/hyenovel:companion`.
 
 > localhost, single-user only; subscription auth is bound to local credentials — **do not deploy to the cloud**.
 
-### Command line (in a Claude Code session opened in the repo dir; register the hyenovel MCP first, see CLAUDE.md)
+### In the agent (a Claude Code session in any directory; register the hyenovel MCP first, see CLAUDE.md)
 
-1. `/story-critique <path to .md/.txt>` — send it to den for the full critique chain; results go to the DB and show in the web app.
-2. `/story-discuss <slug>` — discuss the piece back and forth (grounded, sycophancy-free; conclusions are not saved).
+1. `/hyenovel:companion` — give a .md/.txt path to submit (analysis runs in the background); the companion speaks first, then you talk.
+2. `/hyenovel:continue` — pick up the most recent piece. Finding works, reading the analysis or stopping a run: just ask ("which pieces do I have", "show me the analysis of the sea one").
 3. `python -m export <slug>` — export a shareable `<slug>.md` and `<slug>.html` (intention chain + text-axis anatomy).
 
 ## How it works
 
 ```
-start_critique(file path) ─▶ den ─ analyst ▶ criticizer ─▶ DB (source of truth: observation + judgment)
+submit_work(file path)  ─▶ den ─ analyst ▶ criticizer ─▶ DB (source of truth: observation + judgment)
                                                            │
                           ┌────────────────┬───────────────┘
                           ▼                ▼

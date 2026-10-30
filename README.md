@@ -79,20 +79,20 @@ cd web && npm install && cd ..
 ./dev.sh          # 確保 den 在跑 + 起前端,Ctrl+C 收前端
 ```
 
-(等同 `python -m den` 再 `cd web && npm run dev`。)舊用戶:拉新版後(舊 server 先停)跑一次 `python -m marrow.importer`,舊結論才會連回它的分析。開 http://localhost:5173 —— 挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋。網頁內的來回討論在切片 4b 前關閉,討論請在 agent 內用 `open_discussion`(`/story-discuss <slug>`)。
+(等同 `python -m den` 再 `cd web && npm run dev`。)舊用戶:拉新版後(舊 server 先停)跑一次 `python -m marrow.importer`,舊結論才會連回它的分析。開 http://localhost:5173 —— 挑一篇故事潛入,看意圖鏈 / 文本軸,讀編輯回饋。在 agent 裡跟 companion 聊,用 `/hyenovel:companion`。
 
 > 只跑 localhost、單人使用;訂閱認證綁本機憑證,**別部署到雲端**。
 
-### 命令列(在 repo 目錄開的 Claude Code session,需先註冊 hyenovel MCP,見 CLAUDE.md)
+### 在 agent 裡(任何目錄的 Claude Code session,需先註冊 hyenovel MCP,見 CLAUDE.md)
 
-1. `/story-critique <.md/.txt 檔案路徑>` —— 送進 den 跑完整評論鏈,結果寫進 DB,網頁讀得到。
-2. `/story-discuss <slug>` —— 就這篇來回討論(有據、不諂媚;結論不會保存)。
+1. `/hyenovel:companion` —— 給一個 .md/.txt 路徑交稿(分析在背景跑),companion 先開口,接著來回聊。
+2. `/hyenovel:continue` —— 接著聊最近那篇。找作品、看分析、停下分析直接用說的(「我有哪些作品」「給我看海那篇的分析」)。
 3. `python -m export <slug>` —— 匯出可分享的 `<slug>.md` 與 `<slug>.html`(意圖鏈 + 文本軸解剖)。
 
 ## 運作原理
 
 ```
-start_critique(檔案路徑) ─▶ den ─ analyst ▶ criticizer ─▶ DB(正本:觀察層 + 判斷層)
+submit_work(檔案路徑)  ─▶ den ─ analyst ▶ criticizer ─▶ DB(正本:觀察層 + 判斷層)
                                                           │
                          ┌────────────────┬───────────────┘
                          ▼                ▼
