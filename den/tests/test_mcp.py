@@ -396,6 +396,13 @@ def test_resolve_ambiguous_lists_candidates(cden):
     assert not any(p.startswith("/discuss") for _, p in cden.paths)
 
 
+def test_ambiguous_over_limit_says_at_least(cden):
+    for i in range(21):
+        _add_story(cden, f"d{i + 1:02d}", f"海之{i}", "x")
+    t = _text(_call(cden.client(), "read_work", {"work": "海", "part": "source"}))
+    assert "超過 20 篇符合「海」" in t and "有 20 篇" not in t
+
+
 def test_resolve_not_found(cden):
     r = _call(cden.client(), "read_work", {"work": "不存在的", "part": "source"})
     assert r.is_error and "找不到「不存在的」這篇" in _text(r) and "find_works" in _text(r)

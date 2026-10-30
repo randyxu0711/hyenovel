@@ -58,6 +58,7 @@ DESC_SUBMIT = (
     "分析在背景跑幾分鐘,回報收到的檔名、修改時間、字數,請作者確認是對的檔。會用作者同一份 Claude 訂閱額度。")
 DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
 _PARTS = ("source", "analysis", "notes", "feedback")
+_CANDIDATES = 20   # 作品有歧義時最多列幾篇
 _WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
@@ -177,12 +178,13 @@ def build_server(den: DenClient) -> MCPServer:
             if not hits:
                 raise _reject("no-work", "還沒有任何作品。請給我稿子的檔案路徑(.md / .txt)。")
             return hits[0]
-        hits = await _works(q=work)
+        hits = await _works(q=work, limit=_CANDIDATES + 1)   # 多拿一筆才知道有沒有超過
         if not hits:
             raise _reject("work-not-found", f"找不到「{work}」這篇。可以用 find_works 看有哪些作品。")
         if len(hits) > 1:
+            many = f"超過 {_CANDIDATES}" if len(hits) > _CANDIDATES else f"有 {len(hits)}"
             raise _reject("work-ambiguous", "\n".join(
-                [f"有 {len(hits)} 篇符合「{work}」,請問作者是哪一篇:"] + [_work_line(w) for w in hits]
+                [f"{many} 篇符合「{work}」,請問作者是哪一篇:"] + [_work_line(w) for w in hits[:_CANDIDATES]]
                 + ["請用標題裡更完整的字再試一次。"]))
         return hits[0]
 
