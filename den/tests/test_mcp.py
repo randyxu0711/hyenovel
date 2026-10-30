@@ -98,7 +98,8 @@ def test_tools_listed(den):
         async with Client(den_mcp.build_server(den.client())) as c:
             return {t.name for t in (await c.list_tools()).tools}
     assert anyio.run(go) == {"start_critique", "critique_status", "cancel_critique",
-                             "resume_critique", "open_discussion", "talk_to_companion"}
+                             "resume_critique", "open_discussion", "talk_to_companion",
+                             "find_works", "read_work"}
     assert den.spawns == 0   # 列 tool 不碰 den
 
 
@@ -501,7 +502,7 @@ def test_main_keeps_stdout_clean(tmp_path):
     for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
         if ln.strip():
             json.loads(ln)
-    assert len(listed["result"]["tools"]) == 6
+    assert len(listed["result"]["tools"]) == 8
     assert not (tmp_path / "den.json").exists()   # 沒拉起 den
 
 
@@ -558,10 +559,30 @@ def test_talk_without_work_uses_last_story(cden):
     assert not r2.is_error and len(_discussions(cden)) == 1
 
 
-def test_talk_without_any_work_is_tool_error(cden):
-    r = _call(cden.client(), "talk_to_companion", {"message": "嗨"})
-    assert r.is_error and "slug" in _text(r)
-    assert ("POST", "/discuss/mini") not in cden.paths
+def test_resolve_none_falls_back_to_den_recent(cden):
+    r = _call(cden.client(), "talk_to_companion", {"message": "嗨"})   # 新 shim、沒聊過
+    assert not r.is_error and ("POST", "/discuss/mini") in cden.paths
+
+
+def test_talk_without_any_work_is_tool_error(tmp_path):
+    from den.tests.test_app_discuss import FakeChat
+    url = f"sqlite:///{tmp_path}/t.db"
+    c = db.connect(url)
+    db.migrate(c, tmp_path / "t.db")
+    c.close()
+    d = FakeDen((url, tmp_path), chat=FakeChat())
+    try:
+        r = _call(d.client(), "talk_to_companion", {"message": "嗨"})
+        assert r.is_error and "還沒有任何作品" in _text(r) and "檔案路徑" in _text(r)
+        assert not any(p.startswith("/discuss") for _, p in d.paths)
+    finally:
+        d.stop()
+
+
+def test_talk_work_by_title_keyword(cden):
+    _add_story(cden, "d07", "海的另一邊", "她走到岸邊。")
+    r = _call(cden.client(), "talk_to_companion", {"work": "海"})
+    assert not r.is_error and ("POST", "/discuss/d07") in cden.paths
 
 
 def test_talk_bad_mode_rejected_locally(cden):
@@ -620,7 +641,7 @@ def test_talk_survives_den_restart(cden):
 
 def test_talk_unknown_slug(cden):
     r = _call(cden.client(), "talk_to_companion", {"work": "nope"})
-    assert r.is_error and "找不到這篇:nope" in _text(r)
+    assert r.is_error and "找不到「nope」這篇" in _text(r)
 
 
 def test_server_instructions_lead_with_verbatim_relay(den):
@@ -663,3 +684,73 @@ def test_talk_oversize_message_rejected_locally(cden):
     r = _call(cden.client(), "talk_to_companion", {"work": "mini", "message": "字" * (MAX_CHAT_CHARS + 1)})
     assert r.is_error and "字字字字" not in _text(r)
     assert not any(p.startswith("/discuss") for _, p in cden.paths)
+
+
+# ── 作品:find_works / read_work / 解析 ──
+
+def _add_story(den, slug, title, text, now=50.0):
+    c = _conn(den)
+    try:
+        with c:
+            sid = repo.ensure_story(c, slug, title, now)
+            repo.add_source_version(c, sid, text, now)
+    finally:
+        c.close()
+
+
+def _list_tools(den):
+    async def go():
+        async with Client(den_mcp.build_server(den.client())) as c:
+            return (await c.list_tools()).tools
+    return anyio.run(go)
+
+
+def test_resolve_ambiguous_lists_candidates(cden):
+    _add_story(cden, "d01", "海", "她走到岸邊。")
+    _add_story(cden, "d02", "海邊的豆花", "早上。")
+    r = _call(cden.client(), "talk_to_companion", {"work": "海"})
+    t = _text(r)
+    assert r.is_error and "有 2 篇符合「海」,請問作者是哪一篇:\n〈海〉" in t
+    assert "〈海邊的豆花〉" in t
+    assert not any(p.startswith("/discuss") for _, p in cden.paths)
+
+
+def test_resolve_not_found(cden):
+    r = _call(cden.client(), "read_work", {"work": "不存在的", "part": "source"})
+    assert r.is_error and "找不到「不存在的」這篇" in _text(r) and "find_works" in _text(r)
+
+
+def test_find_works_lists_state(den):
+    _add_story(den, "d01", "海", "她走到岸邊。")
+    t = _text(_call(den.client(), "find_works", {}))
+    lines = t.splitlines()
+    assert lines[0].startswith("〈海〉開頭「她走到岸邊。」· 沒有分析 · 還沒聊過")
+    assert any(l.startswith("〈") and "分析好了" in l for l in lines)
+
+
+def test_find_works_query_and_empty(den):
+    _add_story(den, "d01", "海", "她走到岸邊。")
+    assert _text(_call(den.client(), "find_works", {"query": "海"})).count("〈") == 1
+    assert _text(_call(den.client(), "find_works", {"query": "沒有這種"})) == "沒有符合「沒有這種」的作品。"
+
+
+def test_read_work_parts(den):
+    src = _text(_call(den.client(), "read_work", {"work": "mini", "part": "source"}))
+    assert "第 1 版原文" in src
+    r = _call(den.client(), "read_work", {"work": "mini", "part": "feedback"})
+    assert r.is_error and "沒有舊版客觀回饋" in _text(r)
+    _add_story(den, "d01", "海", "x")
+    r = _call(den.client(), "read_work", {"work": "d01", "part": "analysis"})
+    assert r.is_error and _text(r).endswith("〈海〉還沒有分析。")
+
+
+def test_read_work_bad_part_local_reject(den):
+    r = _call(den.client(), "read_work", {"work": "mini", "part": "notes"})
+    assert r.is_error and "source" in _text(r)
+    assert den.paths == []
+
+
+def test_readonly_annotations(den):
+    tools = {t.name: t for t in _list_tools(den)}
+    assert tools["find_works"].annotations.read_only_hint is True
+    assert tools["read_work"].annotations.read_only_hint is True

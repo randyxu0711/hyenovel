@@ -8,11 +8,14 @@
 """
 import logging
 import sys
+import time
 from pathlib import Path
+from urllib.parse import urlencode
 
 import anyio
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp_types import ToolAnnotations
 
 from den.client import DenClient, DenRejected, DenUnavailable
 from den.companion import MODES
@@ -52,10 +55,32 @@ INSTRUCTIONS = (
 DESC_TALK = (
     "和陪讀的 companion 說話,回傳它的回覆——請原文轉給作者,不要改寫、摘要或補充。"
     "作者對 companion 說的任何話(包括「好了沒」)都用這個。message 留空 = 讓 companion 先開口。"
-    "work = 作品 slug(省略則沿用這段對話剛聊的那篇)。"
+    "work = 作品標題或開頭裡的關鍵詞(例「海」);省略則沿用剛聊的那篇,或最近的一篇。"
     "mode = direct(直說)/ slow(慢讀,預設)/ imaginative(想像);"
     "作者說「講重點就好」時用 direct,「慢慢講」用 slow,「陪我想像」用 imaginative,沒提就不要給。")
 _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
+DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
+             "query 給標題或開頭裡的關鍵詞(例「海」),不給就列最近的。")
+DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ feedback(舊版客觀回饋)。"
+             "只在作者自己要看時用,不要拿來代替 companion 回答。work 同 talk_to_companion。")
+_PARTS = ("source", "analysis", "feedback")
+_WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
+_READONLY = ToolAnnotations(readOnlyHint=True)
+
+
+def _when(ts: float | None) -> str:
+    return time.strftime("%m/%d %H:%M", time.localtime(ts)) if ts else ""
+
+
+def _work_line(w: dict) -> str:
+    st = w["state"]
+    if st == "stopped":
+        cls = w.get("error_class")
+        label = f"分析停住了({_REASONS.get(cls, cls)})" if cls else "分析停住了"
+    else:
+        label = _WORK_STATES.get(st, st)
+    talked = f"最近聊 {_when(w['talked_at'])}" if w.get("talked_at") else "還沒聊過"
+    return f"〈{w['title']}〉開頭「{w['opening']}」· {label} · {talked}"
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_OPEN = (
     "取得一篇已分析完成的故事的討論素材:編輯人格指示、原文全文、精簡版分析與回饋、已留下的結論。"
@@ -158,13 +183,14 @@ def build_server(den: DenClient) -> MCPServer:
     server = MCPServer("hyenovel", instructions=INSTRUCTIONS)
 
     async def call(method: str, path: str, json: dict | None = None, *,
-                   on_status: dict[int, str] | None = None) -> dict:
+                   on_status: dict[int, str] | None = None,
+                   on_detail: dict[str, str] | None = None) -> dict:
         try:
             r = await anyio.to_thread.run_sync(lambda: den.request(method, path, json=json))
         except DenUnavailable as e:
             raise ToolError(f"連不上 hyenovel den:{e}") from None
         if r.status_code >= 400:
-            msg = (on_status or {}).get(r.status_code)
+            msg = (on_detail or {}).get(_detail(r)) or (on_status or {}).get(r.status_code)
             raise ToolError(msg or f"den 回應 {r.status_code}:{_detail(r)}")
         return r.json()
 
@@ -253,6 +279,50 @@ def build_server(den: DenClient) -> MCPServer:
 
     sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug → 對話 id
     current: list[str] = []         # 最近一次聊的那篇
+
+    async def _works(**params) -> list[dict]:
+        return (await call("GET", "/works?" + urlencode({k: v for k, v in params.items() if v is not None})))["works"]
+
+    async def resolve_work(work: str | None) -> dict:
+        """作者的說法 → 一篇作品(`GET /works` 的一筆)。slug / 標題關鍵詞 / 剛聊的 / 最近的。"""
+        if work is None:
+            hits = await _works(q=current[0]) if current else []
+            hits = hits or await _works(limit=1)
+            if not hits:
+                raise _reject("no-work", "還沒有任何作品。請給我稿子的檔案路徑(.md / .txt)。")
+            return hits[0]
+        hits = await _works(q=work)
+        if not hits:
+            raise _reject("work-not-found", f"找不到「{work}」這篇。可以用 find_works 看有哪些作品。")
+        if len(hits) > 1:
+            raise _reject("work-ambiguous", "\n".join(
+                [f"有 {len(hits)} 篇符合「{work}」,請問作者是哪一篇:"] + [_work_line(w) for w in hits]
+                + ["請用標題裡更完整的字再試一次。"]))
+        return hits[0]
+
+    async def _find(query: str | None) -> str:
+        hits = await _works(q=query)
+        if not hits:
+            return f"沒有符合「{query}」的作品。" if query and query.strip() else "目前沒有任何作品。"
+        return "\n".join(_work_line(w) for w in hits)
+
+    @server.tool(description=DESC_FIND, annotations=_READONLY)
+    async def find_works(query: str | None = None) -> str:
+        return await guarded(_find(query))
+
+    async def _read(part: str, work: str | None) -> str:
+        if part not in _PARTS:
+            raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ feedback(舊版客觀回饋)。")
+        w = await resolve_work(work)
+        name = f"〈{w['title']}〉"
+        out = await call("GET", f"/works/{w['slug']}/{part}", on_status={404: f"找不到{name}。"},
+                         on_detail={"not-analyzed": f"{name}還沒有分析。",
+                                    "no-feedback": f"{name}沒有舊版客觀回饋。"})
+        return out["text"]
+
+    @server.tool(description=DESC_READ, annotations=_READONLY)
+    async def read_work(part: str, work: str | None = None) -> str:
+        return await guarded(_read(part, work))
     in_flight: set[str] = set()     # 正在跑一輪的篇:首輪還沒局 id、den 的鎖擋不到,由這裡擋(免得付兩次錢)
 
     def _turn(slug: str, body: dict) -> dict:
@@ -265,15 +335,14 @@ def build_server(den: DenClient) -> MCPServer:
         raise ToolError("companion 沒有回應" + _TALK_FAILED)
 
     async def _talk(message: str, work: str | None, mode: str | None, client) -> str:
-        slug = work or (current[0] if current else None)
-        if slug is None:
-            raise _reject("no-work", "還不知道要聊哪一篇:請給我它的 slug(例:d01)。")
-        if not valid_slug(slug):
-            raise _reject("slug", f"slug 格式不對:{slug[:64]!r}(只能英數、底線、連字號,例:d01)。")
         if mode is not None and mode not in MODES:
             raise _reject("mode", "模式只有 direct(直說)/ slow(慢讀)/ imaginative(想像)。")
         if len(message) > MAX_CHAT_CHARS:   # 本地擋:den 的 422 會把整段原文回吐給宿主
             raise _reject("too-long", f"這段話超過 {MAX_CHAT_CHARS} 字,請分段說。")
+        try:
+            slug = (await resolve_work(work))["slug"]
+        except ToolError as e:
+            raise ToolError(str(e) + _TALK_FAILED) from None
         if slug in in_flight:
             raise _reject("busy", "上一輪還在跑,等它回來再說" + _TALK_FAILED)
         in_flight.add(slug)
