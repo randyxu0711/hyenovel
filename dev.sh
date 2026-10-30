@@ -45,8 +45,8 @@ $start_backend || $start_frontend \
   || die "--backend-only 與 --frontend-only 不能同時給(那樣什麼都不會起)"
 
 # ── 前置檢查(只查要起的那邊)─────────────────────────────
-if $start_backend && [[ ! -x server/.venv/bin/python ]]; then
-  die "找不到 server/.venv/bin/python — 先建 venv:python -m venv server/.venv && server/.venv/bin/pip install -r server/requirements.txt"
+if $start_backend && [[ ! -x .venv/bin/python ]]; then
+  die "找不到 .venv/bin/python — 先建 venv:uv venv && uv pip install -r pyproject.toml -r requirements-dev.txt"
 fi
 if $start_frontend && [[ ! -d web/node_modules ]]; then
   echo "· web/node_modules 不存在,先跑 npm install…"
@@ -65,11 +65,11 @@ trap cleanup EXIT INT TERM
 
 if $start_backend; then
   echo "▶ 後端  den(沿用已在跑的,否則脫離拉起)"
-  server/.venv/bin/python -c "
+  .venv/bin/python -c "
 from den.client import DenClient
 from marrow import db
 DenClient(db.data_dir()).ensure()
-" || die "den 起不來 — 手動跑 server/.venv/bin/python -m den 看錯誤"
+" || die "den 起不來 — 手動跑 .venv/bin/python -m den 看錯誤"
   echo "✓ den 就緒"
 fi
 if $start_frontend; then

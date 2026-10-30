@@ -1,3 +1,20 @@
+[project]
+name = "hyenovel"
+version = "0.0.0"
+requires-python = ">=3.12"
+# 打包(build-system、進入點)留切片 6;這裡只當依賴清單用:uv pip install -r pyproject.toml
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",   # den /extract 的 UploadFile
+    "mcp>=2.3,<3",
+    "httpx",
+    "pypdf",
+    "python-docx",
+    "jsonschema",
+    "filelock",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests", "den/tests"]
 # 根層模組(viz/render/export…)靠 repo 根在 sys.path 才 import 得到
