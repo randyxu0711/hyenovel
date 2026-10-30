@@ -64,8 +64,8 @@ git clone https://github.com/randyxu0711/hyenovel.git
 cd hyenovel
 
 # Backend (Python)
-python3 -m venv server/.venv
-server/.venv/bin/pip install -r server/requirements.txt
+uv venv --python 3.14
+uv pip install -r pyproject.toml
 
 # Frontend (Node); dev.sh also auto-installs on first run
 cd web && npm install && cd ..

@@ -64,8 +64,8 @@ git clone https://github.com/randyxu0711/hyenovel.git
 cd hyenovel
 
 # 後端(Python)
-python3 -m venv server/.venv
-server/.venv/bin/pip install -r server/requirements.txt
+uv venv --python 3.14
+uv pip install -r pyproject.toml
 
 # 前端(Node);dev.sh 首次啟動也會自動補跑
 cd web && npm install && cd ..

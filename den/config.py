@@ -1,6 +1,6 @@
 """den 的政策常數。值沿用 server/config.py,§3.7 刻意不開放設定。
 
-不 import server.config:它 import 時有副作用,且 server/ 在切片 5 退役。
+(舊 server/ 已於切片 5 刪除。)
 """
 import re
 
@@ -22,7 +22,7 @@ ANOMALY_TURNS = 1
 ANOMALY_OUTPUT_TOKENS = 20000
 
 HOST = "127.0.0.1"
-PORT = 8788  # 舊 server 佔 8787,過渡期並存;被佔就自動選(den.json 記實際值)
+PORT = 8788  # 避開舊 server 用過的 8787;被佔就自動選(den.json 記實際值)
 IDLE_EXIT = 3 * 3600  # 沒人理 den 超過這麼久(且沒 job、沒串流)就自己結束
 IDLE_CHECK = 60
 SPAWN_WAIT = 15  # 秒:shim 拉起 den 後最多等這麼久(也是等舊 den 放鎖的上限)
