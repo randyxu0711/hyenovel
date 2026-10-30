@@ -20,11 +20,16 @@ def match(rows: list[dict], query: str | None) -> list[dict]:
     q = _norm(query)
     if not q:
         return list(rows)
-    exact = [r for r in rows if r["slug"] == q]
-    if exact:
-        return exact
-    return [r for r in rows
-            if q in _norm(r["title"]) or q in _norm(r["latest_text"][:OPENING_CHARS])]
+    # 分層、取第一層有中的:否則標題「海」永遠被「海-v2」「海邊…」擠成多候選、選不到
+    tiers = (lambda r: r["slug"] == q,
+             lambda r: _norm(r["title"]) == q,
+             lambda r: q in _norm(r["title"]),
+             lambda r: q in _norm(r["latest_text"][:OPENING_CHARS]))
+    for hit in tiers:
+        found = [r for r in rows if hit(r)]
+        if found:
+            return found
+    return []
 
 
 def state(row: dict, analysis: dict | None, job: dict | None) -> str:

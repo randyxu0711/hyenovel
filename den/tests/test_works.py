@@ -20,7 +20,8 @@ def _row(slug, title, text):
 def test_match_single_char_title_and_opening_only():
     rows = [_row("d01", "海", "她走到岸邊。"), _row("d02", "豆花", "早上。" + "x" * 300 + "海"),
             _row("d03", None, "海風很大。")]
-    assert [r["slug"] for r in works.match(rows, "海")] == ["d01", "d03"]
+    assert [r["slug"] for r in works.match(rows, "海")] == ["d01"]          # 標題完全相符優先
+    assert [r["slug"] for r in works.match(rows[1:], "海")] == ["d03"]     # 全文深處的「海」不算
 
 
 def test_match_exact_slug_wins():
@@ -154,3 +155,13 @@ def test_read_missing_parts(c):
     assert e.value.reason == "no-feedback"
     with pytest.raises(LookupError):
         works.read_part(c, "nope", "source")
+
+
+def test_match_exact_title_beats_substring():
+    rows = [_row("d01", "海", "她走到岸邊。"), _row("d02", "海-v2", "x"), _row("d03", "豆花", "海邊的早上。")]
+    assert [r["slug"] for r in works.match(rows, "海")] == ["d01"]
+
+
+def test_match_title_substring_beats_opening():
+    rows = [_row("d02", "海-v2", "x"), _row("d03", "豆花", "海邊的早上。")]
+    assert [r["slug"] for r in works.match(rows, "海")] == ["d02"]

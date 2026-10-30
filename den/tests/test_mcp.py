@@ -387,12 +387,12 @@ def _list_tools(den):
 
 
 def test_resolve_ambiguous_lists_candidates(cden):
-    _add_story(cden, "d01", "海", "她走到岸邊。")
+    _add_story(cden, "d01", "海的另一邊", "她走到岸邊。")
     _add_story(cden, "d02", "海邊的豆花", "早上。")
     r = _call(cden.client(), "talk_to_companion", {"work": "海"})
     t = _text(r)
-    assert r.is_error and "有 2 篇符合「海」,請問作者是哪一篇:\n〈海〉" in t
-    assert "〈海邊的豆花〉" in t
+    assert r.is_error and "有 2 篇符合「海」,請問作者是哪一篇:\n〈" in t
+    assert "〈海的另一邊〉" in t and "〈海邊的豆花〉" in t
     assert not any(p.startswith("/discuss") for _, p in cden.paths)
 
 
@@ -643,3 +643,47 @@ def test_instructions_name_new_tools_only():
     assert t.startswith("talk_to_companion 回傳的是陪讀角色 companion 對作者說的話") and len(t) <= 4096
     assert all(n in t for n in ("submit_work", "find_works", "read_work", "cancel_work"))
     assert "start_critique" not in t and "critique_status" not in t
+
+
+def test_resolve_full_title_reachable_despite_longer_titles(cden):
+    _add_story(cden, "d01", "海", "她走到岸邊。")
+    _add_story(cden, "d02", "海-v2", "x")
+    r = _call(cden.client(), "talk_to_companion", {"work": "海"})
+    assert not r.is_error and ("POST", "/discuss/d01") in cden.paths
+
+
+def test_talk_after_submit_targets_submitted_work(cden, tmp_path):
+    _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                             ("submit_work", {"path": str(_write(tmp_path, "海.md", "海很冷。"))}),
+                             ("talk_to_companion", {})])
+    assert ("POST", "/discuss/d01") in cden.paths
+
+
+def test_cancel_after_resume_targets_resumed_work(data, tmp_path):
+    from den.tests.test_app_discuss import FakeChat
+    d = FakeDen(data, run=Run(released=False), chat=FakeChat())
+    try:
+        _session(d.client(), [("talk_to_companion", {"work": "mini"}),
+                              ("submit_work", {"path": str(_write(tmp_path, "海.md", "海很冷。"))}),
+                              ("cancel_work", {})])
+        assert ("POST", "/works/d01/cancel") in d.paths
+    finally:
+        d.run.release.set()
+        d.stop()
+
+
+_MINI_SRC = (_REPO / "tests" / "fixtures" / "mini" / "source.md").read_text(encoding="utf-8")
+
+
+def test_submit_unchanged_analyzed_file_does_not_rerun(den, tmp_path):
+    p = _write(tmp_path, "燈.md", _MINI_SRC)          # mini 這版已分析好
+    r = _call(den.client(), "submit_work", {"path": str(p)})
+    t = _text(r)
+    assert not r.is_error and "沿用那篇" in t and "已經分析好了,沒有重跑" in t
+    assert "分析已開始" not in t and "分析在背景跑" not in t and _job_count(den) == 0
+
+
+def test_submit_unchanged_never_analyzed_file_starts(den, tmp_path):
+    _add_story(den, "d01", "海", TEXT)                 # 有這版原文、從沒跑過分析
+    r = _call(den.client(), "submit_work", {"path": str(_write(tmp_path))})
+    assert not r.is_error and "分析已開始" in _text(r) and _job_count(den) == 1

@@ -137,12 +137,15 @@ def build_server(den: DenClient) -> MCPServer:
 
     async def call(method: str, path: str, json: dict | None = None, *,
                    on_status: dict[int, str] | None = None,
-                   on_detail: dict[str, str] | None = None) -> dict:
+                   on_detail: dict[str, str] | None = None,
+                   ok_details: tuple[str, ...] = ()) -> dict:
         try:
             r = await anyio.to_thread.run_sync(lambda: den.request(method, path, json=json))
         except DenUnavailable as e:
             raise ToolError(f"連不上 hyenovel den:{e}") from None
         if r.status_code >= 400:
+            if _detail(r) in ok_details:   # 呼叫者要自己分流的拒絕:回 {"detail": …},不當錯誤
+                return {"detail": _detail(r)}
             msg = (on_detail or {}).get(_detail(r)) or (on_status or {}).get(r.status_code)
             raise ToolError(msg or f"den 回應 {r.status_code}:{_detail(r)}")
         return r.json()
@@ -213,23 +216,35 @@ def build_server(den: DenClient) -> MCPServer:
         slug = (await resolve_work(work))["slug"] if work else None
         sent_title = title if title is not None else (None if work else p.stem)
         s = await call("POST", "/stories", {"text": text, "title": sent_title, "slug": slug})
-        j = await call("POST", "/jobs", {"kind": "critique", "slug": s["slug"], "client": client})
+        current[:] = [s["slug"]]   # 交完稿,「這篇」就是它(否則下一句不帶 work 會聊回上一篇)
+        job = {"kind": "critique", "slug": s["slug"], "client": client}
+        # 稿子沒改:只續跑;這版已分析好就不重跑(重送同一個檔不該再花一次錢)。從沒跑過才開新的
+        j = (await call("POST", "/jobs", {**job, "resume_only": True}, ok_details=("done", "never"))
+             if not s["new_version"] else None)
+        if j is not None and j.get("detail") == "never":
+            j = None
+        if j is None:
+            j = await call("POST", "/jobs", job)
         name = s["title"] or p.stem
         chars = sum(not ch.isspace() for ch in text)
         lines = [f"收到 {p.name}({_when(p.stat().st_mtime)} 修改,{chars:,} 字),作品〈{name}〉。"]
         if s["reused"]:
             lines.append(f"這份稿子和〈{name}〉最新一版一樣,沿用那篇。")
-        if j.get("resumed"):
+        if j.get("detail") == "done":
+            lines.append("這一版已經分析好了,沒有重跑。要聊就讓 companion 開口;改了稿再交新檔。")
+        elif j.get("resumed"):
             lines += ["這一版之前跑到一半,已接續(已完成的步驟不重跑)。", _stopped_why(j)]
         elif j["existing"]:
             lines.append("這一版已經在分析中,沒有再開一次。")
         else:
             lines.append(f"分析已開始,{_minutes(j['estimate'])}。會用你同一份訂閱額度。")
-        lines.append("分析在背景跑,不用等;現在就可以用 talk_to_companion 讓 companion 先開口。")
+        if j.get("detail") != "done":
+            lines.append("分析在背景跑,不用等;現在就可以用 talk_to_companion 讓 companion 先開口。")
         return "\n".join(lines)
 
     async def _resume(work: str | None, client) -> str:
         w = await resolve_work(work)
+        current[:] = [w["slug"]]
         name = f"〈{w['title']}〉"
         j = await call("POST", "/jobs", {"kind": "critique", "slug": w["slug"], "client": client,
                                          "resume_only": True}, on_detail={
