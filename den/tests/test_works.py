@@ -93,3 +93,64 @@ def test_listing_job_fields_only_when_running_or_stopped(c):
 def test_listing_opening_truncated(c):
     _story(c, "d01", "t", "字" * 40, 1.0)
     assert works.listing(c, None)[0]["opening"] == "字" * 30 + "…"
+
+
+ANA = {"title": "燈", "slug": "a", "nodes": [{"id": "t1", "type": "theme", "label": "等待"}], "edges": []}
+FB = {"slug": "a", "read": "讀到的", "key_points": [], "one_line": "一句話"}
+
+
+def _two_versions(c, analysed=1, feedback=False):
+    sid = repo.ensure_story(c, "a", "燈", 0)
+    v1, _ = repo.add_source_version(c, sid, "第一版原文", 1)
+    v2, _ = repo.add_source_version(c, sid, "第二版原文", 2)
+    vid = {1: v1, 2: v2}[analysed]
+    aid, _ = repo.add_artifact(c, sid, vid, "analysis", 1, ANA, {}, 3)
+    repo.set_current(c, sid, "analysis", aid)
+    if feedback:
+        fid, _ = repo.add_artifact(c, sid, vid, "feedback", 1, FB, {}, 3)
+        repo.set_current(c, sid, "feedback", fid)
+    return sid
+
+
+def test_read_source_is_latest_version(c):
+    _two_versions(c)
+    out = works.read_part(c, "a", "source")
+    assert out.splitlines()[0] == "〈燈〉第 2 版原文:" and "第二版原文" in out and "第一版" not in out
+
+
+def test_read_analysis_marks_older_version(c):
+    _two_versions(c, analysed=1)
+    out = works.read_part(c, "a", "analysis")
+    assert out.splitlines()[0] == "(這是第 1 版的分析;最新是第 2 版,新版還沒分析完。)"
+    assert "等待" in out and "---" not in out.splitlines()[1]
+
+
+def test_read_analysis_latest_has_no_version_note(c):
+    _two_versions(c, analysed=2)
+    assert not works.read_part(c, "a", "analysis").startswith("(這是第")
+
+
+def test_read_feedback_labelled_legacy(c):
+    _two_versions(c, analysed=2, feedback=True)
+    out = works.read_part(c, "a", "feedback")
+    assert out.splitlines()[0] == "(舊版客觀回饋:舊的編輯評論流程產生,之後會由備課筆記取代。)"
+    assert "一句話" in out
+
+
+def test_read_feedback_older_version_noted(c):
+    _two_versions(c, analysed=1, feedback=True)
+    assert "這是第 1 版的回饋" in works.read_part(c, "a", "feedback")
+
+
+def test_read_missing_parts(c):
+    sid = repo.ensure_story(c, "b", None, 0)
+    repo.add_source_version(c, sid, "x", 1)
+    with pytest.raises(works.Missing) as e:
+        works.read_part(c, "b", "analysis")
+    assert e.value.reason == "not-analyzed"
+    _two_versions(c)
+    with pytest.raises(works.Missing) as e:
+        works.read_part(c, "a", "feedback")
+    assert e.value.reason == "no-feedback"
+    with pytest.raises(LookupError):
+        works.read_part(c, "nope", "source")

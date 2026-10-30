@@ -333,6 +333,20 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise HTTPException(422, f"limit 要在 1–{_WORKS_MAX}")
         return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
 
+    @app.get("/works/{slug}/{part}")
+    async def read_work(slug: str, part: str, request: Request):
+        _slug_ok(slug, "read-work")
+        if part not in works.PARTS:
+            log.info("event=reject where=read-work reason=bad-part part=%r", part[:32])
+            raise HTTPException(422, f"part 只能是 {'/'.join(works.PARTS)}")
+        try:
+            return {"text": works.read_part(request.app.state.mgr.conn, slug, part)}
+        except LookupError:
+            raise _unknown("read-work") from None
+        except works.Missing as e:
+            log.info("event=reject where=read-work reason=%s", e.reason)
+            raise HTTPException(409, e.reason) from None
+
     @app.get("/stories/{slug}/viz")
     async def get_viz(slug: str, request: Request):
         _slug_ok(slug, "viz")

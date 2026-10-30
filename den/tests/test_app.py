@@ -858,3 +858,15 @@ def test_get_works_query_and_limit(data):
         assert len(all_) == 2 and [w["title"] for w in hit] == ["海"]
         assert c.get("/works", params={"limit": 0}, headers=h).status_code == 422
         assert c.get("/works", params={"limit": 51}, headers=h).status_code == 422
+
+
+def test_get_work_part_status_codes(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.get("/works/mini/source", headers=h)
+        assert r.status_code == 200 and "原文" in r.json()["text"]
+        assert c.get("/works/mini/analysis", headers=h).status_code == 200
+        r = c.get("/works/mini/feedback", headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "no-feedback"
+        assert c.get("/works/nope/source", headers=h).status_code == 404
+        assert c.get("/works/mini/notes", headers=h).status_code == 422

@@ -2,6 +2,7 @@
 
 比對刻意只看標題與開頭:單字查詢(「海」)若比全文,幾乎每篇都中(spec §11 第 2 批)。
 """
+import render   # 根層函式庫(den 的 cwd 是 repo 根)
 from marrow import repo
 
 OPENING_CHARS = 200   # 比對看的開頭長度
@@ -67,3 +68,43 @@ def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
     for w in hits:
         del w["latest_text"]
     return hits[:limit]
+
+
+PARTS = ("source", "analysis", "feedback")
+_LEGACY = "(舊版客觀回饋:舊的編輯評論流程產生,之後會由備課筆記取代。)"
+
+
+class Missing(Exception):
+    """這篇沒有這個 part。reason:not-analyzed / no-feedback。"""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def read_part(conn, slug: str, part: str) -> str:
+    """作者自己要看的資料(markdown)。LookupError 無此篇;Missing 沒有這個 part。"""
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise LookupError(slug)
+    latest = repo.latest_source_version(conn, st["id"])
+    ana = repo.current_artifact(conn, st["id"], "analysis")
+    title = (ana or {}).get("body", {}).get("title") or st["title"] or slug
+    if part == "source":
+        return f"〈{title}〉第 {latest['n']} 版原文:\n\n{latest['text']}"
+    if part == "analysis":
+        if ana is None:
+            raise Missing("not-analyzed")
+        art, what, body = ana, "分析", render.render_analysis(ana["body"], front_matter=False)
+        head = []
+    else:
+        fb = repo.current_artifact(conn, st["id"], "feedback")
+        if fb is None:
+            raise Missing("no-feedback")
+        art, what, body = fb, "回饋", render.render_feedback(fb["body"], title, front_matter=False)
+        head = [_LEGACY]
+    if art["source_version_id"] != latest["id"]:
+        n = repo.source_version(conn, art["source_version_id"])["n"]
+        tail = ",新版還沒分析完" if part == "analysis" else ""
+        head.append(f"(這是第 {n} 版的{what};最新是第 {latest['n']} 版{tail}。)")
+    return "\n".join(head + ([""] if head else []) + [body])
