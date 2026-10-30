@@ -33,15 +33,17 @@ def match(rows: list[dict], query: str | None) -> list[dict]:
 
 
 def state(row: dict, analysis: dict | None, job: dict | None) -> str:
-    """ready / running / stopped / stale / none。不是最新版的 job 當作沒有。"""
+    """ready / notes-running / notes-stopped / running / stopped / stale / none。不是最新版的 job 當作沒有。
+    分析在 analyst 成功時就換上,所以「最新版有分析」時 job 可能還在跑 / 停在 reviewer(notes-*)。"""
     latest = row["latest_sv_id"]
+    st = job["state"] if job is not None and job["source_version_id"] == latest else None
+    active, stopped = st in _ACTIVE, st in _STOPPED
     if analysis is not None and analysis["source_version_id"] == latest:
-        return "ready"
-    if job is not None and job["source_version_id"] == latest:
-        if job["state"] in _ACTIVE:
-            return "running"
-        if job["state"] in _STOPPED:
-            return "stopped"
+        return "notes-running" if active else "notes-stopped" if stopped else "ready"
+    if active:
+        return "running"
+    if stopped:
+        return "stopped"
     return "stale" if analysis is not None else "none"
 
 
@@ -62,7 +64,7 @@ def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
         ana, job = cur.get(r["id"]), jobs.get(r["id"])
         r["title"] = (ana or {}).get("body", {}).get("title") or r["title"] or r["slug"]
         st = state(r, ana, job)
-        live = st in ("running", "stopped")
+        live = st in ("running", "stopped", "notes-running", "notes-stopped")
         out.append({"slug": r["slug"], "title": r["title"], "latest_text": r["latest_text"],
                     "opening": _opening(r["latest_text"]), "submitted_at": r["submitted_at"],
                     "talked_at": r["talked_at"], "state": st,

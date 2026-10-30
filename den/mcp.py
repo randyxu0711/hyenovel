@@ -59,7 +59,8 @@ DESC_SUBMIT = (
 DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
 _PARTS = ("source", "analysis", "notes", "feedback")
 _CANDIDATES = 20   # 作品有歧義時最多列幾篇
-_WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
+_WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析",
+                "notes-running": "分析好了,備課筆記還在跑"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
 PROMPT_COMPANION = (
@@ -76,9 +77,10 @@ def _when(ts: float | None) -> str:
 
 def _work_line(w: dict) -> str:
     st = w["state"]
-    if st == "stopped":
+    if st in ("stopped", "notes-stopped"):
         cls = w.get("error_class")
-        label = f"分析停住了({_REASONS.get(cls, cls)})" if cls else "分析停住了"
+        what = "分析好了,備課筆記停住了" if st == "notes-stopped" else "分析停住了"
+        label = f"{what}({_REASONS.get(cls, cls)})" if cls else what
     else:
         label = _WORK_STATES.get(st, st)
     talked = f"最近聊 {_when(w['talked_at'])}" if w.get("talked_at") else "還沒聊過"

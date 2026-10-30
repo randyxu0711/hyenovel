@@ -45,7 +45,10 @@ LATEST, OLD = 2, 1
     (LATEST, None, "ready"), (None, (LATEST, "running"), "running"), (None, (LATEST, "queued"), "running"),
     (None, (LATEST, "paused"), "stopped"), (None, (LATEST, "failed"), "stopped"),
     (OLD, None, "stale"), (OLD, (OLD, "running"), "stale"), (None, (OLD, "done"), "none"),
-    (None, None, "none"), (LATEST, (LATEST, "running"), "ready")])
+    (None, None, "none"), (LATEST, (LATEST, "running"), "notes-running"),
+    (LATEST, (LATEST, "queued"), "notes-running"), (LATEST, (LATEST, "paused"), "notes-stopped"),
+    (LATEST, (LATEST, "cancelled"), "notes-stopped"), (LATEST, (LATEST, "done"), "ready"),
+    (LATEST, (OLD, "paused"), "ready")])
 def test_state(ana_ver, job, want):
     row = {"latest_sv_id": LATEST}
     ana = None if ana_ver is None else {"source_version_id": ana_ver}
@@ -89,6 +92,17 @@ def test_listing_job_fields_only_when_running_or_stopped(c):
     repo.set_job_state(c, jid, "done", 4.0)
     [w] = works.listing(c, None)
     assert (w["state"], w["job_id"], w["error_class"]) == ("none", None, None)
+
+
+def test_listing_reviewer_stopped_is_visible(c):
+    """分析已換上、reviewer 停住:不能只說「分析好了」,作者要看得到停住與原因。"""
+    sid, vid = _story(c, "d01", "t", "x", 1.0)
+    aid, _ = repo.add_artifact(c, sid, vid, "analysis", 1, {"title": "t"}, {}, 2.0)
+    repo.set_current(c, sid, "analysis", aid)
+    jid = repo.create_job(c, "critique", sid, vid, {}, 2.0)
+    repo.set_job_state(c, jid, "paused", 3.0, step="reviewer", error_class="usage-limit")
+    [w] = works.listing(c, None)
+    assert (w["state"], w["job_id"], w["error_class"]) == ("notes-stopped", jid, "usage-limit")
 
 
 def test_listing_opening_truncated(c):

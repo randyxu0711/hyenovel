@@ -715,3 +715,13 @@ def test_submit_unchanged_never_analyzed_file_starts(den, tmp_path):
     _add_story(den, "d01", "海", TEXT)                 # 有這版原文、從沒跑過分析
     r = _call(den.client(), "submit_work", {"path": str(_write(tmp_path))})
     assert not r.is_error and "分析已開始" in _text(r) and _job_count(den) == 1
+
+
+@pytest.mark.parametrize("w,want", [
+    ({"state": "notes-running"}, "分析好了,備課筆記還在跑"),
+    ({"state": "notes-stopped", "error_class": "usage-limit"}, "分析好了,備課筆記停住了(訂閱額度用完)"),
+    ({"state": "notes-stopped", "error_class": None}, "分析好了,備課筆記停住了"),
+])
+def test_work_line_shows_reviewer_progress(w, want):
+    line = den_mcp._work_line({"title": "t", "opening": "o", "talked_at": None, **w})
+    assert f"· {want} ·" in line
