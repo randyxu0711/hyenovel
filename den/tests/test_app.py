@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from den import app as den_app
 from den import config as den_config
-from den.tests.test_pipeline import _analysis, _feedback, ok
+from den.tests.test_pipeline import _analysis, _notes, ok
 from marrow import db, repo
 from marrow.workpacks import WORKPACKS
 
@@ -33,7 +33,7 @@ class Run:
         async def run(system_prompt, user_prompt, schema):
             while not self.release.is_set():
                 await asyncio.sleep(0.01)
-            return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _feedback())
+            return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _notes())
         return run
 
 
@@ -199,7 +199,7 @@ def test_get_job_has_no_raw_output(data):
         body = c.get(f"/jobs/{jid}", headers=h).json()
         for k in ("state", "step", "error_class", "detail"):
             assert k in body
-        assert [a["step"] for a in body["attempts"]] == ["analyst", "criticizer"]
+        assert [a["step"] for a in body["attempts"]] == ["analyst", "reviewer"]
         assert set(body["attempts"][0]) == {"step", "n", "outcome", "model", "duration_ms", "tokens"}
         assert "raw_output" not in json.dumps(body)
 
@@ -244,7 +244,7 @@ def test_events_terminal_without_replay_sends_state_and_ends(data):
         _wait_state(c, h, jid, "done")
         c.app.state.mgr.bus._events.pop(jid)               # 模擬 TTL 過了 / 上一個行程跑的
         evs = _read_sse(c, h, jid)
-        assert evs == [{"event": "state", "data": {"state": "done", "step": "criticizer",
+        assert evs == [{"event": "state", "data": {"state": "done", "step": "reviewer",
                                                    "error_class": None, "detail": None}}]
         assert c.app.state.mgr.bus._subs == {}
 

@@ -21,11 +21,6 @@ def analysis():
     return schema.to_v1("analysis", json.loads((MINI / "analysis.json").read_text(encoding="utf-8")))
 
 
-@pytest.fixture
-def feedback(feedback_json):
-    return schema.to_v1("feedback", feedback_json)
-
-
 def test_locate_moved_unchanged():
     assert viz.locate is gate.locate
 
@@ -80,31 +75,14 @@ def test_gate_analysis_malformed_shape_no_raise(body, source):
     assert gate.gate_analysis(body, source)
 
 
-def test_gate_feedback_passes(feedback, analysis, source):
-    assert gate.gate_feedback(feedback, analysis, source) == []
-
-
-def test_gate_feedback_bad_ref(feedback, analysis, source):
-    f = copy.deepcopy(feedback)
-    f["key_points"][0]["refs"] = ["zz"]
-    errs = gate.gate_feedback(f, analysis, source)
-    assert any("refs zz 不是存在的 node id" in e and e.startswith("feedback「收尾太快」") for e in errs)
-
-
-def test_gate_feedback_bad_quote(feedback, analysis, source):
-    f = copy.deepcopy(feedback)
-    f["strengths"][0]["quotes"] = ["原文沒有這句"]
-    errs = gate.gate_feedback(f, analysis, source)
-    assert errs == ["feedback「燈的用法」: 引文在原文找不到:「原文沒有這句」"]
-
-
-@pytest.mark.parametrize("fb,an", [
-    ({"strengths": "x", "key_points": [1, {"quotes": "q", "refs": 5}]}, {"nodes": "x"}),
-    ({"strengths": [{"title": "t", "quotes": [3], "refs": [4]}]}, {"nodes": ["x", {"id": 1}]}),
+@pytest.mark.parametrize("nb,an", [
+    ({"points": "x"}, {"nodes": "x"}),
+    ({"points": [1, {"quotes": "q", "refs": 5}]}, {"nodes": "x"}),
+    ({"points": [{"title": "t", "quotes": [3], "refs": [4]}]}, {"nodes": ["x", {"id": 1}]}),
     ([], []),
 ])
-def test_gate_feedback_malformed_shape_no_raise(fb, an, source):
-    assert gate.gate_feedback(fb, an, source)
+def test_gate_notes_malformed_shape_no_raise(nb, an, source):
+    assert gate.gate_notes(nb, an, source)
 
 
 def test_errors_never_contain_fix(analysis, source):
@@ -122,10 +100,9 @@ def test_gate_analysis_whitespace_only_quote_rejected(analysis, source, blank):
 
 
 @pytest.mark.parametrize("blank", ["   ", "\n", "　", " 　\n"])
-def test_gate_feedback_whitespace_only_quote_rejected(feedback, analysis, source, blank):
-    f = copy.deepcopy(feedback)
-    f["strengths"][0]["quotes"] = [blank]
-    assert any("引文在原文找不到" in e for e in gate.gate_feedback(f, analysis, source))
+def test_gate_notes_whitespace_only_quote_rejected(analysis, source, blank):
+    assert any("引文在原文找不到" in e for e in gate.gate_notes(_notes(quotes=[blank]), analysis, source))
+
 
 
 def _notes(**point):

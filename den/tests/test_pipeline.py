@@ -1,4 +1,4 @@
-"""den.pipeline 行為契約:修補包重試、錯誤分流、續跑、成功才換 current。
+"""den.pipeline 行為契約:修補包重試、錯誤分流、續跑、每步成功就換該 kind 的 current。
 
 假 RunFn 按呼叫順序吐預先排好的 RunResult(或拋例外);絕不 spawn 真 claude。
 """
@@ -30,18 +30,17 @@ def _bad_analysis():
     return body
 
 
-def _feedback(read="第一版回饋"):
-    return schema.to_v1("feedback", {
+def _notes(read="第一版筆記"):
+    return {
         "slug": "mini",
         "read": read,
-        "strengths": [{"title": "燈的用法", "body": "把等待外包給物件。",
-                       "refs": ["k1"], "quotes": ["像在等誰"]}],
-        "key_points": [{"title": "收尾太快", "body": "關燈之後沒有餘波。",
-                        "refs": ["e1"], "quotes": ["他把燈關了。"],
-                        "question": "他站在黑暗裡多久?"}],
-        "minor": [],
+        "points": [
+            {"kind": "opinion", "title": "收尾太快", "body": "關燈之後沒有餘波。",
+             "refs": ["e1"], "quotes": ["他把燈關了。"], "question": "他站在黑暗裡多久?"},
+            {"kind": "moved", "title": "燈的用法", "body": "把等待外包給物件。",
+             "refs": ["k1"], "quotes": ["像在等誰"], "question": None}],
         "one_line": "節制,但收得太急。",
-    })
+    }
 
 
 def ok(body):
@@ -99,16 +98,16 @@ def _outcomes(conn, job, step=None):
 
 def test_happy_path_commits_and_swaps_current(conn):
     job = _job(conn)
-    out, events, _ = _drive(conn, job, FakeRun(ok(_analysis()), ok(_feedback())))
+    out, events, _ = _drive(conn, job, FakeRun(ok(_analysis()), ok(_notes())))
     assert out == pipeline.StepOutcome("done", None, None)
-    a, f = _current(conn, job, "analysis"), _current(conn, job, "feedback")
-    assert a["body"] == _analysis() and f["body"] == _feedback()
+    a, f = _current(conn, job, "analysis"), _current(conn, job, "notes")
+    assert a["body"] == _analysis() and f["body"] == _notes()
     for art, n in ((a, 0), (f, 0)):
         assert art["provenance"] == {"tier": "A", "runner": "claude-cli", "model": "claude-sonnet",
                                      "cli_version": "9.9.9", "job": job["id"], "attempt": n}
     atts = repo.attempts(conn, job["id"])
     assert [(x["step"], x["n"], x["outcome"]) for x in atts] == [
-        ("analyst", 0, "ok"), ("criticizer", 0, "ok")]
+        ("analyst", 0, "ok"), ("reviewer", 0, "ok")]
     assert atts[0]["artifact_id"] == a["id"] and atts[1]["artifact_id"] == f["id"]
     assert events[-1] == {"event": "done", "data": {"ok": True}}
     assert {"event": "phase", "data": {"name": "analyst", "status": "ok", "attempt": 0}} in events
@@ -116,7 +115,7 @@ def test_happy_path_commits_and_swaps_current(conn):
 
 def test_gate_retry_uses_repair_input(conn):
     job = _job(conn)
-    run = FakeRun(ok(_bad_analysis()), ok(_analysis()), ok(_feedback()))
+    run = FakeRun(ok(_bad_analysis()), ok(_analysis()), ok(_notes()))
     out, events, _ = _drive(conn, job, run)
     assert out.state == "done"
     second = run.calls[1][1]
@@ -142,7 +141,7 @@ def test_gate_exhausted_pauses(conn):
 def test_transient_backoff_not_counted(conn):
     job = _job(conn)
     bad = ok(_bad_analysis())
-    run = FakeRun(fail("transient"), fail("transient"), bad, bad, ok(_analysis()), ok(_feedback()))
+    run = FakeRun(fail("transient"), fail("transient"), bad, bad, ok(_analysis()), ok(_notes()))
     out, _, sleeps = _drive(conn, job, run)
     assert out.state == "done"
     assert sleeps == [4.0, 8.0]
@@ -181,20 +180,36 @@ def test_error_routing_usage_limit_auth_crash(conn, outcome, state, cls):
 
 
 def _paused_second_job(conn):
-    """先一次 happy path(current=A1,F1),再開新 job:analyst ok、criticizer 撞 usage-limit。"""
+    """先一次 happy path(current=A1,N1),再開新 job:analyst ok、reviewer 撞 usage-limit。"""
     j1 = _job(conn)
-    _drive(conn, j1, FakeRun(ok(_analysis()), ok(_feedback())))
-    a1, f1 = _current(conn, j1, "analysis")["id"], _current(conn, j1, "feedback")["id"]
+    _drive(conn, j1, FakeRun(ok(_analysis()), ok(_notes())))
+    a1, f1 = _current(conn, j1, "analysis")["id"], _current(conn, j1, "notes")["id"]
     j2 = _job(conn)
     out, _, _ = _drive(conn, j2, FakeRun(ok(_analysis("第二版")), fail("usage-limit")))
     assert out.state == "paused"
     return j2, a1, f1
 
 
-def test_current_swaps_only_on_success(conn):
+def test_reviewer_paused_keeps_new_analysis(conn):
+    """analyst 成功就換 current(companion 不等判斷層);reviewer 停住不動舊筆記。"""
     j2, a1, f1 = _paused_second_job(conn)
-    assert _current(conn, j2, "analysis")["id"] == a1
-    assert _current(conn, j2, "feedback")["id"] == f1
+    a = _current(conn, j2, "analysis")
+    assert a["id"] != a1 and a["body"] == _analysis("第二版")
+    assert _current(conn, j2, "notes")["id"] == f1
+
+
+def test_analysis_current_before_reviewer_runs(conn):
+    job = _job(conn)
+    seen = {}
+
+    class Peek(FakeRun):
+        async def __call__(self, system_prompt, user_prompt, schema_):
+            if system_prompt == WORKPACKS["reviewer"].system_prompt:
+                seen["analysis"] = _current(conn, job, "analysis")["body"]
+            return await super().__call__(system_prompt, user_prompt, schema_)
+
+    _drive(conn, job, Peek(ok(_analysis("本 job")), ok(_notes())))
+    assert seen["analysis"] == _analysis("本 job")
 
 
 def test_resume_skips_committed_steps(conn):
@@ -202,24 +217,24 @@ def test_resume_skips_committed_steps(conn):
     with conn:
         repo.set_job_state(conn, j2["id"], "paused", 3.0)   # worker 的工作,這裡代勞
         assert repo.requeue_job(conn, j2["id"], 3.0)
-    run = FakeRun(ok(_feedback("第二版回饋")))
+    run = FakeRun(ok(_notes("第二版回饋")))
     out, events, _ = _drive(conn, repo.get_job(conn, j2["id"]), run)
     assert out.state == "done"
-    assert len(run.calls) == 1 and run.calls[0][0] == WORKPACKS["criticizer"].system_prompt
+    assert len(run.calls) == 1 and run.calls[0][0] == WORKPACKS["reviewer"].system_prompt
     assert canonical_json(_analysis("第二版")) in run.calls[0][1]
-    assert [a["n"] for a in repo.attempts(conn, j2["id"]) if a["step"] == "criticizer"] == [0, 1]
+    assert [a["n"] for a in repo.attempts(conn, j2["id"]) if a["step"] == "reviewer"] == [0, 1]
     assert _current(conn, j2, "analysis")["body"] == _analysis("第二版")
     assert _current(conn, j2, "analysis")["id"] != a1
-    assert _current(conn, j2, "feedback")["body"] == _feedback("第二版回饋")
+    assert _current(conn, j2, "notes")["body"] == _notes("第二版回饋")
     assert {"event": "phase", "data": {"name": "analyst", "status": "ok", "attempt": 0,
                                        "detail": "resume-skip"}} in events
 
 
-def test_criticizer_gets_this_jobs_analysis(conn):
+def test_reviewer_gets_this_jobs_analysis(conn):
     job = _job(conn)
     old = _current(conn, job, "analysis")["body"]
     mine = _analysis("本 job 的分析")
-    run = FakeRun(ok(mine), ok(_feedback()))
+    run = FakeRun(ok(mine), ok(_notes()))
     _drive(conn, job, run)
     prompt = run.calls[1][1]
     assert f"<analysis>\n{canonical_json(mine)}\n</analysis>" in prompt
@@ -232,9 +247,10 @@ def test_cancel_records_attempt_and_reraises(conn):
     with pytest.raises(asyncio.CancelledError):
         _drive(conn, job, FakeRun(ok(_analysis()), asyncio.CancelledError()))
     atts = repo.attempts(conn, job["id"])
-    assert [(a["step"], a["outcome"]) for a in atts] == [("analyst", "ok"), ("criticizer", "cancelled")]
-    assert _current(conn, job, "analysis")["id"] == before
-    assert _current(conn, job, "feedback") is None
+    assert [(a["step"], a["outcome"]) for a in atts] == [("analyst", "ok"), ("reviewer", "cancelled")]
+    assert _current(conn, job, "analysis")["id"] != before     # analyst 已成功,先換了
+    assert _current(conn, job, "analysis")["id"] == atts[0]["artifact_id"]
+    assert _current(conn, job, "notes") is None
 
 
 
@@ -285,7 +301,7 @@ def test_worker_anomaly_on_timeout(conn, caplog):
 def test_worker_anomaly_turns_on_ok(conn, caplog):
     job = _job(conn)
     run = FakeRun(_with(ok(_analysis()), turns=4, output=132533),
-                  _with(ok(_feedback()), turns=1, output=4000))
+                  _with(ok(_notes()), turns=1, output=4000))
     with caplog.at_level(logging.INFO, logger="hyenovel"):
         out, _, _ = _drive(conn, job, run)
     assert out.state == "done"
@@ -299,7 +315,7 @@ def test_worker_anomaly_turns_on_ok(conn, caplog):
 def test_worker_anomaly_quiet_when_normal_or_missing(conn, caplog, turns, output):
     job = _job(conn)
     run = FakeRun(_with(ok(_analysis()), turns=turns, output=output),
-                  _with(ok(_feedback()), turns=turns, output=output))
+                  _with(ok(_notes()), turns=turns, output=output))
     with caplog.at_level(logging.INFO, logger="hyenovel"):
         out, _, _ = _drive(conn, job, run)
     assert out.state == "done"
@@ -330,7 +346,7 @@ def unparsed(text, *, with_text=True):
 def test_unparsable_output_retries_with_raw_text(conn):
     job = _job(conn)
     run = FakeRun(unparsed("好的，以下是分析：{\"slug\": \"mini\", \"nodes\": [截斷"),
-                  ok(_analysis()), ok(_feedback()))
+                  ok(_analysis()), ok(_notes()))
     out, events, _ = _drive(conn, job, run)
     assert out.state == "done"
     assert _outcomes(conn, job, "analyst") == ["gate", "ok"]
@@ -347,7 +363,7 @@ def test_unparsable_output_retries_with_raw_text(conn):
 def test_unparsable_without_text_falls_back_to_raw(conn):
     job = _job(conn)
     r = unparsed("我做不到", with_text=False)
-    run = FakeRun(r, ok(_analysis()), ok(_feedback()))
+    run = FakeRun(r, ok(_analysis()), ok(_notes()))
     _drive(conn, job, run)
     assert f"<previous_output>\n{r.raw}\n" in run.calls[1][1]
 
@@ -360,19 +376,19 @@ def test_unparsable_exhausted_pauses_gate(conn):
     assert events[-1]["event"] == "error" and events[-1]["data"]["reason"] == "gate"
 
 
-def test_unparsable_criticizer_does_not_rerun_analyst(conn):
+def test_unparsable_reviewer_does_not_rerun_analyst(conn):
     job = _job(conn)
     run = FakeRun(ok(_analysis()), *[unparsed("不是 JSON")] * 3)
     out, _, _ = _drive(conn, job, run)
     assert (out.state, out.error_class) == ("paused", "gate")
     assert [c[0] for c in run.calls] == [WORKPACKS["analyst"].system_prompt] + \
-        [WORKPACKS["criticizer"].system_prompt] * 3
-    run2 = FakeRun(unparsed("還是不行"), ok(_feedback()))         # 續跑:只重跑被擋的那步
+        [WORKPACKS["reviewer"].system_prompt] * 3
+    run2 = FakeRun(unparsed("還是不行"), ok(_notes()))         # 續跑:只重跑被擋的那步
     out, _, _ = _drive(conn, job, run2)
     assert out.state == "done"
-    assert [c[0] for c in run2.calls] == [WORKPACKS["criticizer"].system_prompt] * 2
+    assert [c[0] for c in run2.calls] == [WORKPACKS["reviewer"].system_prompt] * 2
     assert _outcomes(conn, job, "analyst") == ["ok"]
-    assert _outcomes(conn, job, "criticizer") == ["gate"] * 4 + ["ok"]
+    assert _outcomes(conn, job, "reviewer") == ["gate"] * 4 + ["ok"]
 
 
 # ── Task 9e:attempt 記 system prompt 指紋 ──
@@ -383,7 +399,7 @@ def _sha(text):
 
 def test_attempts_record_prompt_sha(conn):
     job = _job(conn)
-    run = FakeRun(fail("transient"), ok(_bad_analysis()), ok(_analysis()), ok(_feedback()))
+    run = FakeRun(fail("transient"), ok(_bad_analysis()), ok(_analysis()), ok(_notes()))
     _drive(conn, job, run)
     atts = repo.attempts(conn, job["id"])
     assert [a["outcome"] for a in atts] == ["transient", "gate", "ok", "ok"]
@@ -407,6 +423,6 @@ def test_prompt_change_changes_sha(conn, monkeypatch):
     monkeypatch.setitem(WORKPACKS, "analyst",
                         dataclasses.replace(old, system_prompt=old.system_prompt + "改一個字"))
     job = _job(conn)
-    _drive(conn, job, FakeRun(ok(_analysis()), ok(_feedback())))
+    _drive(conn, job, FakeRun(ok(_analysis()), ok(_notes())))
     got = repo.attempts(conn, job["id"])[0]["prompt_sha"]
     assert got == _sha(old.system_prompt + "改一個字") and got != _sha(old.system_prompt)

@@ -57,3 +57,11 @@ def test_render_companion_not_running_says_reading_from_source():
 
 def test_render_companion_title_falls_back_to_slug():
     assert "# 《s》" in render_companion(_ctx(title=None), "slow")
+
+
+def test_running_hint_only_without_analysis():
+    """reviewer 還在跑時已有分析:不能再說結構分析還在跑(analyst 成功就換 current)。"""
+    a = {"synopsis": "梗", "nodes": [], "edges": []}
+    for prog in ("queued", "running"):
+        assert "還在背景跑" not in render_companion(_ctx(analysis=a, progress=prog), "slow")
+        assert "還在背景跑" in render_companion(_ctx(progress=prog), "slow")

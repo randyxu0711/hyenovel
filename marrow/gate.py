@@ -86,16 +86,6 @@ def _check_points(points, ids, source, label_prefix) -> list[str]:
     return errs
 
 
-def gate_feedback(body: dict, analysis: dict, source: str) -> list[str]:
-    errs = [f"schema: {m}" for m in schema.validate_v1("feedback", body)]
-    if not isinstance(body, dict):
-        return errs
-    ids = _node_ids(analysis) if isinstance(analysis, dict) else []
-    for key in ("strengths", "key_points"):
-        errs += _check_points(body.get(key), ids, source, "feedback")
-    return errs
-
-
 def gate_notes(body: dict, analysis: dict, source: str) -> list[str]:
     errs = [f"schema: {m}" for m in schema.validate_v1("notes", body)]
     if not isinstance(body, dict):

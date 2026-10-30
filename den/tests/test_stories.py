@@ -95,6 +95,23 @@ def test_companion_context_progress_reports_latest_job_state(conn):
     assert stories.companion_context(conn, "d01")["progress"] == "running"
 
 
+def test_companion_context_never_includes_notes(conn):
+    """spec §7.4:備課筆記只給作者,進 companion 會被當成自己的閱讀照念。"""
+    from den.companion import render_companion
+    st = repo.story_by_slug(conn, "mini")
+    ana = repo.current_artifact(conn, st["id"], "analysis")
+    notes = {"slug": "mini", "read": "筆記讀法甲乙", "one_line": "筆記一句丙丁", "points": [
+        {"kind": "confused", "title": "筆記標題戊己", "quotes": ["像在等誰"], "refs": None,
+         "body": "筆記內文庚辛", "question": None}]}
+    with conn:
+        nid, _ = repo.add_artifact(conn, st["id"], ana["source_version_id"], "notes", 1, notes, {}, 9.0)
+        repo.set_current(conn, st["id"], "notes", nid)
+    ctx = stories.companion_context(conn, "mini")
+    text = repr(ctx) + render_companion(ctx, "direct")
+    for marker in ("筆記讀法甲乙", "筆記一句丙丁", "筆記標題戊己", "筆記內文庚辛"):
+        assert marker not in text
+
+
 def test_companion_context_unknown_slug(conn):
     with pytest.raises(LookupError):
         stories.companion_context(conn, "nope")
