@@ -317,3 +317,19 @@ def test_last_mode_none_for_legacy_rows(conn):
     s, d = _disc(conn)
     repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
     assert repo.last_mode(conn, d) is None
+
+
+def test_works_latest_version_and_last_talk(conn):
+    a = repo.ensure_story(conn, "a", "甲篇", 0)
+    repo.add_source_version(conn, a, "第一版", 1)
+    repo.add_source_version(conn, a, "第二版", 2)
+    for ext, end in (("x", 10.0), ("y", 20.0)):
+        d = repo.ensure_discussion(conn, a, ext, "mcp", None, 5.0)
+        repo.close_discussion(conn, d, end)
+    b = repo.ensure_story(conn, "b", None, 0)
+    repo.add_source_version(conn, b, "乙", 3)
+    rows = {r["slug"]: r for r in repo.works(conn)}
+    assert rows["a"]["latest_n"] == 2 and rows["a"]["latest_text"] == "第二版"
+    assert rows["a"]["submitted_at"] == 2 and rows["a"]["talked_at"] == 20
+    assert rows["a"]["title"] == "甲篇" and rows["a"]["id"] == a
+    assert rows["b"]["talked_at"] is None and rows["b"]["latest_sv_id"]

@@ -42,7 +42,7 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import discuss, stories, version, views
+from den import discuss, stories, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, MAX_ANCHORS, MAX_CHAT_CHARS,
                         MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
 from den.jobs import JobManager
@@ -60,6 +60,7 @@ _ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
 _LIST_KEYS = ("id", "slug", "title", "state", "step", "error_class", "updated_at",
               "is_latest_version")
 _LIST_MAX = 100
+_WORKS_MAX = 50
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
              "error_class", "detail", "params", "created_at", "updated_at")
 
@@ -324,6 +325,13 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
     @app.get("/stories")
     async def list_stories(request: Request):
         return {"stories": views.stories(request.app.state.mgr.conn)}
+
+    @app.get("/works")
+    async def list_works(request: Request, q: str | None = None, limit: int = 20):
+        if not 1 <= limit <= _WORKS_MAX:
+            log.info("event=reject where=list-works limit=%s", limit)
+            raise HTTPException(422, f"limit 要在 1–{_WORKS_MAX}")
+        return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
 
     @app.get("/stories/{slug}/viz")
     async def get_viz(slug: str, request: Request):

@@ -847,3 +847,14 @@ def test_extract_bad_pdf_400(data):
 def test_extract_requires_token(data):
     with _client(data) as c:
         assert c.post("/extract", files={"file": ("a.txt", b"x")}).status_code == 401
+
+
+def test_get_works_query_and_limit(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "海很冷。", "title": "海", "slug": None}, headers=h)
+        all_ = c.get("/works", headers=h).json()["works"]
+        hit = c.get("/works", params={"q": "海"}, headers=h).json()["works"]
+        assert len(all_) == 2 and [w["title"] for w in hit] == ["海"]
+        assert c.get("/works", params={"limit": 0}, headers=h).status_code == 422
+        assert c.get("/works", params={"limit": 51}, headers=h).status_code == 422
