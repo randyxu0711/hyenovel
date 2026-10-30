@@ -42,10 +42,10 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import discuss, stories, version, views
+from den import discuss, stories, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, MAX_ANCHORS, MAX_CHAT_CHARS,
                         MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
-from den.jobs import JobManager
+from den.jobs import JobManager, NothingToResume
 from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
                         stream_chat)
 from marrow import db, ingest, repo, vizdata
@@ -60,6 +60,7 @@ _ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
 _LIST_KEYS = ("id", "slug", "title", "state", "step", "error_class", "updated_at",
               "is_latest_version")
 _LIST_MAX = 100
+_WORKS_MAX = 50
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
              "error_class", "detail", "params", "created_at", "updated_at")
 
@@ -74,6 +75,7 @@ class JobIn(BaseModel):
     kind: Literal["critique"]
     slug: str
     client: ClientIn | None = None
+    resume_only: bool = False   # 不帶稿的交稿:只續跑,不開新的一次分析
 
 
 class StoryIn(BaseModel):
@@ -292,9 +294,11 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             log.info("event=reject where=runner client=%r", client and client["name"][:64])
             raise HTTPException(503, "沒有可用的 runner：目前只支援 Claude CLI")
         try:
-            out = request.app.state.mgr.submit(body.slug, client, runner)
+            out = request.app.state.mgr.submit(body.slug, client, runner, resume_only=body.resume_only)
         except LookupError:
             raise HTTPException(404, "這篇不在 DB:先執行 python -m marrow.importer") from None
+        except NothingToResume as e:
+            raise HTTPException(409, e.reason) from None
         return {**out, "runner": runner, "note": "會用你同一份訂閱額度"}
 
     @app.get("/health")
@@ -324,6 +328,40 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
     @app.get("/stories")
     async def list_stories(request: Request):
         return {"stories": views.stories(request.app.state.mgr.conn)}
+
+    @app.get("/works")
+    async def list_works(request: Request, q: str | None = None, limit: int = 20):
+        if not 1 <= limit <= _WORKS_MAX:
+            log.info("event=reject where=list-works limit=%s", limit)
+            raise HTTPException(422, f"limit 要在 1–{_WORKS_MAX}")
+        return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
+
+    @app.get("/works/{slug}/{part}")
+    async def read_work(slug: str, part: str, request: Request):
+        _slug_ok(slug, "read-work")
+        if part not in works.PARTS:
+            log.info("event=reject where=read-work reason=bad-part part=%r", part[:32])
+            raise HTTPException(422, f"part 只能是 {'/'.join(works.PARTS)}")
+        try:
+            return {"text": works.read_part(request.app.state.mgr.conn, slug, part)}
+        except LookupError:
+            raise _unknown("read-work") from None
+        except works.Missing as e:
+            log.info("event=reject where=read-work reason=%s", e.reason)
+            raise HTTPException(409, e.reason) from None
+
+    @app.post("/works/{slug}/cancel")
+    async def cancel_work(slug: str, request: Request):
+        _slug_ok(slug, "cancel-work")
+        mgr = request.app.state.mgr
+        st = repo.story_by_slug(mgr.conn, slug)
+        if st is None:
+            raise _unknown("cancel-work")
+        done = [j["id"] for j in repo.active_jobs_of_story(mgr.conn, st["id"]) if mgr.cancel(j["id"])]
+        if not done:
+            log.info("event=reject where=cancel-work reason=nothing-running")
+            raise HTTPException(409, "nothing-running")
+        return {"cancelled": done}
 
     @app.get("/stories/{slug}/viz")
     async def get_viz(slug: str, request: Request):
@@ -379,20 +417,6 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         except ValueError as e:   # extract_text 內已記 event=extract-fail
             raise HTTPException(400, str(e)) from None
         return {"filename": file.filename, "text": text, "chars": len(text)}
-
-    @app.get("/stories/{slug}/discussion")
-    async def get_discussion(slug: str, request: Request):
-        if not valid_slug(slug):
-            log.info("event=reject where=slug slug=%r", slug[:64])
-            raise HTTPException(422, "bad slug")
-        try:
-            return stories.discussion_context(request.app.state.mgr.conn, slug)
-        except LookupError:
-            log.info("event=reject where=discussion reason=unknown-slug")
-            raise HTTPException(404, "這篇不在 DB") from None
-        except ValueError:
-            log.info("event=reject where=discussion reason=not-analyzed")
-            raise HTTPException(409, "這篇還沒分析完成") from None
 
     @app.post("/discuss/{slug}")
     async def discuss_turn(slug: str, body: DiscussIn, request: Request):

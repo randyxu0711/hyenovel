@@ -73,6 +73,14 @@ def _error(where: str | None, reason: str, message: str) -> dict:
                                        "recoverable": True, "reason": reason}}
 
 
+class NothingToResume(Exception):
+    """只續跑時沒有可續的:reason = done(最新版已分析好)/ never(最新版沒跑過)。"""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 class JobManager:
     def __init__(self, conn, run_factory: RunFactory, *, runner_name: str,
                  cli_version: str | None, now: Callable[[], float] = time.time):
@@ -92,7 +100,8 @@ class JobManager:
         for jid in ids:
             log.info("event=job-recovered job=%s", jid)
 
-    def submit(self, slug: str, client: dict | None = None, runner: str | None = None) -> dict:
+    def submit(self, slug: str, client: dict | None = None, runner: str | None = None, *,
+               resume_only: bool = False) -> dict:
         st = repo.story_by_slug(self.conn, slug)
         if st is None:
             log.info("event=submit-rejected reason=unknown-slug")
@@ -114,6 +123,14 @@ class JobManager:
             return {"job_id": stuck["id"], "estimate": est, "existing": True, "resumed": True,
                     "previous_state": stuck["state"],                # requeue 前讀的:停在哪
                     "previous_error_class": stuck["error_class"]}
+        if resume_only:   # 不帶稿 = 只續跑;開新的一次分析只能由交稿觸發(重跑 = 花錢)
+            last = repo.latest_job(self.conn, st["id"], sv["id"])
+            ana = repo.current_artifact(self.conn, st["id"], "analysis")
+            done = ((last is not None and last["state"] == "done")
+                    or (ana is not None and ana["source_version_id"] == sv["id"]))
+            reason = "done" if done else "never"
+            log.info("event=submit-rejected reason=nothing-to-resume detail=%s", reason)
+            raise NothingToResume(reason)
         with self.conn:
             jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
                                   {"client": client, "runner": runner}, self._now())

@@ -1,6 +1,5 @@
 """收原文與討論素材(純 DB 邏輯,路由在 app.py)。呼叫 ingest 的人包 `with conn:`。"""
 from den import config
-from den.views import conclusion_is_stale
 from marrow import ingest as marrow_ingest
 from marrow import repo
 
@@ -33,27 +32,6 @@ def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> 
     return {"slug": slug, "title": st["title"],
             "version": repo.latest_source_version(conn, sid)["n"],
             "new_version": new, "reused": reused}
-
-
-def discussion_context(conn, slug: str) -> dict:
-    st = repo.story_by_slug(conn, slug)
-    if st is None:
-        raise LookupError(slug)
-    analysis = repo.current_artifact(conn, st["id"], "analysis")
-    if analysis is None:
-        raise ValueError("not-analyzed")
-    feedback = repo.current_artifact(conn, st["id"], "feedback")
-    latest = repo.latest_source_version(conn, st["id"])
-    return {
-        "slug": slug, "title": st["title"],
-        "source": repo.source_version(conn, analysis["source_version_id"])["text"],
-        "stale": latest["id"] != analysis["source_version_id"],
-        "analysis": analysis["body"],
-        "feedback": feedback["body"] if feedback else None,
-        "conclusions": [{**{k: c[k] for k in ("kind", "text", "refs", "quotes")},
-                         "stale": conclusion_is_stale(c, analysis["id"])}
-                        for c in repo.conclusions(conn, st["id"]) if c["invalidated_at"] is None],
-    }
 
 
 def companion_context(conn, slug: str) -> dict:

@@ -8,7 +8,7 @@ Vite + React + TS。**只讀 den 的 DB**(切片 4a):`/api` 由 vite 代理到 d
 2. `cd web && npm install && npm run dev` → 開 localhost:5173。
 3. 測試 `npm test`、型別 `npm run typecheck`。
 
-網頁討論 4a 期間關閉(輸入框提示改用 MCP 的 `open_discussion`),用量面板隱藏;4b 恢復。
+用量面板隱藏。
 den 沒開時 web 顯示 503 提示。
 
 ## 邊界

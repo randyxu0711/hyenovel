@@ -1,4 +1,4 @@
-"""stdio MCP 轉接器:六個 tool,薄薄一層翻成 den REST。入口 `python -m den.mcp`。
+"""stdio MCP 轉接器:五個 tool + 兩個 prompt,薄薄一層翻成 den REST。入口 `python -m den.mcp`。
 
 - stdout 只屬於 MCP 協定:本模組不 print,logging 只准 stderr(main 明確設)。
 - den.request 是阻塞的(拉起 den 可能等十幾秒)→ 一律丟 anyio.to_thread。
@@ -8,16 +8,18 @@
 """
 import logging
 import sys
+import time
 from pathlib import Path
+from urllib.parse import urlencode
 
 import anyio
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp_types import ToolAnnotations
 
 from den.client import DenClient, DenRejected, DenUnavailable
 from den.companion import MODES
-from den.config import MAX_CHAT_CHARS, MAX_SOURCE_BYTES, valid_slug
-from den.discuss import render_discussion
+from den.config import MAX_CHAT_CHARS, MAX_SOURCE_BYTES
 from marrow import db
 from marrow.ingest import decode
 
@@ -26,40 +28,58 @@ log = logging.getLogger("hyenovel")
 _SUFFIXES = (".md", ".txt")
 _CLIENT_MAX = 64   # den 的 ClientIn 上限;超過整個 POST /jobs 會 422
 
-_STATES = {"queued": "排隊中", "done": "完成", "paused": "已暫停",
-           "failed": "失敗", "cancelled": "已取消"}
-_STEPS = {"analyst": "分析中", "criticizer": "評論中"}
 _REASONS = {"usage-limit": "訂閱額度用完", "gate": "引文閘門重試耗盡",
             "overload": "服務過載", "auth": "Claude CLI 未登入或登入失效",
             "crash": "工人失敗", "timeout": "工人失敗(逾時)"}
-_RESUMABLE = ("paused", "failed", "cancelled")
-_STALE = "舊版原文,不能續跑——改稿後請用 start_critique 跑新版"
 
-DESC_START = (
-    "把一篇純文學短篇送去分析+編輯評論。只收本機 .md / .txt 檔案路徑(不收全文、不收 pdf/docx——"
-    "請使用者先轉成純文字檢查過)。這是分鐘級的非同步背景工作:立刻回 slug 與 job id,"
-    "之後用 critique_status 查進度。改稿重跑請帶上次回的 slug;同一份原文不帶 slug 重送會沿用那篇。"
-    "會用使用者同一份 Claude 訂閱額度。")
-DESC_STATUS = ("查詢 start_critique 回的 job 進度(排隊/分析/評論/完成/暫停/失敗/取消)與停住的原因。"
-               "不帶 job_id 會列出最近的 job,新對話找不到編號時用。")
-DESC_CANCEL = "取消一個排隊中或執行中的評論 job。取消後可用 resume_critique 續跑。"
-DESC_RESUME = "續跑一個已暫停(例:額度用完)、失敗或已取消的評論 job;已完成的步驟不重跑。"
 # ≤4,096 字元(Claude Code 會靜默截斷);最重要的放第一句
 INSTRUCTIONS = (
     "talk_to_companion 回傳的是陪讀角色 companion 對作者說的話:請一字不改地轉給作者,"
     "不要改寫、摘要、補充或加上你自己的評論。作者想聊自己寫的作品、想聽讀者感受時用 talk_to_companion。"
-    "送新稿分析用 start_critique、查進度用 critique_status。")
+    "交稿用 submit_work(只收檔案路徑)、找作品 find_works、作者自己要看原文或分析用 read_work、"
+    "停下分析用 cancel_work。作品用標題或關鍵詞指定,不必記編號。")
 DESC_TALK = (
     "和陪讀的 companion 說話,回傳它的回覆——請原文轉給作者,不要改寫、摘要或補充。"
     "作者對 companion 說的任何話(包括「好了沒」)都用這個。message 留空 = 讓 companion 先開口。"
-    "work = 作品 slug(省略則沿用這段對話剛聊的那篇)。"
+    "work = 作品標題或開頭裡的關鍵詞(例「海」);省略則沿用剛聊的那篇,或最近的一篇。"
     "mode = direct(直說)/ slow(慢讀,預設)/ imaginative(想像);"
     "作者說「講重點就好」時用 direct,「慢慢講」用 slow,「陪我想像」用 imaginative,沒提就不要給。")
 _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
-DESC_OPEN = (
-    "取得一篇已分析完成的故事的討論素材:編輯人格指示、原文全文、精簡版分析與回饋、已留下的結論。"
-    "拿到後由你自己扮演出版編輯與使用者來回討論,全程唯讀:不寫任何檔案、不改分析。")
+DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
+             "query 給標題或開頭裡的關鍵詞(例「海」),不給就列最近的。")
+DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ feedback(舊版客觀回饋)。"
+             "只在作者自己要看時用,不要拿來代替 companion 回答。work 同 talk_to_companion。")
+DESC_SUBMIT = (
+    "交一篇稿子給 hyenovel:只收本機 .md / .txt 檔案路徑(不收貼上的全文、不收 pdf/docx——請作者先存成純文字檔)。"
+    "改稿重交請帶 work(作品標題或關鍵詞)。不給 path = 續跑這篇停住的分析(不會重跑已完成的)。"
+    "分析在背景跑幾分鐘,回報收到的檔名、修改時間、字數,請作者確認是對的檔。會用作者同一份 Claude 訂閱額度。")
+DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
+_PARTS = ("source", "analysis", "feedback")
+_WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
+_READONLY = ToolAnnotations(readOnlyHint=True)
+# prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
+PROMPT_COMPANION = (
+    "我想跟 hyenovel 的 companion 聊我的作品。如果我還沒說要聊哪個檔,先問我稿子的檔案路徑(.md / .txt),"
+    "或我只是想直接聊最近那篇。拿到路徑就用 submit_work 交稿、把回報給我確認;"
+    "然後用 talk_to_companion(message 留空)讓 companion 先開口。companion 的回覆請一字不改地轉給我。")
+PROMPT_CONTINUE = ("接著聊我最近那篇:用 talk_to_companion(message 留空、不給 work)讓 companion 先開口,"
+                   "回覆一字不改地轉給我。")
+
+
+def _when(ts: float | None) -> str:
+    return time.strftime("%m/%d %H:%M", time.localtime(ts)) if ts else ""
+
+
+def _work_line(w: dict) -> str:
+    st = w["state"]
+    if st == "stopped":
+        cls = w.get("error_class")
+        label = f"分析停住了({_REASONS.get(cls, cls)})" if cls else "分析停住了"
+    else:
+        label = _WORK_STATES.get(st, st)
+    talked = f"最近聊 {_when(w['talked_at'])}" if w.get("talked_at") else "還沒聊過"
+    return f"〈{w['title']}〉開頭「{w['opening']}」· {label} · {talked}"
 
 
 def client_of(ctx: Context) -> dict | None:
@@ -112,59 +132,21 @@ def _minutes(est: dict | None) -> str:
     return f"預估約 {max(1, round(est['seconds'] / 60))} 分鐘(依過去 {est['basis']} 次紀錄)"
 
 
-def _label(j: dict) -> str:
-    st = j["state"]
-    return _STEPS.get(j.get("step"), "分析中") if st == "running" else _STATES.get(st, st)
-
-
-def _status_text(j: dict) -> str:
-    st = j["state"]
-    lines = [f"job {j['id']}:{_label(j)}"]
-    if j.get("error_class"):
-        lines.append(f"原因:{_REASONS.get(j['error_class'], j['error_class'])}")
-    if st in _RESUMABLE:
-        lines.append(f"可用 resume_critique(job_id={j['id']}) 續跑;已完成的步驟不重跑。")
-    elif st == "done":
-        lines.append(f"可用 open_discussion(slug=\"{j['slug']}\") 開始討論這篇。")
-    elif st in ("queued", "running"):
-        lines.append("還在跑,晚點再問我進度。")
-    return "\n".join(lines)
-
-
-def _list_text(jobs: list[dict]) -> str:
-    """三組:進行中 / 可續跑(附原因)/ 最近完成;空的組不出。"""
-    if not jobs:
-        return "目前沒有任何分析紀錄。"
-    groups = (("進行中", ("queued", "running")), ("可續跑", _RESUMABLE), ("最近完成", ("done",)))
-    out = []
-    for head, states in groups:
-        rows = [j for j in jobs if j["state"] in states]
-        if not rows:
-            continue
-        out.append(f"## {head}")
-        for j in rows:
-            why = (f"({_REASONS.get(j['error_class'], j['error_class'])})"
-                   if j.get("error_class") else "")
-            stale = head == "可續跑" and not j.get("is_latest_version", True)
-            out.append(f"job {j['id']} ·〈{j['title'] or j['slug']}〉({j['slug']}) · {_label(j)}{why}"
-                       + (f" · {_STALE}" if stale else ""))
-        if head == "可續跑" and any(j.get("is_latest_version", True) for j in rows):
-            out.append("用 resume_critique(job_id=N) 續跑(N 換成上面的編號);已完成的步驟不重跑。")
-        out.append("")
-    return "\n".join(out).rstrip()
-
-
 def build_server(den: DenClient) -> MCPServer:
     server = MCPServer("hyenovel", instructions=INSTRUCTIONS)
 
     async def call(method: str, path: str, json: dict | None = None, *,
-                   on_status: dict[int, str] | None = None) -> dict:
+                   on_status: dict[int, str] | None = None,
+                   on_detail: dict[str, str] | None = None,
+                   ok_details: tuple[str, ...] = ()) -> dict:
         try:
             r = await anyio.to_thread.run_sync(lambda: den.request(method, path, json=json))
         except DenUnavailable as e:
             raise ToolError(f"連不上 hyenovel den:{e}") from None
         if r.status_code >= 400:
-            msg = (on_status or {}).get(r.status_code)
+            if _detail(r) in ok_details:   # 呼叫者要自己分流的拒絕:回 {"detail": …},不當錯誤
+                return {"detail": _detail(r)}
+            msg = (on_detail or {}).get(_detail(r)) or (on_status or {}).get(r.status_code)
             raise ToolError(msg or f"den 回應 {r.status_code}:{_detail(r)}")
         return r.json()
 
@@ -179,80 +161,119 @@ def build_server(den: DenClient) -> MCPServer:
             raise ToolError(tail(str(e))) from None
         return tail(text)
 
-    async def _start(path, title, slug, client) -> str:
-        text = _read_source(path)
-        s = await call("POST", "/stories", {"text": text, "title": title, "slug": slug})
-        j = await call("POST", "/jobs", {"kind": "critique", "slug": s["slug"], "client": client})
-        lines = []
-        if s["reused"]:
-            lines.append(f"這份原文和 {s['slug']} 的最新版相同,沿用那篇。")
-        if j.get("resumed"):
-            cls = j.get("previous_error_class")
-            if cls:
-                why = f"上次停在:{_REASONS.get(cls, cls)}"
-            elif j.get("previous_state") == "cancelled":
-                why = "上次是你取消的。"
-            else:
-                why = "上次沒有跑完。"
-            lines += [f"這篇這一版之前跑到一半(job {j['job_id']}),已接續:已完成的步驟不重跑。", why,
-                      f"好了問我進度(critique_status job_id={j['job_id']})。"]
-            return "\n".join(lines)
-        if j["existing"]:
-            lines += [f"{s['slug']} 這一版已在分析中:job {j['job_id']}(沒有開新的 job,不會再花額度)。",
-                      f"好了問我進度(critique_status job_id={j['job_id']})。"]
-            return "\n".join(lines)
-        lines += [f"已送出:slug {s['slug']}(第 {s['version']} 版)、job {j['job_id']}(runner:{j['runner']})。",
-                  f"{_minutes(j['estimate'])}。{j['note']}。",
-                  f"這是背景工作,好了問我進度(critique_status job_id={j['job_id']})。",
-                  f"改稿重跑請帶這個 slug:start_critique(path, slug=\"{s['slug']}\")。"]
-        return "\n".join(lines)
-
-    @server.tool(description=DESC_START)
-    async def start_critique(path: str, ctx: Context, title: str | None = None,
-                             slug: str | None = None) -> str:
-        return await guarded(_start(path, title, slug, client_of(ctx)))
-
-    async def _status(job_id: int | None) -> str:
-        if job_id is None:
-            return _list_text((await call("GET", "/jobs"))["jobs"])
-        return _status_text(await call("GET", f"/jobs/{job_id}",
-                                       on_status={404: f"找不到 job {job_id}。"}))
-
-    @server.tool(description=DESC_STATUS)
-    async def critique_status(job_id: int | None = None) -> str:
-        return await guarded(_status(job_id))
-
-    async def _act(job_id: int, verb: str, conflict: str, done: str) -> str:
-        await call("POST", f"/jobs/{job_id}/{verb}",
-                   on_status={404: f"找不到 job {job_id}。", 409: conflict})
-        return done
-
-    @server.tool(description=DESC_CANCEL)
-    async def cancel_critique(job_id: int) -> str:
-        return await guarded(_act(job_id, "cancel", "這個 job 目前不能取消(可能已結束)。",
-                                  f"job {job_id} 已取消;要再跑用 resume_critique。"))
-
-    @server.tool(description=DESC_RESUME)
-    async def resume_critique(job_id: int) -> str:
-        return await guarded(_act(job_id, "resume", ("這個 job 目前不能續跑。可能是:已結束(只有暫停/失敗/取消的可以續);"
-                                  "舊版原文(改稿後請用 start_critique 跑新版);"
-                                  "同一版已有別的 job 在跑,或之後已有一次跑完。"),
-                                  f"job {job_id} 已重新排入;用 critique_status 查進度。"))
-
-    async def _open(slug: str) -> str:
-        if not valid_slug(slug):   # 會拼進 URL 路徑:本地先擋
-            raise _reject("slug", f"slug 格式不對:{slug[:64]!r}(只能英數、底線、連字號,例:d01)。")
-        return render_discussion(await call(
-            "GET", f"/stories/{slug}/discussion",
-            on_status={404: f"找不到這篇:{slug}。",
-                       409: "這篇還沒分析完成,先 start_critique(或等它跑完)。"}))
-
-    @server.tool(description=DESC_OPEN)
-    async def open_discussion(slug: str) -> str:
-        return await guarded(_open(slug))
-
     sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug → 對話 id
     current: list[str] = []         # 最近一次聊的那篇
+
+    async def _works(**params) -> list[dict]:
+        return (await call("GET", "/works?" + urlencode({k: v for k, v in params.items() if v is not None})))["works"]
+
+    async def resolve_work(work: str | None) -> dict:
+        """作者的說法 → 一篇作品(`GET /works` 的一筆)。slug / 標題關鍵詞 / 剛聊的 / 最近的。"""
+        if work is None:
+            hits = await _works(q=current[0]) if current else []
+            hits = hits or await _works(limit=1)
+            if not hits:
+                raise _reject("no-work", "還沒有任何作品。請給我稿子的檔案路徑(.md / .txt)。")
+            return hits[0]
+        hits = await _works(q=work)
+        if not hits:
+            raise _reject("work-not-found", f"找不到「{work}」這篇。可以用 find_works 看有哪些作品。")
+        if len(hits) > 1:
+            raise _reject("work-ambiguous", "\n".join(
+                [f"有 {len(hits)} 篇符合「{work}」,請問作者是哪一篇:"] + [_work_line(w) for w in hits]
+                + ["請用標題裡更完整的字再試一次。"]))
+        return hits[0]
+
+    async def _find(query: str | None) -> str:
+        hits = await _works(q=query)
+        if not hits:
+            return f"沒有符合「{query}」的作品。" if query and query.strip() else "目前沒有任何作品。"
+        return "\n".join(_work_line(w) for w in hits)
+
+    @server.tool(description=DESC_FIND, annotations=_READONLY)
+    async def find_works(query: str | None = None) -> str:
+        return await guarded(_find(query))
+
+    async def _read(part: str, work: str | None) -> str:
+        if part not in _PARTS:
+            raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ feedback(舊版客觀回饋)。")
+        w = await resolve_work(work)
+        name = f"〈{w['title']}〉"
+        out = await call("GET", f"/works/{w['slug']}/{part}", on_status={404: f"找不到{name}。"},
+                         on_detail={"not-analyzed": f"{name}還沒有分析。",
+                                    "no-feedback": f"{name}沒有舊版客觀回饋。"})
+        return out["text"]
+
+    def _stopped_why(j: dict) -> str:
+        cls = j.get("previous_error_class")
+        if cls:
+            return f"上次停在:{_REASONS.get(cls, cls)}"
+        return "上次是你取消的。" if j.get("previous_state") == "cancelled" else "上次沒有跑完。"
+
+    async def _submit_file(path: str, work: str | None, title: str | None, client) -> str:
+        text = _read_source(path)
+        p = Path(path).expanduser()
+        slug = (await resolve_work(work))["slug"] if work else None
+        sent_title = title if title is not None else (None if work else p.stem)
+        s = await call("POST", "/stories", {"text": text, "title": sent_title, "slug": slug})
+        current[:] = [s["slug"]]   # 交完稿,「這篇」就是它(否則下一句不帶 work 會聊回上一篇)
+        job = {"kind": "critique", "slug": s["slug"], "client": client}
+        # 稿子沒改:只續跑;這版已分析好就不重跑(重送同一個檔不該再花一次錢)。從沒跑過才開新的
+        j = (await call("POST", "/jobs", {**job, "resume_only": True}, ok_details=("done", "never"))
+             if not s["new_version"] else None)
+        if j is not None and j.get("detail") == "never":
+            j = None
+        if j is None:
+            j = await call("POST", "/jobs", job)
+        name = s["title"] or p.stem
+        chars = sum(not ch.isspace() for ch in text)
+        lines = [f"收到 {p.name}({_when(p.stat().st_mtime)} 修改,{chars:,} 字),作品〈{name}〉。"]
+        if s["reused"]:
+            lines.append(f"這份稿子和〈{name}〉最新一版一樣,沿用那篇。")
+        if j.get("detail") == "done":
+            lines.append("這一版已經分析好了,沒有重跑。要聊就讓 companion 開口;改了稿再交新檔。")
+        elif j.get("resumed"):
+            lines += ["這一版之前跑到一半,已接續(已完成的步驟不重跑)。", _stopped_why(j)]
+        elif j["existing"]:
+            lines.append("這一版已經在分析中,沒有再開一次。")
+        else:
+            lines.append(f"分析已開始,{_minutes(j['estimate'])}。會用你同一份訂閱額度。")
+        if j.get("detail") != "done":
+            lines.append("分析在背景跑,不用等;現在就可以用 talk_to_companion 讓 companion 先開口。")
+        return "\n".join(lines)
+
+    async def _resume(work: str | None, client) -> str:
+        w = await resolve_work(work)
+        current[:] = [w["slug"]]
+        name = f"〈{w['title']}〉"
+        j = await call("POST", "/jobs", {"kind": "critique", "slug": w["slug"], "client": client,
+                                         "resume_only": True}, on_detail={
+            "done": f"{name}最新一版已經分析好了,不用再跑。改了稿請給我新檔的路徑。",
+            "never": f"{name}最新一版還沒開始分析,請再給我一次檔案路徑交稿。"})
+        if j.get("resumed"):
+            return f"{name}已接著上次停下的地方續跑。{_stopped_why(j)}"
+        return f"{name}已經在分析中。"
+
+    @server.tool(description=DESC_SUBMIT)
+    async def submit_work(ctx: Context, path: str | None = None, work: str | None = None,
+                          title: str | None = None) -> str:
+        if path is None:
+            return await guarded(_resume(work, client_of(ctx)))
+        return await guarded(_submit_file(path, work, title, client_of(ctx)))
+
+    async def _cancel_work(work: str | None) -> str:
+        w = await resolve_work(work)
+        name = f"〈{w['title']}〉"
+        await call("POST", f"/works/{w['slug']}/cancel", on_status={409: f"{name}現在沒有在分析。"})
+        return f"{name}的分析已停下;之後不帶路徑呼叫 submit_work 可以接著跑。"
+
+    @server.tool(description=DESC_CANCEL_WORK)
+    async def cancel_work(work: str | None = None) -> str:
+        return await guarded(_cancel_work(work))
+
+    @server.tool(description=DESC_READ, annotations=_READONLY)
+    async def read_work(part: str, work: str | None = None) -> str:
+        return await guarded(_read(part, work))
     in_flight: set[str] = set()     # 正在跑一輪的篇:首輪還沒局 id、den 的鎖擋不到,由這裡擋(免得付兩次錢)
 
     def _turn(slug: str, body: dict) -> dict:
@@ -265,15 +286,14 @@ def build_server(den: DenClient) -> MCPServer:
         raise ToolError("companion 沒有回應" + _TALK_FAILED)
 
     async def _talk(message: str, work: str | None, mode: str | None, client) -> str:
-        slug = work or (current[0] if current else None)
-        if slug is None:
-            raise _reject("no-work", "還不知道要聊哪一篇:請給我它的 slug(例:d01)。")
-        if not valid_slug(slug):
-            raise _reject("slug", f"slug 格式不對:{slug[:64]!r}(只能英數、底線、連字號,例:d01)。")
         if mode is not None and mode not in MODES:
             raise _reject("mode", "模式只有 direct(直說)/ slow(慢讀)/ imaginative(想像)。")
         if len(message) > MAX_CHAT_CHARS:   # 本地擋:den 的 422 會把整段原文回吐給宿主
             raise _reject("too-long", f"這段話超過 {MAX_CHAT_CHARS} 字,請分段說。")
+        try:
+            slug = (await resolve_work(work))["slug"]
+        except ToolError as e:
+            raise ToolError(str(e) + _TALK_FAILED) from None
         if slug in in_flight:
             raise _reject("busy", "上一輪還在跑,等它回來再說" + _TALK_FAILED)
         in_flight.add(slug)
@@ -310,6 +330,14 @@ def build_server(den: DenClient) -> MCPServer:
     async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None,
                                 mode: str | None = None) -> str:
         return await guarded(_talk(message, work, mode, client_of(ctx)))
+
+    @server.prompt(description="開始陪讀:交一篇稿子(或直接聊最近那篇),讓 companion 先開口。")
+    def companion() -> str:
+        return PROMPT_COMPANION
+
+    @server.prompt(name="continue", description="接著聊最近那篇,companion 先開口。")
+    def continue_() -> str:
+        return PROMPT_CONTINUE
 
     return server
 

@@ -424,36 +424,11 @@ def test_post_stories_422_blank(data, caplog):
     assert "event=reject where=stories" in caplog.text
 
 
-def test_discussion_404(data, caplog):
-    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
-        assert c.get("/stories/nope/discussion", headers=_auth(data[1])).status_code == 404
-    assert "event=reject where=discussion reason=unknown-slug" in caplog.text
-
-
 def test_post_stories_422_unknown_slug(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         r = c.post("/stories", json={"text": "x", "slug": "s07"}, headers=_auth(data[1]))
     assert r.status_code == 422
     assert "event=reject where=stories reason=unknown slug" in caplog.text
-
-
-def test_discussion_422_bad_slug(data):
-    with _client(data) as c:
-        assert c.get("/stories/-x/discussion", headers=_auth(data[1])).status_code == 422
-
-
-def test_discussion_409(data):
-    with _client(data) as c:
-        h = _auth(data[1])
-        c.post("/stories", json={"text": "未分析。"}, headers=h)
-        r = c.get("/stories/d01/discussion", headers=h)
-    assert r.status_code == 409 and r.json() == {"detail": "這篇還沒分析完成"}
-
-
-def test_discussion_200(data):
-    with _client(data) as c:
-        r = c.get("/stories/mini/discussion", headers=_auth(data[1]))
-    assert r.status_code == 200 and r.json()["slug"] == "mini"
 
 
 def test_post_job_records_client_and_runner(data):
@@ -847,3 +822,56 @@ def test_extract_bad_pdf_400(data):
 def test_extract_requires_token(data):
     with _client(data) as c:
         assert c.post("/extract", files={"file": ("a.txt", b"x")}).status_code == 401
+
+
+def test_get_works_query_and_limit(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        c.post("/stories", json={"text": "海很冷。", "title": "海", "slug": None}, headers=h)
+        all_ = c.get("/works", headers=h).json()["works"]
+        hit = c.get("/works", params={"q": "海"}, headers=h).json()["works"]
+        assert len(all_) == 2 and [w["title"] for w in hit] == ["海"]
+        assert c.get("/works", params={"limit": 0}, headers=h).status_code == 422
+        assert c.get("/works", params={"limit": 51}, headers=h).status_code == 422
+
+
+def test_get_work_part_status_codes(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.get("/works/mini/source", headers=h)
+        assert r.status_code == 200 and "原文" in r.json()["text"]
+        assert c.get("/works/mini/analysis", headers=h).status_code == 200
+        r = c.get("/works/mini/feedback", headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "no-feedback"
+        assert c.get("/works/nope/source", headers=h).status_code == 404
+        assert c.get("/works/mini/notes", headers=h).status_code == 422
+
+
+def test_post_jobs_resume_only_409_reason(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini", "resume_only": True}, headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "done"
+        assert c.get("/jobs", headers=h).json()["jobs"] == []
+
+
+def test_cancel_work_cancels_active_jobs(data):
+    with _client(data, run=Run(released=False)) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        r = c.post("/works/mini/cancel", headers=h)
+        assert r.status_code == 200 and r.json()["cancelled"] == [jid]
+        _wait_state(c, h, jid, "cancelled")
+
+
+def test_cancel_work_nothing_running_409(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/works/mini/cancel", headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "nothing-running"
+        assert c.post("/works/nope/cancel", headers=h).status_code == 404
+
+
+def test_discussion_endpoint_gone(data):
+    with _client(data) as c:
+        assert c.get("/stories/mini/discussion", headers=_auth(data[1])).status_code == 404

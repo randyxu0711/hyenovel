@@ -215,6 +215,16 @@ def stories(conn) -> list[dict]:
     return [_row(r) for r in conn.execute("SELECT * FROM story ORDER BY slug")]
 
 
+def works(conn) -> list[dict]:
+    """每篇一列:最新版(id / n / 原文 / 交稿時間)與最近一次聊天的結束時間(沒聊過 = None)。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT st.id, st.slug, st.title, sv.id AS latest_sv_id, sv.n AS latest_n, "
+        "sv.text AS latest_text, sv.created_at AS submitted_at, "
+        "(SELECT MAX(ended_at) FROM discussion WHERE story_id = st.id) AS talked_at "
+        "FROM story st JOIN source_version sv ON sv.story_id = st.id "
+        "AND sv.n = (SELECT MAX(n) FROM source_version WHERE story_id = st.id) ORDER BY st.slug")]
+
+
 def current_artifacts(conn) -> list[dict]:
     """所有篇的 current:`{story_id, kind, artifact}`,一次查完。"""
     out = []
@@ -375,6 +385,13 @@ def has_newer_done_job(conn, story_id: int, source_version_id: int, job_id: int)
     return conn.execute(
         "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
         "AND state = 'done' LIMIT 1", (story_id, source_version_id, job_id)).fetchone() is not None
+
+
+def active_jobs_of_story(conn, story_id: int) -> list[dict]:
+    """該篇任何版本還在排隊 / 執行中的 job(依作品取消用)。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND state IN ('queued', 'running') ORDER BY id",
+        (story_id,))]
 
 
 def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:
