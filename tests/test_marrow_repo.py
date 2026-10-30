@@ -333,3 +333,13 @@ def test_works_latest_version_and_last_talk(conn):
     assert rows["a"]["submitted_at"] == 2 and rows["a"]["talked_at"] == 20
     assert rows["a"]["title"] == "甲篇" and rows["a"]["id"] == a
     assert rows["b"]["talked_at"] is None and rows["b"]["latest_sv_id"]
+
+
+def test_active_jobs_of_story(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    ids = {}
+    for st, ver in (("queued", v2), ("running", v), ("done", v), ("paused", v2)):
+        ids[st] = repo.create_job(conn, "critique", s, ver, {}, 0)
+        repo.set_job_state(conn, ids[st], st, 1)
+    assert [j["id"] for j in repo.active_jobs_of_story(conn, s)] == [ids["queued"], ids["running"]]

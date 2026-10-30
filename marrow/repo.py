@@ -387,6 +387,13 @@ def has_newer_done_job(conn, story_id: int, source_version_id: int, job_id: int)
         "AND state = 'done' LIMIT 1", (story_id, source_version_id, job_id)).fetchone() is not None
 
 
+def active_jobs_of_story(conn, story_id: int) -> list[dict]:
+    """該篇任何版本還在排隊 / 執行中的 job(依作品取消用)。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND state IN ('queued', 'running') ORDER BY id",
+        (story_id,))]
+
+
 def resumable_job(conn, story_id: int, source_version_id: int) -> dict | None:
     """同篇同版可續(paused/failed/cancelled)的最新 job(重送自動續跑用:已付的步驟不重花)。"""
     return _row(conn.execute(

@@ -45,7 +45,7 @@ from pydantic import BaseModel, Field
 from den import discuss, stories, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, MAX_ANCHORS, MAX_CHAT_CHARS,
                         MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
-from den.jobs import JobManager
+from den.jobs import JobManager, NothingToResume
 from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
                         stream_chat)
 from marrow import db, ingest, repo, vizdata
@@ -75,6 +75,7 @@ class JobIn(BaseModel):
     kind: Literal["critique"]
     slug: str
     client: ClientIn | None = None
+    resume_only: bool = False   # 不帶稿的交稿:只續跑,不開新的一次分析
 
 
 class StoryIn(BaseModel):
@@ -293,9 +294,11 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             log.info("event=reject where=runner client=%r", client and client["name"][:64])
             raise HTTPException(503, "沒有可用的 runner：目前只支援 Claude CLI")
         try:
-            out = request.app.state.mgr.submit(body.slug, client, runner)
+            out = request.app.state.mgr.submit(body.slug, client, runner, resume_only=body.resume_only)
         except LookupError:
             raise HTTPException(404, "這篇不在 DB:先執行 python -m marrow.importer") from None
+        except NothingToResume as e:
+            raise HTTPException(409, e.reason) from None
         return {**out, "runner": runner, "note": "會用你同一份訂閱額度"}
 
     @app.get("/health")
@@ -346,6 +349,19 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         except works.Missing as e:
             log.info("event=reject where=read-work reason=%s", e.reason)
             raise HTTPException(409, e.reason) from None
+
+    @app.post("/works/{slug}/cancel")
+    async def cancel_work(slug: str, request: Request):
+        _slug_ok(slug, "cancel-work")
+        mgr = request.app.state.mgr
+        st = repo.story_by_slug(mgr.conn, slug)
+        if st is None:
+            raise _unknown("cancel-work")
+        done = [j["id"] for j in repo.active_jobs_of_story(mgr.conn, st["id"]) if mgr.cancel(j["id"])]
+        if not done:
+            log.info("event=reject where=cancel-work reason=nothing-running")
+            raise HTTPException(409, "nothing-running")
+        return {"cancelled": done}
 
     @app.get("/stories/{slug}/viz")
     async def get_viz(slug: str, request: Request):

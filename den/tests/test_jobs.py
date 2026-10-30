@@ -492,3 +492,57 @@ def test_submit_auto_resume_reports_previous_state(conn, state, cls):
         repo.set_job_state(conn, jid, state, 2.0, error_class=cls)
     out = m.submit("mini")
     assert (out["job_id"], out["previous_state"], out["previous_error_class"]) == (jid, state, cls)
+
+
+def _jobs_count(conn):
+    return conn.execute("SELECT COUNT(*) FROM job").fetchone()[0]
+
+
+def _new_story(conn, slug="z1"):
+    with conn:
+        sid = repo.ensure_story(conn, slug, None, 0)
+        vid, _ = repo.add_source_version(conn, sid, "只有原文", 0)
+    return sid, vid
+
+
+def test_resume_only_done_is_409_and_no_job(conn):
+    m = _mgr(conn, GatedRun())
+    sid, vid = _new_story(conn)
+    with conn:
+        jid = repo.create_job(conn, "critique", sid, vid, {}, 1.0)
+        repo.set_job_state(conn, jid, "done", 2.0)
+    with pytest.raises(jobs.NothingToResume) as e:
+        m.submit("z1", resume_only=True)
+    assert e.value.reason == "done" and _jobs_count(conn) == 1
+
+
+def test_resume_only_imported_analysis_counts_as_done(conn):
+    m = _mgr(conn, GatedRun())          # mini:匯入的分析對應最新版,沒有 job
+    with pytest.raises(jobs.NothingToResume) as e:
+        m.submit("mini", resume_only=True)
+    assert e.value.reason == "done" and _jobs_count(conn) == 0
+
+
+def test_resume_only_never_ran(conn):
+    m = _mgr(conn, GatedRun())
+    _new_story(conn)
+    with pytest.raises(jobs.NothingToResume) as e:
+        m.submit("z1", resume_only=True)
+    assert e.value.reason == "never" and _jobs_count(conn) == 0
+
+
+def test_resume_only_resumes_paused(conn):
+    m = _mgr(conn, GatedRun())
+    sid, vid = _new_story(conn)
+    with conn:
+        jid = repo.create_job(conn, "critique", sid, vid, {}, 1.0)
+        repo.set_job_state(conn, jid, "paused", 2.0, error_class="usage-limit")
+    out = m.submit("z1", resume_only=True)
+    assert out["job_id"] == jid and out["resumed"] and _jobs_count(conn) == 1
+
+
+def test_resume_only_returns_active(conn):
+    m = _mgr(conn, GatedRun())
+    first = m.submit("mini")
+    out = m.submit("mini", resume_only=True)
+    assert out["job_id"] == first["job_id"] and out["existing"] and _jobs_count(conn) == 1

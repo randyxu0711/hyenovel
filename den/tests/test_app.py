@@ -870,3 +870,28 @@ def test_get_work_part_status_codes(data):
         assert r.status_code == 409 and r.json()["detail"] == "no-feedback"
         assert c.get("/works/nope/source", headers=h).status_code == 404
         assert c.get("/works/mini/notes", headers=h).status_code == 422
+
+
+def test_post_jobs_resume_only_409_reason(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/jobs", json={"kind": "critique", "slug": "mini", "resume_only": True}, headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "done"
+        assert c.get("/jobs", headers=h).json()["jobs"] == []
+
+
+def test_cancel_work_cancels_active_jobs(data):
+    with _client(data, run=Run(released=False)) as c:
+        h = _auth(data[1])
+        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        r = c.post("/works/mini/cancel", headers=h)
+        assert r.status_code == 200 and r.json()["cancelled"] == [jid]
+        _wait_state(c, h, jid, "cancelled")
+
+
+def test_cancel_work_nothing_running_409(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.post("/works/mini/cancel", headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "nothing-running"
+        assert c.post("/works/nope/cancel", headers=h).status_code == 404
