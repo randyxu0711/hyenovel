@@ -487,3 +487,11 @@ def test_discuss_mode_literal_matches_companion_modes():
     from den.companion import MODES
     ann = den_app.DiscussIn.model_fields["mode"].annotation
     assert typing.get_args(typing.get_args(ann)[0]) == MODES
+
+
+def test_empty_message_mid_conversation_asks_to_continue(c, fake_chat):
+    from den.discuss import CONTINUE, OPENER
+    sid = first_turn(c)
+    post_discuss(c, "mini", sid, "")
+    user = fake_chat.calls[-1][1]
+    assert user.rstrip().endswith(CONTINUE) and OPENER not in user

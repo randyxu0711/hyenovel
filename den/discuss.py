@@ -75,6 +75,7 @@ def render_discussion(ctx: dict) -> str:
 
 _ROLE = {"user": "作者", "assistant": "你"}
 OPENER = "(作者還沒說話。你先開口。)"
+CONTINUE = "(作者這次沒說話,等你接著說。)"
 
 
 def render_turn(history: list[dict], message: str) -> str:
@@ -129,7 +130,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], mod
     failed = False
     try:
         async with aclosing(chat(companion.render_companion(turn["ctx"], mode),
-                                 render_turn(history, message or OPENER))) as stream:
+                                 render_turn(history, message or (CONTINUE if history else OPENER)))) as stream:
             async for kind, val in stream:
                 if kind == "delta":
                     yield {"event": "token", "data": {"text": val}}

@@ -16,7 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from den.client import DenClient, DenRejected, DenUnavailable
 from den.companion import MODES
-from den.config import MAX_SOURCE_BYTES, valid_slug
+from den.config import MAX_CHAT_CHARS, MAX_SOURCE_BYTES, valid_slug
 from den.discuss import render_discussion
 from marrow import db
 from marrow.ingest import decode
@@ -253,6 +253,7 @@ def build_server(den: DenClient) -> MCPServer:
 
     sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug → 對話 id
     current: list[str] = []         # 最近一次聊的那篇
+    in_flight: set[str] = set()     # 正在跑一輪的篇:首輪還沒局 id、den 的鎖擋不到,由這裡擋(免得付兩次錢)
 
     def _turn(slug: str, body: dict) -> dict:
         """收齊一輪 SSE,回 message 事件的 data;error 事件 → ToolError。"""
@@ -271,6 +272,17 @@ def build_server(den: DenClient) -> MCPServer:
             raise _reject("slug", f"slug 格式不對:{slug[:64]!r}(只能英數、底線、連字號,例:d01)。")
         if mode is not None and mode not in MODES:
             raise _reject("mode", "模式只有 direct(直說)/ slow(慢讀)/ imaginative(想像)。")
+        if len(message) > MAX_CHAT_CHARS:   # 本地擋:den 的 422 會把整段原文回吐給宿主
+            raise _reject("too-long", f"這段話超過 {MAX_CHAT_CHARS} 字,請分段說。")
+        if slug in in_flight:
+            raise _reject("busy", "上一輪還在跑,等它回來再說" + _TALK_FAILED)
+        in_flight.add(slug)
+        try:
+            return await _talk_once(slug, message, mode, client)
+        finally:
+            in_flight.discard(slug)
+
+    async def _talk_once(slug: str, message: str, mode: str | None, client) -> str:
         body = {"session_id": sessions.get(slug), "message": message, "anchors": [],
                 "mode": mode, "home": "mcp", "client": client}
         try:
@@ -284,10 +296,10 @@ def build_server(den: DenClient) -> MCPServer:
                 data = await anyio.to_thread.run_sync(lambda: _turn(slug, body))
         except DenRejected as e:
             if e.status == 404:
-                raise ToolError(f"找不到這篇:{slug}。") from None
+                raise ToolError(f"找不到這篇:{slug}" + _TALK_FAILED) from None
             if e.status == 409:
-                raise ToolError("上一輪還在跑,等它回來再說。") from None
-            raise ToolError(f"den 回應 {e.status}:{e.detail}") from None
+                raise ToolError("上一輪還在跑,等它回來再說" + _TALK_FAILED) from None
+            raise ToolError(f"den 回應 {e.status}" + _TALK_FAILED) from None
         except DenUnavailable as e:
             raise ToolError(f"連不上 hyenovel den:{e}{_TALK_FAILED}") from None
         sessions[slug] = data["session_id"]

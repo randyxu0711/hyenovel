@@ -630,3 +630,36 @@ def test_server_instructions_lead_with_verbatim_relay(den):
     text = anyio.run(go)
     assert text.startswith("talk_to_companion 回傳的是") and "一字不改" in text
     assert len(text) <= 4096
+
+
+def test_talk_first_turn_double_call_runs_one_worker(cden):
+    """首輪還沒有局 id,den 的鎖擋不到:shim 自己擋,免得兩個工人、付兩次錢。"""
+    cden.chat.hang = True
+
+    async def go():
+        async with Client(den_mcp.build_server(cden.client()),
+                          client_info=Implementation(name="claude-code", version="2.1.314")) as c:
+            out = {}
+            async with anyio.create_task_group() as tg:
+                async def first():
+                    out["a"] = await c.call_tool("talk_to_companion", {"work": "mini"})
+                tg.start_soon(first)
+                await anyio.to_thread.run_sync(cden.chat.started.wait, 5)
+                out["b"] = await c.call_tool("talk_to_companion", {"work": "mini"})
+                cden.chat.release.set()
+            return out
+    out = anyio.run(go)
+    assert out["b"].is_error and "上一輪還在跑" in _text(out["b"]) and "照實告訴作者" in _text(out["b"])
+    assert not out["a"].is_error and len(cden.chat.calls) == 1
+
+
+def test_talk_rejections_tell_host_to_report(cden):
+    r = _call(cden.client(), "talk_to_companion", {"work": "nope"})
+    assert "照實告訴作者" in _text(r)
+
+
+def test_talk_oversize_message_rejected_locally(cden):
+    from den.config import MAX_CHAT_CHARS
+    r = _call(cden.client(), "talk_to_companion", {"work": "mini", "message": "字" * (MAX_CHAT_CHARS + 1)})
+    assert r.is_error and "字字字字" not in _text(r)
+    assert not any(p.startswith("/discuss") for _, p in cden.paths)
