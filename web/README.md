@@ -19,9 +19,13 @@ den 沒開時 web 顯示 503 提示。
 
 ## 切換步驟(舊 server → den;手動做一次)
 
-1. 停掉舊 server(及舊 web dev server);切換後不要再用 `uvicorn server.app`(它寫的 `stories/` 網頁看不到)。
-2. repo 根 `python -m marrow.importer`,確認輸出的 skipped 為空。
-3. `python -m den`。
-4. `cd web && npm run dev`。
-5. 驗收:列表張數 = DB 故事數(扣隱形);開 s08 見骨架圖、原文、結論、逐字;新上傳一篇走完誕生動畫;
+舊 `server/` 已於切片 5 刪除。從舊版升上來的話:
+
+1. 停掉舊 server(及舊 web dev server)與正在跑的 den(它可能還在用 `server/.venv` 的 python)。
+2. 建根目錄 venv(`uv venv && uv pip install -r pyproject.toml`),MCP 改註冊
+   `.venv/bin/python -m den.mcp`;確認沒問題後再刪 `server/.venv`。
+3. repo 根 `python -m marrow.importer`,確認輸出的 skipped 為空。
+4. `python -m den`。
+5. `cd web && npm run dev`。
+6. 驗收:列表張數 = DB 故事數(扣隱形);開 s08 見骨架圖、原文、結論、逐字;新上傳一篇走完誕生動畫;
    討論輸入回搬家訊息;關掉 den 後 web 顯示 503 提示。

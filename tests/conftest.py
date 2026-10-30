@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-import index
 import render
 import viz
 
@@ -35,8 +34,6 @@ def story(tmp_path, monkeypatch):
 
     monkeypatch.setattr(viz, "ROOT", root)
     monkeypatch.setattr(render, "ROOT", root)
-    monkeypatch.setattr(index, "ROOT", root)
-    monkeypatch.setattr(index, "STORIES", root / "stories")
     return "mini", base
 
 

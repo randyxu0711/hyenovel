@@ -23,16 +23,15 @@ jobs:
       - name: 建 venv(Python 3.14,對齊本機)
         run: uv venv --python 3.14
 
-      # requirements.txt 含 claude-agent-sdk —— CI 只 import 它(拿 RateLimitEvent 等型別),
-      # 不會連線、不需要 ~/.claude/.credentials.json、不燒訂閱。
+      # 測試不 spawn 真 claude、不需要 ~/.claude/.credentials.json、不燒訂閱。
       - name: 裝依賴
-        run: uv pip install -r server/requirements.txt -r requirements-dev.txt
+        run: uv pip install -r pyproject.toml -r requirements-dev.txt
 
-      # 確定性層(viz/render/index/atomicio/ingest)門檻 100%,少一行就紅。
-      # server/ 的其餘模組不設數字門檻:它們混了 SDK 接線,100% 只能靠 mock 演出來,
-      # 那種測試在 SDK 改版時會集體假綠。它們靠「行為契約逐條有測」守。
+      # 確定性層(viz/render/export/atomicio/marrow)門檻 100%,少一行就紅。
+      # den/ 不設數字門檻:它混了 CLI 子行程與 HTTP 接線,100% 只能靠 mock 演出來,
+      # 那種測試在外部行為改版時會集體假綠。它靠「行為契約逐條有測」守。
       - name: 測試 + 確定性層 100% 覆蓋門檻
-        run: uv run pytest -q --cov --cov-report=term-missing --cov-fail-under=100
+        run: uv run --no-project pytest -q --cov --cov-report=term-missing --cov-fail-under=100
 
   web:
     name: 前端

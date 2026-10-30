@@ -1,6 +1,6 @@
 """原文解碼 / 正規化(從 server/ingest.py 搬來,行為不變)。
 
-放在確定性層是因為 den(MCP 路徑)與舊 server 都要用同一份:編碼陷阱的教訓只該有一處。
+放在確定性層:編碼陷阱的教訓只該有一處。
 """
 import io
 import logging
