@@ -147,13 +147,20 @@ def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
 
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
                   origin: str, anchors: list[str], analysis_fp: str | None,
-                  usage: dict | None = None) -> bool:
+                  usage: dict | None = None, mode: str | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
-         None if usage is None else canonical_json(usage)))
+         None if usage is None else canonical_json(usage), mode))
     return cur.rowcount == 1
+
+
+def last_mode(conn, discussion_id: int) -> str | None:
+    """該局最後一筆有記模式的 assistant 發言用的模式(舊局沒有 → None)。"""
+    r = conn.execute("SELECT mode FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
+                     "AND mode IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
+    return r[0] if r else None
 
 
 def utterances(conn, discussion_id: int) -> list[dict]:
@@ -353,6 +360,13 @@ def list_jobs(conn, limit: int) -> list[dict]:
     for r in rows:
         r["is_latest_version"] = bool(r["is_latest_version"])
     return rows
+
+
+def latest_job(conn, story_id: int, source_version_id: int) -> dict | None:
+    """同篇同版 id 最大的 job(companion 素材的進度用)。"""
+    return _row(conn.execute(
+        "SELECT * FROM job WHERE story_id = ? AND source_version_id = ? ORDER BY id DESC LIMIT 1",
+        (story_id, source_version_id)).fetchone())
 
 
 def has_newer_done_job(conn, story_id: int, source_version_id: int, job_id: int) -> bool:

@@ -1,4 +1,4 @@
-"""stdio MCP 轉接器:五個 tool,薄薄一層翻成 den REST。入口 `python -m den.mcp`。
+"""stdio MCP 轉接器:六個 tool,薄薄一層翻成 den REST。入口 `python -m den.mcp`。
 
 - stdout 只屬於 MCP 協定:本模組不 print,logging 只准 stderr(main 明確設)。
 - den.request 是阻塞的(拉起 den 可能等十幾秒)→ 一律丟 anyio.to_thread。
@@ -14,8 +14,9 @@ import anyio
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from den.client import DenClient, DenUnavailable
-from den.config import MAX_SOURCE_BYTES, valid_slug
+from den.client import DenClient, DenRejected, DenUnavailable
+from den.companion import MODES
+from den.config import MAX_CHAT_CHARS, MAX_SOURCE_BYTES, valid_slug
 from den.discuss import render_discussion
 from marrow import db
 from marrow.ingest import decode
@@ -43,6 +44,19 @@ DESC_STATUS = ("查詢 start_critique 回的 job 進度(排隊/分析/評論/完
                "不帶 job_id 會列出最近的 job,新對話找不到編號時用。")
 DESC_CANCEL = "取消一個排隊中或執行中的評論 job。取消後可用 resume_critique 續跑。"
 DESC_RESUME = "續跑一個已暫停(例:額度用完)、失敗或已取消的評論 job;已完成的步驟不重跑。"
+# ≤4,096 字元(Claude Code 會靜默截斷);最重要的放第一句
+INSTRUCTIONS = (
+    "talk_to_companion 回傳的是陪讀角色 companion 對作者說的話:請一字不改地轉給作者,"
+    "不要改寫、摘要、補充或加上你自己的評論。作者想聊自己寫的作品、想聽讀者感受時用 talk_to_companion。"
+    "送新稿分析用 start_critique、查進度用 critique_status。")
+DESC_TALK = (
+    "和陪讀的 companion 說話,回傳它的回覆——請原文轉給作者,不要改寫、摘要或補充。"
+    "作者對 companion 說的任何話(包括「好了沒」)都用這個。message 留空 = 讓 companion 先開口。"
+    "work = 作品 slug(省略則沿用這段對話剛聊的那篇)。"
+    "mode = direct(直說)/ slow(慢讀,預設)/ imaginative(想像);"
+    "作者說「講重點就好」時用 direct,「慢慢講」用 slow,「陪我想像」用 imaginative,沒提就不要給。")
+_TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
+_NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_OPEN = (
     "取得一篇已分析完成的故事的討論素材:編輯人格指示、原文全文、精簡版分析與回饋、已留下的結論。"
     "拿到後由你自己扮演出版編輯與使用者來回討論,全程唯讀:不寫任何檔案、不改分析。")
@@ -141,7 +155,7 @@ def _list_text(jobs: list[dict]) -> str:
 
 
 def build_server(den: DenClient) -> MCPServer:
-    server = MCPServer("hyenovel")
+    server = MCPServer("hyenovel", instructions=INSTRUCTIONS)
 
     async def call(method: str, path: str, json: dict | None = None, *,
                    on_status: dict[int, str] | None = None) -> dict:
@@ -236,6 +250,66 @@ def build_server(den: DenClient) -> MCPServer:
     @server.tool(description=DESC_OPEN)
     async def open_discussion(slug: str) -> str:
         return await guarded(_open(slug))
+
+    sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug → 對話 id
+    current: list[str] = []         # 最近一次聊的那篇
+    in_flight: set[str] = set()     # 正在跑一輪的篇:首輪還沒局 id、den 的鎖擋不到,由這裡擋(免得付兩次錢)
+
+    def _turn(slug: str, body: dict) -> dict:
+        """收齊一輪 SSE,回 message 事件的 data;error 事件 → ToolError。"""
+        for ev in den.stream("POST", f"/discuss/{slug}", body):
+            if ev["event"] == "message":
+                return ev["data"]
+            if ev["event"] == "error":
+                raise ToolError(ev["data"]["message"] + _TALK_FAILED)
+        raise ToolError("companion 沒有回應" + _TALK_FAILED)
+
+    async def _talk(message: str, work: str | None, mode: str | None, client) -> str:
+        slug = work or (current[0] if current else None)
+        if slug is None:
+            raise _reject("no-work", "還不知道要聊哪一篇:請給我它的 slug(例:d01)。")
+        if not valid_slug(slug):
+            raise _reject("slug", f"slug 格式不對:{slug[:64]!r}(只能英數、底線、連字號,例:d01)。")
+        if mode is not None and mode not in MODES:
+            raise _reject("mode", "模式只有 direct(直說)/ slow(慢讀)/ imaginative(想像)。")
+        if len(message) > MAX_CHAT_CHARS:   # 本地擋:den 的 422 會把整段原文回吐給宿主
+            raise _reject("too-long", f"這段話超過 {MAX_CHAT_CHARS} 字,請分段說。")
+        if slug in in_flight:
+            raise _reject("busy", "上一輪還在跑,等它回來再說" + _TALK_FAILED)
+        in_flight.add(slug)
+        try:
+            return await _talk_once(slug, message, mode, client)
+        finally:
+            in_flight.discard(slug)
+
+    async def _talk_once(slug: str, message: str, mode: str | None, client) -> str:
+        body = {"session_id": sessions.get(slug), "message": message, "anchors": [],
+                "mode": mode, "home": "mcp", "client": client}
+        try:
+            try:
+                data = await anyio.to_thread.run_sync(lambda: _turn(slug, body))
+            except DenRejected as e:
+                if not (e.status == 404 and e.detail == _NO_SESSION and body["session_id"]):
+                    raise
+                sessions.pop(slug, None)      # 局不見了(DB 重建):開新局,拒絕發生在花錢前
+                body["session_id"] = None
+                data = await anyio.to_thread.run_sync(lambda: _turn(slug, body))
+        except DenRejected as e:
+            if e.status == 404:
+                raise ToolError(f"找不到這篇:{slug}" + _TALK_FAILED) from None
+            if e.status == 409:
+                raise ToolError("上一輪還在跑,等它回來再說" + _TALK_FAILED) from None
+            raise ToolError(f"den 回應 {e.status}" + _TALK_FAILED) from None
+        except DenUnavailable as e:
+            raise ToolError(f"連不上 hyenovel den:{e}{_TALK_FAILED}") from None
+        sessions[slug] = data["session_id"]
+        current[:] = [slug]
+        return data["text"]
+
+    @server.tool(description=DESC_TALK)
+    async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None,
+                                mode: str | None = None) -> str:
+        return await guarded(_talk(message, work, mode, client_of(ctx)))
 
     return server
 

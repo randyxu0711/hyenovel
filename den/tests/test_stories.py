@@ -129,3 +129,38 @@ def test_discussion_context_feedback_when_present(conn):
                                    {"items": []}, {}, 2.0)
         repo.set_current(conn, sid, "feedback", aid)
     assert stories.discussion_context(conn, "mini")["feedback"] == {"items": []}
+
+
+# ── companion_context ──
+
+def test_companion_context_keys_have_no_judgment_layer(conn):
+    out = stories.companion_context(conn, "mini")
+    assert set(out) == {"slug", "title", "source", "analysis", "progress"}
+    assert isinstance(out["analysis"], dict) and out["progress"] == "none"
+
+
+def test_companion_context_unanalyzed_story_has_source_only(conn):
+    _ingest(conn, "還沒分析。")
+    out = stories.companion_context(conn, "d01")
+    assert out["analysis"] is None and out["source"] == "還沒分析。\n" and out["progress"] == "none"
+
+
+def test_companion_context_hides_stale_analysis(conn):
+    _ingest(conn, "改過的新稿。", slug="mini")
+    out = stories.companion_context(conn, "mini")
+    assert out["analysis"] is None and out["source"] == "改過的新稿。\n"
+
+
+def test_companion_context_progress_reports_latest_job_state(conn):
+    _ingest(conn, "還沒分析。")
+    st = repo.story_by_slug(conn, "d01")
+    v = repo.latest_source_version(conn, st["id"])["id"]
+    with conn:
+        j = repo.create_job(conn, "critique", st["id"], v, {}, 6.0)
+        repo.set_job_state(conn, j, "running", 7.0)
+    assert stories.companion_context(conn, "d01")["progress"] == "running"
+
+
+def test_companion_context_unknown_slug(conn):
+    with pytest.raises(LookupError):
+        stories.companion_context(conn, "nope")

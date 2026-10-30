@@ -291,3 +291,29 @@ def test_discussion_by_external_scoped_to_story(conn):
     assert repo.discussion_by_external(conn, s1, "x")["id"] == d1
     assert repo.discussion_by_external(conn, s1, "x")["story_id"] == s1
     assert repo.discussion_by_external(conn, s1, "nope") is None
+
+
+def test_latest_job_picks_highest_id_of_that_version(conn):
+    s, v = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 1)
+    assert repo.latest_job(conn, s, v) is None
+    repo.create_job(conn, "critique", s, v, {}, 0)
+    a = repo.create_job(conn, "critique", s, v2, {}, 1)
+    b = repo.create_job(conn, "critique", s, v2, {}, 2)
+    repo.set_job_state(conn, b, "done", 3)
+    assert repo.latest_job(conn, s, v2)["id"] == b != a
+
+
+def test_last_mode_returns_latest_assistant_mode(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "user", "a", 1.0, "den", [], None)
+    repo.add_utterance(conn, d, 1, "assistant", "b", 1.0, "den", [], None, mode="slow")
+    repo.add_utterance(conn, d, 2, "assistant", "c", 2.0, "den", [], None, mode="direct")
+    assert repo.last_mode(conn, d) == "direct"
+    assert repo.utterances(conn, d)[0]["mode"] is None
+
+
+def test_last_mode_none_for_legacy_rows(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
+    assert repo.last_mode(conn, d) is None

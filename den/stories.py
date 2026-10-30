@@ -54,3 +54,22 @@ def discussion_context(conn, slug: str) -> dict:
                          "stale": conclusion_is_stale(c, analysis["id"])}
                         for c in repo.conclusions(conn, st["id"]) if c["invalidated_at"] is None],
     }
+
+
+def companion_context(conn, slug: str) -> dict:
+    """companion 素材:最新版原文、只在對應最新版時才給的分析、最新版的進度。
+
+    刻意不帶 feedback / 結論(spec §7.4:判斷層的產物進 companion 會被當成自己的閱讀照念)。
+    分析對應舊版時不給:引文會對不上新稿。
+    """
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise LookupError(slug)
+    latest = repo.latest_source_version(conn, st["id"])
+    analysis = repo.current_artifact(conn, st["id"], "analysis")
+    job = repo.latest_job(conn, st["id"], latest["id"])
+    return {
+        "slug": slug, "title": st["title"], "source": latest["text"],
+        "analysis": analysis["body"] if analysis and analysis["source_version_id"] == latest["id"] else None,
+        "progress": job["state"] if job else "none",
+    }
