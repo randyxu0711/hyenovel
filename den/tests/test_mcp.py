@@ -420,14 +420,16 @@ def test_read_work_parts(den):
     assert "第 1 版原文" in src
     r = _call(den.client(), "read_work", {"work": "mini", "part": "feedback"})
     assert r.is_error and "沒有舊版客觀回饋" in _text(r)
+    r = _call(den.client(), "read_work", {"work": "mini", "part": "notes"})
+    assert r.is_error and "還沒有備課筆記" in _text(r)
     _add_story(den, "d01", "海", "x")
     r = _call(den.client(), "read_work", {"work": "d01", "part": "analysis"})
     assert r.is_error and _text(r).endswith("〈海〉還沒有分析。")
 
 
 def test_read_work_bad_part_local_reject(den):
-    r = _call(den.client(), "read_work", {"work": "mini", "part": "notes"})
-    assert r.is_error and "source" in _text(r)
+    r = _call(den.client(), "read_work", {"work": "mini", "part": "bogus"})
+    assert r.is_error and "notes(備課筆記" in _text(r)
     assert den.paths == []
 
 

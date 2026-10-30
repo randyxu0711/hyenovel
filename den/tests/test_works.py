@@ -100,7 +100,12 @@ ANA = {"title": "燈", "slug": "a", "nodes": [{"id": "t1", "type": "theme", "lab
 FB = {"slug": "a", "read": "讀到的", "key_points": [], "one_line": "一句話"}
 
 
-def _two_versions(c, analysed=1, feedback=False):
+NOTES = {"slug": "mini", "read": "一個人回到空屋。", "one_line": "燈等的是誰。", "points": [
+    {"kind": "confused", "title": "燈為誰亮", "quotes": ["像在等誰"], "refs": ["k1"],
+     "body": "以為有人要回來。", "question": "燈在等的是誰?"}]}
+
+
+def _two_versions(c, analysed=1, feedback=False, notes=False):
     sid = repo.ensure_story(c, "a", "燈", 0)
     v1, _ = repo.add_source_version(c, sid, "第一版原文", 1)
     v2, _ = repo.add_source_version(c, sid, "第二版原文", 2)
@@ -110,6 +115,9 @@ def _two_versions(c, analysed=1, feedback=False):
     if feedback:
         fid, _ = repo.add_artifact(c, sid, vid, "feedback", 1, FB, {}, 3)
         repo.set_current(c, sid, "feedback", fid)
+    if notes:
+        nid, _ = repo.add_artifact(c, sid, vid, "notes", 1, NOTES, {}, 3)
+        repo.set_current(c, sid, "notes", nid)
     return sid
 
 
@@ -143,6 +151,18 @@ def test_read_feedback_older_version_noted(c):
     assert "這是第 1 版的回饋" in works.read_part(c, "a", "feedback")
 
 
+def test_read_notes(c):
+    _two_versions(c, analysed=2, notes=True)
+    out = works.read_part(c, "a", "notes")
+    assert out.startswith("# 備課筆記 —〈燈〉") and "[困惑] 燈為誰亮" in out and "---" not in out.splitlines()[0]
+
+
+def test_read_notes_marks_older_version(c):
+    _two_versions(c, analysed=1, notes=True)
+    assert works.read_part(c, "a", "notes").splitlines()[0] == \
+        "(這是第 1 版的筆記;最新是第 2 版,新版還沒有筆記。)"
+
+
 def test_read_missing_parts(c):
     sid = repo.ensure_story(c, "b", None, 0)
     repo.add_source_version(c, sid, "x", 1)
@@ -153,6 +173,9 @@ def test_read_missing_parts(c):
     with pytest.raises(works.Missing) as e:
         works.read_part(c, "a", "feedback")
     assert e.value.reason == "no-feedback"
+    with pytest.raises(works.Missing) as e:
+        works.read_part(c, "a", "notes")
+    assert e.value.reason == "no-notes"
     with pytest.raises(LookupError):
         works.read_part(c, "nope", "source")
 

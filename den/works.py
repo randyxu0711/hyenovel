@@ -75,12 +75,12 @@ def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
     return hits[:limit]
 
 
-PARTS = ("source", "analysis", "feedback")
+PARTS = ("source", "analysis", "notes", "feedback")
 _LEGACY = "(舊版客觀回饋:舊的編輯評論流程產生,之後會由備課筆記取代。)"
 
 
 class Missing(Exception):
-    """這篇沒有這個 part。reason:not-analyzed / no-feedback。"""
+    """這篇沒有這個 part。reason:not-analyzed / no-notes / no-feedback。"""
 
     def __init__(self, reason: str):
         super().__init__(reason)
@@ -102,6 +102,12 @@ def read_part(conn, slug: str, part: str) -> str:
             raise Missing("not-analyzed")
         art, what, body = ana, "分析", render.render_analysis(ana["body"], front_matter=False)
         head = []
+    elif part == "notes":
+        art = repo.current_artifact(conn, st["id"], "notes")
+        if art is None:
+            raise Missing("no-notes")
+        what, body = "筆記", render.render_notes(art["body"], title, front_matter=False)
+        head = []
     else:
         fb = repo.current_artifact(conn, st["id"], "feedback")
         if fb is None:
@@ -110,6 +116,6 @@ def read_part(conn, slug: str, part: str) -> str:
         head = [_LEGACY]
     if art["source_version_id"] != latest["id"]:
         n = repo.source_version(conn, art["source_version_id"])["n"]
-        tail = ",新版還沒有分析結果" if part == "analysis" else ""
+        tail = {"analysis": ",新版還沒有分析結果", "notes": ",新版還沒有筆記"}.get(part, "")
         head.append(f"(這是第 {n} 版的{what};最新是第 {latest['n']} 版{tail}。)")
     return "\n".join(head + ([""] if head else []) + [body])

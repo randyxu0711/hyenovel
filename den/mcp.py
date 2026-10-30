@@ -48,14 +48,16 @@ _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
              "query 給標題或開頭裡的關鍵詞(例「海」),不給就列最近的。")
-DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ feedback(舊版客觀回饋)。"
+DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ "
+             "notes(備課筆記:另一位冷讀者依輕重排好的問題清單,作者說「直接給我問題」「冷一點的版本」時用)/ "
+             "feedback(舊版客觀回饋)。給 notes 時要跟作者說明這是另一位冷讀者的筆記,不是 companion 的感受。"
              "只在作者自己要看時用,不要拿來代替 companion 回答。work 同 talk_to_companion。")
 DESC_SUBMIT = (
     "交一篇稿子給 hyenovel:只收本機 .md / .txt 檔案路徑(不收貼上的全文、不收 pdf/docx——請作者先存成純文字檔)。"
     "改稿重交請帶 work(作品標題或關鍵詞)。不給 path = 續跑這篇停住的分析(不會重跑已完成的)。"
     "分析在背景跑幾分鐘,回報收到的檔名、修改時間、字數,請作者確認是對的檔。會用作者同一份 Claude 訂閱額度。")
 DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
-_PARTS = ("source", "analysis", "feedback")
+_PARTS = ("source", "analysis", "notes", "feedback")
 _WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
@@ -196,11 +198,12 @@ def build_server(den: DenClient) -> MCPServer:
 
     async def _read(part: str, work: str | None) -> str:
         if part not in _PARTS:
-            raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ feedback(舊版客觀回饋)。")
+            raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ notes(備課筆記)/ feedback(舊版客觀回饋)。")
         w = await resolve_work(work)
         name = f"〈{w['title']}〉"
         out = await call("GET", f"/works/{w['slug']}/{part}", on_status={404: f"找不到{name}。"},
                          on_detail={"not-analyzed": f"{name}還沒有分析。",
+                                    "no-notes": f"{name}還沒有備課筆記。",
                                     "no-feedback": f"{name}沒有舊版客觀回饋。"})
         return out["text"]
 

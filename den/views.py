@@ -30,7 +30,8 @@ def stories(conn) -> list[dict]:
             "synopsis": body.get("synopsis") or "",
             "nodes": len(body.get("nodes", [])),
             "edges": len(body.get("edges", [])),
-            "current": {"analysis": _current(ana), "feedback": _current(arts.get("feedback"))},
+            "current": {"analysis": _current(ana), "feedback": _current(arts.get("feedback")),
+                        "notes": _current(arts.get("notes"))},
             "latest_job": None if job is None else {
                 "id": job["id"], "state": job["state"], "step": job["step"],
                 "error_class": job["error_class"], "updated_at": job["updated_at"]},

@@ -125,6 +125,28 @@ def build_viz_data(slug, analysis, source, diag, feedback=None):
     }
 
 
+def notes_as_feedback(notes):
+    """備課筆記 → viz / web 既有的 feedback 形狀(版面不動):打動歸 strengths、其餘照順序歸 key_points。"""
+    def pt(p):
+        return {"title": p["title"], "quotes": p["quotes"], "refs": p["refs"], "body": p["body"],
+                "experiment": None, "question": p["question"]}
+    pts = notes["points"]
+    return {"read": notes["read"], "one_line": notes["one_line"], "minor": [],
+            "strengths": [pt(p) for p in pts if p["kind"] == "moved"],
+            "key_points": [pt(p) for p in pts if p["kind"] != "moved"]}
+
+
+def pick_judgment(analysis_art, notes_art, feedback_art):
+    """與分析同版的判斷層(feedback 形狀):同版筆記優先,其次同版舊 feedback,否則 None。
+    不同版不配:refs 綁的 node id 與引文對不上這份分析。"""
+    sv = analysis_art["source_version_id"]
+    if notes_art is not None and notes_art["source_version_id"] == sv:
+        return notes_as_feedback(notes_art["body"])
+    if feedback_art is not None and feedback_art["source_version_id"] == sv:
+        return feedback_art["body"]
+    return None
+
+
 def viz_payload(slug, analysis, feedback, source):
     """DB artifact body → 前端資料契約。深拷貝後再定位,不動呼叫端的 body;
     不回錯誤清單(進 DB 的 artifact 已過閘門)。"""
