@@ -133,7 +133,7 @@ def test_v2_db_upgrades_to_prompt_sha_with_backup(tmp_path):     # Task 9e
     conn.execute("INSERT INTO attempt (job_id, step, n, runner, created_at) "
                  "VALUES (1,'analyst',0,'cli',0)")
     conn.commit()
-    assert db.migrate(conn, p) == 5
+    assert db.migrate(conn, p) == 6
     assert "prompt_sha" in _cols(conn, "attempt")
     assert conn.execute("SELECT prompt_sha FROM attempt").fetchone()[0] is None
     assert (tmp_path / "h.db.bak-v2").exists()
