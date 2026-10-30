@@ -4,6 +4,7 @@
 **不是** jsonschema 這個 lib 對不對 —— 那不是我們的事。
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -344,3 +345,12 @@ def test_build_html_escapes_script_breakout():
     esc = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     assert esc in out                          # 注進去的是轉義版
     assert json.loads(esc) == data             # <\/ ≡ </:parse 回來一模一樣
+
+
+# ── 匯出頁給作者的提示不能指向已刪的指令(companion 第 2 批刪了舊 skill / tool) ──
+
+@pytest.mark.parametrize("name", ["template.html", "viz.js"])
+def test_viz_hints_do_not_name_removed_commands(name):
+    src = (Path(__file__).resolve().parent.parent / "viz" / name).read_text(encoding="utf-8")
+    for gone in ("/story-critique", "/story-discuss", "start_critique", "open_discussion"):
+        assert gone not in src

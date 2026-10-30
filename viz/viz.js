@@ -148,7 +148,7 @@ function pointHTML(p) {
   return h + '</div>';
 }
 function renderDockIdle() {
-  if (!FB) { dock.innerHTML = '<p class="hint">尚無回饋。跑 /story-critique 產生 feedback,或點圖上節點看分析。</p>'; return; }
+  if (!FB) { dock.innerHTML = '<p class="hint">尚無回饋。點圖上節點看分析,或在 agent 裡用 /hyenovel:companion 跟 companion 聊這篇。</p>'; return; }
   let h = `<div class="read">${esc(FB.read)}</div>`;
   if (FB.key_points && FB.key_points.length) {
     h += '<h3>編輯最想聊的事</h3>';
@@ -179,7 +179,7 @@ function renderDockNode(id) {
   if (pis.length) {
     h += '<h3>編輯對這點的話</h3>';
     pis.forEach(i => h += pointHTML(POINTS[i]));
-    h += '<p class="hint">想聊?在終端 <b>/story-discuss ' + esc(D.slug) + '</b> 接這題(網頁版即時討論為 Phase 2)。</p>';
+    h += '<p class="hint">想聊?在 agent 裡用 <b>/hyenovel:companion</b>,跟 companion 說要聊〈' + esc(D.title) + '〉這一點。</p>';
   } else if (FB) {
     h += '<p class="hint">編輯沒特別點這顆。看「編輯最想聊的事」?<span class="q" data-idle="1">回總覽</span></p>';
   }
