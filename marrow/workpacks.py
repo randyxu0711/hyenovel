@@ -18,7 +18,7 @@ _PROMPTS = Path(__file__).resolve().parent / "prompts"
 @dataclass(frozen=True)
 class WorkPack:
     name: str
-    kind: Literal["analysis", "feedback"]
+    kind: Literal["analysis", "feedback", "notes"]
     system_prompt: str
     schema: dict
 
@@ -44,15 +44,18 @@ def _system_prompt(name: str, sch: dict) -> str:
 WORKPACKS: dict[str, WorkPack] = {
     name: WorkPack(name, kind, _system_prompt(name, schema.load_schema(kind)),
                    schema.load_schema(kind))
-    for name, kind in (("analyst", "analysis"), ("criticizer", "feedback"))
+    for name, kind in (("analyst", "analysis"), ("criticizer", "feedback"), ("reviewer", "notes"))
 }
+
+
+_NEEDS_ANALYSIS = ("criticizer", "reviewer")
 
 
 def first_input(name: str, slug: str, source: str, analysis: dict | None) -> str:
     out = f"slug: {slug}\n<source>\n{source}\n</source>"
-    if name == "criticizer":
+    if name in _NEEDS_ANALYSIS:
         if analysis is None:
-            raise ValueError("criticizer 需要 analysis")
+            raise ValueError(f"{name} 需要 analysis")
         out += f"\n<analysis>\n{canonical_json(analysis)}\n</analysis>"
     return out
 
@@ -76,4 +79,5 @@ def repair_input(name: str, slug: str, source: str, analysis: dict | None,
 def gate(name: str, body: dict, source: str, analysis: dict | None) -> list[str]:
     if name == "analyst":
         return _gate.gate_analysis(body, source)
-    return _gate.gate_feedback(body, analysis, source)
+    fn = _gate.gate_notes if name == "reviewer" else _gate.gate_feedback
+    return fn(body, analysis, source)

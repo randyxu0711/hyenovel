@@ -27,19 +27,19 @@ def feedback(feedback_json):
 
 
 def test_registry_shape():
-    assert set(workpacks.WORKPACKS) == {"analyst", "criticizer"}
+    assert set(workpacks.WORKPACKS) == {"analyst", "criticizer", "reviewer"}
     assert workpacks.WORKPACKS["analyst"].kind == "analysis"
     assert workpacks.WORKPACKS["criticizer"].kind == "feedback"
 
 
-@pytest.mark.parametrize("name", ["analyst", "criticizer"])
+@pytest.mark.parametrize("name", ["analyst", "criticizer", "reviewer"])
 def test_registry_schemas_are_strict(name):
     wp = workpacks.WORKPACKS[name]
     assert wp.schema == schema.load_schema(wp.kind)
     assert schema.strict_violations(wp.schema) == []
 
 
-@pytest.mark.parametrize("name", ["analyst", "criticizer"])
+@pytest.mark.parametrize("name", ["analyst", "criticizer", "reviewer"])
 def test_prompts_are_toolless(name):
     # 只查人格段;附上的 schema 的 description 會提到 stories/<slug>/(那是說明,不是工具指示)
     p = workpacks.WORKPACKS[name].system_prompt.split("\n## 輸出格式\n")[0]
@@ -54,7 +54,7 @@ def test_prompts_keep_persona():
     assert "輸出前自檢" in c
 
 
-@pytest.mark.parametrize("name,key", [("analyst", "edges"), ("criticizer", "one_line")])
+@pytest.mark.parametrize("name,key", [("analyst", "edges"), ("criticizer", "one_line"), ("reviewer", "points")])
 def test_system_prompt_appends_output_format(name, key):
     wp = workpacks.WORKPACKS[name]
     raw = (Path(workpacks.__file__).parent / "prompts" / f"{name}.md").read_text(encoding="utf-8")
@@ -69,7 +69,7 @@ def test_system_prompt_appends_output_format(name, key):
                                                   if k != "$schema"}))
 
 
-@pytest.mark.parametrize("name", ["analyst", "criticizer"])
+@pytest.mark.parametrize("name", ["analyst", "criticizer", "reviewer"])
 def test_prompt_files_have_no_code_fence(name):
     # 輸出格式要求「不要程式碼框」,示例自己就不能帶框
     raw = (Path(workpacks.__file__).parent / "prompts" / f"{name}.md").read_text(encoding="utf-8")
@@ -125,3 +125,24 @@ def test_gate_dispatch(source, analysis, feedback):
     badf = copy.deepcopy(feedback)
     badf["key_points"][0]["quotes"] = ["原文裡不存在的句子"]
     assert workpacks.gate("criticizer", badf, source, analysis) != []
+
+
+def test_reviewer_registered():
+    wp = workpacks.WORKPACKS["reviewer"]
+    assert wp.kind == "notes"
+    tail = wp.system_prompt.split("\n## 輸出格式\n")[1]
+    assert '"moved"' in tail and '"confused"' in tail
+
+
+def test_reviewer_first_input_needs_analysis(source, analysis):
+    with pytest.raises(ValueError):
+        workpacks.first_input("reviewer", "mini", source, None)
+    assert workpacks.first_input("reviewer", "mini", source, analysis) == \
+        workpacks.first_input("criticizer", "mini", source, analysis)
+
+
+def test_gate_dispatch_reviewer(source, analysis):
+    notes = {"slug": "mini", "read": "r", "one_line": "o", "points": [
+        {"kind": "opinion", "title": "t", "quotes": ["像在等誰"], "refs": ["t99"], "body": "b",
+         "question": None}]}
+    assert workpacks.gate("reviewer", notes, source, analysis) == ["筆記「t」: refs t99 不是存在的 node id"]

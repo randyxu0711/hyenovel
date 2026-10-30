@@ -23,7 +23,7 @@ def _mini():
     return json.loads((FIXTURES / "mini/analysis.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("kind", ["analysis", "feedback"])
+@pytest.mark.parametrize("kind", ["analysis", "feedback", "notes"])
 def test_v1_schemas_are_strict(kind):
     assert schema.strict_violations(schema.load_schema(kind)) == []
 

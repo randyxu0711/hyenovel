@@ -70,20 +70,35 @@ def gate_analysis(body: dict, source: str) -> list[str]:
     return errs
 
 
+def _check_points(points, ids, source, label_prefix) -> list[str]:
+    """每點的引文要在原文找得到、refs 要是存在的 node id。"""
+    errs = []
+    for p in _dicts(points):
+        label = f"{label_prefix}「{str(p.get('title'))[:14]}」"
+        quotes = p.get("quotes")
+        for q in quotes if isinstance(quotes, list) else []:
+            if isinstance(q, str) and not _found(q, source):
+                errs.append(f"{label}: 引文在原文找不到:「{q[:50]}」")
+        refs = p.get("refs")
+        for r in refs if isinstance(refs, list) else []:
+            if r not in ids:
+                errs.append(f"{label}: refs {r} 不是存在的 node id")
+    return errs
+
+
 def gate_feedback(body: dict, analysis: dict, source: str) -> list[str]:
     errs = [f"schema: {m}" for m in schema.validate_v1("feedback", body)]
     if not isinstance(body, dict):
         return errs
     ids = _node_ids(analysis) if isinstance(analysis, dict) else []
     for key in ("strengths", "key_points"):
-        for p in _dicts(body.get(key)):
-            label = f"feedback「{str(p.get('title'))[:14]}」"
-            quotes = p.get("quotes")
-            for q in quotes if isinstance(quotes, list) else []:
-                if isinstance(q, str) and not _found(q, source):
-                    errs.append(f"{label}: 引文在原文找不到:「{q[:50]}」")
-            refs = p.get("refs")
-            for r in refs if isinstance(refs, list) else []:
-                if r not in ids:
-                    errs.append(f"{label}: refs {r} 不是存在的 node id")
+        errs += _check_points(body.get(key), ids, source, "feedback")
     return errs
+
+
+def gate_notes(body: dict, analysis: dict, source: str) -> list[str]:
+    errs = [f"schema: {m}" for m in schema.validate_v1("notes", body)]
+    if not isinstance(body, dict):
+        return errs
+    ids = _node_ids(analysis) if isinstance(analysis, dict) else []
+    return errs + _check_points(body.get("points"), ids, source, "筆記")

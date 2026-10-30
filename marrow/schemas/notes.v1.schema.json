@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyenovel/notes.v1.schema.json",
+  "title": "hyenovel reading notes",
+  "description": "備課筆記:reviewer(中性冷讀者)讀原文與分析後,值得跟作者聊的點。只給作者看,不進 companion 素材。refs 指向 analysis 的 node id;quotes 為逐字原文。",
+  "type": "object",
+  "required": [
+    "slug",
+    "read",
+    "points",
+    "one_line"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "slug": {
+      "type": "string"
+    },
+    "read": {
+      "type": "string",
+      "description": "冷讀者讀到這篇在做什麼——兩三句。"
+    },
+    "points": {
+      "type": "array",
+      "description": "值得跟作者聊的點,依輕重排序,第一條最重要。",
+      "items": {
+        "$ref": "#/$defs/point"
+      },
+      "minItems": 1
+    },
+    "one_line": {
+      "type": "string",
+      "description": "如果作者只想聽一件事,最值得先想的是什麼。"
+    }
+  },
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": [
+        "kind",
+        "title",
+        "quotes",
+        "refs",
+        "body",
+        "question"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "moved",
+            "confused",
+            "wondering",
+            "opinion"
+          ],
+          "description": "moved=被打動、confused=讀不懂或卡住、wondering=想問作者、opinion=你的判斷。"
+        },
+        "title": {
+          "type": "string",
+          "description": "這一點的一句話標題。"
+        },
+        "quotes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "支撐此點的逐字原文。"
+        },
+        "refs": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "綁到的 analysis node id(可空)。"
+        },
+        "body": {
+          "type": "string",
+          "description": "說明:機制與讀者經驗,不是形容詞。"
+        },
+        "question": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "留給作者的問題(沒有填 null)。"
+        }
+      }
+    }
+  }
+}

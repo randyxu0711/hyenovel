@@ -126,3 +126,37 @@ def test_gate_feedback_whitespace_only_quote_rejected(feedback, analysis, source
     f = copy.deepcopy(feedback)
     f["strengths"][0]["quotes"] = [blank]
     assert any("引文在原文找不到" in e for e in gate.gate_feedback(f, analysis, source))
+
+
+def _notes(**point):
+    p = {"kind": "confused", "title": "燈為誰亮", "quotes": ["像在等誰"], "refs": ["k1"],
+         "body": "讀到這裡以為有人要回來,後面沒有接上。", "question": "燈在等的是誰?"}
+    p.update(point)
+    return {"slug": "mini", "read": "一個人回到空屋。", "points": [p], "one_line": "燈等的是誰。"}
+
+
+def test_gate_notes_passes_valid(analysis, source):
+    assert gate.gate_notes(_notes(), analysis, source) == []
+
+
+def test_gate_notes_rejects_hallucinated_quote(analysis, source):
+    errs = gate.gate_notes(_notes(quotes=["原文沒有這句"]), analysis, source)
+    assert len(errs) == 1 and errs[0].startswith("筆記「燈為誰亮」") and "引文在原文找不到" in errs[0]
+
+
+def test_gate_notes_rejects_unknown_ref(analysis, source):
+    assert any("refs t99 不是存在的 node id" in e
+               for e in gate.gate_notes(_notes(refs=["t99"]), analysis, source))
+
+
+def test_gate_notes_rejects_bad_kind(analysis, source):
+    assert any(e.startswith("schema:") for e in gate.gate_notes(_notes(kind="praise"), analysis, source))
+
+
+def test_gate_notes_rejects_confidence_field(analysis, source):
+    assert any(e.startswith("schema:") for e in gate.gate_notes(_notes(confidence=0.9), analysis, source))
+
+
+def test_gate_notes_non_dict_body(analysis, source):
+    errs = gate.gate_notes([], analysis, source)
+    assert errs and all(e.startswith("schema:") for e in errs)

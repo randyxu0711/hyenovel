@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator
 SCHEMA_VERSION = 1
 _DIR = Path(__file__).resolve().parent / "schemas"
 
-Kind = Literal["analysis", "feedback"]
+Kind = Literal["analysis", "feedback", "notes"]
 
 
 @cache
