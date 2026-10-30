@@ -5,12 +5,6 @@ import logging
 import pytest
 
 from marrow import ingest
-from server import ingest as server_ingest
-
-
-def test_decode_moved_unchanged():
-    assert server_ingest._decode is ingest.decode
-    assert server_ingest._normalize is ingest.normalize
 
 
 def test_decode_big5():
