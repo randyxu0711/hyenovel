@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from den import app as den_app
 from den import config as den_config
-from den.tests.test_pipeline import _analysis, _feedback, ok
+from den.tests.test_pipeline import _analysis, _notes, ok
 from marrow import db, repo
 from marrow.workpacks import WORKPACKS
 
@@ -33,7 +33,7 @@ class Run:
         async def run(system_prompt, user_prompt, schema):
             while not self.release.is_set():
                 await asyncio.sleep(0.01)
-            return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _feedback())
+            return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _notes())
         return run
 
 
@@ -199,7 +199,7 @@ def test_get_job_has_no_raw_output(data):
         body = c.get(f"/jobs/{jid}", headers=h).json()
         for k in ("state", "step", "error_class", "detail"):
             assert k in body
-        assert [a["step"] for a in body["attempts"]] == ["analyst", "criticizer"]
+        assert [a["step"] for a in body["attempts"]] == ["analyst", "reviewer"]
         assert set(body["attempts"][0]) == {"step", "n", "outcome", "model", "duration_ms", "tokens"}
         assert "raw_output" not in json.dumps(body)
 
@@ -244,7 +244,7 @@ def test_events_terminal_without_replay_sends_state_and_ends(data):
         _wait_state(c, h, jid, "done")
         c.app.state.mgr.bus._events.pop(jid)               # 模擬 TTL 過了 / 上一個行程跑的
         evs = _read_sse(c, h, jid)
-        assert evs == [{"event": "state", "data": {"state": "done", "step": "criticizer",
+        assert evs == [{"event": "state", "data": {"state": "done", "step": "reviewer",
                                                    "error_class": None, "detail": None}}]
         assert c.app.state.mgr.bus._subs == {}
 
@@ -738,6 +738,60 @@ def test_viz_200(data):
     assert r.status_code == 200 and r.json()["slug"] == "mini"
 
 
+NOTES = {"slug": "mini", "read": "一個人回到空屋。", "one_line": "燈等的是誰。", "points": [
+    {"kind": "confused", "title": "燈為誰亮", "quotes": ["像在等誰"], "refs": ["k1"],
+     "body": "以為有人要回來。", "question": "燈在等的是誰?"}]}
+
+
+def _add_notes(url, version_offset=0):
+    c = db.connect(url)
+    try:
+        with c:
+            st = repo.story_by_slug(c, "mini")
+            sv = repo.current_artifact(c, st["id"], "analysis")["source_version_id"]
+            if version_offset:
+                sv, _ = repo.add_source_version(c, st["id"], "別版。", 0.5)
+            nid, _ = repo.add_artifact(c, st["id"], sv, "notes", 1, NOTES, {}, 9.0)
+            repo.set_current(c, st["id"], "notes", nid)
+    finally:
+        c.close()
+
+
+def test_viz_uses_notes_shape(data):
+    _add_notes(data[0])
+    with _client(data) as c:
+        fb = c.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"]
+    assert fb["read"] == "一個人回到空屋。" and [p["title"] for p in fb["key_points"]] == ["燈為誰亮"]
+    assert fb["key_points"][0]["quotes"][0]["quote"] == "像在等誰"
+
+
+def test_viz_drops_judgment_of_other_version(data):
+    _add_notes(data[0], version_offset=1)
+    with _client(data) as c:
+        assert c.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
+
+
+def test_viz_drops_judgment_after_same_version_rerun(data):
+    """web 的「重新分析」:同版新 job 的分析先換上、reviewer 停住 → 舊回饋不配新圖。"""
+    c = db.connect(data[0])
+    try:
+        with c:
+            st = repo.story_by_slug(c, "mini")
+            ana = repo.current_artifact(c, st["id"], "analysis")
+            fid, _ = repo.add_artifact(c, st["id"], ana["source_version_id"], "feedback", 1,
+                                       {"read": "舊回饋", "strengths": [], "key_points": [], "minor": [],
+                                        "one_line": "x"}, {}, 9.0)
+            repo.set_current(c, st["id"], "feedback", fid)
+            body = {**ana["body"], "synopsis": "重跑"}
+            aid, _ = repo.add_artifact(c, st["id"], ana["source_version_id"], "analysis", 1, body,
+                                       {"job": 42}, 10.0)
+            repo.set_current(c, st["id"], "analysis", aid)
+    finally:
+        c.close()
+    with _client(data) as cl:
+        assert cl.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
+
+
 def test_viz_404_when_not_analyzed(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
@@ -844,7 +898,9 @@ def test_get_work_part_status_codes(data):
         r = c.get("/works/mini/feedback", headers=h)
         assert r.status_code == 409 and r.json()["detail"] == "no-feedback"
         assert c.get("/works/nope/source", headers=h).status_code == 404
-        assert c.get("/works/mini/notes", headers=h).status_code == 422
+        r = c.get("/works/mini/notes", headers=h)
+        assert r.status_code == 409 and r.json()["detail"] == "no-notes"
+        assert c.get("/works/mini/bogus", headers=h).status_code == 422
 
 
 def test_post_jobs_resume_only_409_reason(data):

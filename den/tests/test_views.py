@@ -44,6 +44,7 @@ def test_stories_done(c):
     assert s["slug"] == "x1" and s["title"] == "分析標題" and s["synopsis"] == "梗概"
     assert s["current"]["analysis"] == {"id": aid, "created_at": 5.0}
     assert s["current"]["feedback"] == {"id": fid, "created_at": 6.0}
+    assert s["current"]["notes"] is None
     assert s["latest_job"] == {"id": jid, "state": "done", "step": "render",
                                "error_class": None, "updated_at": 2.0}
     assert s["nodes"] == len(BODY["nodes"]) and s["edges"] == 1
@@ -63,7 +64,7 @@ def test_stories_queued_without_artifact(c):
     sid, vid, *_ = _story(c, title=None)
     _job(c, sid, vid, "queued")
     [s] = views.stories(c)
-    assert s["current"] == {"analysis": None, "feedback": None}
+    assert s["current"] == {"analysis": None, "feedback": None, "notes": None}
     assert s["nodes"] == 0 and s["edges"] == 0 and s["synopsis"] == "" and s["title"] == "x1"
     assert s["latest_job"]["state"] == "queued"
 
@@ -158,3 +159,11 @@ def test_unknown_slug_raises_lookup(c):
         views.conclusions(c, "nope")
     with pytest.raises(LookupError):
         views.transcript(c, "nope")
+
+
+def test_stories_current_notes(c):
+    sid, vid, aid, _ = _story(c, body=BODY)
+    nid, _ = repo.add_artifact(c, sid, vid, "notes", 1, {"n": 1}, {}, 7.0)
+    repo.set_current(c, sid, "notes", nid)
+    [s] = views.stories(c)
+    assert s["current"]["notes"] == {"id": nid, "created_at": 7.0}

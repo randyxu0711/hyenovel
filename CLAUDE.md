@@ -7,20 +7,20 @@
 設計全貌見 `docs/DESIGN.md`;當前進度與待辦見 `docs/STATUS.md`。**動工前先讀這兩份。**
 
 ## 核心原則
-- **DB(marrow,SQLite)= 正本**(切片 4a 起):觀察層(analysis)與判斷層(feedback)由 den 的 job 寫進 `artifact`,
+- **DB(marrow,SQLite)= 正本**(切片 4a 起):觀察層(analysis)與判斷層(notes 備課筆記;舊作品是 feedback)由 den 的 job 寫進 `artifact`,
   web 只讀 den。`stories/<slug>/*.json` 是舊流程/匯入來源,**不再是正本**。分享檔用 `python -m export <slug>` 從 DB 匯出。
-- **觀察與判斷隔離**:analyst 與 criticizer 是**兩個獨立步驟**(den 的工人各自 context),不可在同一 context 兼任,否則判斷獨立性被污染。
+- **觀察與判斷隔離**:analyst 與 reviewer 是**兩個獨立步驟**(den 的工人各自 context),不可在同一 context 兼任,否則判斷獨立性被污染。
 - **每條主張必引逐字原文**;引用閘門(`viz.py:locate`)會在原文搜尋驗證,幻覺引用直接擋(硬閘門)。
 - Obsidian 為可選 viewer(匯出的 md 可放進 vault)。
 - **marrow/**:DB 正本(SQLite)。切片 1–3 過渡期它曾是舊檔案的唯讀鏡像(舊 server 寫 `stories/`,
   `python -m marrow.importer` 冪等補進 DB);切片 4a 起翻案:web 改讀 den、DB 為正本;舊 `server/`(claude-agent-sdk 版後端)已於切片 5 刪除,
   importer 只作舊篇一次性匯入;根目錄 `viz.py`/`render.py` 留作函式庫,供 `export` 使用。DB 只支援 SQLite;repository 不寫方言 SQL,方言只准在 `marrow/db.py`。
-  **切片 2 起 den 會寫 DB**:產物 commit 進 `artifact`,`current_artifact` 只在 job **全部步驟成功**時一次換;
+  **切片 2 起 den 會寫 DB**:產物 commit 進 `artifact`,`current_artifact` 在 job 的**每一步成功時**換該 kind(analyst 好了 companion 就能用,不等 reviewer);
   importer 只對「新建」的 artifact 切 current,不覆蓋 den 已換的。
 
 ## 架構與資料流
 ```
-MCP submit_work(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ criticizer ─▶ DB(artifact)
+MCP submit_work(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ reviewer ─▶ DB(artifact)
                                                                             │
                                  ┌──────────────────────────────────────────┤
                                  ▼                  ▼                        ▼
@@ -31,7 +31,7 @@ MCP submit_work(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ criticize
 
 ## 怎麼用(任何目錄的 session,註冊 MCP 後都有)
 - 入口是 MCP prompt:`/hyenovel:companion`(開始陪讀:交稿或直接聊)、`/hyenovel:continue`(接著聊最近那篇)。都不收參數(Claude Code 以空白切參數,路徑在對話裡給)。
-- 陪讀 companion:宿主呼叫 MCP `talk_to_companion`(den 工人扮演、宿主原文轉述;模式 `direct`/`slow`/`imaginative`,人格在 `marrow/prompts/companion/`;素材只給原文+精簡分析,**不給 feedback/結論**)。
+- 陪讀 companion:宿主呼叫 MCP `talk_to_companion`(den 工人扮演、宿主原文轉述;模式 `direct`/`slow`/`imaginative`,人格在 `marrow/prompts/companion/`;素材只給原文+精簡分析,**不給 notes/feedback/結論**)。
 - 作品用標題或開頭關鍵詞指定(`work="海"`),den 的 `GET /works` 比對(只看標題+開頭 200 字);多篇符合時回候選讓宿主問作者。
 - `python -m export <slug> [--out DIR]` — 從 DB 匯出 `<slug>.md`(單一 front matter,先回饋後分析)與 `<slug>.html`(viz);預設輸出到 `stories/<slug>/`。
 - `python -m den [--port N]` — 本機 daemon(127.0.0.1:8788,token 在 `~/.local/share/hyenovel/den.token`);
@@ -43,17 +43,17 @@ MCP submit_work(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ criticize
 - web:`cd web && npm run dev`(vite 代理 `/api` 到 den 並帶 token)。用量面板關閉。
 - 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`。五個 tool:
   `submit_work`(交稿,**只收 .md/.txt 路徑**;不給 path = 只續跑,絕不重跑)/ `talk_to_companion`(跟 companion 說話)/
-  `find_works`(列作品+狀態,唯讀)/ `read_work`(原文/分析/舊回饋,唯讀)/ `cancel_work`(停下分析)。
+  `find_works`(列作品+狀態,唯讀)/ `read_work`(原文/分析/備課筆記/舊回饋,唯讀)/ `cancel_work`(停下分析)。
   `readOnlyHint` 在 Claude Code **不會免確認**(只影響平行),要免問請加 allow 規則。
 - `python viz.py <slug> [--check]` — 舊式出圖/驗引用(函式庫仍在,`export` 內部使用)。
 - `.venv/bin/python -m pytest` — 跑全部測試(venv:`uv venv && uv pip install -r pyproject.toml -r requirements-dev.txt`)(零成本、不燒訂閱)。CI 在 push 時跑同一套。
-- subagent 定義在 `.claude/agents/{analyst,criticizer}.md`(den 工人沿用);舊 skill `story-critique`/`story-discuss` 已於 companion 第 2 批刪除。
+- den 工人的 prompt 在 `marrow/prompts/{analyst,reviewer}.md`(`.claude/agents/analyst.md` 是舊流程遺留,den 不讀);舊 skill `story-critique`/`story-discuss` 已於 companion 第 2 批刪除。
 
 ## 慣例
 - node id:theme=t* / motif=m* / technique=k* / effect=e* / character=c* / beat=b*。
 - 意圖鏈核心邊:`produces`(technique→effect)、`serves`(effect→theme)。
 - `effect`/`beat` 節點帶 `intensity`(0–1);beat 用 `precedes` 串成文本軸。
-- feedback 的 `refs` 綁 analysis 的 node id(viz 靠它把回饋錨定到圖)。
+- notes(與舊 feedback)的 `refs` 綁 analysis 的 node id(viz 靠它錨定到圖);判斷層只配**同版**分析(`vizdata.pick_judgment`)。
 - 改視覺化動 `viz/{template.html,viz.css,viz.js}`;`viz.py` 只負責驗證+注入。
 - **故事內容(stories/<slug>/)是使用者創作,預設不 commit。** 程式碼才進版控。
 - 討論逐字與結論存在 DB(`utterance` / `conclusion`)。結論的型別欄位叫 `kind` 不叫 `type`

@@ -2,7 +2,7 @@
 
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
   GET  /stories             → {"stories": [...]}(領域形狀,見 den.views)
-  GET  /stories/{slug}/viz  → VizData | 404 無 current analysis
+  GET  /stories/{slug}/viz  → VizData | 404 無 current analysis(feedback 欄 = 同版備課筆記,否則同版舊回饋)
   GET  /stories/{slug}/source → text/plain,current analysis 所對照那一版的原文(無則最新版)
   GET  /stories/{slug}/conclusions → {"conclusions": [...]}
   GET  /stories/{slug}/transcript  → {"turns": [...]}
@@ -11,6 +11,10 @@
   GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
   POST /discuss/{slug}      {"session_id"?, "message", "anchors"} → SSE token* → message + done | error
                             (串流前判:422 slug/body、404 無此篇/非此篇的局、409 未分析/該局有一輪在跑)
+  GET  /works?q=&limit=N    → {"works": [...]}(標題/開頭比對,最近活動在前;limit 預設 20,1–50)
+  GET  /works/{slug}/{part} → {"text"}(part = source/analysis/notes/feedback;422 part 不對、404 無此篇、
+                            409 not-analyzed / no-notes / no-feedback)
+  POST /works/{slug}/cancel → {"cancelled": [job_id...]} | 409 nothing-running
   GET  /health              → {version, pid, busy}
   POST /jobs                {"kind":"critique","slug","client"?} → 202 {job_id, estimate, existing, resumed, runner, note}
                             (同篇同版已在排隊/執行 → 回那個 job,existing=true,不建新的;
@@ -374,9 +378,10 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         if ana is None:
             log.info("event=reject where=viz reason=not-analyzed")
             raise HTTPException(404, "這篇還沒分析完成")
-        fb = repo.current_artifact(conn, st["id"], "feedback")
+        picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"),
+                                       repo.current_artifact(conn, st["id"], "feedback"))
         src = repo.source_version(conn, ana["source_version_id"])["text"]
-        return vizdata.viz_payload(slug, ana["body"], fb["body"] if fb else None, src)
+        return vizdata.viz_payload(slug, ana["body"], vizdata.judgment_for_viz(picked), src)
 
     @app.get("/stories/{slug}/source")
     async def get_source(slug: str, request: Request):

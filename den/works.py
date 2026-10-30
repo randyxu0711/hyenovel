@@ -33,15 +33,17 @@ def match(rows: list[dict], query: str | None) -> list[dict]:
 
 
 def state(row: dict, analysis: dict | None, job: dict | None) -> str:
-    """ready / running / stopped / stale / none。不是最新版的 job 當作沒有。"""
+    """ready / notes-running / notes-stopped / running / stopped / stale / none。不是最新版的 job 當作沒有。
+    分析在 analyst 成功時就換上,所以「最新版有分析」時 job 可能還在跑 / 停在 reviewer(notes-*)。"""
     latest = row["latest_sv_id"]
+    st = job["state"] if job is not None and job["source_version_id"] == latest else None
+    active, stopped = st in _ACTIVE, st in _STOPPED
     if analysis is not None and analysis["source_version_id"] == latest:
-        return "ready"
-    if job is not None and job["source_version_id"] == latest:
-        if job["state"] in _ACTIVE:
-            return "running"
-        if job["state"] in _STOPPED:
-            return "stopped"
+        return "notes-running" if active else "notes-stopped" if stopped else "ready"
+    if active:
+        return "running"
+    if stopped:
+        return "stopped"
     return "stale" if analysis is not None else "none"
 
 
@@ -62,7 +64,7 @@ def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
         ana, job = cur.get(r["id"]), jobs.get(r["id"])
         r["title"] = (ana or {}).get("body", {}).get("title") or r["title"] or r["slug"]
         st = state(r, ana, job)
-        live = st in ("running", "stopped")
+        live = st in ("running", "stopped", "notes-running", "notes-stopped")
         out.append({"slug": r["slug"], "title": r["title"], "latest_text": r["latest_text"],
                     "opening": _opening(r["latest_text"]), "submitted_at": r["submitted_at"],
                     "talked_at": r["talked_at"], "state": st,
@@ -75,12 +77,12 @@ def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
     return hits[:limit]
 
 
-PARTS = ("source", "analysis", "feedback")
+PARTS = ("source", "analysis", "notes", "feedback")
 _LEGACY = "(舊版客觀回饋:舊的編輯評論流程產生,之後會由備課筆記取代。)"
 
 
 class Missing(Exception):
-    """這篇沒有這個 part。reason:not-analyzed / no-feedback。"""
+    """這篇沒有這個 part。reason:not-analyzed / no-notes / no-feedback。"""
 
     def __init__(self, reason: str):
         super().__init__(reason)
@@ -102,6 +104,12 @@ def read_part(conn, slug: str, part: str) -> str:
             raise Missing("not-analyzed")
         art, what, body = ana, "分析", render.render_analysis(ana["body"], front_matter=False)
         head = []
+    elif part == "notes":
+        art = repo.current_artifact(conn, st["id"], "notes")
+        if art is None:
+            raise Missing("no-notes")
+        what, body = "筆記", render.render_notes(art["body"], title, front_matter=False)
+        head = []
     else:
         fb = repo.current_artifact(conn, st["id"], "feedback")
         if fb is None:
@@ -110,6 +118,6 @@ def read_part(conn, slug: str, part: str) -> str:
         head = [_LEGACY]
     if art["source_version_id"] != latest["id"]:
         n = repo.source_version(conn, art["source_version_id"])["n"]
-        tail = ",新版還沒有分析結果" if part == "analysis" else ""
+        tail = {"analysis": ",新版還沒有分析結果", "notes": ",新版還沒有筆記"}.get(part, "")
         head.append(f"(這是第 {n} 版的{what};最新是第 {latest['n']} 版{tail}。)")
     return "\n".join(head + ([""] if head else []) + [body])

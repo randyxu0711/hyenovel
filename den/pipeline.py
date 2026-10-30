@@ -2,7 +2,8 @@
 
 - 引擎只裁決(回 StepOutcome),不寫 job 狀態——那是 worker 的事。
 - 每筆 attempt 都記(#17:被擋的是純損耗,要看得見);artifact 與它的 ok attempt 同一個 transaction。
-- current 只在**全部步驟成功**時一次換;中途任何停止都不動。
+- 每步成功就換該 kind 的 current(與 artifact 同一個 transaction):analyst 好了 companion 就能用,
+  不等判斷層;停在後面的步驟不動前面已換的。
 - 續跑:該步已有 ok attempt 就載入其 artifact 跳過,不重花錢;attempt n 接著既有的編。
 """
 import asyncio
@@ -18,8 +19,8 @@ from marrow.schema import SCHEMA_VERSION
 
 log = logging.getLogger("hyenovel")
 
-# 宣告式步驟清單;criticizer 的 analysis 輸入 = 本 job analyst 步的產物
-CRITIQUE: tuple[str, ...] = ("analyst", "criticizer")
+# 宣告式步驟清單;reviewer 的 analysis 輸入 = 本 job analyst 步的產物
+CRITIQUE: tuple[str, ...] = ("analyst", "reviewer")
 
 # (system_prompt, user_prompt, schema) -> RunResult;由 worker 注入(綁好 preset、timeout、on_proc)
 RunFn = Callable[[str, str, dict], Awaitable[RunResult]]
@@ -102,6 +103,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
                     aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"],
                                                pack.kind, SCHEMA_VERSION, r.parsed, prov, now())
                     record("ok", r, artifact_id=aid)
+                    repo.set_current(conn, job["story_id"], pack.kind, aid)
                 emit(_phase(step, "ok", n))
                 return repo.artifact(conn, aid)
             with conn:
@@ -146,6 +148,10 @@ async def run_critique(conn, job: dict, run: RunFn, emit: Callable[[dict], None]
             log.info("event=step-skip job=%s step=%s", jid, step)
             emit(_phase(step, "ok", prior["n"], "resume-skip"))
             done[step] = repo.artifact(conn, prior["artifact_id"])
+            # 舊 den 只在全部成功時換 current:它停下的 job 已 ok 的步驟從沒換上。
+            # 續跑已由 _resume_blocker 保證是最新版、沒被取代,換上是安全的(已是 current 時無變化)
+            with conn:
+                repo.set_current(conn, job["story_id"], workpacks.WORKPACKS[step].kind, prior["artifact_id"])
             continue
         res = await _run_step(conn, job, step, slug, source, analysis, run, emit,
                               runner_name=runner_name, cli_version=cli_version,
@@ -158,9 +164,6 @@ async def run_critique(conn, job: dict, run: RunFn, emit: Callable[[dict], None]
                 "reason": res.error_class}})
             return res
         done[step] = res
-    with conn:
-        for step, art in done.items():
-            repo.set_current(conn, job["story_id"], workpacks.WORKPACKS[step].kind, art["id"])
     log.info("event=job-done job=%s", jid)
     emit({"event": "done", "data": {"ok": True}})
     return StepOutcome("done", None, None)

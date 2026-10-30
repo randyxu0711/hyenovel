@@ -284,3 +284,29 @@ def test_feedback_md_point_without_body():
           "one_line": "o"}
     md = render.render_feedback(fb, "標題")
     assert "### 強" in md and "### 1. 點" in md
+
+
+
+# ── render_notes ──
+
+NOTES = {"slug": "mini", "read": "一個人回到空屋。", "one_line": "燈等的是誰。", "points": [
+    {"kind": "confused", "title": "燈為誰亮", "quotes": ["像在等誰"], "refs": ["k1"],
+     "body": "以為有人要回來。", "question": "燈在等的是誰?"},
+    {"kind": "moved", "title": "關燈", "quotes": ["他把燈關了。"], "refs": None,
+     "body": "一個動作收掉整篇。", "question": None}]}
+
+
+def test_render_notes_order_and_labels():
+    md = render.render_notes(NOTES, "極小合成樣本")
+    assert md.startswith("---\ntags: [hyenovel, story-notes]\n---")
+    assert "# 備課筆記 —〈極小合成樣本〉" in md and "另一位冷讀者" in md
+    assert md.index("### 1. [困惑] 燈為誰亮") < md.index("### 2. [打動] 關燈")
+    assert "> 「像在等誰」" in md and "**留給作者的問題**:燈在等的是誰?" in md
+    assert md.count("留給作者的問題") == 1                     # question 為 null 不出現
+    assert "一個人回到空屋。" in md and "燈等的是誰。" in md
+
+
+def test_render_notes_labels_every_kind_and_no_front_matter():
+    pts = [{**NOTES["points"][1], "kind": k, "title": k} for k in ("wondering", "opinion")]
+    md = render.render_notes({**NOTES, "read": "", "points": pts}, "t", front_matter=False)
+    assert not md.startswith("---") and "[想問] wondering" in md and "[意見] opinion" in md

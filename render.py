@@ -154,6 +154,28 @@ def render_feedback(feedback, title, *, front_matter=True):
     return "\n".join(L).rstrip() + "\n"
 
 
+NOTE_KINDS = {"moved": "打動", "confused": "困惑", "wondering": "想問", "opinion": "意見"}
+
+
+def render_notes(notes, title, *, front_matter=True):
+    L = ["---\ntags: [hyenovel, story-notes]\n---", ""] if front_matter else []
+    L.append(f"# 備課筆記 —〈{title}〉\n")
+    L.append("(另一位冷讀者的筆記,依輕重排序;不是 companion 的感受。)\n")
+    if notes.get("read"):
+        L.append("## 這篇在做什麼(冷讀者讀到的)\n")
+        L.append(notes["read"] + "\n")
+    for i, p in enumerate(notes["points"], 1):
+        L.append(f"### {i}. [{NOTE_KINDS[p['kind']]}] {p['title']}")
+        L += [f"> 「{q}」" for q in p["quotes"]]
+        L.append("\n" + p["body"])
+        if p.get("question"):
+            L.append(f"- **留給作者的問題**:{p['question']}")
+        L.append("")
+    L.append("## 一句話\n")
+    L.append(f"如果只想聽一件事:**{notes['one_line']}**")
+    return "\n".join(L).rstrip() + "\n"
+
+
 def main():
     args = sys.argv[1:]
     if not args:

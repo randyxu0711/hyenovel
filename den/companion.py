@@ -38,7 +38,7 @@ def render_companion(ctx: dict, mode: str) -> str:
             out.append(f"梗概:{a['synopsis']}")
         out += [f"- {n['type']} {n['label']}" + (f":{n['note']}" if n.get("note") else "")
                 for n in a.get("nodes") or ()]
-    if ctx["progress"] in ("queued", "running"):
+    if a is None and ctx["progress"] in ("queued", "running"):   # 有分析時在跑的是 reviewer
         out += ["", "## 現在的狀況", _RUNNING]
     elif a is None:
         out += ["", "## 現在的狀況", _IDLE]

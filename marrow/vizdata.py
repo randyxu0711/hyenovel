@@ -125,6 +125,40 @@ def build_viz_data(slug, analysis, source, diag, feedback=None):
     }
 
 
+def notes_as_feedback(notes):
+    """備課筆記 → viz / web 既有的 feedback 形狀(版面不動):打動歸 strengths、其餘照順序歸 key_points。"""
+    def pt(p):
+        return {"title": p["title"], "quotes": p["quotes"], "refs": p["refs"], "body": p["body"],
+                "experiment": None, "question": p["question"]}
+    pts = notes["points"]
+    return {"read": notes["read"], "one_line": notes["one_line"], "minor": [],
+            "strengths": [pt(p) for p in pts if p["kind"] == "moved"],
+            "key_points": [pt(p) for p in pts if p["kind"] != "moved"]}
+
+
+def _job(art):
+    return (art.get("provenance") or {}).get("job")
+
+
+def pick_judgment(analysis_art, notes_art, feedback_art):
+    """與這份分析配對的判斷層:(\"notes\" | \"feedback\", body) 或 None。同版筆記優先,其次同版舊 feedback。
+    配對要同版**且同 job**(匯入的沒有 job,兩邊都沒有才算同):每步成功就換 current,同版重跑時
+    新分析先上、舊判斷層還在,它的 refs 綁的是別份分析的 node id。"""
+    for kind, art in (("notes", notes_art), ("feedback", feedback_art)):
+        if (art is not None and art["source_version_id"] == analysis_art["source_version_id"]
+                and _job(art) == _job(analysis_art)):
+            return kind, art["body"]
+    return None
+
+
+def judgment_for_viz(picked):
+    """pick_judgment 的結果 → viz 的 feedback 欄(筆記轉成既有形狀)。"""
+    if picked is None:
+        return None
+    kind, body = picked
+    return notes_as_feedback(body) if kind == "notes" else body
+
+
 def viz_payload(slug, analysis, feedback, source):
     """DB artifact body → 前端資料契約。深拷貝後再定位,不動呼叫端的 body;
     不回錯誤清單(進 DB 的 artifact 已過閘門)。"""

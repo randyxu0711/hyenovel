@@ -15,10 +15,19 @@ TITLE = ANALYSIS["title"]            # 標題以 analysis 為先(分析者決定
 FB_HEAD = f"# 給作者的話 —〈{TITLE}〉"
 
 
-def seed(conn, slug="mini", analysis=True, feedback=True):
+NOTES = {"slug": "mini", "read": "一個人回到空屋。", "one_line": "燈等的是誰。", "points": [
+    {"kind": "confused", "title": "燈為誰亮", "quotes": ["像在等誰"], "refs": ["k1"],
+     "body": "以為有人要回來。", "question": "燈在等的是誰?"},
+    {"kind": "moved", "title": "關燈", "quotes": ["他把燈關了。"], "refs": None,
+     "body": "一個動作收掉整篇。", "question": None}]}
+NOTES_HEAD = f"# 備課筆記 —〈{TITLE}〉"
+
+
+def seed(conn, slug="mini", analysis=True, feedback=True, notes=False):
     sid = repo.ensure_story(conn, slug, "迷你", 1.0)
     svid, _ = repo.add_source_version(conn, sid, SOURCE, 1.0)
-    for kind, body, on in (("analysis", ANALYSIS, analysis), ("feedback", FEEDBACK, feedback)):
+    for kind, body, on in (("analysis", ANALYSIS, analysis), ("feedback", FEEDBACK, feedback),
+                           ("notes", NOTES, notes)):
         if on:
             aid, _ = repo.add_artifact(conn, sid, svid, kind, 1, body, {}, 1.0)
             repo.set_current(conn, sid, kind, aid)
@@ -134,3 +143,21 @@ def test_title_order_analysis_then_story_then_slug(conn):
         repo.set_current(conn, sid, "analysis", aid)
         md, _ = export.build(conn, slug)
         assert f'title: "{want}"' in md
+
+
+def test_build_prefers_notes(conn):
+    seed(conn, notes=True)
+    md, html = export.build(conn, "mini")
+    assert NOTES_HEAD in md and FB_HEAD not in md
+    assert "tags: [hyenovel, story-notes, story-analysis]" in md.split("\n---\n", 1)[0]
+    assert "燈為誰亮" in html
+
+
+def test_build_ignores_notes_of_other_version(conn):
+    sid = seed(conn, feedback=False)
+    old, _ = repo.add_source_version(conn, sid, "更早的稿。", 0.5)
+    nid, _ = repo.add_artifact(conn, sid, old, "notes", 1, NOTES, {}, 1.0)
+    repo.set_current(conn, sid, "notes", nid)
+    md, html = export.build(conn, "mini")
+    assert NOTES_HEAD not in md and "燈為誰亮" not in html
+    assert md.split("\n---\n", 1)[0].endswith("tags: [hyenovel, story-analysis]")

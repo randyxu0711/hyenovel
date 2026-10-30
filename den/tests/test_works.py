@@ -45,7 +45,10 @@ LATEST, OLD = 2, 1
     (LATEST, None, "ready"), (None, (LATEST, "running"), "running"), (None, (LATEST, "queued"), "running"),
     (None, (LATEST, "paused"), "stopped"), (None, (LATEST, "failed"), "stopped"),
     (OLD, None, "stale"), (OLD, (OLD, "running"), "stale"), (None, (OLD, "done"), "none"),
-    (None, None, "none"), (LATEST, (LATEST, "running"), "ready")])
+    (None, None, "none"), (LATEST, (LATEST, "running"), "notes-running"),
+    (LATEST, (LATEST, "queued"), "notes-running"), (LATEST, (LATEST, "paused"), "notes-stopped"),
+    (LATEST, (LATEST, "cancelled"), "notes-stopped"), (LATEST, (LATEST, "done"), "ready"),
+    (LATEST, (OLD, "paused"), "ready")])
 def test_state(ana_ver, job, want):
     row = {"latest_sv_id": LATEST}
     ana = None if ana_ver is None else {"source_version_id": ana_ver}
@@ -91,6 +94,17 @@ def test_listing_job_fields_only_when_running_or_stopped(c):
     assert (w["state"], w["job_id"], w["error_class"]) == ("none", None, None)
 
 
+def test_listing_reviewer_stopped_is_visible(c):
+    """分析已換上、reviewer 停住:不能只說「分析好了」,作者要看得到停住與原因。"""
+    sid, vid = _story(c, "d01", "t", "x", 1.0)
+    aid, _ = repo.add_artifact(c, sid, vid, "analysis", 1, {"title": "t"}, {}, 2.0)
+    repo.set_current(c, sid, "analysis", aid)
+    jid = repo.create_job(c, "critique", sid, vid, {}, 2.0)
+    repo.set_job_state(c, jid, "paused", 3.0, step="reviewer", error_class="usage-limit")
+    [w] = works.listing(c, None)
+    assert (w["state"], w["job_id"], w["error_class"]) == ("notes-stopped", jid, "usage-limit")
+
+
 def test_listing_opening_truncated(c):
     _story(c, "d01", "t", "字" * 40, 1.0)
     assert works.listing(c, None)[0]["opening"] == "字" * 30 + "…"
@@ -100,7 +114,12 @@ ANA = {"title": "燈", "slug": "a", "nodes": [{"id": "t1", "type": "theme", "lab
 FB = {"slug": "a", "read": "讀到的", "key_points": [], "one_line": "一句話"}
 
 
-def _two_versions(c, analysed=1, feedback=False):
+NOTES = {"slug": "mini", "read": "一個人回到空屋。", "one_line": "燈等的是誰。", "points": [
+    {"kind": "confused", "title": "燈為誰亮", "quotes": ["像在等誰"], "refs": ["k1"],
+     "body": "以為有人要回來。", "question": "燈在等的是誰?"}]}
+
+
+def _two_versions(c, analysed=1, feedback=False, notes=False):
     sid = repo.ensure_story(c, "a", "燈", 0)
     v1, _ = repo.add_source_version(c, sid, "第一版原文", 1)
     v2, _ = repo.add_source_version(c, sid, "第二版原文", 2)
@@ -110,6 +129,9 @@ def _two_versions(c, analysed=1, feedback=False):
     if feedback:
         fid, _ = repo.add_artifact(c, sid, vid, "feedback", 1, FB, {}, 3)
         repo.set_current(c, sid, "feedback", fid)
+    if notes:
+        nid, _ = repo.add_artifact(c, sid, vid, "notes", 1, NOTES, {}, 3)
+        repo.set_current(c, sid, "notes", nid)
     return sid
 
 
@@ -143,6 +165,18 @@ def test_read_feedback_older_version_noted(c):
     assert "這是第 1 版的回饋" in works.read_part(c, "a", "feedback")
 
 
+def test_read_notes(c):
+    _two_versions(c, analysed=2, notes=True)
+    out = works.read_part(c, "a", "notes")
+    assert out.startswith("# 備課筆記 —〈燈〉") and "[困惑] 燈為誰亮" in out and "---" not in out.splitlines()[0]
+
+
+def test_read_notes_marks_older_version(c):
+    _two_versions(c, analysed=1, notes=True)
+    assert works.read_part(c, "a", "notes").splitlines()[0] == \
+        "(這是第 1 版的筆記;最新是第 2 版,新版還沒有筆記。)"
+
+
 def test_read_missing_parts(c):
     sid = repo.ensure_story(c, "b", None, 0)
     repo.add_source_version(c, sid, "x", 1)
@@ -153,6 +187,9 @@ def test_read_missing_parts(c):
     with pytest.raises(works.Missing) as e:
         works.read_part(c, "a", "feedback")
     assert e.value.reason == "no-feedback"
+    with pytest.raises(works.Missing) as e:
+        works.read_part(c, "a", "notes")
+    assert e.value.reason == "no-notes"
     with pytest.raises(LookupError):
         works.read_part(c, "nope", "source")
 

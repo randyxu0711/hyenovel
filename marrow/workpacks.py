@@ -1,4 +1,4 @@
-"""工作包登錄表:analyst / criticizer 的 system prompt、輸出 schema、輸入組裝與閘門分派。
+"""工作包登錄表:analyst / reviewer 的 system prompt、輸出 schema、輸入組裝與閘門分派。
 
 prompt 是 marrow 內唯一正本(無工具版:原文直接放在使用者訊息)。輸出格式與 schema 由這裡
 附在 system prompt 尾巴(穩定、可被快取);模型把 JSON 當文字吐,我們解析、閘門驗。
@@ -18,7 +18,7 @@ _PROMPTS = Path(__file__).resolve().parent / "prompts"
 @dataclass(frozen=True)
 class WorkPack:
     name: str
-    kind: Literal["analysis", "feedback"]
+    kind: Literal["analysis", "notes"]
     system_prompt: str
     schema: dict
 
@@ -44,15 +44,18 @@ def _system_prompt(name: str, sch: dict) -> str:
 WORKPACKS: dict[str, WorkPack] = {
     name: WorkPack(name, kind, _system_prompt(name, schema.load_schema(kind)),
                    schema.load_schema(kind))
-    for name, kind in (("analyst", "analysis"), ("criticizer", "feedback"))
+    for name, kind in (("analyst", "analysis"), ("reviewer", "notes"))
 }
+
+
+_NEEDS_ANALYSIS = ("reviewer",)
 
 
 def first_input(name: str, slug: str, source: str, analysis: dict | None) -> str:
     out = f"slug: {slug}\n<source>\n{source}\n</source>"
-    if name == "criticizer":
+    if name in _NEEDS_ANALYSIS:
         if analysis is None:
-            raise ValueError("criticizer 需要 analysis")
+            raise ValueError(f"{name} 需要 analysis")
         out += f"\n<analysis>\n{canonical_json(analysis)}\n</analysis>"
     return out
 
@@ -76,4 +79,4 @@ def repair_input(name: str, slug: str, source: str, analysis: dict | None,
 def gate(name: str, body: dict, source: str, analysis: dict | None) -> list[str]:
     if name == "analyst":
         return _gate.gate_analysis(body, source)
-    return _gate.gate_feedback(body, analysis, source)
+    return _gate.gate_notes(body, analysis, source)

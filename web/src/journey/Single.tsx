@@ -125,7 +125,7 @@ export default function Single() {
               <h3 className="fb-sec">如果只能改一件事</h3>
               <p className="fb-lead one">{fb.one_line}</p>
             </div>
-          ) : <p className="sb-msg">這篇還沒有編輯回饋。</p>)}
+          ) : <p className="sb-msg">這篇還沒有備課筆記。</p>)}
           </div>
         </div>
       )}

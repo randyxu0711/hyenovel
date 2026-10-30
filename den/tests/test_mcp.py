@@ -396,6 +396,13 @@ def test_resolve_ambiguous_lists_candidates(cden):
     assert not any(p.startswith("/discuss") for _, p in cden.paths)
 
 
+def test_ambiguous_over_limit_says_at_least(cden):
+    for i in range(21):
+        _add_story(cden, f"d{i + 1:02d}", f"海之{i}", "x")
+    t = _text(_call(cden.client(), "read_work", {"work": "海", "part": "source"}))
+    assert "超過 20 篇符合「海」" in t and "有 20 篇" not in t
+
+
 def test_resolve_not_found(cden):
     r = _call(cden.client(), "read_work", {"work": "不存在的", "part": "source"})
     assert r.is_error and "找不到「不存在的」這篇" in _text(r) and "find_works" in _text(r)
@@ -420,14 +427,16 @@ def test_read_work_parts(den):
     assert "第 1 版原文" in src
     r = _call(den.client(), "read_work", {"work": "mini", "part": "feedback"})
     assert r.is_error and "沒有舊版客觀回饋" in _text(r)
+    r = _call(den.client(), "read_work", {"work": "mini", "part": "notes"})
+    assert r.is_error and "還沒有備課筆記" in _text(r)
     _add_story(den, "d01", "海", "x")
     r = _call(den.client(), "read_work", {"work": "d01", "part": "analysis"})
     assert r.is_error and _text(r).endswith("〈海〉還沒有分析。")
 
 
 def test_read_work_bad_part_local_reject(den):
-    r = _call(den.client(), "read_work", {"work": "mini", "part": "notes"})
-    assert r.is_error and "source" in _text(r)
+    r = _call(den.client(), "read_work", {"work": "mini", "part": "bogus"})
+    assert r.is_error and "notes(備課筆記" in _text(r)
     assert den.paths == []
 
 
@@ -706,3 +715,13 @@ def test_submit_unchanged_never_analyzed_file_starts(den, tmp_path):
     _add_story(den, "d01", "海", TEXT)                 # 有這版原文、從沒跑過分析
     r = _call(den.client(), "submit_work", {"path": str(_write(tmp_path))})
     assert not r.is_error and "分析已開始" in _text(r) and _job_count(den) == 1
+
+
+@pytest.mark.parametrize("w,want", [
+    ({"state": "notes-running"}, "分析好了,備課筆記還在跑"),
+    ({"state": "notes-stopped", "error_class": "usage-limit"}, "分析好了,備課筆記停住了(訂閱額度用完)"),
+    ({"state": "notes-stopped", "error_class": None}, "分析好了,備課筆記停住了"),
+])
+def test_work_line_shows_reviewer_progress(w, want):
+    line = den_mcp._work_line({"title": "t", "opening": "o", "talked_at": None, **w})
+    assert f"· {want} ·" in line

@@ -48,15 +48,19 @@ _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
              "query 給標題或開頭裡的關鍵詞(例「海」),不給就列最近的。")
-DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ feedback(舊版客觀回饋)。"
+DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ "
+             "notes(備課筆記:另一位冷讀者依輕重排好的問題清單,作者說「直接給我問題」「冷一點的版本」時用)/ "
+             "feedback(舊版客觀回饋)。給 notes 時要跟作者說明這是另一位冷讀者的筆記,不是 companion 的感受。"
              "只在作者自己要看時用,不要拿來代替 companion 回答。work 同 talk_to_companion。")
 DESC_SUBMIT = (
     "交一篇稿子給 hyenovel:只收本機 .md / .txt 檔案路徑(不收貼上的全文、不收 pdf/docx——請作者先存成純文字檔)。"
     "改稿重交請帶 work(作品標題或關鍵詞)。不給 path = 續跑這篇停住的分析(不會重跑已完成的)。"
     "分析在背景跑幾分鐘,回報收到的檔名、修改時間、字數,請作者確認是對的檔。會用作者同一份 Claude 訂閱額度。")
 DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
-_PARTS = ("source", "analysis", "feedback")
-_WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
+_PARTS = ("source", "analysis", "notes", "feedback")
+_CANDIDATES = 20   # 作品有歧義時最多列幾篇
+_WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析",
+                "notes-running": "分析好了,備課筆記還在跑"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
 PROMPT_COMPANION = (
@@ -73,9 +77,10 @@ def _when(ts: float | None) -> str:
 
 def _work_line(w: dict) -> str:
     st = w["state"]
-    if st == "stopped":
+    if st in ("stopped", "notes-stopped"):
         cls = w.get("error_class")
-        label = f"分析停住了({_REASONS.get(cls, cls)})" if cls else "分析停住了"
+        what = "分析好了,備課筆記停住了" if st == "notes-stopped" else "分析停住了"
+        label = f"{what}({_REASONS.get(cls, cls)})" if cls else what
     else:
         label = _WORK_STATES.get(st, st)
     talked = f"最近聊 {_when(w['talked_at'])}" if w.get("talked_at") else "還沒聊過"
@@ -175,12 +180,13 @@ def build_server(den: DenClient) -> MCPServer:
             if not hits:
                 raise _reject("no-work", "還沒有任何作品。請給我稿子的檔案路徑(.md / .txt)。")
             return hits[0]
-        hits = await _works(q=work)
+        hits = await _works(q=work, limit=_CANDIDATES + 1)   # 多拿一筆才知道有沒有超過
         if not hits:
             raise _reject("work-not-found", f"找不到「{work}」這篇。可以用 find_works 看有哪些作品。")
         if len(hits) > 1:
+            many = f"超過 {_CANDIDATES}" if len(hits) > _CANDIDATES else f"有 {len(hits)}"
             raise _reject("work-ambiguous", "\n".join(
-                [f"有 {len(hits)} 篇符合「{work}」,請問作者是哪一篇:"] + [_work_line(w) for w in hits]
+                [f"{many} 篇符合「{work}」,請問作者是哪一篇:"] + [_work_line(w) for w in hits[:_CANDIDATES]]
                 + ["請用標題裡更完整的字再試一次。"]))
         return hits[0]
 
@@ -196,11 +202,12 @@ def build_server(den: DenClient) -> MCPServer:
 
     async def _read(part: str, work: str | None) -> str:
         if part not in _PARTS:
-            raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ feedback(舊版客觀回饋)。")
+            raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ notes(備課筆記)/ feedback(舊版客觀回饋)。")
         w = await resolve_work(work)
         name = f"〈{w['title']}〉"
         out = await call("GET", f"/works/{w['slug']}/{part}", on_status={404: f"找不到{name}。"},
                          on_detail={"not-analyzed": f"{name}還沒有分析。",
+                                    "no-notes": f"{name}還沒有備課筆記。",
                                     "no-feedback": f"{name}沒有舊版客觀回饋。"})
         return out["text"]
 

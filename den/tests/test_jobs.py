@@ -10,13 +10,13 @@ import pytest
 
 from den import jobs
 from den.pipeline import StepOutcome
-from den.tests.test_pipeline import _analysis, _feedback, fail, ok
+from den.tests.test_pipeline import _analysis, _notes, fail, ok
 from marrow import repo
 from marrow.workpacks import WORKPACKS
 
 
 class GatedRun:
-    """run_factory:每次 run 先等 gate,再依 schema 吐 ok(analysis) 或 ok(feedback)。"""
+    """run_factory:每次 run 先等 gate,再依 schema 吐 ok(analysis) 或 ok(notes)。"""
 
     def __init__(self, *, gated=True, exc=None):
         self.gate = asyncio.Event()
@@ -34,7 +34,7 @@ class GatedRun:
             self.calls += 1
             self.started.set()
             await self.gate.wait()
-            return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _feedback())
+            return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _notes())
         return run
 
 
@@ -301,19 +301,19 @@ def test_submit_dedupes_inflight_same_version(conn, caplog):
 # ── 8c:同一版自動續跑、續跑防重 ──
 
 class ScriptRun:
-    """run_factory:analyst 一律 ok;criticizer 依 crit 腳本(先吐完再一律 ok)。記每步呼叫數。"""
+    """run_factory:analyst 一律 ok;reviewer 依 crit 腳本(先吐完再一律 ok)。記每步呼叫數。"""
 
     def __init__(self, *crit):
         self.crit = list(crit)
-        self.calls = {"analyst": 0, "criticizer": 0}
+        self.calls = {"analyst": 0, "reviewer": 0}
 
     def __call__(self, on_proc):
         async def run(system_prompt, user_prompt, schema):
             if schema is WORKPACKS["analyst"].schema:
                 self.calls["analyst"] += 1
                 return ok(_analysis())
-            self.calls["criticizer"] += 1
-            return self.crit.pop(0) if self.crit else ok(_feedback())
+            self.calls["reviewer"] += 1
+            return self.crit.pop(0) if self.crit else ok(_notes())
         return run
 
 
@@ -329,7 +329,7 @@ def test_submit_auto_resumes_paused_same_version(conn, caplog):
         assert first["resumed"] is False
         w = asyncio.create_task(m.worker())
         await _until(lambda: _state(conn, first["job_id"]) == "paused", "撞額度暫停")
-        assert run.calls == {"analyst": 1, "criticizer": 1}
+        assert run.calls == {"analyst": 1, "reviewer": 1}
         with caplog.at_level(logging.INFO, logger="hyenovel"):
             again = m.submit("mini")
         assert again == {"job_id": first["job_id"], "estimate": again["estimate"],
@@ -338,7 +338,7 @@ def test_submit_auto_resumes_paused_same_version(conn, caplog):
         assert f"event=job-auto-resumed job={first['job_id']}" in caplog.text
         assert _job_count(conn) == 1
         await _until(lambda: _state(conn, first["job_id"]) == "done", "續跑跑完")
-        assert run.calls == {"analyst": 1, "criticizer": 2}      # analyst 有 ok attempt,不重跑
+        assert run.calls == {"analyst": 1, "reviewer": 2}      # analyst 有 ok attempt,不重跑
         q = m.bus.subscribe(first["job_id"])                     # bus 已 reset:沒有上一輪的 error
         evs = [q.get_nowait() for _ in range(q.qsize())]
         assert not any(e["event"] == "error" for e in evs)
@@ -473,7 +473,7 @@ def test_rerun_after_done_can_pause_and_resume(conn):
         again = m.submit("mini")                                   # 自動續跑 J2
         assert (again["job_id"], again["resumed"]) == (j2, True)
         await _until(lambda: _state(conn, j2) == "done", "J2 續跑完")
-        assert run.calls == {"analyst": 2, "criticizer": 3}        # J2 的 analyst 沒重跑
+        assert run.calls == {"analyst": 2, "reviewer": 3}        # J2 的 analyst 沒重跑
         run.crit.append(fail("usage-limit"))
         j3 = m.submit("mini")["job_id"]
         await _until(lambda: _state(conn, j3) == "paused", "J3 撞額度")
