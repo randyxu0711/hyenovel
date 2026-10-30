@@ -84,8 +84,11 @@ class StoryIn(BaseModel):
 
 class DiscussIn(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
-    message: str = Field(min_length=1, max_length=MAX_CHAT_CHARS)
+    message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
     anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
+    mode: Literal["direct", "slow", "imaginative"] | None = None   # 同 companion.MODES
+    home: Literal["web", "mcp"] = "web"
+    client: ClientIn | None = None
 
 
 def load_token(data_dir: Path) -> str:
@@ -403,8 +406,6 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id)
         except LookupError:
             raise reject(404, "unknown-slug", "這篇不在 DB") from None
-        except ValueError:
-            raise reject(409, "not-analyzed", "這篇還沒分析完成") from None
         except discuss.UnknownSession:
             raise reject(404, "unknown-session", "這篇沒有這一局") from None
         lock = None
@@ -412,7 +413,9 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             lock = state.chat_locks.setdefault(f"{slug}/{body.session_id}", asyncio.Lock())
             if lock.locked():
                 raise reject(409, "busy", "這一局還有一輪在跑")
-        events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors)
+        client = body.client.model_dump() if body.client else None
+        events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors,
+                                  body.mode, body.home, client)
         return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

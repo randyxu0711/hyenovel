@@ -117,7 +117,7 @@ def test_first_turn_creates_session_and_persists_both(c):
     assert [e["data"] for e in evs[:2]] == [{"text": "A"}, {"text": "B"}]
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
-    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid}
+    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow"}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
     assert [(t["role"], t["text"], t["session"]) for t in ts] == \
@@ -130,8 +130,8 @@ def test_second_turn_sends_history(c, fake_chat):
     evs = post_discuss(c, "mini", sid, "那改慢呢")
     assert evs[-1]["data"] == {"ok": True, "session_id": sid}
     system, user = fake_chat.calls[-1]
-    assert "<source>" in system                       # 素材 = open_discussion 那份
-    assert "作者:結尾太快?" in user and "編輯:AB" in user
+    assert "<source>" in system                       # 素材 = companion 那份
+    assert "作者:結尾太快?" in user and "你:AB" in user
     assert user.rstrip().endswith("那改慢呢")
     assert fake_chat.calls[0][1] == "結尾太快?"         # 第一輪沒有歷史
     assert [t["text"] for t in turns(c)] == ["結尾太快?", "AB", "那改慢呢", "AB"]
@@ -337,7 +337,8 @@ def test_busy_lock_at_stream_start_yields_error(c):
 
 # ── 4xx(串流開始前判)──
 
-@pytest.mark.parametrize("body", [{"message": ""}, {"message": "x" * 8001},
+@pytest.mark.parametrize("body", [{"message": "x", "mode": "doubt"}, {"message": "x" * 8001},
+                                  {"message": "x", "home": "cli"},
                                   {"message": "x", "anchors": ["a"] * 9},
                                   {"message": "x", "session_id": "s" * 65}])
 def test_bad_body_422(c, fake_chat, body):
@@ -360,15 +361,6 @@ def test_unknown_slug_404(c, caplog):
     with caplog.at_level(logging.INFO, logger="hyenovel"):
         assert post_raw(c, "nope", None).status_code == 404
     assert "event=reject where=discuss reason=unknown-slug" in caplog.text
-
-
-def test_not_analyzed_409(c, caplog, fake_chat):
-    slug = c.post("/stories", json={"text": "未分析。"}).json()["slug"]
-    with caplog.at_level(logging.INFO, logger="hyenovel"):
-        r = post_raw(c, slug, None)
-    assert r.status_code == 409 and r.json() == {"detail": "這篇還沒分析完成"}
-    assert "event=reject where=discuss reason=not-analyzed" in caplog.text
-    assert fake_chat.calls == []
 
 
 def test_requires_token(c):
@@ -416,3 +408,82 @@ def test_commit_failure_yields_error_and_does_not_log_ok(c, monkeypatch, caplog)
     assert turns(c) == []
     assert "outcome=ok" not in caplog.text
     assert "stage=commit" in caplog.text
+
+
+# ── companion(第 1 批) ──
+
+def _mini_id(conn):
+    return repo.story_by_slug(conn, "mini")["id"]
+
+
+def test_unanalyzed_story_can_chat_with_source_only(c, fake_chat):
+    slug = c.post("/stories", json={"text": "未分析的稿。"}).json()["slug"]
+    evs = post_discuss(c, slug, None, "你覺得呢")
+    assert evs[-1]["event"] == "done"
+    system = fake_chat.calls[-1][0]
+    assert "未分析的稿。" in system and "你讀的時候注意到的結構" not in system
+    sid = evs[-1]["data"]["session_id"]
+    us = in_loop(c, lambda conn: _session_rows(conn, sid, slug))[1]
+    assert {u["analysis_fp"] for u in us} == {None}
+
+
+def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
+    def judged(conn):
+        sid_ = _mini_id(conn)
+        fb = repo.current_artifact(conn, sid_, "feedback")
+        return fb["body"] if fb else None, [x["text"] for x in repo.conclusions(conn, sid_)]
+    fb, concl = in_loop(c, judged)
+    first_turn(c)
+    system = fake_chat.calls[-1][0]
+    assert "你讀的時候注意到的結構" in system
+    assert "編輯回饋" not in system and "已留下的結論" not in system
+    for text in concl:
+        assert text not in system
+    if fb:
+        for p in fb.get("key_points") or ():
+            assert p["body"] not in system
+
+
+def test_mode_defaults_to_slow_and_is_recorded(c, fake_chat):
+    sid = first_turn(c)
+    assert "你的讀法:慢讀" in fake_chat.calls[-1][0]
+    user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert (user["mode"], asst["mode"]) == (None, "slow")
+
+
+def test_mode_carries_over_within_session(c, fake_chat):
+    evs = [json.loads(line[6:]) for line in c.post("/discuss/mini", json={
+        "message": "講重點", "mode": "direct"}).text.splitlines() if line.startswith("data: ")]
+    sid = evs[-1]["data"]["session_id"]
+    assert "你的讀法:直說" in fake_chat.calls[-1][0]
+    post_discuss(c, "mini", sid, "然後呢")
+    assert "你的讀法:直說" in fake_chat.calls[-1][0]
+    assert in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]["mode"] == "direct"
+
+
+def test_empty_message_stores_only_assistant(c, fake_chat):
+    from den.discuss import OPENER
+    evs = post_discuss(c, "mini", None, "")
+    sid = evs[-1]["data"]["session_id"]
+    assert fake_chat.calls[-1][1] == OPENER
+    us = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert [(u["seq"], u["role"]) for u in us] == [(0, "assistant")]
+    post_discuss(c, "mini", sid, "嗯")
+    us = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert [(u["seq"], u["role"]) for u in us] == [(0, "assistant"), (1, "user"), (2, "assistant")]
+    assert "作者:\n" not in fake_chat.calls[-1][1]
+
+
+def test_home_and_client_recorded(c):
+    r = c.post("/discuss/mini", json={"message": "q", "home": "mcp",
+                                      "client": {"name": "claude-code", "version": "2.1.314"}})
+    sid = [json.loads(x[6:]) for x in r.text.splitlines() if x.startswith("data: ")][-1]["data"]["session_id"]
+    d = in_loop(c, lambda conn: _session_rows(conn, sid))[0]
+    assert (d["home"], d["client"]) == ("mcp", "claude-code")
+
+
+def test_discuss_mode_literal_matches_companion_modes():
+    import typing
+    from den.companion import MODES
+    ann = den_app.DiscussIn.model_fields["mode"].annotation
+    assert typing.get_args(typing.get_args(ann)[0]) == MODES
