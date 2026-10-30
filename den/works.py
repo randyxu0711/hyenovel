@@ -110,6 +110,6 @@ def read_part(conn, slug: str, part: str) -> str:
         head = [_LEGACY]
     if art["source_version_id"] != latest["id"]:
         n = repo.source_version(conn, art["source_version_id"])["n"]
-        tail = ",新版還沒分析完" if part == "analysis" else ""
+        tail = ",新版還沒有分析結果" if part == "analysis" else ""
         head.append(f"(這是第 {n} 版的{what};最新是第 {latest['n']} 版{tail}。)")
     return "\n".join(head + ([""] if head else []) + [body])

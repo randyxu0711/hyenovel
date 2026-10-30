@@ -122,7 +122,7 @@ def test_read_source_is_latest_version(c):
 def test_read_analysis_marks_older_version(c):
     _two_versions(c, analysed=1)
     out = works.read_part(c, "a", "analysis")
-    assert out.splitlines()[0] == "(這是第 1 版的分析;最新是第 2 版,新版還沒分析完。)"
+    assert out.splitlines()[0] == "(這是第 1 版的分析;最新是第 2 版,新版還沒有分析結果。)"
     assert "等待" in out and "---" not in out.splitlines()[1]
 
 
