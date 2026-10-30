@@ -230,6 +230,24 @@ def test_resume_skips_committed_steps(conn):
                                        "detail": "resume-skip"}} in events
 
 
+def test_resume_old_pipeline_job_makes_skipped_analysis_current(conn):
+    """舊 den(全部成功才換 current)停在 criticizer 的 job:analyst 的分析從沒換上。
+    新 den 續跑會跳過 analyst,跳過時也要換上,否則 job done 了作品卻沒有這份分析。"""
+    job = _job(conn)
+    before = _current(conn, job, "analysis")["id"]
+    with conn:
+        aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"], "analysis",
+                                   1, _analysis("舊 den 的分析"), {"job": job["id"]}, 1.5)
+        repo.add_attempt(conn, job["id"], "analyst", 0, runner="claude-cli", model=None,
+                         cli_version=None, outcome="ok", raw_output=None, parsed=None,
+                         gate_verdict=None, tokens=None, duration_ms=1, artifact_id=aid, now=1.5)
+    assert _current(conn, job, "analysis")["id"] == before
+    run = FakeRun(ok(_notes()))
+    out, _, _ = _drive(conn, job, run)
+    assert out.state == "done" and len(run.calls) == 1
+    assert _current(conn, job, "analysis")["id"] == aid
+
+
 def test_reviewer_gets_this_jobs_analysis(conn):
     job = _job(conn)
     old = _current(conn, job, "analysis")["body"]

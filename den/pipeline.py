@@ -148,6 +148,10 @@ async def run_critique(conn, job: dict, run: RunFn, emit: Callable[[dict], None]
             log.info("event=step-skip job=%s step=%s", jid, step)
             emit(_phase(step, "ok", prior["n"], "resume-skip"))
             done[step] = repo.artifact(conn, prior["artifact_id"])
+            # 舊 den 只在全部成功時換 current:它停下的 job 已 ok 的步驟從沒換上。
+            # 續跑已由 _resume_blocker 保證是最新版、沒被取代,換上是安全的(已是 current 時無變化)
+            with conn:
+                repo.set_current(conn, job["story_id"], workpacks.WORKPACKS[step].kind, prior["artifact_id"])
             continue
         res = await _run_step(conn, job, step, slug, source, analysis, run, emit,
                               runner_name=runner_name, cli_version=cli_version,
