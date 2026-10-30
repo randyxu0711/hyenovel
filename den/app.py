@@ -378,10 +378,10 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         if ana is None:
             log.info("event=reject where=viz reason=not-analyzed")
             raise HTTPException(404, "這篇還沒分析完成")
-        judgment = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"),
-                                         repo.current_artifact(conn, st["id"], "feedback"))
+        picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"),
+                                       repo.current_artifact(conn, st["id"], "feedback"))
         src = repo.source_version(conn, ana["source_version_id"])["text"]
-        return vizdata.viz_payload(slug, ana["body"], judgment, src)
+        return vizdata.viz_payload(slug, ana["body"], vizdata.judgment_for_viz(picked), src)
 
     @app.get("/stories/{slug}/source")
     async def get_source(slug: str, request: Request):

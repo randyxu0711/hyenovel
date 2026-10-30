@@ -136,15 +136,27 @@ def notes_as_feedback(notes):
             "key_points": [pt(p) for p in pts if p["kind"] != "moved"]}
 
 
+def _job(art):
+    return (art.get("provenance") or {}).get("job")
+
+
 def pick_judgment(analysis_art, notes_art, feedback_art):
-    """與分析同版的判斷層(feedback 形狀):同版筆記優先,其次同版舊 feedback,否則 None。
-    不同版不配:refs 綁的 node id 與引文對不上這份分析。"""
-    sv = analysis_art["source_version_id"]
-    if notes_art is not None and notes_art["source_version_id"] == sv:
-        return notes_as_feedback(notes_art["body"])
-    if feedback_art is not None and feedback_art["source_version_id"] == sv:
-        return feedback_art["body"]
+    """與這份分析配對的判斷層:(\"notes\" | \"feedback\", body) 或 None。同版筆記優先,其次同版舊 feedback。
+    配對要同版**且同 job**(匯入的沒有 job,兩邊都沒有才算同):每步成功就換 current,同版重跑時
+    新分析先上、舊判斷層還在,它的 refs 綁的是別份分析的 node id。"""
+    for kind, art in (("notes", notes_art), ("feedback", feedback_art)):
+        if (art is not None and art["source_version_id"] == analysis_art["source_version_id"]
+                and _job(art) == _job(analysis_art)):
+            return kind, art["body"]
     return None
+
+
+def judgment_for_viz(picked):
+    """pick_judgment 的結果 → viz 的 feedback 欄(筆記轉成既有形狀)。"""
+    if picked is None:
+        return None
+    kind, body = picked
+    return notes_as_feedback(body) if kind == "notes" else body
 
 
 def viz_payload(slug, analysis, feedback, source):

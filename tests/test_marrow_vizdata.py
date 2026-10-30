@@ -51,20 +51,33 @@ def test_notes_as_feedback_splits_moved():
     assert "kind" not in fb["key_points"][0]
 
 
-def _art(sv, body):
-    return {"source_version_id": sv, "body": body}
+def _art(sv, body, job=None):
+    return {"source_version_id": sv, "body": body, "provenance": {} if job is None else {"job": job}}
 
 
 def test_pick_judgment_prefers_same_version_notes():
-    fb = {"read": "舊"}
-    assert vizdata.pick_judgment(_art(2, {}), _art(2, NOTES), _art(2, fb)) == vizdata.notes_as_feedback(NOTES)
+    assert vizdata.pick_judgment(_art(2, {}), _art(2, NOTES), _art(2, {"read": "舊"})) == ("notes", NOTES)
 
 
 def test_pick_judgment_skips_stale_notes_falls_back_to_same_version_feedback():
     fb = {"read": "舊"}
-    assert vizdata.pick_judgment(_art(2, {}), _art(1, NOTES), _art(2, fb)) == fb
+    assert vizdata.pick_judgment(_art(2, {}), _art(1, NOTES), _art(2, fb)) == ("feedback", fb)
 
 
 def test_pick_judgment_none_when_both_stale_or_missing():
     assert vizdata.pick_judgment(_art(2, {}), _art(1, NOTES), _art(1, {"read": "舊"})) is None
     assert vizdata.pick_judgment(_art(2, {}), None, None) is None
+
+
+def test_pick_judgment_same_version_rerun_needs_same_job():
+    """同版重跑:J2 的分析先換上,J1 的筆記 / 匯入的舊回饋 refs 綁的是別份分析的 node id,不能配。"""
+    ana = _art(2, {}, job=8)
+    assert vizdata.pick_judgment(ana, _art(2, NOTES, job=7), _art(2, {"read": "舊"})) is None
+    assert vizdata.pick_judgment(ana, _art(2, NOTES, job=8), None) == ("notes", NOTES)
+    assert vizdata.pick_judgment(_art(2, {}), _art(2, NOTES, job=7), None) is None   # 匯入的分析 × den 的筆記
+
+
+def test_judgment_for_viz():
+    assert vizdata.judgment_for_viz(None) is None
+    assert vizdata.judgment_for_viz(("notes", NOTES)) == vizdata.notes_as_feedback(NOTES)
+    assert vizdata.judgment_for_viz(("feedback", {"read": "舊"})) == {"read": "舊"}

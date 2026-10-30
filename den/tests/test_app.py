@@ -771,6 +771,27 @@ def test_viz_drops_judgment_of_other_version(data):
         assert c.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
 
 
+def test_viz_drops_judgment_after_same_version_rerun(data):
+    """web 的「重新分析」:同版新 job 的分析先換上、reviewer 停住 → 舊回饋不配新圖。"""
+    c = db.connect(data[0])
+    try:
+        with c:
+            st = repo.story_by_slug(c, "mini")
+            ana = repo.current_artifact(c, st["id"], "analysis")
+            fid, _ = repo.add_artifact(c, st["id"], ana["source_version_id"], "feedback", 1,
+                                       {"read": "舊回饋", "strengths": [], "key_points": [], "minor": [],
+                                        "one_line": "x"}, {}, 9.0)
+            repo.set_current(c, st["id"], "feedback", fid)
+            body = {**ana["body"], "synopsis": "重跑"}
+            aid, _ = repo.add_artifact(c, st["id"], ana["source_version_id"], "analysis", 1, body,
+                                       {"job": 42}, 10.0)
+            repo.set_current(c, st["id"], "analysis", aid)
+    finally:
+        c.close()
+    with _client(data) as cl:
+        assert cl.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
+
+
 def test_viz_404_when_not_analyzed(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
