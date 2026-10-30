@@ -98,7 +98,7 @@ def test_tools_listed(den):
         async with Client(den_mcp.build_server(den.client())) as c:
             return {t.name for t in (await c.list_tools()).tools}
     assert anyio.run(go) == {"start_critique", "critique_status", "cancel_critique",
-                             "resume_critique", "open_discussion"}
+                             "resume_critique", "open_discussion", "talk_to_companion"}
     assert den.spawns == 0   # 列 tool 不碰 den
 
 
@@ -501,5 +501,123 @@ def test_main_keeps_stdout_clean(tmp_path):
     for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
         if ln.strip():
             json.loads(ln)
-    assert len(listed["result"]["tools"]) == 5
+    assert len(listed["result"]["tools"]) == 6
     assert not (tmp_path / "den.json").exists()   # 沒拉起 den
+
+
+# ── talk_to_companion ──
+
+@pytest.fixture
+def cden(data):
+    from den.tests.test_app_discuss import FakeChat
+    d = FakeDen(data, chat=FakeChat())
+    yield d
+    d.stop()
+
+
+def _session(client, calls, between=None):
+    """同一個 MCP 連線(= 同一個 shim 行程狀態)連續呼叫;between(i) 在第 i 次之後跑。"""
+    async def go():
+        out = []
+        async with Client(den_mcp.build_server(client),
+                          client_info=Implementation(name="claude-code", version="2.1.314")) as c:
+            for i, (name, args) in enumerate(calls):
+                out.append(await c.call_tool(name, args))
+                if between:
+                    between(i)
+        return out
+    return anyio.run(go)
+
+
+def _discussions(den):
+    c = _conn(den)
+    try:
+        return [dict(r) for r in c.execute("SELECT * FROM discussion")]
+    finally:
+        c.close()
+
+
+def _utterance_count(den):
+    c = _conn(den)
+    try:
+        return c.execute("SELECT COUNT(*) FROM utterance").fetchone()[0]
+    finally:
+        c.close()
+
+
+def test_talk_returns_companion_text_and_reuses_session(cden):
+    r1, r2 = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                       ("talk_to_companion", {"message": "結尾呢", "work": "mini"})])
+    assert not r1.is_error and _text(r1).startswith("AB")
+    assert len(_discussions(cden)) == 1 and _utterance_count(cden) == 3   # 開場 1 + 一來一回 2
+
+
+def test_talk_without_work_uses_last_story(cden):
+    r1, r2 = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                       ("talk_to_companion", {"message": "嗯"})])
+    assert not r2.is_error and len(_discussions(cden)) == 1
+
+
+def test_talk_without_any_work_is_tool_error(cden):
+    r = _call(cden.client(), "talk_to_companion", {"message": "嗨"})
+    assert r.is_error and "slug" in _text(r)
+    assert ("POST", "/discuss/mini") not in cden.paths
+
+
+def test_talk_bad_mode_rejected_locally(cden):
+    r = _call(cden.client(), "talk_to_companion", {"work": "mini", "mode": "doubt"})
+    assert r.is_error and "direct(直說)" in _text(r)
+    assert not any(p.startswith("/discuss") for _, p in cden.paths)
+
+
+def test_talk_records_home_mcp_and_client_name(cden):
+    _call(cden.client(), "talk_to_companion", {"work": "mini", "mode": "direct"})
+    (d,) = _discussions(cden)
+    assert (d["home"], d["client"]) == ("mcp", "claude-code")
+    assert "你的讀法:直說" in cden.chat.calls[-1][0]
+
+
+def test_talk_worker_error_tells_host_to_report_failure(cden):
+    cden.chat.outcome = "usage-limit"
+    r = _call(cden.client(), "talk_to_companion", {"work": "mini"})
+    assert r.is_error and "用量已達上限" in _text(r) and "照實告訴作者" in _text(r)
+
+
+def test_talk_busy_is_tool_error(cden):
+    import types
+
+    def jam(i):
+        sid = _discussions(cden)[0]["external_id"]
+        cden.tc.app.state.chat_locks[f"mini/{sid}"] = types.SimpleNamespace(locked=lambda: True)
+    _, r = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                     ("talk_to_companion", {"message": "再來"})], between=jam)
+    assert r.is_error and "上一輪還在跑" in _text(r)
+    assert len(cden.chat.calls) == 1
+
+
+def test_talk_unknown_session_starts_fresh(cden):
+    def wipe(i):
+        if i:
+            return
+        c = _conn(cden)
+        with c:
+            c.execute("DELETE FROM utterance")
+            c.execute("DELETE FROM discussion")
+        c.close()
+    _, r = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                     ("talk_to_companion", {"message": "還在嗎"})], between=wipe)
+    assert not r.is_error and len(_discussions(cden)) == 1 and _utterance_count(cden) == 2
+
+
+def test_talk_survives_den_restart(cden):
+    def restart(i):
+        cden.stop()
+        cden.start()
+    _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                             ("talk_to_companion", {"message": "繼續"})], between=restart)
+    assert len(_discussions(cden)) == 1 and _utterance_count(cden) == 3
+
+
+def test_talk_unknown_slug(cden):
+    r = _call(cden.client(), "talk_to_companion", {"work": "nope"})
+    assert r.is_error and "找不到這篇:nope" in _text(r)
