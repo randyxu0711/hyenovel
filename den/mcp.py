@@ -63,6 +63,11 @@ DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊�
              "query 給標題或開頭裡的關鍵詞(例「海」),不給就列最近的。")
 DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ feedback(舊版客觀回饋)。"
              "只在作者自己要看時用,不要拿來代替 companion 回答。work 同 talk_to_companion。")
+DESC_SUBMIT = (
+    "交一篇稿子給 hyenovel:只收本機 .md / .txt 檔案路徑(不收貼上的全文、不收 pdf/docx——請作者先存成純文字檔)。"
+    "改稿重交請帶 work(作品標題或關鍵詞)。不給 path = 續跑這篇停住的分析(不會重跑已完成的)。"
+    "分析在背景跑幾分鐘,回報收到的檔名、修改時間、字數,請作者確認是對的檔。會用作者同一份 Claude 訂閱額度。")
+DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
 _PARTS = ("source", "analysis", "feedback")
 _WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
@@ -319,6 +324,61 @@ def build_server(den: DenClient) -> MCPServer:
                          on_detail={"not-analyzed": f"{name}還沒有分析。",
                                     "no-feedback": f"{name}沒有舊版客觀回饋。"})
         return out["text"]
+
+    def _stopped_why(j: dict) -> str:
+        cls = j.get("previous_error_class")
+        if cls:
+            return f"上次停在:{_REASONS.get(cls, cls)}"
+        return "上次是你取消的。" if j.get("previous_state") == "cancelled" else "上次沒有跑完。"
+
+    async def _submit_file(path: str, work: str | None, title: str | None, client) -> str:
+        text = _read_source(path)
+        p = Path(path).expanduser()
+        slug = (await resolve_work(work))["slug"] if work else None
+        sent_title = title if title is not None else (None if work else p.stem)
+        s = await call("POST", "/stories", {"text": text, "title": sent_title, "slug": slug})
+        j = await call("POST", "/jobs", {"kind": "critique", "slug": s["slug"], "client": client})
+        name = s["title"] or p.stem
+        chars = sum(not ch.isspace() for ch in text)
+        lines = [f"收到 {p.name}({_when(p.stat().st_mtime)} 修改,{chars:,} 字),作品〈{name}〉。"]
+        if s["reused"]:
+            lines.append(f"這份稿子和〈{name}〉最新一版一樣,沿用那篇。")
+        if j.get("resumed"):
+            lines += ["這一版之前跑到一半,已接續(已完成的步驟不重跑)。", _stopped_why(j)]
+        elif j["existing"]:
+            lines.append("這一版已經在分析中,沒有再開一次。")
+        else:
+            lines.append(f"分析已開始,{_minutes(j['estimate'])}。會用你同一份訂閱額度。")
+        lines.append("分析在背景跑,不用等;現在就可以用 talk_to_companion 讓 companion 先開口。")
+        return "\n".join(lines)
+
+    async def _resume(work: str | None, client) -> str:
+        w = await resolve_work(work)
+        name = f"〈{w['title']}〉"
+        j = await call("POST", "/jobs", {"kind": "critique", "slug": w["slug"], "client": client,
+                                         "resume_only": True}, on_detail={
+            "done": f"{name}最新一版已經分析好了,不用再跑。改了稿請給我新檔的路徑。",
+            "never": f"{name}最新一版還沒開始分析,請再給我一次檔案路徑交稿。"})
+        if j.get("resumed"):
+            return f"{name}已接著上次停下的地方續跑。{_stopped_why(j)}"
+        return f"{name}已經在分析中。"
+
+    @server.tool(description=DESC_SUBMIT)
+    async def submit_work(ctx: Context, path: str | None = None, work: str | None = None,
+                          title: str | None = None) -> str:
+        if path is None:
+            return await guarded(_resume(work, client_of(ctx)))
+        return await guarded(_submit_file(path, work, title, client_of(ctx)))
+
+    async def _cancel_work(work: str | None) -> str:
+        w = await resolve_work(work)
+        name = f"〈{w['title']}〉"
+        await call("POST", f"/works/{w['slug']}/cancel", on_status={409: f"{name}現在沒有在分析。"})
+        return f"{name}的分析已停下;之後不帶路徑呼叫 submit_work 可以接著跑。"
+
+    @server.tool(description=DESC_CANCEL_WORK)
+    async def cancel_work(work: str | None = None) -> str:
+        return await guarded(_cancel_work(work))
 
     @server.tool(description=DESC_READ, annotations=_READONLY)
     async def read_work(part: str, work: str | None = None) -> str:

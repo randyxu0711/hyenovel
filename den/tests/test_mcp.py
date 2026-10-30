@@ -99,7 +99,7 @@ def test_tools_listed(den):
             return {t.name for t in (await c.list_tools()).tools}
     assert anyio.run(go) == {"start_critique", "critique_status", "cancel_critique",
                              "resume_critique", "open_discussion", "talk_to_companion",
-                             "find_works", "read_work"}
+                             "find_works", "read_work", "submit_work", "cancel_work"}
     assert den.spawns == 0   # 列 tool 不碰 den
 
 
@@ -502,7 +502,7 @@ def test_main_keeps_stdout_clean(tmp_path):
     for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
         if ln.strip():
             json.loads(ln)
-    assert len(listed["result"]["tools"]) == 8
+    assert len(listed["result"]["tools"]) == 10
     assert not (tmp_path / "den.json").exists()   # 沒拉起 den
 
 
@@ -754,3 +754,178 @@ def test_readonly_annotations(den):
     tools = {t.name: t for t in _list_tools(den)}
     assert tools["find_works"].annotations.read_only_hint is True
     assert tools["read_work"].annotations.read_only_hint is True
+
+
+# ── submit_work / cancel_work ──
+
+def _last_job(den):
+    c = _conn(den)
+    try:
+        return dict(c.execute("SELECT * FROM job ORDER BY id DESC LIMIT 1").fetchone())
+    finally:
+        c.close()
+
+
+def _job_count(den):
+    c = _conn(den)
+    try:
+        return c.execute("SELECT COUNT(*) FROM job").fetchone()[0]
+    finally:
+        c.close()
+
+
+def test_submit_happy(den, tmp_path):
+    r = _call(den.client(), "submit_work", {"path": str(_write(tmp_path))})
+    assert not r.is_error
+    t = _text(r)
+    assert "作品〈a〉" in t and "分析已開始" in t and "第一次跑" in t and "訂閱額度" in t
+    assert t.splitlines()[-1].startswith("分析在背景跑,不用等")
+    assert "job" not in t and "d01" not in t                     # 不叫作者記編號
+    assert json.loads(_last_job(den)["params"])["client"]["name"] == "claude-code"
+
+
+def test_submit_legacy_era_client_info(den, tmp_path):
+    r = _call(den.client(), "submit_work", {"path": str(_write(tmp_path))}, mode="legacy")
+    assert not r.is_error and json.loads(_last_job(den)["params"])["client"]["name"] == "claude-code"
+
+
+def test_submit_reports_name_mtime_chars(den, tmp_path):
+    p = _write(tmp_path, "海.md", "她走。\n\n  海很冷。\n")
+    ts = time.mktime((2026, 10, 30, 14, 2, 0, 0, 0, -1))
+    os.utime(p, (ts, ts))
+    first = _text(_call(den.client(), "submit_work", {"path": str(p)})).splitlines()[0]
+    assert first == "收到 海.md(10/30 14:02 修改,7 字),作品〈海〉。"
+
+
+def test_submit_expands_home(den, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _write(tmp_path)
+    assert not _call(den.client(), "submit_work", {"path": "~/a.md"}).is_error
+
+
+def test_submit_big5_with_title(den, tmp_path):
+    p = _write(tmp_path, "b.txt", "他走進門。屋裡沒有人。燈還亮著。\n", enc="big5")
+    r = _call(den.client(), "submit_work", {"path": str(p), "title": "門"})
+    assert not r.is_error and "作品〈門〉" in _text(r)
+    c = _conn(den)
+    try:
+        st = repo.story_by_slug(c, "d01")
+        assert st["title"] == "門"
+        assert repo.latest_source_version(c, st["id"])["text"] == "他走進門。屋裡沒有人。燈還亮著。\n"
+    finally:
+        c.close()
+
+
+@pytest.mark.parametrize("make, want", [
+    (lambda d: d / "nope.md", "找不到"),
+    (lambda d: (d / "dir.md").mkdir() or d / "dir.md", "不是檔案"),
+    (lambda d: _write(d, "a.pdf"), ".txt"),
+    (lambda d: _write(d, "e.md", "  \n\n"), "空的"),
+    (lambda d: _write(d, "big.TXT", "字" * (MAX_SOURCE_BYTES // 3 + 1)), "上限"),
+], ids=["missing", "directory", "pdf", "empty", "oversize"])
+def test_submit_rejects(den, tmp_path, make, want):
+    before = _story_count(den)
+    r = _call(den.client(), "submit_work", {"path": str(make(tmp_path))})
+    assert r.is_error and want in _text(r)
+    assert _story_count(den) == before
+
+
+def test_submit_same_file_twice_reuses(den, tmp_path):
+    p = str(_write(tmp_path))
+    c = den.client()
+    _call(c, "submit_work", {"path": p})
+    second = _text(_call(c, "submit_work", {"path": p}))
+    assert "沿用那篇" in second and _story_count(den) == 2   # mini + d01
+
+
+def test_submit_revision_keeps_title(den, tmp_path):
+    c = den.client()
+    _call(c, "submit_work", {"path": str(_write(tmp_path, "海.md", "第一版。"))})
+    r = _call(c, "submit_work", {"path": str(_write(tmp_path, "海-v2.md", "第二版。")), "work": "海"})
+    assert not r.is_error and "作品〈海〉" in _text(r)
+    conn = _conn(den)
+    try:
+        st = repo.story_by_slug(conn, "d01")
+        assert st["title"] == "海" and repo.latest_source_version(conn, st["id"])["n"] == 2
+    finally:
+        conn.close()
+    assert _story_count(den) == 2
+
+
+def test_submit_twice_while_inflight_no_second_job(data, tmp_path):
+    d = FakeDen(data, run=Run(released=False))
+    try:
+        p = str(_write(tmp_path))
+        c = d.client()
+        _call(c, "submit_work", {"path": p})
+        t = _text(_call(c, "submit_work", {"path": p}))
+        assert "已經在分析中,沒有再開一次" in t and "分析已開始" not in t
+        assert _job_count(d) == 1
+    finally:
+        d.run.release.set()
+        d.stop()
+
+
+@pytest.mark.parametrize("state, cls, why", [
+    ("paused", "usage-limit", "上次停在:訂閱額度用完"),
+    ("cancelled", None, "上次是你取消的"),
+    ("failed", None, "上次沒有跑完"),
+], ids=["paused-usage-limit", "cancelled", "failed-no-class"])
+def test_submit_same_version_after_stop_resumes(den, tmp_path, state, cls, why):
+    p = str(_write(tmp_path))
+    c = den.client()
+    _call(c, "submit_work", {"path": p})
+    jid = _last_job(den)["id"]
+    conn = _conn(den)
+    try:
+        for _ in range(500):   # 假分析的引文對不上 → 閘門耗盡 → paused;worker 就此閒下
+            if repo.get_job(conn, jid)["state"] == "paused":
+                break
+            time.sleep(0.02)
+        with conn:
+            repo.set_job_state(conn, jid, state, time.time(), error_class=cls)
+    finally:
+        conn.close()
+    t = _text(_call(c, "submit_work", {"path": p}))
+    assert "這一版之前跑到一半,已接續(已完成的步驟不重跑)。" in t and why in t
+    assert "分析已開始" not in t and _job_count(den) == 1
+
+
+def test_submit_without_path_after_done_says_ready(den):
+    r = _call(den.client(), "submit_work", {"work": "mini"})
+    assert r.is_error and "最新一版已經分析好了,不用再跑" in _text(r)
+    assert _job_count(den) == 0
+
+
+def test_submit_without_path_never_ran(den):
+    _add_story(den, "d01", "海", "x")
+    r = _call(den.client(), "submit_work", {"work": "海"})
+    assert r.is_error and "〈海〉最新一版還沒開始分析" in _text(r) and _job_count(den) == 0
+
+
+def test_submit_without_path_resumes_paused(den):
+    jid = _make_job(den, "paused", "usage-limit")
+    r = _call(den.client(), "submit_work", {"work": "mini"})
+    assert not r.is_error and "已接著上次停下的地方續跑" in _text(r)
+    assert _job_count(den) == 1 and _last_job(den)["id"] == jid
+
+
+def test_cancel_work_running_and_idle(data, tmp_path):
+    d = FakeDen(data, run=Run(released=False))
+    try:
+        c = d.client()
+        _call(c, "submit_work", {"path": str(_write(tmp_path))})
+        r = _call(c, "cancel_work", {})
+        assert not r.is_error and "〈a〉的分析已停下" in _text(r)
+        r = _call(c, "cancel_work", {"work": "mini"})
+        assert r.is_error and "現在沒有在分析" in _text(r)
+    finally:
+        d.run.release.set()
+        d.stop()
+
+
+def test_write_tools_not_readonly(den):
+    tools = {t.name: t for t in _list_tools(den)}
+    for name in ("submit_work", "cancel_work", "talk_to_companion"):
+        a = tools[name].annotations
+        assert not (a and a.read_only_hint)
