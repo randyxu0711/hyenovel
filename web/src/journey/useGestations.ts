@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getRunningCritiques, streamCritique, cancelCritique, getIndex, reanalyzeCritique } from "../data/client";
 import type { Gestation, GestationStatus } from "../types";
 
-const STEP: Record<string, number> = { analyst: 1, criticizer: 2, render: 3 };
+// criticizer 留著:DB 裡舊 job 的 step 還是它
+const STEP: Record<string, number> = { analyst: 1, criticizer: 2, reviewer: 2, render: 3 };
 
 // 只有 "paused" 原樣保留,其餘一律當 "failed"
 //(resumable=true 已保證它值得續跑,只是不知道確切原因)。

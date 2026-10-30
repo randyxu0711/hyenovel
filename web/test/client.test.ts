@@ -80,6 +80,11 @@ describe("toIndexFile 翻譯表", () => {
     const s2 = one({ current: { analysis: art(T + 99), feedback: art(T) } });
     expect(s2.updated).toBe(new Date((T + 99) * 1000).toISOString());
   });
+  it("只有備課筆記(沒有舊回饋)也算 has_feedback;updated 納入 notes 時間", () => {
+    const s = one({ current: { analysis: art(T), feedback: null, notes: art(T + 77) } });
+    expect(s.has_feedback).toBe(true);
+    expect(s.updated).toBe(new Date((T + 77) * 1000).toISOString());
+  });
   it("count / 欄位直通", () => {
     const f = toIndexFile({ stories: [entry()] });
     expect(f.count).toBe(1);
@@ -185,6 +190,12 @@ describe("critique 走 job", () => {
     expect(running).toEqual([{ slug: "d01", title: "T", status: "running", step: 2 }]);
     expect(await cancelCritique("d01")).toBe(true);
     expect(calls[calls.length - 1].url).toBe("/api/jobs/7/cancel");
+  });
+  it("getRunningCritiques:reviewer 跑中與舊 criticizer 都是 step 2", async () => {
+    vi.stubGlobal("fetch", routes({ "GET /api/stories": { stories: [
+      entry({ latest_job: job("running", "reviewer") }),
+      entry({ slug: "d02", latest_job: job("running", "criticizer") })] } }).fn);
+    expect((await getRunningCritiques()).map(r => r.step)).toEqual([2, 2]);
   });
   it("getRunningCritiques queued 的 step 為 0、status 仍標 running", async () => {
     vi.stubGlobal("fetch", routes({ "GET /api/stories": { stories: [entry({ latest_job: job("queued") })] } }).fn);

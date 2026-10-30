@@ -191,6 +191,18 @@ describe("useGestations", () => {
     expect(result.current.gestations.get("i")?.step).toBe(2);   // stage=criticizer
   });
 
+  it("停在 reviewer 的故事:step 同舊 criticizer 是 2", async () => {
+    running.mockResolvedValue([]);
+    idx.mockResolvedValue({
+      generated: "", count: 1,
+      stories: [{ slug: "i", title: "壬", synopsis: "", nodes: 0, edges: 0, has_feedback: false, has_viz: false,
+                  updated: "", status: "paused", stage: "reviewer", resumable: true, reason: null }],
+    });
+    const { result } = renderHook(() => useGestations(() => {}));
+    await waitFor(() => expect(result.current.gestations.get("i")?.status).toBe("paused"));
+    expect(result.current.gestations.get("i")?.step).toBe(2);   // stage=reviewer
+  });
+
   it("index 的 status 是未列舉值但 resumable=true → 容忍,標 failed 不炸掉", async () => {
     running.mockResolvedValue([]);
     idx.mockResolvedValue({

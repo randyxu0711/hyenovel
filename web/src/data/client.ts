@@ -6,7 +6,7 @@ type DenArtifact = { id: number; created_at: number } | null;
 type DenJob = { id: number; state: string; step: string | null; error_class: string | null; updated_at: number };
 type DenStory = {
   slug: string; title: string; synopsis: string; nodes: number; edges: number;
-  current: { analysis: DenArtifact; feedback: DenArtifact }; latest_job: DenJob | null;
+  current: { analysis: DenArtifact; feedback: DenArtifact; notes?: DenArtifact }; latest_job: DenJob | null;
 };
 export type DenStories = { stories: DenStory[] };
 
@@ -20,10 +20,11 @@ function jobView(j: DenJob | null): Pick<IndexEntry, "status" | "stage" | "resum
 
 export function toIndexFile(res: DenStories): IndexFile {
   const stories = res.stories.map((s): IndexEntry => {
-    const t = Math.max(s.current.analysis?.created_at ?? 0, s.current.feedback?.created_at ?? 0, s.latest_job?.updated_at ?? 0);
+    const t = Math.max(s.current.analysis?.created_at ?? 0, s.current.feedback?.created_at ?? 0,
+      s.current.notes?.created_at ?? 0, s.latest_job?.updated_at ?? 0);
     return {
       slug: s.slug, title: s.title, synopsis: s.synopsis, nodes: s.nodes, edges: s.edges,
-      has_viz: s.current.analysis != null, has_feedback: s.current.feedback != null,
+      has_viz: s.current.analysis != null, has_feedback: s.current.feedback != null || s.current.notes != null,
       updated: new Date(t * 1000).toISOString(), ...jobView(s.latest_job),
     };
   });
@@ -154,7 +155,7 @@ export async function getRunningCritiques(): Promise<RunningCritique[]> {
       .filter(s => s.latest_job && (s.latest_job.state === "queued" || s.latest_job.state === "running"))
       .map(s => ({
         slug: s.slug, title: s.title, status: "running",
-        step: ({ analyst: 1, criticizer: 2 } as Record<string, number>)[s.latest_job!.step ?? ""] ?? 0,
+        step: ({ analyst: 1, criticizer: 2, reviewer: 2 } as Record<string, number>)[s.latest_job!.step ?? ""] ?? 0,
       }));
   } catch { return []; }
 }
