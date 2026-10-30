@@ -225,7 +225,7 @@ def build_server(den: DenClient) -> MCPServer:
             j = None
         if j is None:
             j = await call("POST", "/jobs", job)
-        name = s["title"] or p.stem
+        name = (await _works(q=s["slug"]))[0]["title"]   # 跟 find_works 同源:分析抽出的標題優先於檔名
         chars = sum(not ch.isspace() for ch in text)
         lines = [f"收到 {p.name}({_when(p.stat().st_mtime)} 修改,{chars:,} 字),作品〈{name}〉。"]
         if s["reused"]:

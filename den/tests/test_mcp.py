@@ -519,6 +519,25 @@ def test_submit_same_file_twice_reuses(den, tmp_path):
     assert "沿用那篇" in second and _story_count(den) == 2   # mini + d01
 
 
+def test_submit_reports_same_title_as_find_works(den, tmp_path):
+    """交稿回報的標題跟清單同源:分析抽出的標題優先於檔名(否則同一篇交稿叫〈draft3〉、清單叫〈海〉)。"""
+    c = den.client()
+    _call(c, "submit_work", {"path": str(_write(tmp_path, "draft3.md", "第一版。"))})
+    conn = _conn(den)
+    try:
+        st = repo.story_by_slug(conn, "d01")
+        vid = repo.latest_source_version(conn, st["id"])["id"]
+        aid, _ = repo.add_artifact(conn, st["id"], vid, "analysis", 1,
+                                   {"title": "海", "slug": "d01", "nodes": [], "edges": []}, {}, 3)
+        repo.set_current(conn, st["id"], "analysis", aid)
+        conn.commit()
+    finally:
+        conn.close()
+    r = _call(c, "submit_work", {"path": str(_write(tmp_path, "draft4.md", "第二版。")), "work": "海"})
+    assert not r.is_error and "作品〈海〉" in _text(r)
+    assert "〈海〉" in _text(_call(c, "find_works", {}))
+
+
 def test_submit_revision_keeps_title(den, tmp_path):
     c = den.client()
     _call(c, "submit_work", {"path": str(_write(tmp_path, "海.md", "第一版。"))})
