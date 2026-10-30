@@ -621,3 +621,12 @@ def test_talk_survives_den_restart(cden):
 def test_talk_unknown_slug(cden):
     r = _call(cden.client(), "talk_to_companion", {"work": "nope"})
     assert r.is_error and "找不到這篇:nope" in _text(r)
+
+
+def test_server_instructions_lead_with_verbatim_relay(den):
+    async def go():
+        async with Client(den_mcp.build_server(den.client())) as c:
+            return c.instructions
+    text = anyio.run(go)
+    assert text.startswith("talk_to_companion 回傳的是") and "一字不改" in text
+    assert len(text) <= 4096

@@ -31,7 +31,8 @@ MCP start_critique(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ critic
 
 ## 怎麼用(在本專案目錄開的 session)
 - `/story-critique <檔案路徑>` — 呼叫 MCP `start_critique` 送文、轉告預估、問進度時 `critique_status`。
-- `/story-discuss <slug>` — 先 `open_discussion` 取素材再來回討論(出版編輯人格、有據、反諂媚);**結論不會被保存**。
+- 陪讀 companion:宿主呼叫 MCP `talk_to_companion`(den 工人扮演、宿主原文轉述;模式 `direct`/`slow`/`imaginative`,人格在 `marrow/prompts/companion/`;素材只給原文+精簡分析,**不給 feedback/結論**)。
+- `/story-discuss <slug>` — 舊流程:先 `open_discussion` 取素材再來回討論(出版編輯人格);去留在 companion 第 2 批決定。
 - `python -m export <slug> [--out DIR]` — 從 DB 匯出 `<slug>.md`(單一 front matter,先回饋後分析)與 `<slug>.html`(viz);預設輸出到 `stories/<slug>/`。
 - `python -m den [--port N]` — 本機 daemon(127.0.0.1:8788,token 在 `~/.local/share/hyenovel/den.token`);
   舊 `stories/` 的篇要先 `python -m marrow.importer` 匯入;新篇由 `start_critique` 建立。工人 env 是白名單(無 `CLAUDE*`、
@@ -40,9 +41,9 @@ MCP start_critique(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ critic
   版本指紋不符才重啟,**忙碌中的 den 不重啟**(新版等跑完);`git pull` 後在 agent 內跑 `/mcp` 重載 shim。
   MCP 建立的故事 slug 是 `dNN`。
 - web:`cd web && npm run dev`(vite 代理 `/api` 到 den 並帶 token)。網頁討論與用量面板在切片 4b 前關閉(討論改用 `open_discussion`)。
-- 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`。五個 tool:
+- 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`。六個 tool:
   `start_critique`(送文開分析)/ `critique_status`(進度)/ `cancel_critique`(取消)/
-  `resume_critique`(續跑)/ `open_discussion`(取討論素材開聊)。
+  `resume_critique`(續跑)/ `open_discussion`(取討論素材開聊,舊)/ `talk_to_companion`(跟 companion 說話)。
 - `python viz.py <slug> [--check]` — 舊式出圖/驗引用(函式庫仍在,`export` 內部使用)。
 - `.venv/bin/python -m pytest` — 跑全部測試(venv:`uv venv && uv pip install -r pyproject.toml -r requirements-dev.txt`)(零成本、不燒訂閱)。CI 在 push 時跑同一套。
 - subagent 定義在 `.claude/agents/{analyst,criticizer}.md`(den 工人沿用);skill 在 `.claude/skills/`。

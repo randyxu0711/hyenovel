@@ -44,6 +44,11 @@ DESC_STATUS = ("查詢 start_critique 回的 job 進度(排隊/分析/評論/完
                "不帶 job_id 會列出最近的 job,新對話找不到編號時用。")
 DESC_CANCEL = "取消一個排隊中或執行中的評論 job。取消後可用 resume_critique 續跑。"
 DESC_RESUME = "續跑一個已暫停(例:額度用完)、失敗或已取消的評論 job;已完成的步驟不重跑。"
+# ≤4,096 字元(Claude Code 會靜默截斷);最重要的放第一句
+INSTRUCTIONS = (
+    "talk_to_companion 回傳的是陪讀角色 companion 對作者說的話:請一字不改地轉給作者,"
+    "不要改寫、摘要、補充或加上你自己的評論。作者想聊自己寫的作品、想聽讀者感受時用 talk_to_companion。"
+    "送新稿分析用 start_critique、查進度用 critique_status。")
 DESC_TALK = (
     "和陪讀的 companion 說話,回傳它的回覆——請原文轉給作者,不要改寫、摘要或補充。"
     "作者對 companion 說的任何話(包括「好了沒」)都用這個。message 留空 = 讓 companion 先開口。"
@@ -150,7 +155,7 @@ def _list_text(jobs: list[dict]) -> str:
 
 
 def build_server(den: DenClient) -> MCPServer:
-    server = MCPServer("hyenovel")
+    server = MCPServer("hyenovel", instructions=INSTRUCTIONS)
 
     async def call(method: str, path: str, json: dict | None = None, *,
                    on_status: dict[int, str] | None = None) -> dict:
