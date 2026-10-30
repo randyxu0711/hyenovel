@@ -13,8 +13,9 @@ import subprocess
 import sys
 import threading
 import time
+from json import loads as json_loads   # stream() 的參數名 json 遮住模組
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 import filelock
 import httpx
@@ -31,6 +32,14 @@ NOTICE_STALE = "hyenovel 已更新,請在 Claude Code 執行 `/mcp` 重新連線
 
 class DenUnavailable(Exception):
     """den 起不來 / 連不上;訊息給人看(有 den.log 時附尾巴)。"""
+
+
+class DenRejected(Exception):
+    """den 回 4xx/5xx(串流請求用;一般請求直接回 Response 給呼叫者看狀態碼)。"""
+
+    def __init__(self, status: int, detail: str):
+        super().__init__(f"{status}: {detail}")
+        self.status, self.detail = status, detail
 
 
 def default_spawn(data_dir: Path) -> Callable[[], subprocess.Popen]:
@@ -243,3 +252,51 @@ class DenClient:
             return self._send(conn, method, path, json)
         except httpx.TransportError as e:
             raise DenUnavailable(f"den 連線中斷:{e!r}") from None
+
+    def stream(self, method: str, path: str, json: dict | None = None) -> Iterator[dict]:
+        """SSE 請求:逐個 yield `{"event", "data"}`。≥400 丟 DenRejected。
+
+        重試規則同 request:只在確定沒到 den(連不上 / 401)時重送一次;
+        回應開始後斷線 = den 可能已經在花錢,丟 DenUnavailable 不重送。
+        """
+        conn = self.ensure()
+        try:
+            r = self._open(conn, method, path, json)
+            if r.status_code == 401:
+                r.close()
+                r = None
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            r = None
+        except httpx.TransportError as e:
+            raise DenUnavailable(f"den 連線中斷,這一輪可能已送達(不自動重送):{e!r}") from None
+        if r is None:
+            conn = self.ensure()   # 只重試一次
+            try:
+                r = self._open(conn, method, path, json)
+            except httpx.TransportError as e:
+                raise DenUnavailable(f"den 連線中斷:{e!r}") from None
+        try:
+            if r.status_code >= 400:
+                r.read()
+                raise DenRejected(r.status_code, _detail_of(r))
+            for line in r.iter_lines():
+                if line.startswith("data: "):
+                    yield json_loads(line[6:])
+        except httpx.TransportError as e:
+            raise DenUnavailable(f"den 連線中斷,這一輪可能已送達(不自動重送):{e!r}") from None
+        finally:
+            r.close()
+
+    @staticmethod
+    def _open(conn, method: str, path: str, json: dict | None) -> httpx.Response:
+        client, token = conn
+        req = client.build_request(method, path, json=json, headers={"Authorization": f"Bearer {token}"})
+        return client.send(req, stream=True)
+
+
+def _detail_of(r: httpx.Response) -> str:
+    try:
+        d = r.json().get("detail")
+    except (ValueError, AttributeError):
+        d = None
+    return str(d) if d else r.text[:200]

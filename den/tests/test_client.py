@@ -18,17 +18,29 @@ from fastapi.testclient import TestClient
 
 from den import app as den_app
 from den import client as den_client
-from den.client import DenClient, DenUnavailable
+from den.client import DenClient, DenRejected, DenUnavailable
 from den.tests.test_app import Run
 from den.version import fingerprint
+
+
+class _Broken(httpx.SyncByteStream):
+    """送一半就斷的回應本文。"""
+
+    def __init__(self, head: bytes, request):
+        self.head, self.request = head, request
+
+    def __iter__(self):
+        yield self.head
+        raise httpx.ReadError("dropped", request=self.request)
 
 
 class FakeDen:
     """可起可停的假 den;transport 記下每個請求的 Authorization 與回應碼。"""
 
-    def __init__(self, data, run=None):
+    def __init__(self, data, run=None, chat=None):
         self.url, self.dir = data
         self.run = run or Run()
+        self.chat = chat           # 討論的 chat_factory(FakeChat);None = 討論端點不可用
         self.tc = None
         self.auth: list[str | None] = []
         self.statuses: list[int] = []
@@ -37,10 +49,12 @@ class FakeDen:
         self.paths: list[tuple[str, str]] = []   # 真的送到假 den 的 (method, path)
         self.fake_401 = 0          # 非 /health 請求:接下來幾次直接回 401(不送進 den)
         self.raise_after = None    # 非 /health 請求:den 處理完後丟這個例外(回應在路上丟了)
+        self.drop_midway = False   # 非 /health 請求:回應本文送一半就斷(ReadError)
 
     # 注入點 ------------------------------------------------------------
     def start(self):
-        self.tc = TestClient(den_app.create_app(self.url, self.dir, run_factory=self.run))
+        self.tc = TestClient(den_app.create_app(self.url, self.dir, run_factory=self.run,
+                                                chat_factory=self.chat))
         self.tc.__enter__()
 
     def stop(self):
@@ -75,6 +89,9 @@ class FakeDen:
                     raise fake.raise_after("lost", request=request)
                 r.read()   # starlette 的回應 stream 不是 httpx.SyncByteStream,轉成一般回應
                 fake.statuses.append(r.status_code)
+                if api and fake.drop_midway:
+                    return httpx.Response(r.status_code, headers=r.headers,
+                                          stream=_Broken(r.content[:len(r.content) // 2], request))
                 return httpx.Response(r.status_code, headers=r.headers, content=r.content)
 
         return httpx.Client(base_url="http://testserver", transport=Switch())
@@ -523,3 +540,44 @@ def test_probe_uses_short_timeout(den, monkeypatch):
     monkeypatch.setattr(httpx.Client, "get", get)
     den.client().ensure()
     assert seen == [den_client._PROBE_TIMEOUT]
+
+
+# ── stream(SSE) ──
+
+@pytest.fixture
+def chat_den(data):
+    from den.tests.test_app_discuss import FakeChat
+    d = FakeDen(data, chat=FakeChat())
+    d.start()
+    yield d
+    d.stop()
+
+
+def test_stream_yields_events_in_order(chat_den):
+    evs = list(chat_den.client().stream("POST", "/discuss/mini", {"message": "q"}))
+    assert [e["event"] for e in evs] == ["token", "token", "message", "done"]
+    assert evs[2]["data"]["text"] == "AB"
+
+
+def test_stream_http_error_raises_with_detail(chat_den):
+    with pytest.raises(DenRejected) as e:
+        list(chat_den.client().stream("POST", "/discuss/nope", {"message": "q"}))
+    assert (e.value.status, e.value.detail) == (404, "這篇不在 DB")
+
+
+def test_stream_does_not_resend_after_midway_drop(chat_den):
+    c = chat_den.client()
+    c.ensure()
+    chat_den.drop_midway = True
+    chat_den.paths.clear()
+    with pytest.raises(DenUnavailable, match="不自動重送"):
+        list(c.stream("POST", "/discuss/mini", {"message": "q"}))
+    assert chat_den.paths.count(("POST", "/discuss/mini")) == 1
+
+
+def test_stream_retries_once_on_401(chat_den):
+    c = chat_den.client()
+    chat_den.fake_401 = 1
+    evs = list(c.stream("POST", "/discuss/mini", {"message": "q"}))
+    assert evs[-1]["event"] == "done"
+    assert chat_den.paths.count(("POST", "/discuss/mini")) == 1
