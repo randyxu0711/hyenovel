@@ -36,6 +36,7 @@ const PANES: [Pane, MsgKey][] = [["works", "rail.works"], ["desk", "nav.paper"],
 function Shell({ chars }: { chars: Characters }) {
   const t = useT();
   const { mode } = useThemeState();
+  const lang = useLang();
   const me = chars.byId(null);
   useEffect(() => applySignature(me, mode), [me, mode]);
   const [slug, setSlug] = useState<string | null>(null);
@@ -53,11 +54,11 @@ function Shell({ chars }: { chars: Characters }) {
       <nav className="dash-rail" aria-label={t("rail.works")}>
         <div className="dash-brand"><Avatar character={me} size={30} /><b>{t("brand")}</b></div>
         <button type="button" className="dash-feed">{t("rail.feed")}</button>
-        <Rail current={slug} onPick={s => pick(s)} onPickSession={pick} />
+        <Rail current={slug} onLoaded={ws => setSlug(cur => cur ?? ws[0]?.slug ?? null)} onPick={s => pick(s)} onPickSession={pick} />
         <Keys />
       </nav>
       <main className="dash-desk">
-        {slug ? <Reader slug={slug} onQuote={q => { setQuote(q); setPane("talk"); }} /> : t("desk.empty")}
+        {slug ? <Reader slug={slug} companion={localized(me.name, lang)} onQuote={q => { setQuote(q); setPane("talk"); }} /> : t("desk.empty")}
       </main>
       <aside className="dash-talk">{quote ?? t("talk.empty")}</aside>
     </div>

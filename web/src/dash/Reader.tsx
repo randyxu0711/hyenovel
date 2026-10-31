@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { api, DashError, type WorkDetail } from "./api";
-import { errorMessage, localized, useLang, useT } from "./i18n";
-import { useCharacters } from "./useCharacters";
+import { errorMessage, useT } from "./i18n";
 import { useSelectionQuote } from "./useSelectionQuote";
 
 /** 打字紙:滾筒在上、稿在下;選一段 → 浮動鈕帶進對話。 */
-export default function Reader({ slug, onQuote }: { slug: string; onQuote: (q: string) => void }) {
+export default function Reader({ slug, companion, onQuote }: {
+  slug: string; companion: string; onQuote: (q: string) => void;
+}) {
   const t = useT();
-  const lang = useLang();
-  const me = useCharacters().byId(null);
   const [work, setWork] = useState<WorkDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const sheet = useRef<HTMLElement>(null);
@@ -39,7 +38,7 @@ export default function Reader({ slug, onQuote }: { slug: string; onQuote: (q: s
           <button type="button" className="reader-bring" disabled={tooLong}
             onMouseDown={e => e.preventDefault()}
             onClick={() => { onQuote(quote); clear(); }}>
-            {t("reader.bring", { name: localized(me.name, lang) })}
+            {t("reader.bring", { name: companion })}
           </button>
           {tooLong && <span role="status">{t("reader.tooLong")}</span>}
         </div>

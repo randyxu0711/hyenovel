@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type RecentSession, type SessionRow, type Work, type WorkDetail } from "./api";
+import { api, type RecentSession, type SessionRow, type Work } from "./api";
 import Avatar from "./Avatar";
 import { useT } from "./i18n";
 import { useCharacters } from "./useCharacters";
@@ -7,31 +7,36 @@ import { useCharacters } from "./useCharacters";
 const RECENT = 3;
 const ANALYZING = ["running", "notes-running"];
 
-function useLoaded<T>(load: () => Promise<T>, deps: unknown[], empty: T): T {
-  const [v, setV] = useState<T>(empty);
+/** 結果綁在載入它的 key 上:key 一換,舊 key 的資料立刻不再回傳(不會殘留到新作品底下)。 */
+function useLoaded<T>(load: () => Promise<T>, key: string | null, empty: T): T {
+  const [got, setGot] = useState<{ key: string | null; v: T } | null>(null);
   useEffect(() => {
     let live = true;
-    load().then(x => { if (live) setV(x); }, () => { if (live) setV(empty); });
+    load().then(v => { if (live) setGot({ key, v }); }, () => { if (live) setGot({ key, v: empty }); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return v;
+  }, [key]);
+  return got && got.key === key ? got.v : empty;
 }
 
+const NONE: never[] = [];
+
 /** 左欄「作品」與「對話」兩區。載入失敗只是列表空著(閱讀區自己會顯示錯誤)。 */
-export default function Rail({ current, onPick, onPickSession }: {
+export default function Rail({ current, onPick, onPickSession, onLoaded }: {
   current: string | null;
   onPick: (slug: string) => void;
   onPickSession: (slug: string, session: string) => void;
+  /** 作品清單載入後通知(依最近活動排序,第一篇最近)。 */
+  onLoaded?: (works: Work[]) => void;
 }) {
   const t = useT();
   const chars = useCharacters();
   const [all, setAll] = useState(false);
-  const works = useLoaded<Work[]>(() => api.works(), [], []);
-  const recent = useLoaded<RecentSession[]>(() => api.recentSessions(), [], []);
-  const mine = useLoaded<SessionRow[]>(() => current ? api.sessions(current) : Promise.resolve([]), [current], []);
-  const detail = useLoaded<WorkDetail | null>(() => current ? api.work(current) : Promise.resolve(null), [current], null);
+  const works = useLoaded<Work[] | null>(() => api.works(), "", null);
+  const recent = useLoaded<RecentSession[]>(() => api.recentSessions(), "", NONE);
+  const mine = useLoaded<SessionRow[]>(() => current ? api.sessions(current) : Promise.resolve(NONE), current, NONE);
   useEffect(() => setAll(false), [current]);
+  useEffect(() => { if (works) onLoaded?.(works); }, [works]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = all ? mine : mine.slice(0, RECENT);
   return (
@@ -39,7 +44,8 @@ export default function Rail({ current, onPick, onPickSession }: {
       <section aria-label={t("rail.works")}>
         <h2 className="rail-h">{t("rail.works")}</h2>
         <ul>
-          {works.map(w => {
+          {works?.length === 0 && <li><p className="rail-meta">{t("rail.firstDraft")}</p></li>}
+          {(works ?? NONE).map(w => {
             const open = w.slug === current;
             return (
               <li key={w.slug}>
@@ -49,8 +55,8 @@ export default function Rail({ current, onPick, onPickSession }: {
                   <span className="rail-meta">
                     {ANALYZING.includes(String(w.state)) ? (
                       <><span className="rail-dots" aria-hidden="true"><i /><i /><i /></span> {t("rail.reading")}</>
-                    ) : open && detail ? (
-                      `${t("rail.version", { n: detail.version })} · ${t("rail.chars", { n: detail.text.length })}`
+                    ) : typeof w.version === "number" && typeof w.chars === "number" ? (
+                      `${t("rail.version", { n: w.version })} · ${t("rail.chars", { n: w.chars })}`
                     ) : null}
                   </span>
                 </button>

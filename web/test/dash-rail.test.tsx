@@ -13,9 +13,8 @@ function mount(current: string | null, mine = 5) {
   setLang("zh-Hant");
   vi.stubGlobal("fetch", vi.fn(async (u: string) => {
     if (u === "/api/works") return json({ works: [
-      { slug: "d1", title: "海", state: "ready" }, { slug: "d2", title: "山", state: "running" }] });
+      { slug: "d1", title: "海", state: "ready", version: 3, chars: 1200 }, { slug: "d2", title: "山", state: "running", version: 1, chars: 50 }, { slug: "d3", title: "湖", state: "none" }] });
     if (u === "/api/works/d1/sessions") return json({ sessions: Array.from({ length: mine }, (_, i) => sess(i + 1)) });
-    if (u === "/api/works/d1") return json({ slug: "d1", title: "海", version: 3, text: "字".repeat(1200), state: "ready", job_id: null, notes_ready: false });
     if (u.startsWith("/api/sessions")) return json({ sessions: [{ ...sess(9, { character: "gone", mode: "direct" }), slug: "d2", title: "山" }] });
     throw new Error(u);
   }));
@@ -36,11 +35,43 @@ describe("Rail", () => {
     fireEvent.click(mountain);
     expect(onPick).toHaveBeenCalledWith("d2");
   });
-  it("目前那篇顯示版本與字數,只列最近 3 局加全部", async () => {
+  it("每篇都顯示版本與字數;缺欄位就不顯示", async () => {
+    mount(null);
+    const works = within(await screen.findByRole("region", { name: "作品" }));
+    await works.findByText("海");
+    expect(works.getByText("第 3 版 · 1200 字")).toBeTruthy();
+    expect(works.getByText("湖").closest("button")!.textContent).toBe("湖");
+  });
+  it("切換作品時,前一篇的局不會留在新作品底下", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    setLang("zh-Hant");
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      if (u === "/api/works") return json({ works: [{ slug: "d1", title: "海" }, { slug: "d2", title: "山" }] });
+      if (u === "/api/works/d1/sessions") return json({ sessions: [sess(1)] });
+      if (u === "/api/works/d2/sessions") { await gate; return json({ sessions: [sess(7)] }); }
+      return json({ sessions: [] });
+    }));
+    const chars = makeCharacters([hyena], "hyena");
+    const el = (c: string) => <CharactersProvider value={chars}><Rail current={c} onPick={vi.fn()} onPickSession={vi.fn()} /></CharactersProvider>;
+    const { rerender } = render(el("d1"));
+    await screen.findAllByText("預覽1");
+    rerender(el("d2"));
+    await screen.findByText("山");
+    expect(screen.queryByText("預覽1")).toBeNull();
+    release();
+    expect(await screen.findByText("預覽7")).toBeTruthy();
+  });
+  it("沒有作品時邀請交第一張稿", async () => {
+    setLang("zh-Hant");
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => json(u === "/api/works" ? { works: [] } : { sessions: [] })));
+    render(<CharactersProvider value={makeCharacters([hyena], "hyena")}><Rail current={null} onPick={vi.fn()} onPickSession={vi.fn()} /></CharactersProvider>);
+    expect(await screen.findByText("還沒有作品。捲進第一張稿吧。")).toBeTruthy();
+  });
+  it("只列最近 3 局加全部", async () => {
     const { onPickSession } = mount("d1");
     const works = within(await screen.findByRole("region", { name: "作品" }));
     await works.findByText("預覽3");
-    expect(works.getByText("第 3 版 · 1200 字")).toBeTruthy();
     expect(works.queryByText("預覽4")).toBeNull();
     fireEvent.click(works.getByText("預覽2"));
     expect(onPickSession).toHaveBeenCalledWith("d1", "s2");

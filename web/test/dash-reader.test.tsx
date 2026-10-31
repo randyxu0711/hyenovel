@@ -13,7 +13,7 @@ const mount = async (d: object, onQuote = vi.fn()) => {
   vi.stubGlobal("fetch", vi.fn(async () => json(d)));
   const r = render(
     <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
-      <Reader slug="d1" onQuote={onQuote} />
+      <Reader slug="d1" companion="鬣狗" onQuote={onQuote} />
     </CharactersProvider>);
   await screen.findByText("海");
   return { ...r, onQuote };
@@ -53,7 +53,7 @@ describe("Reader", () => {
   it("載入失敗顯示對應訊息", async () => {
     setLang("zh-Hant");
     vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "x", code: "unknown-work" }, 404)));
-    render(<CharactersProvider value={makeCharacters([hyena], "hyena")}><Reader slug="zz" onQuote={vi.fn()} /></CharactersProvider>);
+    render(<CharactersProvider value={makeCharacters([hyena], "hyena")}><Reader slug="zz" companion="鬣狗" onQuote={vi.fn()} /></CharactersProvider>);
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "找不到這篇作品。");
   });
 });

@@ -27,7 +27,7 @@ export type Character = {
 export type ThemeTokens = Record<string, string>;
 export type Theme = { id: string; name: LText; source: string; light: ThemeTokens; dark: ThemeTokens };
 
-export type Work = { slug: string; title: string; [k: string]: unknown };
+export type Work = { slug: string; title: string; version: number; chars: number; [k: string]: unknown };
 export type WorkDetail = {
   slug: string; title: string; version: number; text: string; state: string;
   job_id: number | null; notes_ready: boolean;
