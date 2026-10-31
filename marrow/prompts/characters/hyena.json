@@ -1,0 +1,27 @@
+{
+  "id": "hyena",
+  "mode": "slow",
+  "name": {
+    "zh-Hant": "鬣狗",
+    "en": "Hyena"
+  },
+  "line": {
+    "zh-Hant": "一路跟著你的字走",
+    "en": "Follows your words, line by line"
+  },
+  "avatar": {
+    "kind": "hyena",
+    "seed": "hyena"
+  },
+  "colors": {
+    "light": {
+      "fill": "#cc8650",
+      "text": "#925a2b"
+    },
+    "dark": {
+      "fill": "#dc9a66",
+      "text": "#dc9a66"
+    }
+  },
+  "voice": ""
+}

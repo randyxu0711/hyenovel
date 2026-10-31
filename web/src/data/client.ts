@@ -65,7 +65,7 @@ export async function getStory(slug: string): Promise<{ viz: VizData; source: st
 export type SSEEvent = { event: string; data: any };
 
 /** 解析一個 SSE frame(event: / data: 多行);無 data 回 null。 */
-function parseFrame(frame: string): SSEEvent | null {
+export function parseFrame(frame: string): SSEEvent | null {
   let event = "message";
   let data = "";
   for (const line of frame.split("\n")) {
@@ -101,8 +101,13 @@ function unwrap(ev: SSEEvent): SSEEvent {
 }
 
 /** 用 fetch + ReadableStream 讀 SSE(EventSource 不支援 POST,故手刻)。POST / GET 共用。 */
-async function* sseFetch(url: string, init?: RequestInit): AsyncGenerator<SSEEvent> {
+export async function* sseFetch(
+  url: string, init?: RequestInit,
+  /** 非 2xx 時由呼叫端接手(可讀 body 丟自己的錯);省略 = 舊行為。 */
+  onHttpError?: (res: Response) => Promise<never>,
+): AsyncGenerator<SSEEvent> {
   const res = await fetch(url, init);
+  if (!res.ok && onHttpError) await onHttpError(res);
   if (!res.ok || !res.body) throw new Error(`${url}(${res.status})`);
   const reader = res.body.getReader();
   const dec = new TextDecoder();

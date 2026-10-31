@@ -53,7 +53,7 @@ async function setup(dir: string) {
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       seen.push({ method: req.method, url: req.url, headers: req.headers, body });
-      if (req.url === "/sse") {
+      if (req.url === "/api/sse") {
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         res.write("data: 1\n\n");
         await gate; // 測試確認收到第一幀後才放行第二幀
@@ -98,7 +98,7 @@ describe("denHandler", () => {
     expect(r.headers["x-den"]).toBe("yes");
     expect(JSON.parse(r.text)).toEqual({ ok: true });
     const s = ctx.seen[0];
-    expect([s.method, s.url, s.body]).toEqual(["POST", "/stories", '{"a":1}']);
+    expect([s.method, s.url, s.body]).toEqual(["POST", "/api/stories", '{"a":1}']);
     expect(s.headers.authorization).toBe("Bearer tok123");
     expect(s.headers.origin).toBeUndefined();
     expect(s.headers.host).toBe(`127.0.0.1:${ctx.denPort}`);

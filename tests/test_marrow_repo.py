@@ -265,7 +265,57 @@ def test_discussions_with_utterances_orders_by_ts_then_seq(conn):
     got = repo.discussions_with_utterances(conn, s)
     assert [(u["external_id"], u["text"]) for u in got] == [("A", "a0"), ("B", "b0"), ("A", "a1")]
     assert got[0]["anchors"] == ["t1"] and set(got[0]) == {
-        "external_id", "seq", "role", "text", "ts", "anchors"}
+        "external_id", "seq", "role", "text", "ts", "anchors", "mode", "character", "quotes",
+        "analysis_fp"}
+
+
+def test_discussions_with_utterances_carries_mode_character_quotes(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "user", "問", 1.0, "den", [], None, quotes=["原句"])
+    repo.add_utterance(conn, d, 1, "assistant", "答", 2.0, "den", [], None, mode="slow", character="hyena")
+    u, a = repo.discussions_with_utterances(conn, s)
+    assert u["quotes"] == ["原句"] and u["mode"] is None
+    assert (a["mode"], a["character"], a["quotes"]) == ("slow", "hyena", None)
+
+
+def test_recent_discussions_orders_by_last_activity_and_limits(conn):
+    s, _ = _story(conn)
+    s2 = repo.ensure_story(conn, "s2", "乙", 0)
+    a = repo.ensure_discussion(conn, s, "A", "web", None, 1.0)
+    b = repo.ensure_discussion(conn, s2, "B", "web", None, 2.0)
+    repo.ensure_discussion(conn, s, "empty", "web", None, 3.0)           # 沒發言的局不列
+    repo.add_utterance(conn, a, 0, "user", "問", 1.0, "den", [], None)
+    repo.add_utterance(conn, a, 1, "assistant", "答" * 80, 5.0, "den", [], None, mode="slow", character="hyena")
+    repo.add_utterance(conn, a, 2, "user", "再問", 6.0, "den", [], None)
+    repo.add_utterance(conn, b, 0, "user", "問", 2.0, "den", [], None)
+    repo.add_utterance(conn, b, 1, "assistant", "乙答", 4.0, "den", [], None, mode="direct", character="buffalo")
+    got = repo.recent_discussions(conn, 10)
+    assert [g["external_id"] for g in got] == ["A", "B"]
+    assert got[0] == {"external_id": "A", "slug": "s1", "title": None, "started_at": 1.0,
+                      "last_at": 6.0, "turns": 1, "character": "hyena", "mode": "slow",
+                      "preview": "答" * 60}
+    assert (got[1]["title"], got[1]["turns"], got[1]["preview"]) == ("乙", 1, "乙答")
+    assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["A"]
+
+
+def test_discussions_by_external_spans_stories(conn):
+    s, _ = _story(conn)
+    s2 = repo.ensure_story(conn, "s2", None, 0)
+    repo.ensure_discussion(conn, s, "X", "web", None, 1.0)
+    repo.ensure_discussion(conn, s2, "X", "web", None, 1.0)
+    assert [d["slug"] for d in repo.discussions_by_external(conn, "X")] == ["s1", "s2"]
+    assert repo.discussions_by_external(conn, "nope") == []
+
+
+def test_analysis_versions_maps_fp_to_source_version_n(conn):
+    s, v1 = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 7.0)
+    a1, _ = repo.add_artifact(conn, s, v1, "analysis", 1, {"t": 1}, {}, 1.0)
+    a2, _ = repo.add_artifact(conn, s, v2, "analysis", 1, {"t": 2}, {}, 8.0)
+    repo.add_artifact(conn, s, v2, "notes", 1, {"t": 3}, {}, 8.0)          # 非 analysis 不算
+    got = repo.analysis_versions(conn, s)
+    assert got == {repo.artifact(conn, a1)["sha256"]: 1, repo.artifact(conn, a2)["sha256"]: 2}
+
 
 
 def test_add_utterance_stores_usage_json(conn):
@@ -343,3 +393,32 @@ def test_active_jobs_of_story(conn):
         ids[st] = repo.create_job(conn, "critique", s, ver, {}, 0)
         repo.set_job_state(conn, ids[st], st, 1)
     assert [j["id"] for j in repo.active_jobs_of_story(conn, s)] == [ids["queued"], ids["running"]]
+
+
+def test_last_character_and_stored_on_utterance(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
+    assert repo.last_character(conn, d) is None
+    repo.add_utterance(conn, d, 1, "assistant", "b", 1.0, "den", [], None, mode="slow", character="hyena")
+    repo.add_utterance(conn, d, 2, "assistant", "c", 2.0, "den", [], None, mode="direct", character="buffalo")
+    assert repo.last_character(conn, d) == "buffalo"
+    assert repo.utterances(conn, d)[0]["character"] is None
+
+
+def test_migration_0007_adds_character(conn):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(utterance)")}
+    assert "character" in cols
+
+
+def test_migration_0008_adds_quotes(conn):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(utterance)")}
+    assert "quotes" in cols
+
+
+def test_add_utterance_stores_quotes(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "user", "a", 1.0, "den", [], None)
+    repo.add_utterance(conn, d, 1, "user", "b", 2.0, "den", [], None, quotes=["甲", "乙"])
+    rows = repo.utterances(conn, d)
+    assert rows[0]["quotes"] is None and rows[1]["quotes"] == ["甲", "乙"]
+

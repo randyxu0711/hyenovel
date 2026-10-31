@@ -58,3 +58,6 @@ jobs:
 
       - name: 型別檢查(tsc)
         run: npm run typecheck
+
+      - name: 打包(den 出 web/dist)
+        run: npm run build

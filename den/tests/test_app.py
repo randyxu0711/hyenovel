@@ -37,9 +37,13 @@ class Run:
         return run
 
 
+BASE = "http://127.0.0.1"   # guard 擋非本機 Host:TestClient 預設的 testserver 會被拒
+
+
 def _client(data, run=None, **kw):
     url, d = data
-    return TestClient(den_app.create_app(url, d, run_factory=run or Run(), **kw))
+    return TestClient(den_app.create_app(url, d, run_factory=run or Run(), **kw),
+                      base_url=BASE)
 
 
 def _auth(d):
@@ -49,7 +53,7 @@ def _auth(d):
 def _wait_state(c, h, jid, want, limit=10.0):
     end = time.monotonic() + limit
     while time.monotonic() < end:
-        st = c.get(f"/jobs/{jid}", headers=h).json()["state"]
+        st = c.get(f"/api/jobs/{jid}", headers=h).json()["state"]
         if st == want:
             return
         time.sleep(0.02)
@@ -61,7 +65,7 @@ def _read_sse(c, h, jid, limit=10.0) -> list[dict]:
     out: list = []
 
     def go():
-        with c.stream("GET", f"/jobs/{jid}/events", headers=h) as r:
+        with c.stream("GET", f"/api/jobs/{jid}/events", headers=h) as r:
             out.append(r.headers["content-type"])
             for line in r.iter_lines():
                 if line.startswith("data: "):
@@ -96,33 +100,33 @@ def test_empty_token_file_regenerated(data):
     p.write_text("  \n")
     p.chmod(0o644)
     with _client(data) as c:
-        assert c.get("/jobs/999", headers={"Authorization": "Bearer "}).status_code == 401
+        assert c.get("/api/jobs/999", headers={"Authorization": "Bearer "}).status_code == 401
         tok = p.read_text().strip()
         assert len(tok) >= 32
         assert stat.S_IMODE(p.stat().st_mode) == 0o600
-        assert c.get("/jobs/999", headers=_auth(data[1])).status_code == 404
+        assert c.get("/api/jobs/999", headers=_auth(data[1])).status_code == 404
     assert [x.name for x in data[1].iterdir() if x.name.startswith(".den.token")] == []
 
 
 def test_falsy_token_rejects_everything(data):
     with _client(data) as c:
         c.app.state.token = ""
-        assert c.get("/jobs/999", headers={"Authorization": "Bearer "}).status_code == 401
+        assert c.get("/api/jobs/999", headers={"Authorization": "Bearer "}).status_code == 401
 
 
 def test_missing_token_401(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
-        assert c.get("/jobs/1").status_code == 401
-        assert c.get("/jobs/1", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert c.get("/api/jobs/1").status_code == 401
+        assert c.get("/api/jobs/1", headers={"Authorization": "Bearer wrong"}).status_code == 401
     assert caplog.text.count("event=reject where=token") == 2
 
 
 def test_bad_origin_403(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = {**_auth(data[1]), "Origin": "http://evil.example/" + "x" * 500}
-        assert c.get("/jobs/1", headers=h).status_code == 403
+        assert c.get("/api/jobs/1", headers=h).status_code == 403
         h = {**_auth(data[1]), "Origin": "http://127.0.0.1:9999"}
-        assert c.get("/jobs/1", headers=h).status_code == 403
+        assert c.get("/api/jobs/1", headers=h).status_code == 403
     assert caplog.text.count("event=reject where=origin") == 2
     assert "x" * 100 not in caplog.text                 # Origin 原值截斷後才進 log
 
@@ -130,9 +134,9 @@ def test_bad_origin_403(data, caplog):
 def test_no_origin_allowed(data):
     with _client(data, port=8899) as c:
         h = _auth(data[1])
-        assert c.get("/jobs/999", headers=h).status_code == 404
+        assert c.get("/api/jobs/999", headers=h).status_code == 404
         for o in ("http://127.0.0.1:8899", "http://localhost:8899"):
-            assert c.get("/jobs/999", headers={**h, "Origin": o}).status_code == 404
+            assert c.get("/api/jobs/999", headers={**h, "Origin": o}).status_code == 404
 
 
 # ── 路由 ──
@@ -140,7 +144,7 @@ def test_no_origin_allowed(data):
 def test_post_job_returns_202_and_persists(data):
     with _client(data, Run(released=False)) as c:
         h = _auth(data[1])
-        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
         assert r.status_code == 202
         body = r.json()
         assert body["runner"] == "claude"
@@ -155,11 +159,11 @@ def test_post_job_returns_202_and_persists(data):
 def test_post_job_twice_while_inflight_dedupes(data):
     with _client(data, Run(released=False)) as c:
         h = _auth(data[1])
-        first = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        first = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
         assert first["existing"] is False
-        queued = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        queued = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
         _wait_state(c, h, first["job_id"], "running")
-        running = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        running = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
         for again in (queued, running):
             assert again["job_id"] == first["job_id"] and again["existing"] is True
             assert again["runner"] == "claude" and "estimate" in again
@@ -172,13 +176,13 @@ def test_post_job_twice_while_inflight_dedupes(data):
 def test_get_job_has_slug(data):
     with _client(data, Run(released=False)) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
-        assert c.get(f"/jobs/{jid}", headers=h).json()["slug"] == "mini"
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        assert c.get(f"/api/jobs/{jid}", headers=h).json()["slug"] == "mini"
 
 
 def test_unknown_slug_404_mentions_importer(data):
     with _client(data) as c:
-        r = c.post("/jobs", json={"kind": "critique", "slug": "nope"}, headers=_auth(data[1]))
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "nope"}, headers=_auth(data[1]))
         assert r.status_code == 404
         assert "python -m marrow.importer" in r.json()["detail"]
 
@@ -186,17 +190,17 @@ def test_unknown_slug_404_mentions_importer(data):
 def test_invalid_slug_422(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
-        assert c.post("/jobs", json={"kind": "critique", "slug": "../x"}, headers=h).status_code == 422
-        assert c.post("/jobs", json={"kind": "other", "slug": "mini"}, headers=h).status_code == 422
+        assert c.post("/api/jobs", json={"kind": "critique", "slug": "../x"}, headers=h).status_code == 422
+        assert c.post("/api/jobs", json={"kind": "other", "slug": "mini"}, headers=h).status_code == 422
     assert "event=reject where=slug" in caplog.text
 
 
 def test_get_job_has_no_raw_output(data):
     with _client(data) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "done")
-        body = c.get(f"/jobs/{jid}", headers=h).json()
+        body = c.get(f"/api/jobs/{jid}", headers=h).json()
         for k in ("state", "step", "error_class", "detail"):
             assert k in body
         assert [a["step"] for a in body["attempts"]] == ["analyst", "reviewer"]
@@ -208,19 +212,19 @@ def test_cancel_and_resume_status_codes(data, caplog):
     run = Run(released=False)
     with _client(data, run) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "running")
-        assert c.post(f"/jobs/{jid}/resume", headers=h).status_code == 409   # running 不能續
-        r = c.post(f"/jobs/{jid}/cancel", headers=h)
+        assert c.post(f"/api/jobs/{jid}/resume", headers=h).status_code == 409   # running 不能續
+        r = c.post(f"/api/jobs/{jid}/cancel", headers=h)
         assert (r.status_code, r.json()) == (200, {"ok": True})
         _wait_state(c, h, jid, "cancelled")
-        assert c.post(f"/jobs/{jid}/resume", headers=h).json() == {"ok": True}
+        assert c.post(f"/api/jobs/{jid}/resume", headers=h).json() == {"ok": True}
         run.release.set()
         _wait_state(c, h, jid, "done")
-        assert c.post(f"/jobs/{jid}/cancel", headers=h).status_code == 409   # done 不能取消
-        assert c.post(f"/jobs/{jid}/resume", headers=h).status_code == 409
-        assert c.post("/jobs/999/cancel", headers=h).status_code == 404
-        assert c.post("/jobs/999/resume", headers=h).status_code == 404
+        assert c.post(f"/api/jobs/{jid}/cancel", headers=h).status_code == 409   # done 不能取消
+        assert c.post(f"/api/jobs/{jid}/resume", headers=h).status_code == 409
+        assert c.post("/api/jobs/999/cancel", headers=h).status_code == 404
+        assert c.post("/api/jobs/999/resume", headers=h).status_code == 404
     assert "event=reject where=cancel" in caplog.text
     assert "event=reject where=resume" in caplog.text
 
@@ -230,7 +234,7 @@ def test_cancel_and_resume_status_codes(data, caplog):
 def test_events_sse_streams_until_done(data):
     with _client(data) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         evs = _read_sse(c, h, jid)
         assert evs[-1] == {"event": "done", "data": {"ok": True}}
         assert any(e["event"] == "phase" for e in evs)
@@ -240,7 +244,7 @@ def test_events_sse_streams_until_done(data):
 def test_events_terminal_without_replay_sends_state_and_ends(data):
     with _client(data) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "done")
         c.app.state.mgr.bus._events.pop(jid)               # 模擬 TTL 過了 / 上一個行程跑的
         evs = _read_sse(c, h, jid)
@@ -254,7 +258,7 @@ def test_events_ends_when_db_turns_terminal_without_event(data, monkeypatch):
     monkeypatch.setattr(den_app, "_SSE_POLL", 0.05)
     with _client(data, Run(released=False)) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "running")
         conn = c.app.state.mgr.conn
 
@@ -304,9 +308,9 @@ def test_events_unsubscribes_on_client_disconnect(data):
             tok = app.state.token
             scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
                      "http_version": "1.1", "method": "GET", "scheme": "http",
-                     "path": f"/jobs/{jid}/events", "raw_path": f"/jobs/{jid}/events".encode(),
+                     "path": f"/api/jobs/{jid}/events", "raw_path": f"/api/jobs/{jid}/events".encode(),
                      "query_string": b"", "root_path": "",
-                     "headers": [(b"authorization", f"Bearer {tok}".encode())],
+                     "headers": [(b"host", b"127.0.0.1"), (b"authorization", f"Bearer {tok}".encode())],
                      "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 8788)}
             await asyncio.wait_for(app(scope, receive, send), 5)
             assert got_body.is_set()
@@ -316,7 +320,7 @@ def test_events_unsubscribes_on_client_disconnect(data):
 
 def test_events_unknown_job_404(data):
     with _client(data) as c:
-        assert c.get("/jobs/999/events", headers=_auth(data[1])).status_code == 404
+        assert c.get("/api/jobs/999/events", headers=_auth(data[1])).status_code == 404
 
 
 # ── 單一實例 / 啟動失敗 ──
@@ -344,7 +348,7 @@ def test_default_factory_uses_found_claude(data, monkeypatch):
     monkeypatch.setattr(den_app, "find_claude", lambda: "/fake/claude")
     monkeypatch.setattr(den_app, "cli_version", lambda exe: "1.2.3")
     url, d = data
-    with TestClient(den_app.create_app(url, d)) as c:
+    with TestClient(den_app.create_app(url, d), base_url=BASE) as c:
         mgr = c.app.state.mgr
         assert mgr._cli_version == "1.2.3"
         fn = mgr._run_factory(None)
@@ -396,12 +400,12 @@ def test_worker_death_is_logged_and_restarted(caplog, monkeypatch):
 
 def test_health_requires_token(data):
     with _client(data) as c:
-        assert c.get("/health").status_code == 401
+        assert c.get("/api/health").status_code == 401
 
 
 def test_health_returns_version(data):
     with _client(data) as c:
-        r = c.get("/health", headers=_auth(data[1]))
+        r = c.get("/api/health", headers=_auth(data[1]))
     body = r.json()
     assert r.status_code == 200
     assert body["version"] == c.app.state.version and len(body["version"]) == 12
@@ -410,7 +414,7 @@ def test_health_returns_version(data):
 
 def test_post_stories_201(data):
     with _client(data) as c:
-        r = c.post("/stories", json={"text": "他走進門。", "title": "T", "slug": None},
+        r = c.post("/api/stories", json={"text": "他走進門。", "title": "T", "slug": None},
                    headers=_auth(data[1]))
     assert r.status_code == 201
     assert r.json()["slug"] == "d01" and r.json()["version"] == 1
@@ -418,7 +422,7 @@ def test_post_stories_201(data):
 
 def test_post_stories_422_blank(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
-        r = c.post("/stories", json={"text": "  ", "title": None, "slug": None},
+        r = c.post("/api/stories", json={"text": "  ", "title": None, "slug": None},
                    headers=_auth(data[1]))
     assert r.status_code == 422 and "空白故事" in r.json()["detail"]
     assert "event=reject where=stories" in caplog.text
@@ -426,7 +430,7 @@ def test_post_stories_422_blank(data, caplog):
 
 def test_post_stories_422_unknown_slug(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
-        r = c.post("/stories", json={"text": "x", "slug": "s07"}, headers=_auth(data[1]))
+        r = c.post("/api/stories", json={"text": "x", "slug": "s07"}, headers=_auth(data[1]))
     assert r.status_code == 422
     assert "event=reject where=stories reason=unknown slug" in caplog.text
 
@@ -434,10 +438,10 @@ def test_post_stories_422_unknown_slug(data, caplog):
 def test_post_job_records_client_and_runner(data):
     with _client(data) as c:
         h = _auth(data[1])
-        r = c.post("/jobs", json={"kind": "critique", "slug": "mini",
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "mini",
                                   "client": {"name": "claude-code", "version": "2.1.312"}}, headers=h)
         assert r.status_code == 202 and r.json()["runner"] == "claude"
-        job = c.get(f"/jobs/{r.json()['job_id']}", headers=h).json()
+        job = c.get(f"/api/jobs/{r.json()['job_id']}", headers=h).json()
     assert job["params"] == {"client": {"name": "claude-code", "version": "2.1.312"},
                              "runner": "claude"}
 
@@ -445,14 +449,14 @@ def test_post_job_records_client_and_runner(data):
 def test_post_job_without_client_still_ok(data):
     with _client(data) as c:
         h = _auth(data[1])
-        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
-        job = c.get(f"/jobs/{r.json()['job_id']}", headers=h).json()
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        job = c.get(f"/api/jobs/{r.json()['job_id']}", headers=h).json()
     assert r.status_code == 202 and job["params"] == {"client": None, "runner": "claude"}
 
 
 def test_post_job_client_name_too_long_422(data):
     with _client(data) as c:
-        r = c.post("/jobs", json={"kind": "critique", "slug": "mini",
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "mini",
                                   "client": {"name": "x" * 65}}, headers=_auth(data[1]))
     assert r.status_code == 422
 
@@ -460,7 +464,7 @@ def test_post_job_client_name_too_long_422(data):
 def test_post_job_no_runner_503(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         c.app.state.available = ()
-        r = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=_auth(data[1]))
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=_auth(data[1]))
     assert r.status_code == 503 and "沒有可用的 runner" in r.json()["detail"]
     assert "event=reject where=runner" in caplog.text
 
@@ -526,7 +530,7 @@ def test_idle_exit_called_exactly_once(data):
     url, d = data
     app = den_app.create_app(url, d, run_factory=Run(), idle_exit=10, idle_check=0.01,
                              clock=clk, on_idle=lambda: calls.append(1))
-    with TestClient(app):
+    with TestClient(app, base_url=BASE):
         clk.t = 11
         assert _poll(lambda: calls)
         time.sleep(0.15)
@@ -538,14 +542,14 @@ def test_no_watcher_without_on_idle(data):
     with _client(data, idle_exit=10, idle_check=0.01, clock=clk) as c:
         clk.t = 100
         time.sleep(0.05)
-        assert c.get("/health", headers=_auth(data[1])).status_code == 200
+        assert c.get("/api/health", headers=_auth(data[1])).status_code == 200
 
 
 def test_request_resets_idle(data):
     clk, fired = Clock(), threading.Event()
     with _idle_client(data, clk=clk, fired=fired) as c:
         clk.t = 9
-        assert c.get("/health", headers=_auth(data[1])).status_code == 200
+        assert c.get("/api/health", headers=_auth(data[1])).status_code == 200
         clk.t = 18
         time.sleep(0.15)
         assert not fired.is_set()
@@ -557,7 +561,7 @@ def test_rejected_request_does_not_reset_idle(data):
     clk, fired = Clock(), threading.Event()
     with _idle_client(data, clk=clk, fired=fired) as c:
         clk.t = 9
-        assert c.get("/health").status_code == 401
+        assert c.get("/api/health").status_code == 401
         clk.t = 11
         assert fired.wait(5)
 
@@ -566,7 +570,7 @@ def test_idle_exit_waits_for_pending_jobs(data):
     clk, fired, run = Clock(), threading.Event(), Run(released=False)
     with _idle_client(data, run, clk, fired) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "running")
         clk.t = 11
         time.sleep(0.15)
@@ -581,9 +585,9 @@ def test_idle_exit_waits_for_open_stream(data):
     clk, fired, run = Clock(), threading.Event(), Run(released=False)
     with _idle_client(data, run, clk, fired) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "running")
-        c.post(f"/jobs/{jid}/cancel", headers=h)
+        c.post(f"/api/jobs/{jid}/cancel", headers=h)
         _wait_state(c, h, jid, "cancelled")   # 沒有 pending job 了
         # 開一條不會收尾的串流:手動把計數撐著(cancelled 是終態,真串流會立刻收尾)
         c.app.state.streams += 1
@@ -599,7 +603,7 @@ def test_stream_count_tracks_open_streams(data):
     run = Run(released=False)
     with _client(data, run) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, jid, "running")
         got = []
         t = threading.Thread(target=lambda: got.extend(_read_sse(c, h, jid)), daemon=True)
@@ -632,12 +636,12 @@ def test_idle_watcher_survives_check_error(data, monkeypatch, caplog):
 def test_list_jobs_newest_first_with_slug_title(data):
     with _client(data) as c:
         h = _auth(data[1])
-        c.post("/stories", json={"text": "他走進門。", "title": "門"}, headers=h)
-        a = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        c.post("/api/stories", json={"text": "他走進門。", "title": "門"}, headers=h)
+        a = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, a, "done")
-        b = c.post("/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
+        b = c.post("/api/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
         _wait_state(c, h, b, "paused")     # 假分析的引文對不上 d01 原文 → 閘門耗盡
-        r = c.get("/jobs", headers=h)
+        r = c.get("/api/jobs", headers=h)
         assert r.status_code == 200
         jobs = r.json()["jobs"]
         assert [j["id"] for j in jobs] == [b, a]
@@ -645,26 +649,26 @@ def test_list_jobs_newest_first_with_slug_title(data):
                            "step": "analyst", "error_class": "gate",
                            "updated_at": jobs[0]["updated_at"], "is_latest_version": True}
         assert (jobs[1]["slug"], jobs[1]["state"]) == ("mini", "done")
-        assert [j["id"] for j in c.get("/jobs?limit=1", headers=h).json()["jobs"]] == [b]
+        assert [j["id"] for j in c.get("/api/jobs?limit=1", headers=h).json()["jobs"]] == [b]
 
 
 def test_list_jobs_empty_and_requires_token(data):
     with _client(data) as c:
-        assert c.get("/jobs").status_code == 401
-        assert c.get("/jobs", headers=_auth(data[1])).json() == {"jobs": []}
+        assert c.get("/api/jobs").status_code == 401
+        assert c.get("/api/jobs", headers=_auth(data[1])).json() == {"jobs": []}
 
 
 @pytest.mark.parametrize("limit", [0, 101, -1])
 def test_list_jobs_limit_out_of_range_422(data, caplog, limit):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
-        assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 422
+        assert c.get(f"/api/jobs?limit={limit}", headers=_auth(data[1])).status_code == 422
     assert "event=reject where=list-jobs" in caplog.text
 
 
 def test_list_jobs_limit_bounds_ok(data):
     with _client(data) as c:
         for limit in (1, 100):
-            assert c.get(f"/jobs?limit={limit}", headers=_auth(data[1])).status_code == 200
+            assert c.get(f"/api/jobs?limit={limit}", headers=_auth(data[1])).status_code == 200
 
 
 # ── 8c:同版自動續跑、續跑防重 ──
@@ -672,25 +676,25 @@ def test_list_jobs_limit_bounds_ok(data):
 def test_post_job_auto_resumes_cancelled_same_version(data):
     with _client(data, Run(released=False)) as c:
         h = _auth(data[1])
-        first = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
+        first = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()
         assert first["resumed"] is False
         _wait_state(c, h, first["job_id"], "running")
-        c.post(f"/jobs/{first['job_id']}/cancel", headers=h)
+        c.post(f"/api/jobs/{first['job_id']}/cancel", headers=h)
         _wait_state(c, h, first["job_id"], "cancelled")
-        again = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
+        again = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h)
         assert again.status_code == 202
         body = again.json()
         assert (body["job_id"], body["existing"], body["resumed"]) == (first["job_id"], True, True)
         assert body["previous_error_class"] is None
-        assert len(c.get("/jobs", headers=h).json()["jobs"]) == 1
+        assert len(c.get("/api/jobs", headers=h).json()["jobs"]) == 1
 
 
 def test_resume_409_when_other_active_job(data, caplog):
     with _client(data, Run(released=False)) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
-        old = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        old = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
         _wait_state(c, h, old, "running")
-        c.post(f"/jobs/{old}/cancel", headers=h)
+        c.post(f"/api/jobs/{old}/cancel", headers=h)
         _wait_state(c, h, old, "cancelled")
         conn = c.app.state.mgr.conn
         live = []
@@ -701,7 +705,7 @@ def test_resume_409_when_other_active_job(data, caplog):
                 live.append(repo.create_job(conn, "critique", job["story_id"],
                                             job["source_version_id"], {}, time.time()))
         c.portal.call(make)
-        assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
+        assert c.post(f"/api/jobs/{old}/resume", headers=h).status_code == 409
     assert f"event=resume-rejected job={old} reason=active-job other={live[0]}" in caplog.text
     assert "event=reject where=resume" in caplog.text
 
@@ -709,32 +713,32 @@ def test_resume_409_when_other_active_job(data, caplog):
 def test_resume_409_on_stale_version_and_list_flags_it(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
-        c.post("/stories", json={"text": "第一版。"}, headers=h)
-        old = c.post("/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
+        c.post("/api/stories", json={"text": "第一版。"}, headers=h)
+        old = c.post("/api/jobs", json={"kind": "critique", "slug": "d01"}, headers=h).json()["job_id"]
         _wait_state(c, h, old, "paused")                    # 閘門耗盡
-        assert c.post("/stories", json={"text": "改過的第二版。", "slug": "d01"},
+        assert c.post("/api/stories", json={"text": "改過的第二版。", "slug": "d01"},
                       headers=h).json()["version"] == 2
-        assert c.post(f"/jobs/{old}/resume", headers=h).status_code == 409
-        row = next(j for j in c.get("/jobs", headers=h).json()["jobs"] if j["id"] == old)
+        assert c.post(f"/api/jobs/{old}/resume", headers=h).status_code == 409
+        row = next(j for j in c.get("/api/jobs", headers=h).json()["jobs"] if j["id"] == old)
         assert row["is_latest_version"] is False
     assert f"event=resume-rejected job={old} reason=stale-version" in caplog.text
 
 
 # ── 讀取端點 + 上傳 ──
 
-_READ_ROUTES = ["/stories", "/stories/mini/viz", "/stories/mini/source",
-                "/stories/mini/conclusions", "/stories/mini/transcript"]
+_READ_ROUTES = ["/api/stories", "/api/stories/mini/viz", "/api/stories/mini/source",
+                "/api/stories/mini/conclusions", "/api/stories/mini/transcript"]
 
 
 def test_stories_list(data):
     with _client(data) as c:
-        r = c.get("/stories", headers=_auth(data[1]))
+        r = c.get("/api/stories", headers=_auth(data[1]))
     assert r.status_code == 200 and "mini" in [s["slug"] for s in r.json()["stories"]]
 
 
 def test_viz_200(data):
     with _client(data) as c:
-        r = c.get("/stories/mini/viz", headers=_auth(data[1]))
+        r = c.get("/api/stories/mini/viz", headers=_auth(data[1]))
     assert r.status_code == 200 and r.json()["slug"] == "mini"
 
 
@@ -760,7 +764,7 @@ def _add_notes(url, version_offset=0):
 def test_viz_uses_notes_shape(data):
     _add_notes(data[0])
     with _client(data) as c:
-        fb = c.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"]
+        fb = c.get("/api/stories/mini/viz", headers=_auth(data[1])).json()["feedback"]
     assert fb["read"] == "一個人回到空屋。" and [p["title"] for p in fb["key_points"]] == ["燈為誰亮"]
     assert fb["key_points"][0]["quotes"][0]["quote"] == "像在等誰"
 
@@ -768,7 +772,7 @@ def test_viz_uses_notes_shape(data):
 def test_viz_drops_judgment_of_other_version(data):
     _add_notes(data[0], version_offset=1)
     with _client(data) as c:
-        assert c.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
+        assert c.get("/api/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
 
 
 def test_viz_drops_judgment_after_same_version_rerun(data):
@@ -789,14 +793,14 @@ def test_viz_drops_judgment_after_same_version_rerun(data):
     finally:
         c.close()
     with _client(data) as cl:
-        assert cl.get("/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
+        assert cl.get("/api/stories/mini/viz", headers=_auth(data[1])).json()["feedback"] is None
 
 
 def test_viz_404_when_not_analyzed(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
-        c.post("/stories", json={"text": "未分析。"}, headers=h)
-        r = c.get("/stories/d01/viz", headers=h)
+        c.post("/api/stories", json={"text": "未分析。"}, headers=h)
+        r = c.get("/api/stories/d01/viz", headers=h)
     assert r.status_code == 404
     assert "event=reject where=viz reason=not-analyzed" in caplog.text
 
@@ -805,8 +809,8 @@ def test_source_is_verbatim_text(data):
     text = '甲</script>"\'乙\n'
     with _client(data) as c:
         h = _auth(data[1])
-        c.post("/stories", json={"text": text}, headers=h)
-        r = c.get("/stories/d01/source", headers=h)   # 未分析 → 最新版
+        c.post("/api/stories", json={"text": text}, headers=h)
+        r = c.get("/api/stories/d01/source", headers=h)   # 未分析 → 最新版
     assert r.text == text and r.headers["content-type"].startswith("text/plain")
 
 
@@ -820,29 +824,29 @@ def test_source_follows_analysis_version(data):
     conn.commit()
     conn.close()
     with _client(data) as c:
-        r = c.get("/stories/mini/source", headers=_auth(d))
+        r = c.get("/api/stories/mini/source", headers=_auth(d))
     assert r.text == old
 
 
 def test_conclusions_200(data):
     with _client(data) as c:
-        r = c.get("/stories/mini/conclusions", headers=_auth(data[1]))
+        r = c.get("/api/stories/mini/conclusions", headers=_auth(data[1]))
     assert r.status_code == 200 and isinstance(r.json()["conclusions"], list)
 
 
 def test_transcript_200(data):
     with _client(data) as c:
-        r = c.get("/stories/mini/transcript", headers=_auth(data[1]))
+        r = c.get("/api/stories/mini/transcript", headers=_auth(data[1]))
     assert r.status_code == 200 and isinstance(r.json()["turns"], list)
 
 
-@pytest.mark.parametrize("route", [r for r in _READ_ROUTES if r != "/stories"])
+@pytest.mark.parametrize("route", [r for r in _READ_ROUTES if r != "/api/stories"])
 def test_slug_routes_bad_and_unknown(data, caplog, route):
     tail = route.rsplit("/", 1)[1]
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
-        assert c.get(f"/stories/-x/{tail}", headers=h).status_code == 400
-        assert c.get(f"/stories/nope/{tail}", headers=h).status_code == 404
+        assert c.get(f"/api/stories/-x/{tail}", headers=h).status_code == 400
+        assert c.get(f"/api/stories/nope/{tail}", headers=h).status_code == 404
     assert f"event=reject where={tail} reason=bad-slug" in caplog.text
     assert f"event=reject where={tail} reason=unknown-slug" in caplog.text
 
@@ -855,67 +859,132 @@ def test_read_routes_require_token(data, route):
 
 def test_extract_ok(data):
     with _client(data) as c:
-        r = c.post("/extract", files={"file": ("a.txt", "你好".encode())}, headers=_auth(data[1]))
+        r = c.post("/api/extract", files={"file": ("a.txt", "你好".encode())}, headers=_auth(data[1]))
     assert r.status_code == 200 and r.json() == {"filename": "a.txt", "text": "你好\n", "chars": 3}
 
 
 def test_extract_413_logs_reject(data, caplog):
     big = b"a" * (den_config.MAX_SOURCE_BYTES + 1)
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
-        r = c.post("/extract", files={"file": ("a.txt", big)}, headers=_auth(data[1]))
+        r = c.post("/api/extract", files={"file": ("a.txt", big)}, headers=_auth(data[1]))
     assert r.status_code == 413
     assert f"event=reject where=upload bytes={den_config.MAX_SOURCE_BYTES + 1}" in caplog.text
 
 
 def test_extract_bad_pdf_400(data):
     with _client(data) as c:
-        r = c.post("/extract", files={"file": ("a.pdf", b"%PDF-garbage")}, headers=_auth(data[1]))
+        r = c.post("/api/extract", files={"file": ("a.pdf", b"%PDF-garbage")}, headers=_auth(data[1]))
     assert r.status_code == 400
 
 
 def test_extract_requires_token(data):
     with _client(data) as c:
-        assert c.post("/extract", files={"file": ("a.txt", b"x")}).status_code == 401
+        assert c.post("/api/extract", files={"file": ("a.txt", b"x")}).status_code == 401
 
 
 def test_get_works_query_and_limit(data):
     with _client(data) as c:
         h = _auth(data[1])
-        c.post("/stories", json={"text": "海很冷。", "title": "海", "slug": None}, headers=h)
-        all_ = c.get("/works", headers=h).json()["works"]
-        hit = c.get("/works", params={"q": "海"}, headers=h).json()["works"]
+        c.post("/api/stories", json={"text": "海很冷。", "title": "海", "slug": None}, headers=h)
+        all_ = c.get("/api/works", headers=h).json()["works"]
+        hit = c.get("/api/works", params={"q": "海"}, headers=h).json()["works"]
         assert len(all_) == 2 and [w["title"] for w in hit] == ["海"]
-        assert c.get("/works", params={"limit": 0}, headers=h).status_code == 422
-        assert c.get("/works", params={"limit": 51}, headers=h).status_code == 422
+        assert c.get("/api/works", params={"limit": 0}, headers=h).status_code == 422
+        assert c.get("/api/works", params={"limit": 51}, headers=h).status_code == 422
+
+
+def test_get_works_items_carry_version_and_chars(data):
+    with _client(data) as c:
+        w = c.get("/api/works", headers=_auth(data[1])).json()["works"][0]
+        assert w["version"] == 1 and w["chars"] > 0 and "latest_text" not in w
+
+
+def _seed_session(data, slug="mini", sid="sess1"):
+    conn = db.connect(data[0])
+    st = repo.story_by_slug(conn, slug)
+    with conn:
+        d = repo.ensure_discussion(conn, st["id"], sid, "web", None, 5.0)
+        repo.add_utterance(conn, d, 0, "user", "問", 5.0, "den", [], None)
+        repo.add_utterance(conn, d, 1, "assistant", "答", 6.0, "den", [], None,
+                           mode="slow", character="hyena")
+    conn.close()
+
+
+def test_work_detail_sessions_and_recent_routes(data):
+    _seed_session(data)
+    with _client(data) as c:
+        h = _auth(data[1])
+        d = c.get("/api/works/mini", headers=h).json()
+        assert d["slug"] == "mini" and d["version"] == 1 and d["text"] and "notes_ready" in d
+        [s] = c.get("/api/works/mini/sessions", headers=h).json()["sessions"]
+        assert (s["session"], s["turns"], s["character"]) == ("sess1", 1, "hyena")
+        [r] = c.get("/api/sessions", headers=h).json()["sessions"]
+        assert (r["session"], r["slug"]) == ("sess1", "mini") and "external_id" not in r
+        t = c.get("/api/sessions/sess1", headers=h).json()
+        assert t["slug"] == "mini" and [x["role"] for x in t["turns"]] == ["user", "assistant"]
+
+
+def test_dashboard_read_routes_errors(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        for path in ("/api/works/nope", "/api/works/nope/sessions"):
+            r = c.get(path, headers=h)
+            assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        assert c.get("/api/works/BAD!/sessions", headers=h).json()["code"] == "bad-slug"
+        r = c.get("/api/sessions/nope", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-session-id"
+        assert c.get("/api/sessions", params={"limit": 0}, headers=h).status_code == 422
+        assert c.get("/api/sessions", params={"limit": 101}, headers=h).status_code == 422
+        assert c.get("/api/estimate", params={"chars": -1}, headers=h).status_code == 422
+    assert "where=session-turns reason=unknown-session-id" in caplog.text
+
+
+def test_session_ambiguous_409(data):
+    conn = db.connect(data[0])
+    with conn:
+        other = repo.ensure_story(conn, "other", "乙", 0)
+        repo.add_source_version(conn, other, "x", 0)
+    conn.close()
+    _seed_session(data)
+    _seed_session(data, "other")
+    with _client(data) as c:
+        r = c.get("/api/sessions/sess1", headers=_auth(data[1]))
+        assert r.status_code == 409 and r.json()["code"] == "ambiguous-session"
+
+
+def test_estimate_route_null_without_history(data):
+    with _client(data) as c:
+        r = c.get("/api/estimate", params={"chars": 1000}, headers=_auth(data[1]))
+        assert r.status_code == 200 and r.json() == {"estimate": None}
 
 
 def test_get_work_part_status_codes(data):
     with _client(data) as c:
         h = _auth(data[1])
-        r = c.get("/works/mini/source", headers=h)
+        r = c.get("/api/works/mini/source", headers=h)
         assert r.status_code == 200 and "原文" in r.json()["text"]
-        assert c.get("/works/mini/analysis", headers=h).status_code == 200
-        r = c.get("/works/mini/feedback", headers=h)
+        assert c.get("/api/works/mini/analysis", headers=h).status_code == 200
+        r = c.get("/api/works/mini/feedback", headers=h)
         assert r.status_code == 409 and r.json()["detail"] == "no-feedback"
-        assert c.get("/works/nope/source", headers=h).status_code == 404
-        r = c.get("/works/mini/notes", headers=h)
+        assert c.get("/api/works/nope/source", headers=h).status_code == 404
+        r = c.get("/api/works/mini/notes", headers=h)
         assert r.status_code == 409 and r.json()["detail"] == "no-notes"
-        assert c.get("/works/mini/bogus", headers=h).status_code == 422
+        assert c.get("/api/works/mini/bogus", headers=h).status_code == 422
 
 
 def test_post_jobs_resume_only_409_reason(data):
     with _client(data) as c:
         h = _auth(data[1])
-        r = c.post("/jobs", json={"kind": "critique", "slug": "mini", "resume_only": True}, headers=h)
+        r = c.post("/api/jobs", json={"kind": "critique", "slug": "mini", "resume_only": True}, headers=h)
         assert r.status_code == 409 and r.json()["detail"] == "done"
-        assert c.get("/jobs", headers=h).json()["jobs"] == []
+        assert c.get("/api/jobs", headers=h).json()["jobs"] == []
 
 
 def test_cancel_work_cancels_active_jobs(data):
     with _client(data, run=Run(released=False)) as c:
         h = _auth(data[1])
-        jid = c.post("/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
-        r = c.post("/works/mini/cancel", headers=h)
+        jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
+        r = c.post("/api/works/mini/cancel", headers=h)
         assert r.status_code == 200 and r.json()["cancelled"] == [jid]
         _wait_state(c, h, jid, "cancelled")
 
@@ -923,11 +992,11 @@ def test_cancel_work_cancels_active_jobs(data):
 def test_cancel_work_nothing_running_409(data):
     with _client(data) as c:
         h = _auth(data[1])
-        r = c.post("/works/mini/cancel", headers=h)
+        r = c.post("/api/works/mini/cancel", headers=h)
         assert r.status_code == 409 and r.json()["detail"] == "nothing-running"
-        assert c.post("/works/nope/cancel", headers=h).status_code == 404
+        assert c.post("/api/works/nope/cancel", headers=h).status_code == 404
 
 
 def test_discussion_endpoint_gone(data):
     with _client(data) as c:
-        assert c.get("/stories/mini/discussion", headers=_auth(data[1])).status_code == 404
+        assert c.get("/api/stories/mini/discussion", headers=_auth(data[1])).status_code == 404

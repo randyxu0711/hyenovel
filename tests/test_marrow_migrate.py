@@ -27,7 +27,7 @@ def _close_all():
 
 def test_fresh_db_gets_all_tables_and_version():
     conn = _mem()
-    assert db.migrate(conn, None) == 6
+    assert db.migrate(conn, None) == 8
     names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert TABLES <= names
 
@@ -35,7 +35,7 @@ def test_fresh_db_gets_all_tables_and_version():
 def test_migrate_is_idempotent():
     conn = _mem()
     db.migrate(conn, None)
-    assert db.migrate(conn, None) == 6
+    assert db.migrate(conn, None) == 8
 
 
 def test_upgrade_backs_up_first(tmp_path):
@@ -133,7 +133,7 @@ def test_v2_db_upgrades_to_prompt_sha_with_backup(tmp_path):     # Task 9e
     conn.execute("INSERT INTO attempt (job_id, step, n, runner, created_at) "
                  "VALUES (1,'analyst',0,'cli',0)")
     conn.commit()
-    assert db.migrate(conn, p) == 6
+    assert db.migrate(conn, p) == 8
     assert "prompt_sha" in _cols(conn, "attempt")
     assert conn.execute("SELECT prompt_sha FROM attempt").fetchone()[0] is None
     assert (tmp_path / "h.db.bak-v2").exists()

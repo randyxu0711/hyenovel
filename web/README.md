@@ -2,6 +2,11 @@
 
 Vite + React + TS。**只讀 den 的 DB**(切片 4a):`/api` 由 vite 代理到 den 並帶 token。
 
+## 使用
+
+`npm run build` 產 `web/dist`,den 同源出它;repo 根跑 `python -m den.open` 開瀏覽器(一次性啟動碼換 cookie,120 秒內有效;
+WSL 開不了瀏覽器就點印出的 url)。API 在 `/api`,舊 web 在 `/journey`。
+
 ## 開發
 
 1. 起 den:`python -m den`(或用任何 MCP tool,shim 會自動拉起)。

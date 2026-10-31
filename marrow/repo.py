@@ -147,12 +147,14 @@ def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
 
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
                   origin: str, anchors: list[str], analysis_fp: str | None,
-                  usage: dict | None = None, mode: str | None = None) -> bool:
+                  usage: dict | None = None, mode: str | None = None,
+                  character: str | None = None, quotes: list[str] | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, mode, character, quotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
-         None if usage is None else canonical_json(usage), mode))
+         None if usage is None else canonical_json(usage), mode, character,
+         canonical_json(quotes) if quotes else None))
     return cur.rowcount == 1
 
 
@@ -160,6 +162,13 @@ def last_mode(conn, discussion_id: int) -> str | None:
     """該局最後一筆有記模式的 assistant 發言用的模式(舊局沒有 → None)。"""
     r = conn.execute("SELECT mode FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
                      "AND mode IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
+    return r[0] if r else None
+
+
+def last_character(conn, discussion_id: int) -> str | None:
+    """該局最後一筆有記角色的 assistant 發言是誰說的(舊局沒有 → None)。"""
+    r = conn.execute("SELECT character FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
+                     "AND character IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
     return r[0] if r else None
 
 
@@ -172,8 +181,45 @@ def discussions_with_utterances(conn, story_id: int) -> list[dict]:
     """一篇所有討論局的逐字,依 ts, seq 排;一次查完。"""
     return [_row(r) for r in conn.execute(
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
-        "u.ts AS ts, u.anchors AS anchors FROM utterance u JOIN discussion d "
+        "u.ts AS ts, u.anchors AS anchors, u.mode AS mode, u.character AS character, "
+        "u.quotes AS quotes, u.analysis_fp AS analysis_fp FROM utterance u JOIN discussion d "
         "ON d.id = u.discussion_id WHERE d.story_id = ? ORDER BY u.ts, u.seq", (story_id,))]
+
+
+def discussions_by_external(conn, external_id: str) -> list[dict]:
+    """跨篇找局:同一個 external_id 可能在不同篇各有一局。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT d.*, st.slug AS slug FROM discussion d JOIN story st ON st.id = d.story_id "
+        "WHERE d.external_id = ? ORDER BY d.id", (external_id,))]
+
+
+def analysis_versions(conn, story_id: int) -> dict[str, int]:
+    """一篇所有 analysis artifact:sha256(= 發言的 analysis_fp)→ 它對的原文版本 n;一次查完。"""
+    return {r["sha256"]: r["n"] for r in conn.execute(
+        "SELECT a.sha256 AS sha256, sv.n AS n FROM artifact a JOIN source_version sv "
+        "ON sv.id = a.source_version_id WHERE a.story_id = ? AND a.kind = 'analysis'", (story_id,))}
+
+
+def recent_discussions(conn, limit: int) -> list[dict]:
+    """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
+    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。"""
+    last = ("(SELECT {c} FROM utterance WHERE discussion_id = d.id AND role = 'assistant' "
+            "ORDER BY seq DESC LIMIT 1)")
+    out = []
+    for r in conn.execute(
+            "SELECT d.external_id AS external_id, st.slug AS slug, st.title AS title, "
+            "d.started_at AS started_at, "
+            "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
+            "(SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'assistant') AS turns, "
+            f"{last.format(c='character')} AS character, {last.format(c='mode')} AS mode, "
+            f"{last.format(c='text')} AS preview "
+            "FROM discussion d JOIN story st ON st.id = d.story_id "
+            "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
+            "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
+        row = _row(r)
+        row["preview"] = (row["preview"] or "")[:60]
+        out.append(row)
+    return out
 
 
 # ── conclusion / settlement ──

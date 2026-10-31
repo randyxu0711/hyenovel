@@ -170,7 +170,7 @@ def build_server(den: DenClient) -> MCPServer:
     current: list[str] = []         # 最近一次聊的那篇
 
     async def _works(**params) -> list[dict]:
-        return (await call("GET", "/works?" + urlencode({k: v for k, v in params.items() if v is not None})))["works"]
+        return (await call("GET", "/api/works?" + urlencode({k: v for k, v in params.items() if v is not None})))["works"]
 
     async def resolve_work(work: str | None) -> dict:
         """作者的說法 → 一篇作品(`GET /works` 的一筆)。slug / 標題關鍵詞 / 剛聊的 / 最近的。"""
@@ -205,7 +205,7 @@ def build_server(den: DenClient) -> MCPServer:
             raise _reject("part", "part 只能是 source(原文)/ analysis(分析)/ notes(備課筆記)/ feedback(舊版客觀回饋)。")
         w = await resolve_work(work)
         name = f"〈{w['title']}〉"
-        out = await call("GET", f"/works/{w['slug']}/{part}", on_status={404: f"找不到{name}。"},
+        out = await call("GET", f"/api/works/{w['slug']}/{part}", on_status={404: f"找不到{name}。"},
                          on_detail={"not-analyzed": f"{name}還沒有分析。",
                                     "no-notes": f"{name}還沒有備課筆記。",
                                     "no-feedback": f"{name}沒有舊版客觀回饋。"})
@@ -222,16 +222,16 @@ def build_server(den: DenClient) -> MCPServer:
         p = Path(path).expanduser()
         slug = (await resolve_work(work))["slug"] if work else None
         sent_title = title if title is not None else (None if work else p.stem)
-        s = await call("POST", "/stories", {"text": text, "title": sent_title, "slug": slug})
+        s = await call("POST", "/api/stories", {"text": text, "title": sent_title, "slug": slug})
         current[:] = [s["slug"]]   # 交完稿,「這篇」就是它(否則下一句不帶 work 會聊回上一篇)
         job = {"kind": "critique", "slug": s["slug"], "client": client}
         # 稿子沒改:只續跑;這版已分析好就不重跑(重送同一個檔不該再花一次錢)。從沒跑過才開新的
-        j = (await call("POST", "/jobs", {**job, "resume_only": True}, ok_details=("done", "never"))
+        j = (await call("POST", "/api/jobs", {**job, "resume_only": True}, ok_details=("done", "never"))
              if not s["new_version"] else None)
         if j is not None and j.get("detail") == "never":
             j = None
         if j is None:
-            j = await call("POST", "/jobs", job)
+            j = await call("POST", "/api/jobs", job)
         name = (await _works(q=s["slug"]))[0]["title"]   # 跟 find_works 同源:分析抽出的標題優先於檔名
         chars = sum(not ch.isspace() for ch in text)
         lines = [f"收到 {p.name}({_when(p.stat().st_mtime)} 修改,{chars:,} 字),作品〈{name}〉。"]
@@ -253,7 +253,7 @@ def build_server(den: DenClient) -> MCPServer:
         w = await resolve_work(work)
         current[:] = [w["slug"]]
         name = f"〈{w['title']}〉"
-        j = await call("POST", "/jobs", {"kind": "critique", "slug": w["slug"], "client": client,
+        j = await call("POST", "/api/jobs", {"kind": "critique", "slug": w["slug"], "client": client,
                                          "resume_only": True}, on_detail={
             "done": f"{name}最新一版已經分析好了,不用再跑。改了稿請給我新檔的路徑。",
             "never": f"{name}最新一版還沒開始分析,請再給我一次檔案路徑交稿。"})
@@ -271,7 +271,7 @@ def build_server(den: DenClient) -> MCPServer:
     async def _cancel_work(work: str | None) -> str:
         w = await resolve_work(work)
         name = f"〈{w['title']}〉"
-        await call("POST", f"/works/{w['slug']}/cancel", on_status={409: f"{name}現在沒有在分析。"})
+        await call("POST", f"/api/works/{w['slug']}/cancel", on_status={409: f"{name}現在沒有在分析。"})
         return f"{name}的分析已停下;之後不帶路徑呼叫 submit_work 可以接著跑。"
 
     @server.tool(description=DESC_CANCEL_WORK)
@@ -285,7 +285,7 @@ def build_server(den: DenClient) -> MCPServer:
 
     def _turn(slug: str, body: dict) -> dict:
         """收齊一輪 SSE,回 message 事件的 data;error 事件 → ToolError。"""
-        for ev in den.stream("POST", f"/discuss/{slug}", body):
+        for ev in den.stream("POST", f"/api/discuss/{slug}", body):
             if ev["event"] == "message":
                 return ev["data"]
             if ev["event"] == "error":

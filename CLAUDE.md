@@ -40,7 +40,8 @@ MCP submit_work(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ reviewer 
   **MCP shim 會自動把 den 脫離拉起**(`den.json` 探索檔記 port/pid/指紋);den 閒置 3 小時無 job 自己結束。
   版本指紋不符才重啟,**忙碌中的 den 不重啟**(新版等跑完);`git pull` 後在 agent 內跑 `/mcp` 重載 shim。
   MCP 建立的故事 slug 是 `dNN`。
-- web:`cd web && npm run dev`(vite 代理 `/api` 到 den 並帶 token)。用量面板關閉。
+- dashboard(主入口):`cd web && npm run build` 後 `python -m den.open`(確保 den 在跑、換一次性啟動碼、開瀏覽器;開不了就點印出的 url)。den 同源出 `web/dist`,API 全在 `/api`;舊 web 在 `/journey`。
+  開發:`./dev.sh` 或 `cd web && npm run dev`(vite 代理 `/api` 到 den 並帶 token)。用量面板關閉。
 - 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`。五個 tool:
   `submit_work`(交稿,**只收 .md/.txt 路徑**;不給 path = 只續跑,絕不重跑)/ `talk_to_companion`(跟 companion 說話)/
   `find_works`(列作品+狀態,唯讀)/ `read_work`(原文/分析/備課筆記/舊回饋,唯讀)/ `cancel_work`(停下分析)。

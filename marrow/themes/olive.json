@@ -1,0 +1,40 @@
+{
+  "id": "olive",
+  "name": {
+    "zh-Hant": "暖橄欖",
+    "en": "Warm olive"
+  },
+  "source": "和田三造《配色事典》#310",
+  "light": {
+    "enamel": "#6c6827",
+    "enamel-ink": "#fbf7e6",
+    "desk": "#f0e9cf",
+    "panel": "#f6f0dc",
+    "bubble": "#fdf9ea",
+    "paper": "#fdf9ea",
+    "paper-ink": "#232a1f",
+    "paper-ink-2": "#5f6352",
+    "ui-ink": "#262b20",
+    "ui-ink-2": "#64685a",
+    "line": "rgb(35 42 31 / .14)",
+    "platen": "#2a2b1a",
+    "knob": "#cfc28e",
+    "muzzle": "#f6eccd"
+  },
+  "dark": {
+    "enamel": "#5c5823",
+    "enamel-ink": "#ece7cf",
+    "desk": "#1c1e14",
+    "panel": "#25271c",
+    "bubble": "#303325",
+    "paper": "#dcd2b8",
+    "paper-ink": "#232a1f",
+    "paper-ink-2": "#575b4a",
+    "ui-ink": "#e5e1cf",
+    "ui-ink-2": "#a9a690",
+    "line": "rgb(229 225 207 / .12)",
+    "platen": "#111209",
+    "knob": "#a99f72",
+    "muzzle": "#e6dcbd"
+  }
+}

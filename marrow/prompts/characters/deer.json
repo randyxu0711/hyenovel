@@ -1,0 +1,27 @@
+{
+  "id": "deer",
+  "mode": "imaginative",
+  "name": {
+    "zh-Hant": "鹿",
+    "en": "Deer"
+  },
+  "line": {
+    "zh-Hant": "相信你寫的,把世界撐開",
+    "en": "Believes your story and opens up its world"
+  },
+  "avatar": {
+    "kind": "deer",
+    "seed": "deer"
+  },
+  "colors": {
+    "light": {
+      "fill": "#7f9466",
+      "text": "#56683f"
+    },
+    "dark": {
+      "fill": "#a9b98e",
+      "text": "#a9b98e"
+    }
+  },
+  "voice": ""
+}

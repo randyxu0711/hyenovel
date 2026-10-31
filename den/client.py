@@ -114,9 +114,12 @@ class DenClient:
         except (OSError, ValueError, KeyError, TypeError):
             return None
         client = self._client_for(port)
+        headers = {"Authorization": f"Bearer {token}"}
         try:
-            r = client.get("/health", headers={"Authorization": f"Bearer {token}"},
-                           timeout=_PROBE_TIMEOUT)
+            r = client.get("/api/health", headers=headers, timeout=_PROBE_TIMEOUT)
+            if r.status_code == 404:
+                # 相容舊版 den(main 上的 /health):認得它,版本不符才換得掉。舊版都退場後可刪。
+                r = client.get("/health", headers=headers, timeout=_PROBE_TIMEOUT)
         except httpx.TransportError:
             return None
         if r.status_code != 200:

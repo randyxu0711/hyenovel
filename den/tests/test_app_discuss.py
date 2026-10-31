@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
+from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from den.runner import RunResult
 from den.tests.conftest import FIXTURES
 from den.tests.test_app import Run, _auth, _poll
@@ -75,13 +76,14 @@ def c(data, fake_chat):
     importer.import_story(conn, d / "other", 1.0)
     conn.close()
     with TestClient(den_app.create_app(url, d, run_factory=Run(),
-                                       chat_factory=fake_chat)) as client:
+                                       chat_factory=fake_chat),
+                    base_url="http://127.0.0.1") as client:
         client.headers.update(_auth(d))
         yield client
 
 
 def post_raw(c, slug, sid, message="結尾太快?", anchors=()):
-    return c.post(f"/discuss/{slug}",
+    return c.post(f"/api/discuss/{slug}",
                   json={"session_id": sid, "message": message, "anchors": list(anchors)})
 
 
@@ -96,7 +98,7 @@ def first_turn(c, slug="mini") -> str:
 
 
 def turns(c, slug="mini"):
-    return c.get(f"/stories/{slug}/transcript").json()["turns"]
+    return c.get(f"/api/stories/{slug}/transcript").json()["turns"]
 
 
 def in_loop(c, fn):
@@ -117,7 +119,8 @@ def test_first_turn_creates_session_and_persists_both(c):
     assert [e["data"] for e in evs[:2]] == [{"text": "A"}, {"text": "B"}]
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
-    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow"}
+    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow",
+                               "character": "hyena"}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
     assert [(t["role"], t["text"], t["session"]) for t in ts] == \
@@ -187,7 +190,7 @@ def test_usage_limit_maps_to_error_event(c, fake_chat):
     fake_chat.outcome = "usage-limit"
     evs = post_discuss(c, "mini", None, "x")
     assert evs[-1] == {"event": "error", "data": {"where": "discuss", "message": "用量已達上限",
-                                                  "recoverable": True}}
+                                                  "recoverable": True, "code": "usage-limit"}}
 
 
 @pytest.mark.parametrize("outcome, recoverable", [
@@ -197,6 +200,7 @@ def test_error_recoverable_mapping(c, fake_chat, outcome, recoverable):
     fake_chat.outcome = outcome
     evs = post_discuss(c, "mini", None, "x")
     assert evs[-1]["data"]["recoverable"] is recoverable
+    assert evs[-1]["data"]["code"] == ("usage-limit" if outcome == "usage-limit" else "chat-failed")
 
 
 # ── Review Focus ──
@@ -228,11 +232,11 @@ def test_disconnect_mid_turn_kills_worker_and_writes_nothing(data, fake_chat):
             async def send(msg):
                 if msg["type"] == "http.response.body" and msg.get("body"):
                     got_body.set()
-            path = "/discuss/mini"
+            path = "/api/discuss/mini"
             scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
                      "http_version": "1.1", "method": "POST", "scheme": "http",
                      "path": path, "raw_path": path.encode(), "query_string": b"", "root_path": "",
-                     "headers": [(b"authorization", f"Bearer {app.state.token}".encode()),
+                     "headers": [(b"host", b"127.0.0.1"), (b"authorization", f"Bearer {app.state.token}".encode()),
                                  (b"content-type", b"application/json")],
                      "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 8788)}
             await asyncio.wait_for(app(scope, receive, send), 5)
@@ -255,6 +259,7 @@ def test_body_aclose_at_yield_closes_chat(c, fake_chat):
     async def drive():
         conn = c.app.state.mgr.conn
         turn = den_app.discuss.prepare_turn(conn, "mini", sid)
+        den_app.discuss.pick_character(conn, turn, None, None)
         events = den_app.discuss.run_turn(conn, c.app.state.chat, turn, "x", [])
         gen = den_app._chat_stream(c.app.state, lock, events)
         first = await anext(gen)
@@ -331,7 +336,7 @@ def test_busy_lock_at_stream_start_yields_error(c):
             lock.release()
     out = c.portal.call(drive)
     assert [json.loads(x[6:]) for x in out] == [{"event": "error", "data": {
-        "where": "discuss", "message": "這一局還有一輪在跑", "recoverable": True}}]
+        "where": "discuss", "message": "這一局還有一輪在跑", "recoverable": True, "code": "busy"}}]
     assert pulled == [] and c.app.state.streams == 0
 
 
@@ -342,7 +347,7 @@ def test_busy_lock_at_stream_start_yields_error(c):
                                   {"message": "x", "anchors": ["a"] * 9},
                                   {"message": "x", "session_id": "s" * 65}])
 def test_bad_body_422(c, fake_chat, body):
-    assert c.post("/discuss/mini", json=body).status_code == 422
+    assert c.post("/api/discuss/mini", json=body).status_code == 422
     assert fake_chat.calls == []
 
 
@@ -379,6 +384,7 @@ def test_chat_raising_yields_error_and_persists_nothing(c, fake_chat, caplog):
     evs = post_discuss(c, "mini", None, "秘密提問")
     assert evs[-1]["event"] == "error"
     assert evs[-1]["data"]["where"] == "discuss" and evs[-1]["data"]["recoverable"] is False
+    assert evs[-1]["data"]["code"] == "no-response"
     assert turns(c) == []
     assert "event=discuss-turn-failed slug=mini stage=chat" in caplog.text
     assert "秘密提問" not in caplog.text
@@ -390,7 +396,7 @@ def test_chat_without_result_yields_error(c, fake_chat):
     fake_chat.override = empty
     evs = post_discuss(c, "mini", None, "q")
     assert [e["event"] for e in evs] == ["token", "error"]
-    assert evs[-1]["data"]["recoverable"] is False
+    assert evs[-1]["data"]["recoverable"] is False and evs[-1]["data"]["code"] == "no-response"
     assert turns(c) == []
 
 
@@ -403,6 +409,7 @@ def test_commit_failure_yields_error_and_does_not_log_ok(c, monkeypatch, caplog)
     caplog.set_level(logging.INFO)
     evs = post_discuss(c, "mini", None, "q")
     assert evs[-1]["event"] == "error" and evs[-1]["data"]["recoverable"] is False
+    assert evs[-1]["data"]["code"] == "commit-failed"
     assert "message" not in [e["event"] for e in evs]
     monkeypatch.undo()
     assert turns(c) == []
@@ -417,7 +424,7 @@ def _mini_id(conn):
 
 
 def test_unanalyzed_story_can_chat_with_source_only(c, fake_chat):
-    slug = c.post("/stories", json={"text": "未分析的稿。"}).json()["slug"]
+    slug = c.post("/api/stories", json={"text": "未分析的稿。"}).json()["slug"]
     evs = post_discuss(c, slug, None, "你覺得呢")
     assert evs[-1]["event"] == "done"
     system = fake_chat.calls[-1][0]
@@ -452,7 +459,7 @@ def test_mode_defaults_to_slow_and_is_recorded(c, fake_chat):
 
 
 def test_mode_carries_over_within_session(c, fake_chat):
-    evs = [json.loads(line[6:]) for line in c.post("/discuss/mini", json={
+    evs = [json.loads(line[6:]) for line in c.post("/api/discuss/mini", json={
         "message": "講重點", "mode": "direct"}).text.splitlines() if line.startswith("data: ")]
     sid = evs[-1]["data"]["session_id"]
     assert "你的讀法:直說" in fake_chat.calls[-1][0]
@@ -475,7 +482,7 @@ def test_empty_message_stores_only_assistant(c, fake_chat):
 
 
 def test_home_and_client_recorded(c):
-    r = c.post("/discuss/mini", json={"message": "q", "home": "mcp",
+    r = c.post("/api/discuss/mini", json={"message": "q", "home": "mcp",
                                       "client": {"name": "claude-code", "version": "2.1.314"}})
     sid = [json.loads(x[6:]) for x in r.text.splitlines() if x.startswith("data: ")][-1]["data"]["session_id"]
     d = in_loop(c, lambda conn: _session_rows(conn, sid))[0]
@@ -495,3 +502,108 @@ def test_empty_message_mid_conversation_asks_to_continue(c, fake_chat):
     post_discuss(c, "mini", sid, "")
     user = fake_chat.calls[-1][1]
     assert user.rstrip().endswith(CONTINUE) and OPENER not in user
+
+
+def _post(c, body):
+    return c.post("/api/discuss/mini", json={"message": "q", **body})
+
+
+def _last_assistant(c, evs):
+    sid = evs[-1]["data"]["session_id"]
+    return in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]
+
+
+def test_unknown_character_is_422_before_stream(c, fake_chat):
+    r = _post(c, {"character": "dragon"})
+    assert r.status_code == 422 and r.json()["code"] == "unknown-character"
+    assert fake_chat.calls == []
+
+
+def test_mcp_mode_only_stores_matching_character(c, fake_chat):
+    r = _post(c, {"mode": "direct", "home": "mcp"})
+    evs = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
+    row = _last_assistant(c, evs)
+    assert (row["character"], row["mode"]) == ("buffalo", "direct")
+    assert evs[-2]["data"]["character"] == "buffalo"
+
+
+def test_character_carries_over_and_overrides(c, fake_chat):
+    evs = [json.loads(line[6:]) for line in _post(c, {"character": "deer"}).text.splitlines()
+           if line.startswith("data: ")]
+    sid = evs[-1]["data"]["session_id"]
+    assert (_last_assistant(c, evs)["character"], _last_assistant(c, evs)["mode"]) == ("deer", "imaginative")
+    post_discuss(c, "mini", sid, "然後")
+    assert _last_assistant(c, evs)["character"] == "deer"
+    assert "你的讀法:想像" in fake_chat.calls[-1][0]
+
+
+def test_legacy_session_with_only_mode_keeps_that_mode(c, fake_chat):
+    sid = first_turn(c)
+    def strip(conn):
+        with conn:
+            conn.execute("UPDATE utterance SET character = NULL, mode = 'direct' WHERE role = 'assistant'")
+    in_loop(c, strip)
+    post_discuss(c, "mini", sid, "再說")
+    assert "你的讀法:直說" in fake_chat.calls[-1][0]
+
+
+def test_get_themes_route(c):
+    r = c.get("/api/themes")
+    body = r.json()
+    assert r.status_code == 200 and body["default"] == "olive"
+    assert [t["id"] for t in body["themes"]] == ["grassland", "olive"]
+
+
+def test_get_characters_route(c):
+    r = c.get("/api/characters")
+    body = r.json()
+    assert r.status_code == 200 and body["default"] == "hyena"
+    assert {x["id"] for x in body["characters"]} == {"hyena", "buffalo", "deer"}
+
+
+# ── 帶這段(quotes) ──
+
+def test_quote_not_in_source_rejected_before_stream(c, fake_chat):
+    r = _post(c, {"quotes": ["原文裡根本沒有這句"]})
+    assert r.status_code == 422 and r.json()["code"] == "quote-not-in-source"
+    assert fake_chat.calls == []
+
+
+def test_quote_too_long_rejected(c, fake_chat):
+    r = _post(c, {"quotes": ["他" * (MAX_QUOTE_CHARS + 1)]})
+    assert r.status_code == 422 and r.json()["code"] == "quote-too-long"
+    assert fake_chat.calls == []
+
+
+def test_blank_quote_rejected(c, fake_chat):
+    r = _post(c, {"quotes": ["  "]})
+    assert r.status_code == 422 and r.json()["code"] == "quote-not-in-source"
+
+
+def test_quotes_reach_companion_and_are_stored_on_user_turn(c, fake_chat):
+    r = _post(c, {"quotes": ["他把燈關了。"]})
+    assert r.status_code == 200
+    assert "作者指著原文的這幾段:\n「他把燈關了。」" in fake_chat.calls[-1][1]
+    sid = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")][-1]["data"]["session_id"]
+    rows = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert rows[0]["quotes"] == ["他把燈關了。"] and rows[1]["quotes"] is None
+    post_discuss(c, "mini", sid, "再說")
+    assert "「他把燈關了。」" in fake_chat.calls[-1][1]   # 歷史裡的舊引文照樣還原
+
+
+def test_quotes_matched_with_loose_punctuation(c, fake_chat):
+    r = _post(c, {"quotes": ["他走進門.屋裡沒有人."]})   # 原文是全形句點
+    assert r.status_code == 200
+
+
+def test_quote_needs_message(c, fake_chat):
+    for msg in ("", "  "):
+        r = _post(c, {"message": msg, "quotes": ["他把燈關了。"]})
+        assert r.status_code == 422 and r.json()["code"] == "quote-needs-message"
+    assert fake_chat.calls == []
+
+
+def test_too_many_quotes(c, fake_chat):
+    r = _post(c, {"quotes": ["他把燈關了。"] * (MAX_QUOTES + 1)})
+    assert r.status_code == 422 and r.json()["code"] == "too-many-quotes"
+    assert fake_chat.calls == []

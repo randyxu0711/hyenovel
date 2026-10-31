@@ -1,4 +1,4 @@
-// web → den 的 backend-for-frontend:/api 代理到 den,由這裡帶 token、去 /api 前綴。
+// web → den 的 backend-for-frontend:/api 代理到 den,由這裡帶 token(den 的路由本身就在 /api 底下,前綴原樣轉發)。
 // 這裡是 web 這側的信任邊界:先驗 Origin(den 的 Origin 檢查不能被 proxy 洗掉),驗過才移除再轉給 den。
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -59,7 +59,7 @@ function reply(res: ServerResponse, code: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-/** 掛在 /api 底下的純 Node handler(connect 已去掉前綴,req.url 直接是 den 的路徑)。 */
+/** 掛在 /api 底下的純 Node handler(connect 已去掉前綴,轉發時補回,den 的路由在 /api 底下)。 */
 export function denHandler(dir: string = dataDir()): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     const host = loopbackHost(req);
@@ -70,7 +70,7 @@ export function denHandler(dir: string = dataDir()): (req: IncomingMessage, res:
     const { origin: _o, host: _h, authorization: _a, ...rest } = req.headers;
     const port = Number(new URL(t.url).port);
     const up = request(
-      { host: "127.0.0.1", port, path: req.url, method: req.method,
+      { host: "127.0.0.1", port, path: `/api${req.url}`, method: req.method,
         headers: { ...rest, host: `127.0.0.1:${port}`, authorization: `Bearer ${t.token}` } },
       (ur) => {
         res.writeHead(ur.statusCode ?? 502, ur.headers);

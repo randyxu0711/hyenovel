@@ -242,7 +242,7 @@ def test_talk_without_work_uses_last_story(cden):
 
 def test_resolve_none_falls_back_to_den_recent(cden):
     r = _call(cden.client(), "talk_to_companion", {"message": "嗨"})   # 新 shim、沒聊過
-    assert not r.is_error and ("POST", "/discuss/mini") in cden.paths
+    assert not r.is_error and ("POST", "/api/discuss/mini") in cden.paths
 
 
 def test_talk_without_any_work_is_tool_error(tmp_path):
@@ -255,7 +255,7 @@ def test_talk_without_any_work_is_tool_error(tmp_path):
     try:
         r = _call(d.client(), "talk_to_companion", {"message": "嗨"})
         assert r.is_error and "還沒有任何作品" in _text(r) and "檔案路徑" in _text(r)
-        assert not any(p.startswith("/discuss") for _, p in d.paths)
+        assert not any(p.startswith("/api/discuss") for _, p in d.paths)
     finally:
         d.stop()
 
@@ -263,13 +263,13 @@ def test_talk_without_any_work_is_tool_error(tmp_path):
 def test_talk_work_by_title_keyword(cden):
     _add_story(cden, "d07", "海的另一邊", "她走到岸邊。")
     r = _call(cden.client(), "talk_to_companion", {"work": "海"})
-    assert not r.is_error and ("POST", "/discuss/d07") in cden.paths
+    assert not r.is_error and ("POST", "/api/discuss/d07") in cden.paths
 
 
 def test_talk_bad_mode_rejected_locally(cden):
     r = _call(cden.client(), "talk_to_companion", {"work": "mini", "mode": "doubt"})
     assert r.is_error and "direct(直說)" in _text(r)
-    assert not any(p.startswith("/discuss") for _, p in cden.paths)
+    assert not any(p.startswith("/api/discuss") for _, p in cden.paths)
 
 
 def test_talk_records_home_mcp_and_client_name(cden):
@@ -364,7 +364,7 @@ def test_talk_oversize_message_rejected_locally(cden):
     from den.config import MAX_CHAT_CHARS
     r = _call(cden.client(), "talk_to_companion", {"work": "mini", "message": "字" * (MAX_CHAT_CHARS + 1)})
     assert r.is_error and "字字字字" not in _text(r)
-    assert not any(p.startswith("/discuss") for _, p in cden.paths)
+    assert not any(p.startswith("/api/discuss") for _, p in cden.paths)
 
 
 # ── 作品:find_works / read_work / 解析 ──
@@ -393,7 +393,7 @@ def test_resolve_ambiguous_lists_candidates(cden):
     t = _text(r)
     assert r.is_error and "有 2 篇符合「海」,請問作者是哪一篇:\n〈" in t
     assert "〈海的另一邊〉" in t and "〈海邊的豆花〉" in t
-    assert not any(p.startswith("/discuss") for _, p in cden.paths)
+    assert not any(p.startswith("/api/discuss") for _, p in cden.paths)
 
 
 def test_ambiguous_over_limit_says_at_least(cden):
@@ -677,14 +677,14 @@ def test_resolve_full_title_reachable_despite_longer_titles(cden):
     _add_story(cden, "d01", "海", "她走到岸邊。")
     _add_story(cden, "d02", "海-v2", "x")
     r = _call(cden.client(), "talk_to_companion", {"work": "海"})
-    assert not r.is_error and ("POST", "/discuss/d01") in cden.paths
+    assert not r.is_error and ("POST", "/api/discuss/d01") in cden.paths
 
 
 def test_talk_after_submit_targets_submitted_work(cden, tmp_path):
     _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
                              ("submit_work", {"path": str(_write(tmp_path, "海.md", "海很冷。"))}),
                              ("talk_to_companion", {})])
-    assert ("POST", "/discuss/d01") in cden.paths
+    assert ("POST", "/api/discuss/d01") in cden.paths
 
 
 def test_cancel_after_resume_targets_resumed_work(data, tmp_path):
@@ -694,7 +694,7 @@ def test_cancel_after_resume_targets_resumed_work(data, tmp_path):
         _session(d.client(), [("talk_to_companion", {"work": "mini"}),
                               ("submit_work", {"path": str(_write(tmp_path, "海.md", "海很冷。"))}),
                               ("cancel_work", {})])
-        assert ("POST", "/works/d01/cancel") in d.paths
+        assert ("POST", "/api/works/d01/cancel") in d.paths
     finally:
         d.run.release.set()
         d.stop()

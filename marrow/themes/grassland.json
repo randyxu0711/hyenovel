@@ -1,0 +1,40 @@
+{
+  "id": "grassland",
+  "name": {
+    "zh-Hant": "草原灰夜",
+    "en": "Grassland dusk"
+  },
+  "source": "和田三造《配色事典》#192",
+  "light": {
+    "enamel": "#5f616b",
+    "enamel-ink": "#f4f1ea",
+    "desk": "#efe6d3",
+    "panel": "#f5eee0",
+    "bubble": "#fdf8ec",
+    "paper": "#fdf8ec",
+    "paper-ink": "#2a241c",
+    "paper-ink-2": "#6a5f52",
+    "ui-ink": "#2b2721",
+    "ui-ink-2": "#6b6458",
+    "line": "rgb(42 36 28 / .14)",
+    "platen": "#2d2e35",
+    "knob": "#c9b48a",
+    "muzzle": "#f6ead0"
+  },
+  "dark": {
+    "enamel": "#4e5059",
+    "enamel-ink": "#e6e2d8",
+    "desk": "#1f1f25",
+    "panel": "#27272e",
+    "bubble": "#33333b",
+    "paper": "#dad0ba",
+    "paper-ink": "#2a241c",
+    "paper-ink-2": "#5e5446",
+    "ui-ink": "#e4ded0",
+    "ui-ink-2": "#a9a397",
+    "line": "rgb(228 222 208 / .12)",
+    "platen": "#121216",
+    "knob": "#a8966f",
+    "muzzle": "#e7dcc2"
+  }
+}
