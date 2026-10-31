@@ -8,33 +8,35 @@ const RECENT = 3;
 const ANALYZING = ["running", "notes-running"];
 
 /** 結果綁在載入它的 key 上:key 一換,舊 key 的資料立刻不再回傳(不會殘留到新作品底下)。 */
-function useLoaded<T>(load: () => Promise<T>, key: string | null, empty: T): T {
+function useLoaded<T>(load: () => Promise<T>, key: string | null, empty: T, tick = 0): T {
   const [got, setGot] = useState<{ key: string | null; v: T } | null>(null);
   useEffect(() => {
     let live = true;
     load().then(v => { if (live) setGot({ key, v }); }, () => { if (live) setGot({ key, v: empty }); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, tick]);
   return got && got.key === key ? got.v : empty;
 }
 
 const NONE: never[] = [];
 
 /** 左欄「作品」與「對話」兩區。載入失敗只是列表空著(閱讀區自己會顯示錯誤)。 */
-export default function Rail({ current, onPick, onPickSession, onLoaded }: {
+export default function Rail({ current, onPick, onPickSession, onLoaded, refresh = 0 }: {
   current: string | null;
   onPick: (slug: string) => void;
   onPickSession: (slug: string, session: string) => void;
   /** 作品清單載入後通知(依最近活動排序,第一篇最近)。 */
   onLoaded?: (works: Work[]) => void;
+  /** 數字一變就重抓三份清單(分析跑完、剛交稿)。 */
+  refresh?: number;
 }) {
   const t = useT();
   const chars = useCharacters();
   const [all, setAll] = useState(false);
-  const works = useLoaded<Work[] | null>(() => api.works(), "", null);
-  const recent = useLoaded<RecentSession[]>(() => api.recentSessions(), "", NONE);
-  const mine = useLoaded<SessionRow[]>(() => current ? api.sessions(current) : Promise.resolve(NONE), current, NONE);
+  const works = useLoaded<Work[] | null>(() => api.works(), "", null, refresh);
+  const recent = useLoaded<RecentSession[]>(() => api.recentSessions(), "", NONE, refresh);
+  const mine = useLoaded<SessionRow[]>(() => current ? api.sessions(current) : Promise.resolve(NONE), current, NONE, refresh);
   useEffect(() => setAll(false), [current]);
   useEffect(() => { if (works) onLoaded?.(works); }, [works]);   // eslint-disable-line react-hooks/exhaustive-deps
 

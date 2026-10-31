@@ -137,3 +137,32 @@
 }
 .talk-send:disabled, .talk-form textarea:disabled{cursor:not-allowed; background:var(--dash-panel); color:var(--dash-ui-ink-2)}
 @media (max-width:979px){ .dash-seat{display:none} .dash[data-talk="closed"]{grid-template-columns:1fr} .dash[data-talk="closed"][data-pane="talk"] > .dash-talk{display:flex} }
+
+/* ── 交稿、分析進度、冷讀者的筆記 ── */
+.platen-mark{display:inline-block; width:34px; height:3px; margin:0 8px 3px 12px; border-radius:2px; background:var(--dash-knob); vertical-align:middle; animation:platen-slide 3.2s ease-in-out infinite alternate}
+@keyframes platen-slide{from{transform:translateX(-10px)}to{transform:translateX(10px)}}
+.reader-bar{width:min(760px,92%); margin:10px auto 0; display:flex; align-items:center; gap:10px; font-size:var(--dash-t-xs); color:var(--dash-ui-ink-2)}
+.reader-notes{padding:5px 10px; cursor:pointer; border:1px solid var(--dash-line); border-radius:6px; background:transparent; font-size:var(--dash-t-sm); color:var(--dash-ui-ink)}
+.reader-notes[aria-pressed="true"]{background:var(--dash-bubble)}
+.reader-notes:disabled{cursor:not-allowed; color:var(--dash-ui-ink-2)}
+.reader-body{display:flex; align-items:flex-start; justify-content:center; gap:20px}
+.reader-body .sheet{margin-left:0; margin-right:0; flex:0 1 640px; min-width:0}
+.reader:not([data-notes="open"]) .reader-body .sheet{margin:-6px auto 80px}
+.notes{flex:0 0 300px; max-width:34%; margin-top:8px; padding:16px 18px; border-radius:10px; background:var(--dash-panel); color:var(--dash-ui-ink); font-size:var(--dash-t-sm); line-height:1.8; position:sticky; top:44px; max-height:calc(100vh - 64px); overflow:auto}
+.notes-lead{margin:0 0 10px; font-weight:600; color:var(--dash-ui-ink-2)}
+.dash-notice{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:6; margin:0; padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-panel); color:var(--dash-ui-ink); font-size:var(--dash-t-sm)}
+.feed-scrim{position:fixed; inset:0; z-index:10; display:grid; place-items:center; background:color-mix(in srgb, var(--dash-desk) 70%, transparent)}
+.feed{width:min(560px,92vw); display:flex; flex-direction:column; gap:12px; padding:20px; border:1px solid var(--dash-line); border-radius:12px; background:var(--dash-panel); color:var(--dash-ui-ink)}
+.feed h2{margin:0; font-size:var(--dash-t-lg); font-weight:600}
+.feed textarea{min-height:240px; resize:vertical; padding:10px 12px; font:inherit; font-family:var(--serif); line-height:1.8; color:var(--dash-paper-ink); border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-paper)}
+.feed-meta{display:flex; align-items:center; gap:14px; font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
+.feed-file{cursor:pointer; padding:5px 10px; border:1px solid var(--dash-line); border-radius:6px; color:var(--dash-ui-ink)}
+.feed-file input{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+.feed-file:focus-within{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.feed-msg{margin:0; font-size:var(--dash-t-sm)}
+.feed-actions{display:flex; justify-content:flex-end; gap:10px}
+.feed-actions button{padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:transparent; cursor:pointer; font-size:var(--dash-t-sm)}
+.feed-actions .feed-go{border:0; background:var(--dash-enamel); color:var(--dash-enamel-ink)}
+.feed-actions .feed-go:disabled{cursor:not-allowed; background:var(--dash-bubble); color:var(--dash-ui-ink-2)}
+@media (prefers-reduced-motion:reduce){ .platen-mark{animation:none} }
+@media (max-width:979px){ .reader-body{flex-direction:column; align-items:stretch} .notes{max-width:none; flex-basis:auto; position:static; max-height:none; margin:8px 4% 0} }

@@ -95,3 +95,21 @@ describe("Rail", () => {
     expect(onPickSession).toHaveBeenCalledWith("d2", "s9");
   });
 });
+
+describe("Rail refresh", () => {
+  it("refresh 一變就重抓作品清單,不先清空", async () => {
+    setLang("zh-Hant");
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      if (u === "/api/works") return json({ works: [{ slug: "d1", title: n++ ? "新標題" : "海" }] });
+      return json({ sessions: [] });
+    }));
+    const chars = makeCharacters([hyena], "hyena");
+    const el = (r: number) => <CharactersProvider value={chars}><Rail current={null} refresh={r} onPick={vi.fn()} onPickSession={vi.fn()} /></CharactersProvider>;
+    const { rerender } = render(el(0));
+    await screen.findByText("海");
+    rerender(el(1));
+    expect(screen.getByText("海")).toBeTruthy();
+    await screen.findByText("新標題");
+  });
+});

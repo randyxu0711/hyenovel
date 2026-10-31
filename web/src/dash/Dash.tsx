@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, DashError } from "./api";
 import Avatar from "./Avatar";
 import { errorMessage, localized, setLang, useLang, useT, type MsgKey } from "./i18n";
+import Feed from "./Feed";
 import Rail from "./Rail";
 import Reader from "./Reader";
 import Seat from "./Seat";
@@ -44,6 +45,10 @@ function Shell({ chars }: { chars: Characters }) {
   const [session, setSession] = useState<string | null>(null);
   const [quotes, setQuotes] = useState<string[]>([]);
   const [open, setOpen] = useState(true);
+  const [feeding, setFeeding] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const bump = () => setRefresh(n => n + 1);
   const talk = useTalk(slug, session);
   const me = chars.byId(talk.whoId);
   useEffect(() => applySignature(me, mode), [me, mode]);
@@ -58,18 +63,21 @@ function Shell({ chars }: { chars: Characters }) {
       </div>
       <nav className="dash-rail" aria-label={t("rail.works")}>
         <div className="dash-brand"><Avatar character={me} size={30} /><b>{t("brand")}</b></div>
-        <button type="button" className="dash-feed">{t("rail.feed")}</button>
-        <Rail current={slug} onLoaded={ws => setSlug(cur => cur ?? ws[0]?.slug ?? null)} onPick={s => pick(s)} onPickSession={pick} />
+        <button type="button" className="dash-feed" onClick={() => setFeeding(true)}>{t("rail.feed")}</button>
+        <Rail refresh={refresh} current={slug} onLoaded={ws => setSlug(cur => cur ?? ws[0]?.slug ?? null)} onPick={s => { setNotice(null); pick(s); }} onPickSession={pick} />
         <Keys />
       </nav>
       <main className="dash-desk">
-        {slug ? <Reader slug={slug} companion={localized(me.name, lang)} onQuote={q => { setQuotes(qs => qs.includes(q) ? qs : [...qs, q]); setOpen(true); setPane("talk"); }} /> : t("desk.empty")}
+        {slug ? <Reader slug={slug} onFinished={bump} companion={localized(me.name, lang)} onQuote={q => { setQuotes(qs => qs.includes(q) ? qs : [...qs, q]); setOpen(true); setPane("talk"); }} /> : t("desk.empty")}
       </main>
+      {notice && <p className="dash-notice" role="status">{notice}</p>}
       <aside className="dash-talk">
         <Talk talk={talk} hasWork={slug !== null} quotes={quotes}
           onDropQuote={i => setQuotes(qs => qs.filter((_, j) => j !== i))}
           onSent={() => setQuotes([])} onCollapse={() => setOpen(false)} />
       </aside>
+      {feeding && <Feed onClose={() => setFeeding(false)}
+        onSubmitted={(s, existing) => { setFeeding(false); pick(s); bump(); setNotice(existing ? t("feed.already") : null); }} />}
       {!open && <Seat character={me} onOpen={() => setOpen(true)} />}
     </div>
   );

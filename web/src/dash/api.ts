@@ -40,6 +40,7 @@ export type RecentSession = SessionRow & { slug: string; title: string };
 export type Turn = {
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[];
 };
+export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
 export type SessionDetail = { session: string; slug: string; title: string; turns: Turn[] };
 
@@ -86,9 +87,10 @@ export const api = {
     (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}`)).sessions,
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),
-  part: (slug: string, part: "notes") => request<unknown>(`/api/works/${encodeURIComponent(slug)}/${part}`),
+  part: async (slug: string, part: "notes") =>
+    (await request<{ text: string }>(`/api/works/${encodeURIComponent(slug)}/${part}`)).text,
   estimate: async (chars: number) =>
-    (await request<{ estimate: unknown }>(`/api/estimate?chars=${chars}`)).estimate,
+    (await request<{ estimate: Estimate | null }>(`/api/estimate?chars=${chars}`)).estimate,
   extract: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
