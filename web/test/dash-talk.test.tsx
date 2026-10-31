@@ -142,6 +142,37 @@ describe("對話", () => {
   });
 });
 
+describe("對話錯誤與上限", () => {
+  beforeEach(() => localStorage.setItem("hyenovel.companion", "buffalo"));
+  it("串流中的 error 事件用它帶的 code 顯示", async () => {
+    talkReply = () => sse(["error", { where: "discuss", message: "用量已達上限", recoverable: true, code: "usage-limit" }]);
+    mount();
+    await screen.findByText("第一段。");
+    say("嗨");
+    expect((await screen.findByRole("alert")).textContent).toContain("現在重試也沒用");
+  });
+  it("error 事件沒帶 code 時退回通用訊息", async () => {
+    talkReply = () => sse(["error", { where: "discuss", message: "x", recoverable: false }]);
+    mount();
+    await screen.findByText("第一段。");
+    say("嗨");
+    expect((await screen.findByRole("alert")).textContent).toBe("出了點狀況,請再試一次。");
+  });
+  it("輸入框有 maxLength,與 den 的訊息上限一致", async () => {
+    mount();
+    expect((await screen.findByLabelText("對話輸入") as HTMLTextAreaElement).maxLength).toBe(8000);
+  });
+  it("送出一輪後左欄對話清單重抓(新局才會出現)", async () => {
+    mount();
+    const f = fetch as unknown as ReturnType<typeof vi.fn>;
+    await screen.findByText("第一段。");
+    const recent = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/sessions?")).length;
+    const before = recent();
+    say("嗨");
+    await waitFor(() => expect(recent()).toBeGreaterThan(before));
+  });
+});
+
 describe("沒有寫死角色", () => {
   it("dash 目錄除 Avatar 外沒有 hyena/buffalo/deer 字面值", () => {
     const dir = join(__dirname, "../src/dash");

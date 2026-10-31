@@ -80,3 +80,11 @@ def test_error_codes_match_web_list():
     web = re.findall(r'"([a-z-]+)"', block)
     assert len(web) == len(set(web))
     assert set(web) == set(den_app.ERROR_CODES) | {"den-down"}
+
+
+def test_chat_limit_matches_web():
+    """Talk 輸入框的 maxLength(useTalk.ts 的 MAX_CHAT)必須等於 den 的上限,免得送出才撞 422。"""
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[2] / "web/src/dash/useTalk.ts").read_text(encoding="utf8")
+    assert int(re.search(r"MAX_CHAT\s*=\s*(\d+)", src).group(1)) == den_config.MAX_CHAT_CHARS

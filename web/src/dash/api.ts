@@ -7,7 +7,7 @@ export const DEN_ERROR_CODES = [
   "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
   "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
   "unknown-character", "unknown-session-id", "ambiguous-session",
-  "quote-needs-message", "too-many-quotes",
+  "quote-needs-message", "too-many-quotes", "usage-limit", "no-response", "commit-failed", "chat-failed",
   "den-down",
 ];
 
@@ -37,7 +37,7 @@ export type SessionRow = {
   session: string; started_at: number; last_at: number; turns: number;
   character: string | null; mode: string | null; preview: string; version: number | null;
 };
-export type RecentSession = SessionRow & { slug: string; title: string };
+export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type Turn = {
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[];
 };

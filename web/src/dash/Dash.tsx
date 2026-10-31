@@ -47,13 +47,14 @@ function Shell({ chars }: { chars: Characters }) {
   const [open, setOpen] = useState(true);
   const [feeding, setFeeding] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [reload, setReload] = useState(0);   // 重交已開著的那篇:Reader 要重抓
   const [notice, setNotice] = useState<string | null>(null);
   const bump = () => setRefresh(n => n + 1);
   const talk = useTalk(slug, session);
   const me = chars.byId(talk.whoId);
   useEffect(() => applySignature(me, mode), [me, mode]);
   const [pane, setPane] = useState<Pane>("works");
-  const pick = (s: string, sess: string | null = null) => { setSlug(s); setSession(sess); setQuotes([]); setPane("desk"); };
+  const pick = (s: string, sess: string | null = null) => { setSlug(s); setSession(sess); setQuotes([]); setNotice(null); setPane("desk"); };
   return (
     <div className="dash" data-pane={pane} data-talk={open ? "open" : "closed"}>
       <div className="dash-tabs" role="tablist">
@@ -64,20 +65,25 @@ function Shell({ chars }: { chars: Characters }) {
       <nav className="dash-rail" aria-label={t("rail.works")}>
         <div className="dash-brand"><Avatar character={me} size={30} /><b>{t("brand")}</b></div>
         <button type="button" className="dash-feed" onClick={() => setFeeding(true)}>{t("rail.feed")}</button>
-        <Rail refresh={refresh} current={slug} onLoaded={ws => setSlug(cur => cur ?? ws[0]?.slug ?? null)} onPick={s => { setNotice(null); pick(s); }} onPickSession={pick} />
+        <Rail refresh={refresh} current={slug} onLoaded={ws => setSlug(cur => cur ?? ws[0]?.slug ?? null)} onPick={s => pick(s)} onPickSession={pick} />
         <Keys />
       </nav>
       <main className="dash-desk">
-        {slug ? <Reader slug={slug} onFinished={bump} companion={localized(me.name, lang)} onQuote={q => { setQuotes(qs => qs.includes(q) ? qs : [...qs, q]); setOpen(true); setPane("talk"); }} /> : t("desk.empty")}
+        {slug ? <Reader slug={slug} reload={reload} onFinished={bump} companion={localized(me.name, lang)} onQuote={q => { setQuotes(qs => qs.includes(q) ? qs : [...qs, q]); setOpen(true); setPane("talk"); }} /> : t("desk.empty")}
       </main>
-      {notice && <p className="dash-notice" role="status">{notice}</p>}
+      {notice && (
+        <p className="dash-notice" role="status">
+          {notice}
+          <button type="button" aria-label={t("notice.dismiss")} onClick={() => setNotice(null)}>×</button>
+        </p>
+      )}
       <aside className="dash-talk">
         <Talk talk={talk} hasWork={slug !== null} quotes={quotes}
           onDropQuote={i => setQuotes(qs => qs.filter((_, j) => j !== i))}
-          onSent={() => setQuotes([])} onCollapse={() => setOpen(false)} />
+          onSent={() => { setQuotes([]); setNotice(null); bump(); }} onCollapse={() => setOpen(false)} />
       </aside>
       {feeding && <Feed onClose={() => setFeeding(false)}
-        onSubmitted={(s, existing) => { setFeeding(false); pick(s); bump(); setNotice(existing ? t("feed.already") : null); }} />}
+        onSubmitted={(s, existing) => { setFeeding(false); pick(s); bump(); setReload(n => n + 1); setNotice(existing ? t("feed.already") : null); }} />}
       {!open && <Seat character={me} onOpen={() => setOpen(true)} />}
     </div>
   );

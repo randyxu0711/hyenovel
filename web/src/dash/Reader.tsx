@@ -6,10 +6,13 @@ import { useJob } from "./useJob";
 import { useSelectionQuote } from "./useSelectionQuote";
 
 const ANALYZING = ["running", "notes-running"];
+const STOPPED = ["stopped", "notes-stopped"];
 
 /** 打字紙:滾筒在上、稿在下;選一段 → 浮動鈕帶進對話。 */
-export default function Reader({ slug, companion, onQuote, onFinished }: {
+export default function Reader({ slug, companion, onQuote, onFinished, reload = 0 }: {
   slug: string; companion: string; onQuote: (q: string) => void;
+  /** 外面遞增 = 這篇要重抓(例如重交了同一篇)。 */
+  reload?: number;
   /** 分析跑完(重抓過這篇之後)通知,好讓左欄重抓。 */
   onFinished?: () => void;
 }) {
@@ -18,8 +21,8 @@ export default function Reader({ slug, companion, onQuote, onFinished }: {
   const [err, setErr] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [rev, setRev] = useState(0);
-  const sheet = useRef<HTMLElement>(null);
-  const { quote, tooLong, clear } = useSelectionQuote(sheet);
+  const body = useRef<HTMLDivElement>(null);   // 只收正文的選取;標題不在內
+  const { quote, tooLong, clear } = useSelectionQuote(body);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
   const job = useJob(analyzing ? work!.job_id : null);
@@ -36,7 +39,7 @@ export default function Reader({ slug, companion, onQuote, onFinished }: {
     api.work(slug).then(w => { if (live) setWork(w); },
       e => { if (live) setErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
-  }, [slug, rev]);
+  }, [slug, rev, reload]);
 
   if (err) return <div className="reader-note" role="alert">{t(errorMessage(err))}</div>;
   if (!work) return <div className="reader-note">{t("loading")}</div>;
@@ -53,6 +56,7 @@ export default function Reader({ slug, companion, onQuote, onFinished }: {
             <span className="platen-mark" aria-hidden="true" />
             <span role="status">{t("job.reading")}{job.step && ` · ${t(`job.step.${job.step}` as MsgKey)}`}</span>
           </>}
+          {STOPPED.includes(work.state) && <span role="status">{t(work.state === "stopped" ? "job.stopped" : "job.notesStopped")}</span>}
         </span>
         <i />
       </div>
@@ -64,9 +68,11 @@ export default function Reader({ slug, companion, onQuote, onFinished }: {
         {notesBlock && <span id="notes-why" className="reader-why">{notesBlock}</span>}
       </div>
       <div className="reader-body">
-      <article className="sheet" ref={sheet}>
+      <article className="sheet">
         <h1>{work.title}</h1>
-        {work.text.split(/\n+/).filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}
+        <div ref={body}>
+          {work.text.split(/\n+/).filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}
+        </div>
       </article>
       {notesOpen && work.notes_ready && <NotesPanel slug={slug} />}
       </div>

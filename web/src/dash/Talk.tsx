@@ -5,7 +5,7 @@ import { errorMessage, localized, useLang, useT } from "./i18n";
 import PickCompanion from "./PickCompanion";
 import { useThemeState } from "./theme";
 import { useCharacters } from "./useCharacters";
-import type { Talk as TalkState } from "./useTalk";
+import { MAX_CHAT, type Talk as TalkState } from "./useTalk";
 
 /** 對話欄:選人 → 逐字稿(標說話者、換人有分隔)→ 輸入。 */
 export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCollapse }: {
@@ -100,7 +100,7 @@ export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCol
             <button type="button" aria-label={t("talk.dropQuote")} onClick={() => onDropQuote(i)}>×</button>
           </div>
         ))}
-        <textarea value={draft} rows={2} disabled={!hasWork} aria-label={t("talk.input")}
+        <textarea value={draft} rows={2} maxLength={MAX_CHAT} disabled={!hasWork} aria-label={t("talk.input")}
           placeholder={t("talk.placeholder", { name: nameOf(whoId) })}
           onChange={e => setDraft(e.target.value)} onKeyDown={onKey} />
         <button type="submit" className="talk-send" disabled={!hasWork || !draft.trim() || streaming !== null}>{t("talk.send")}</button>

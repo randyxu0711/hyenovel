@@ -6,6 +6,9 @@ const WHO_KEY = "hyenovel.companion";
 const read = (): string | null => { try { return localStorage.getItem(WHO_KEY); } catch { return null; } };
 const write = (v: string) => { try { localStorage.setItem(WHO_KEY, v); } catch { /* 存不了也照用 */ } };
 
+/** 與 den/config.py 的 MAX_CHAT_CHARS 一致(den/tests/test_app_errors.py 比對)。 */
+export const MAX_CHAT = 8000;
+
 export type Pending = { text: string; quotes: string[] };
 
 /** 一篇作品上的一局對話:逐字稿、串流中的字、誰在陪讀。 */
@@ -56,7 +59,7 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
             { role: "assistant", text: d.text, ts, mode: d.mode ?? null, character: d.character ?? null, quotes: [] }]);
           ok = true;
         } else if (ev.event === "error") {
-          fail(new DashError(0, "unknown", {}, ev.data?.message ?? ""));
+          fail(new DashError(0, ev.data?.code ?? "unknown", {}, ev.data?.message ?? ""));
         }
       }
     } catch (e) {

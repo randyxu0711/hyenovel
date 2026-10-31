@@ -43,7 +43,10 @@ export const zhHant = {
   "feed.keep": "繼續編輯",
   "feed.discardYes": "丟掉",
   "feed.already": "這篇已經在了,已切過去。",
+  "notice.dismiss": "關閉提示",
   "job.reading": "正在讀這一篇",
+  "job.stopped": "分析停住了",
+  "job.notesStopped": "備課筆記停住了",
   "job.step.analyst": "整篇讀一遍",
   "job.step.reviewer": "寫備課筆記",
   "notes.open": "冷讀者的筆記",
@@ -88,6 +91,10 @@ export const zhHant = {
   "err.unknown-character": "沒有這位陪讀者。",
   "err.unknown-session-id": "找不到這一局。",
   "err.ambiguous-session": "有兩篇作品用了同一個局代號,無法判斷是哪一局。",
+  "err.usage-limit": "訂閱用量到上限了,現在重試也沒用;等額度回來再聊。",
+  "err.no-response": "陪讀者沒有回應,這輪沒有存下。可以再送一次。",
+  "err.commit-failed": "存檔失敗,這輪沒有存下。可以再送一次。",
+  "err.chat-failed": "陪讀者這輪沒讀成,沒有存下。稍後再試。",
 } as const;
 
 export type MsgKey = keyof typeof zhHant;
@@ -132,7 +139,10 @@ export const en: Record<MsgKey, string> = {
   "feed.keep": "Keep editing",
   "feed.discardYes": "Discard",
   "feed.already": "This draft is already here. Switched to it.",
+  "notice.dismiss": "Dismiss notice",
   "job.reading": "Reading this one",
+  "job.stopped": "The analysis stalled",
+  "job.notesStopped": "The prep notes stalled",
   "job.step.analyst": "Reading it through",
   "job.step.reviewer": "Writing prep notes",
   "notes.open": "Cold reader's notes",
@@ -177,6 +187,10 @@ export const en: Record<MsgKey, string> = {
   "err.unknown-character": "No such companion.",
   "err.unknown-session-id": "That session was not found.",
   "err.ambiguous-session": "Two works share this session id, so it can't be told which one you mean.",
+  "err.usage-limit": "The subscription usage limit is reached. Retrying now won't help; wait until it resets.",
+  "err.no-response": "The companion did not respond, and this turn was not saved. You can send it again.",
+  "err.commit-failed": "Saving failed, and this turn was not saved. You can send it again.",
+  "err.chat-failed": "The companion could not finish this turn, and it was not saved. Try again later.",
 };
 
 const dicts: Record<Lang, Record<MsgKey, string>> = { "zh-Hant": zhHant, en };

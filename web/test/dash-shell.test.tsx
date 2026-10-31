@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
@@ -35,5 +35,42 @@ describe("Dash 起始作品", () => {
     mount([]);
     expect(await screen.findByText("還沒有作品。捲進第一張稿吧。")).toBeTruthy();
     expect(screen.getByText("選一篇作品,或捲進一張新稿。")).toBeTruthy();
+  });
+});
+
+describe("Dash 交稿後", () => {
+  const draft = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: "捲進一張新稿" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "稿子" }), { target: { value: "稿" } });
+    fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));
+  };
+  const mountSubmitting = () => {
+    const f = mount([{ slug: "d2", title: "最近的", version: 1, chars: 4 }]);
+    const inner = f.getMockImplementation()!;
+    f.mockImplementation(async (u: string, init?: RequestInit) =>
+      u === "/api/stories" && init?.method === "POST"
+        ? json({ slug: "d2", title: "最近的", version: 1, new_version: false, reused: true })
+        : inner(u));
+    return f;
+  };
+  const workFetches = (f: ReturnType<typeof mount>) => f.mock.calls.filter(c => c[0] === "/api/works/d2").length;
+
+  it("重交已開著的那篇:Reader 重抓,並顯示可關掉的提示", async () => {
+    const f = mountSubmitting();
+    await screen.findByText("內文一行");
+    const before = workFetches(f);
+    await draft();
+    expect(await screen.findByText("這篇已經在了,已切過去。")).toBeTruthy();
+    await waitFor(() => expect(workFetches(f)).toBeGreaterThan(before));
+    fireEvent.click(screen.getByRole("button", { name: "關閉提示" }));
+    expect(screen.queryByText("這篇已經在了,已切過去。")).toBeNull();
+  });
+  it("提示在下一個動作(選作品)時清掉", async () => {
+    mountSubmitting();
+    await screen.findByText("內文一行");
+    await draft();
+    await screen.findByText("這篇已經在了,已切過去。");
+    fireEvent.click(await screen.findByRole("button", { name: /最近的/ }));
+    expect(screen.queryByText("這篇已經在了,已切過去。")).toBeNull();
   });
 });

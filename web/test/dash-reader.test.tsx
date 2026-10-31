@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import Reader from "../src/dash/Reader";
 import { setLang } from "../src/dash/i18n";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
@@ -55,5 +55,24 @@ describe("Reader", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "x", code: "unknown-work" }, 404)));
     render(<CharactersProvider value={makeCharacters([hyena], "hyena")}><Reader slug="zz" companion="鬣狗" onQuote={vi.fn()} /></CharactersProvider>);
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "找不到這篇作品。");
+  });
+  it("選到標題不會出現帶進對話的鈕(只收正文)", async () => {
+    await mount(detail());
+    select(screen.getByRole("heading", { name: "海" }).firstChild!, 1);
+    expect(screen.queryByRole("button", { name: "帶給鬣狗聊" })).toBeNull();
+  });
+  it.each([["stopped", "分析停住了"], ["notes-stopped", "備課筆記停住了"]])("狀態 %s:進度區明說停住了", async (state, line) => {
+    await mount(detail({ state }));
+    expect(screen.getByText(line)).toBeTruthy();
+  });
+  it("reload 遞增 → 同一篇重抓", async () => {
+    const { rerender } = await mount(detail());
+    const f = fetch as unknown as ReturnType<typeof vi.fn>;
+    const n = f.mock.calls.length;
+    rerender(
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <Reader slug="d1" companion="鬣狗" onQuote={vi.fn()} reload={1} />
+      </CharactersProvider>);
+    await waitFor(() => expect(f.mock.calls.length).toBe(n + 1));
   });
 });
