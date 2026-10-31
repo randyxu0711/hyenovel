@@ -57,6 +57,18 @@ describe("選人", () => {
     expect(await screen.findByLabelText("對話輸入")).toBeTruthy();
     expect(screen.queryByText("選誰陪你讀")).toBeNull();
   });
+  it("沒選過人時打開既有的局:直接看逐字,接著由最後說話的那位陪讀", async () => {
+    sessions.old = { session: "old", slug: "d1", title: "海", turns: [
+      { role: "user", text: "q1", ts: 1, mode: null, character: null, quotes: [] },
+      { role: "assistant", text: "a1", ts: 2, mode: "imaginative", character: "deer", quotes: [] },
+    ] };
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /q1/ }));
+    await within(await screen.findByRole("log")).findByText("a1");
+    expect(screen.queryByText("選誰陪你讀")).toBeNull();
+    say("嗨");
+    await waitFor(() => expect(talkBodies[0].character).toBe("deer"));
+  });
   it("記住的角色不在清單時退回預設(視為沒選過)", async () => {
     localStorage.setItem("hyenovel.companion", "ghost");
     mount();

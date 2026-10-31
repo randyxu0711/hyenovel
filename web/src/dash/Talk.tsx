@@ -42,8 +42,8 @@ export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCol
   const rows = turns.map((turn: Turn, i) => {
     if (turn.role !== "assistant") {
       return (
-        <div key={i} className="talk-me">
-          {turn.quotes.map((q, j) => <blockquote key={j} className="talk-quote">{q}</blockquote>)}
+        <div key={i} className="chat-me">
+          {turn.quotes.map((q, j) => <blockquote key={j} className="chat-quote">{q}</blockquote>)}
           <p>{turn.text}</p>
         </div>
       );
@@ -53,57 +53,57 @@ export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCol
     last = c.id;
     return (
       <div key={i}>
-        {divider && <div className="talk-switch" role="separator">{t("talk.switched", { name: localized(c.name, lang) })}</div>}
-        <div className="talk-turn">
-          <p className="talk-who"><Avatar character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
-          <p className="talk-text">{turn.text}</p>
+        {divider && <div className="chat-switch" role="separator">{t("talk.switched", { name: localized(c.name, lang) })}</div>}
+        <div className="chat-turn">
+          <p className="chat-who"><Avatar character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+          <p className="chat-text">{turn.text}</p>
         </div>
       </div>
     );
   });
 
   return (
-    <div className="talk">
-      <header className="talk-head">
-        <div className="talk-roster" role="group" aria-label={t("talk.who")}>
+    <div className="chat">
+      <header className="chat-head">
+        <div className="chat-roster" role="group" aria-label={t("talk.who")}>
           {chars.list.map(c => (
-            <button key={c.id} type="button" className="talk-pick" aria-pressed={c.id === whoId}
+            <button key={c.id} type="button" className="chat-pick" aria-pressed={c.id === whoId}
               aria-label={localized(c.name, lang)} title={localized(c.name, lang)}
               onClick={() => talk.setWho(c.id)}>
               <Avatar character={c} size={26} />
             </button>
           ))}
         </div>
-        <button type="button" className="talk-collapse" aria-label={t("talk.collapse")} onClick={onCollapse}>›</button>
+        <button type="button" className="chat-collapse" aria-label={t("talk.collapse")} onClick={onCollapse}>›</button>
       </header>
-      <div className="talk-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
-        {!hasWork || (!turns.length && !pending) ? <p className="talk-empty">{hasWork ? t("talk.start", { name: nameOf(whoId) }) : t("talk.empty")}</p> : null}
+      <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
+        {!hasWork || (!turns.length && !pending) ? <p className="chat-empty">{hasWork ? t("talk.start", { name: nameOf(whoId) }) : t("talk.empty")}</p> : null}
         {rows}
         {pending && (
-          <div className="talk-me">
-            {pending.quotes.map((q, j) => <blockquote key={j} className="talk-quote">{q}</blockquote>)}
+          <div className="chat-me">
+            {pending.quotes.map((q, j) => <blockquote key={j} className="chat-quote">{q}</blockquote>)}
             <p>{pending.text}</p>
           </div>
         )}
         {streaming !== null && (
-          <div className="talk-turn">
-            <p className="talk-who"><Avatar character={me} size={22} /><b style={{ color: me.colors[mode].text }}>{nameOf(whoId)}</b></p>
-            {streaming ? <p className="talk-text">{streaming}</p> : <p className="talk-wait" role="status">{t("talk.waiting", { name: nameOf(whoId) })}</p>}
+          <div className="chat-turn">
+            <p className="chat-who"><Avatar character={me} size={22} /><b style={{ color: me.colors[mode].text }}>{nameOf(whoId)}</b></p>
+            {streaming ? <p className="chat-text">{streaming}</p> : <p className="chat-wait" role="status">{t("talk.waiting", { name: nameOf(whoId) })}</p>}
           </div>
         )}
       </div>
-      {error && <p className="talk-error" role="alert">{t(errorMessage(error.code))}</p>}
-      <form className="talk-form" onSubmit={e => { e.preventDefault(); void submit(); }}>
+      {error && <p className="chat-error" role="alert">{t(errorMessage(error.code))}</p>}
+      <form className="chat-form" onSubmit={e => { e.preventDefault(); void submit(); }}>
         {quotes.map((q, i) => (
-          <div key={i} className="talk-carry">
-            <blockquote className="talk-quote">{q}</blockquote>
+          <div key={i} className="chat-carry">
+            <blockquote className="chat-quote">{q}</blockquote>
             <button type="button" aria-label={t("talk.dropQuote")} onClick={() => onDropQuote(i)}>×</button>
           </div>
         ))}
         <textarea value={draft} rows={2} maxLength={MAX_CHAT} disabled={!hasWork} aria-label={t("talk.input")}
           placeholder={t("talk.placeholder", { name: nameOf(whoId) })}
           onChange={e => setDraft(e.target.value)} onKeyDown={onKey} />
-        <button type="submit" className="talk-send" disabled={!hasWork || !draft.trim() || streaming !== null}>{t("talk.send")}</button>
+        <button type="submit" className="chat-send" disabled={!hasWork || !draft.trim() || streaming !== null}>{t("talk.send")}</button>
       </form>
     </div>
   );

@@ -17,8 +17,6 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
   // 記住的 id 要對照清單:找不到就當作沒選過、用預設。
   const saved = read();
   const [picked, setPicked] = useState<string | null>(saved && chars.list.some(c => c.id === saved) ? saved : null);
-  const whoId = picked ?? chars.defaultId;
-  const chosen = picked !== null;
   const setWho = useCallback((id: string) => { write(id); setPicked(id); }, []);
 
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -27,7 +25,12 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<DashError | null>(null);
   const [draft, setDraft] = useState("");
-  const epoch = useRef(0);   // 換作品/換局後,舊串流的尾巴不准再寫進來
+  const epoch = useRef(0);
+  // 沒選過人時,既有的局由最後說話的那位接著陪讀(舊局只有 mode 也照樣對到角色)。
+  const last = [...turns].reverse().find(t => t.role === "assistant");
+  const inherited = last ? chars.byId(last.character, last.mode).id : null;
+  const whoId = picked ?? inherited ?? chars.defaultId;
+  const chosen = picked !== null || inherited !== null;   // 換作品/換局後,舊串流的尾巴不准再寫進來
 
   useEffect(() => {
     const mine = ++epoch.current;
