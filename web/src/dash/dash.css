@@ -21,7 +21,67 @@
 }
 .dash-key span{color:var(--dash-ui-ink-2)}
 .dash-key select{margin-left:auto; background:var(--dash-panel); border:0}
-.dash-desk{padding:32px; color:var(--dash-ui-ink-2)}
+.dash-desk{padding:0; color:var(--dash-ui-ink-2); overflow:auto; min-width:0}
+.dash-desk:not(:has(.reader)){padding:32px}
+.dash-tabs{display:none}
+.dash-rail{overflow:auto; min-height:0}
+.rail-lists{display:flex; flex-direction:column; gap:14px; min-height:0}
+.rail-h{font-size:var(--dash-t-xs); font-weight:600; color:var(--dash-ui-ink-2); margin:0 0 4px}
+.rail-lists ul{list-style:none; margin:0; padding:0}
+.rail-work, .rail-session, .rail-convo{
+  display:flex; width:100%; text-align:left; gap:8px; padding:6px 8px; border:0; border-radius:6px;
+  background:transparent; cursor:pointer; color:var(--dash-ui-ink);
+}
+.rail-work{flex-direction:column; gap:0}
+.rail-work[aria-current="true"]{background:var(--dash-bubble)}
+.rail-title{font-family:var(--serif); font-size:var(--dash-t-md)}
+.rail-meta{font-size:var(--dash-t-xs); color:var(--dash-ui-ink-2); margin:0}
+.rail-sessions{padding-left:12px !important}
+.rail-session{font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
+.rail-convo{align-items:flex-start; font-size:var(--dash-t-sm)}
+.rail-convo-text{display:flex; flex-direction:column; min-width:0}
+.rail-dots i{display:inline-block; width:5px; height:5px; margin-right:3px; border-radius:50%; background:var(--dash-sig-t); animation:rail-hop 1.2s ease-in-out infinite}
+.rail-dots i:nth-child(2){animation-delay:.15s}
+.rail-dots i:nth-child(3){animation-delay:.3s}
+@keyframes rail-hop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+.reader{position:relative; min-height:100%}
+.reader-note{padding:32px; color:var(--dash-ui-ink-2)}
+.platen{
+  position:sticky; top:0; z-index:2; height:34px; margin:0 auto; width:min(760px,92%);
+  background:var(--dash-platen); border-radius:0 0 14px 14px; padding:0 10px;
+  display:flex; align-items:center; justify-content:space-between;
+  box-shadow:0 6px 14px color-mix(in srgb, var(--dash-platen) 40%, transparent);
+}
+.platen i{width:14px; height:22px; border-radius:5px; background:var(--dash-knob)}
+.platen-tools{font-size:var(--dash-t-xs); color:var(--dash-muzzle)}
+.sheet{
+  width:min(640px,86%); margin:-6px auto 80px; padding:64px 64px 72px; position:relative;
+  background:var(--dash-paper); color:var(--dash-paper-ink);
+  box-shadow:0 18px 40px -18px color-mix(in srgb, var(--dash-platen) 45%, transparent);
+}
+.sheet h1{font-family:var(--serif); font-size:var(--dash-t-xl); font-weight:600; margin:0 0 28px}
+.sheet p{font-family:var(--serif); font-size:var(--dash-t-lg); line-height:2.05; margin:0 0 1.15em; text-align:justify}
+.sheet ::selection{background:color-mix(in srgb, var(--dash-sig) 28%, transparent)}
+.reader-float{
+  position:sticky; bottom:16px; z-index:3; display:flex; gap:10px; align-items:center; justify-content:center;
+  font-size:var(--dash-t-xs); color:var(--dash-ui-ink-2);
+}
+.reader-bring{
+  padding:8px 14px; border:0; border-radius:8px; cursor:pointer; font-size:var(--dash-t-sm);
+  background:var(--dash-enamel); color:var(--dash-enamel-ink);
+}
+.reader-bring:disabled{cursor:not-allowed; background:var(--dash-panel); color:var(--dash-ui-ink-2); border:1px solid var(--dash-line)}
+@media (max-width:979px){
+  .dash{grid-template-columns:1fr; grid-template-rows:auto 1fr}
+  .dash-tabs{display:flex; gap:4px; padding:6px; background:var(--dash-panel)}
+  .dash-tabs button{flex:1; padding:6px; border:0; border-radius:6px; background:transparent; font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
+  .dash-tabs button[aria-selected="true"]{background:var(--dash-bubble); color:var(--dash-ui-ink)}
+  .dash > :not(.dash-tabs){display:none}
+  .dash[data-pane="works"] > .dash-rail, .dash[data-pane="desk"] > .dash-desk, .dash[data-pane="talk"] > .dash-talk{display:flex; flex-direction:column}
+  .dash[data-pane="desk"] > .dash-desk{display:block}
+  .sheet{padding:36px 24px 48px}
+}
+@media (prefers-reduced-motion:reduce){ .rail-dots i{animation:none} }
 .dash-talk{padding:20px 16px; background:var(--dash-panel); color:var(--dash-ui-ink-2)}
 .avatar-fallback{
   display:inline-grid; place-items:center; border-radius:50%;
