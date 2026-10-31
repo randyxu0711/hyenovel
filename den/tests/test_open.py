@@ -21,6 +21,8 @@ def test_open_prints_and_opens_url(monkeypatch, capsys, tmp_path):
                                 transport=httpx.MockTransport(handler)), "tok"
 
     opened = []
+    (tmp_path / "index.html").write_text("x")   # 不依賴本機有沒有 build 過真的 web/dist
+    monkeypatch.setattr(den_open, "_DIST", tmp_path)
     monkeypatch.setattr(den_open, "DenClient", FakeDen)
     monkeypatch.setattr(den_open.webbrowser, "open", opened.append)
     den_open.main([])
