@@ -1,5 +1,8 @@
 """den 的 HTTP 入口:job API + SSE,本機安全三件套(綁 127.0.0.1、Origin、token)、單一實例鎖。
 
+下列路由一律掛在 `/api` 底下(例:GET /api/health);錯誤回應可帶 `code`(ERROR_CODES)。
+有 frontend_dir 時 `/` 出建好的前端(SPA fallback 回 index.html),`/api/*` 對不上回 JSON 404。
+
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
   GET  /stories             → {"stories": [...]}(領域形狀,見 den.views)
   GET  /stories/{slug}/viz  → VizData | 404 無 current analysis(feedback 欄 = 同版備課筆記,否則同版舊回饋)
@@ -42,7 +45,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 import filelock
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -67,6 +70,33 @@ _LIST_MAX = 100
 _WORKS_MAX = 50
 _JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
              "error_class", "detail", "params", "created_at", "updated_at")
+
+
+# dashboard 前端依 code 對照人話;detail 維持原字串(MCP shim 靠它),code 另附。
+ERROR_CODES: tuple[str, ...] = (
+    "bad-slug", "unknown-work", "bad-part", "not-analyzed", "no-notes", "no-feedback",
+    "nothing-running", "unknown-session", "busy", "quote-not-in-source", "quote-too-long",
+    "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
+    "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
+    "unknown-character", "unknown-session-id", "ambiguous-session",
+)
+
+_STORY_ERRORS = {"空白故事": "empty-story", "原文過長": "story-too-long", "bad slug": "bad-slug",
+                 "unknown slug": "unknown-slug-ref"}
+
+
+class ApiError(HTTPException):
+    """帶機器可讀 code 的錯誤;回應 {"detail","code","params"}。"""
+
+    def __init__(self, status: int, code: str, detail: str, params: dict | None = None):
+        super().__init__(status, detail)
+        self.code = code
+        self.params = params or {}
+
+
+async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+    return JSONResponse({"detail": exc.detail, "code": exc.code, "params": exc.params},
+                        status_code=exc.status_code)
 
 
 class ClientIn(BaseModel):
@@ -214,7 +244,8 @@ def _state_event(job: dict) -> dict:
 def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=None,
                port: int = PORT,
                idle_exit: float = IDLE_EXIT, idle_check: float = IDLE_CHECK,
-               on_idle: Callable[[], None] | None = None, clock=time.monotonic) -> FastAPI:
+               on_idle: Callable[[], None] | None = None, clock=time.monotonic,
+               frontend_dir: Path | None = None) -> FastAPI:
     origins = {f"http://{HOST}:{port}", f"http://localhost:{port}"}
 
     @asynccontextmanager
@@ -264,9 +295,13 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             lock.release()
 
     app = FastAPI(title="hyenovel den", lifespan=lifespan)
+    app.add_exception_handler(ApiError, _api_error_handler)
+    api = APIRouter(prefix="/api")
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
+        if not request.url.path.startswith("/api"):   # 前端靜態檔不帶 token;API 才守門
+            return await call_next(request)
         origin = request.headers.get("origin")
         if origin is not None and origin not in origins:
             # !r 且截斷:Origin 是外部輸入,可能夾換行偽造 log 行
@@ -287,30 +322,30 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise HTTPException(404, "job 不存在")
         return job
 
-    @app.post("/jobs", status_code=202)
+    @api.post("/jobs", status_code=202)
     async def post_job(body: JobIn, request: Request):
         if not valid_slug(body.slug):
             log.info("event=reject where=slug slug=%r", body.slug[:64])
-            raise HTTPException(422, "bad slug")
+            raise ApiError(422, "bad-slug", "bad slug")
         client = body.client.model_dump() if body.client else None
         runner = pick_runner(client["name"] if client else None, request.app.state.available)
         if runner is None:
             log.info("event=reject where=runner client=%r", client and client["name"][:64])
-            raise HTTPException(503, "沒有可用的 runner：目前只支援 Claude CLI")
+            raise ApiError(503, "no-runner", "沒有可用的 runner：目前只支援 Claude CLI")
         try:
             out = request.app.state.mgr.submit(body.slug, client, runner, resume_only=body.resume_only)
         except LookupError:
-            raise HTTPException(404, "這篇不在 DB:先執行 python -m marrow.importer") from None
+            raise ApiError(404, "unknown-work", "這篇不在 DB:先執行 python -m marrow.importer") from None
         except NothingToResume as e:
-            raise HTTPException(409, e.reason) from None
+            raise ApiError(409, "nothing-to-resume", e.reason) from None
         return {**out, "runner": runner, "note": "會用你同一份訂閱額度"}
 
-    @app.get("/health")
+    @api.get("/health")
     async def health(request: Request):
         return {"version": request.app.state.version, "pid": os.getpid(),
                 "busy": repo.has_pending_jobs(request.app.state.mgr.conn)}
 
-    @app.post("/stories", status_code=201)
+    @api.post("/stories", status_code=201)
     async def post_story(body: StoryIn, request: Request):
         conn = request.app.state.mgr.conn
         try:
@@ -318,43 +353,43 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 return stories.ingest(conn, body.text, body.title, body.slug, time.time())
         except ValueError as e:
             log.info("event=reject where=stories reason=%s", e)
-            raise HTTPException(422, str(e)) from None
+            raise ApiError(422, _STORY_ERRORS.get(str(e), "bad-slug"), str(e)) from None
 
     def _slug_ok(slug: str, where: str) -> None:
         if not valid_slug(slug):
             log.info("event=reject where=%s reason=bad-slug slug=%r", where, slug[:64])
-            raise HTTPException(400, "bad slug")
+            raise ApiError(400, "bad-slug", "bad slug")
 
-    def _unknown(where: str) -> HTTPException:
+    def _unknown(where: str) -> ApiError:
         log.info("event=reject where=%s reason=unknown-slug", where)
-        return HTTPException(404, "這篇不在 DB")
+        return ApiError(404, "unknown-work", "這篇不在 DB")
 
-    @app.get("/stories")
+    @api.get("/stories")
     async def list_stories(request: Request):
         return {"stories": views.stories(request.app.state.mgr.conn)}
 
-    @app.get("/works")
+    @api.get("/works")
     async def list_works(request: Request, q: str | None = None, limit: int = 20):
         if not 1 <= limit <= _WORKS_MAX:
             log.info("event=reject where=list-works limit=%s", limit)
             raise HTTPException(422, f"limit 要在 1–{_WORKS_MAX}")
         return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
 
-    @app.get("/works/{slug}/{part}")
+    @api.get("/works/{slug}/{part}")
     async def read_work(slug: str, part: str, request: Request):
         _slug_ok(slug, "read-work")
         if part not in works.PARTS:
             log.info("event=reject where=read-work reason=bad-part part=%r", part[:32])
-            raise HTTPException(422, f"part 只能是 {'/'.join(works.PARTS)}")
+            raise ApiError(422, "bad-part", f"part 只能是 {'/'.join(works.PARTS)}")
         try:
             return {"text": works.read_part(request.app.state.mgr.conn, slug, part)}
         except LookupError:
             raise _unknown("read-work") from None
         except works.Missing as e:
             log.info("event=reject where=read-work reason=%s", e.reason)
-            raise HTTPException(409, e.reason) from None
+            raise ApiError(409, e.reason, e.reason) from None
 
-    @app.post("/works/{slug}/cancel")
+    @api.post("/works/{slug}/cancel")
     async def cancel_work(slug: str, request: Request):
         _slug_ok(slug, "cancel-work")
         mgr = request.app.state.mgr
@@ -364,10 +399,10 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         done = [j["id"] for j in repo.active_jobs_of_story(mgr.conn, st["id"]) if mgr.cancel(j["id"])]
         if not done:
             log.info("event=reject where=cancel-work reason=nothing-running")
-            raise HTTPException(409, "nothing-running")
+            raise ApiError(409, "nothing-running", "nothing-running")
         return {"cancelled": done}
 
-    @app.get("/stories/{slug}/viz")
+    @api.get("/stories/{slug}/viz")
     async def get_viz(slug: str, request: Request):
         _slug_ok(slug, "viz")
         conn = request.app.state.mgr.conn
@@ -377,13 +412,13 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         ana = repo.current_artifact(conn, st["id"], "analysis")
         if ana is None:
             log.info("event=reject where=viz reason=not-analyzed")
-            raise HTTPException(404, "這篇還沒分析完成")
+            raise ApiError(404, "not-analyzed", "這篇還沒分析完成")
         picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"),
                                        repo.current_artifact(conn, st["id"], "feedback"))
         src = repo.source_version(conn, ana["source_version_id"])["text"]
         return vizdata.viz_payload(slug, ana["body"], vizdata.judgment_for_viz(picked), src)
 
-    @app.get("/stories/{slug}/source")
+    @api.get("/stories/{slug}/source")
     async def get_source(slug: str, request: Request):
         _slug_ok(slug, "source")
         conn = request.app.state.mgr.conn
@@ -395,7 +430,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
               else repo.latest_source_version(conn, st["id"]))
         return PlainTextResponse(sv["text"], media_type="text/plain; charset=utf-8")
 
-    @app.get("/stories/{slug}/conclusions")
+    @api.get("/stories/{slug}/conclusions")
     async def get_conclusions(slug: str, request: Request):
         _slug_ok(slug, "conclusions")
         try:
@@ -403,7 +438,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         except LookupError:
             raise _unknown("conclusions") from None
 
-    @app.get("/stories/{slug}/transcript")
+    @api.get("/stories/{slug}/transcript")
     async def get_transcript(slug: str, request: Request):
         _slug_ok(slug, "transcript")
         try:
@@ -411,23 +446,23 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         except LookupError:
             raise _unknown("transcript") from None
 
-    @app.post("/extract")
+    @api.post("/extract")
     async def extract(file: UploadFile):
         data = await file.read(MAX_SOURCE_BYTES + 1)
         if len(data) > MAX_SOURCE_BYTES:
             log.info("event=reject where=upload bytes=%s", len(data))
-            raise HTTPException(413, "檔案太大")
+            raise ApiError(413, "file-too-large", "檔案太大")
         try:
             text = ingest.extract_text(file.filename or "", data)
         except ValueError as e:   # extract_text 內已記 event=extract-fail
-            raise HTTPException(400, str(e)) from None
+            raise ApiError(400, "extract-failed", str(e)) from None
         return {"filename": file.filename, "text": text, "chars": len(text)}
 
-    @app.post("/discuss/{slug}")
+    @api.post("/discuss/{slug}")
     async def discuss_turn(slug: str, body: DiscussIn, request: Request):
-        def reject(code: int, reason: str, detail: str) -> HTTPException:
+        def reject(status: int, reason: str, detail: str) -> ApiError:
             log.info("event=reject where=discuss reason=%s", reason)
-            return HTTPException(code, detail)
+            return ApiError(status, "unknown-work" if reason == "unknown-slug" else reason, detail)
         if not valid_slug(slug):
             raise reject(422, "bad-slug", "bad slug")
         state = request.app.state
@@ -448,7 +483,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    @app.get("/jobs")
+    @api.get("/jobs")
     async def list_jobs(request: Request, limit: int = 20):
         if not 1 <= limit <= _LIST_MAX:
             log.info("event=reject where=list-jobs limit=%s", limit)
@@ -456,7 +491,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         rows = repo.list_jobs(request.app.state.mgr.conn, limit)
         return {"jobs": [{k: r[k] for k in _LIST_KEYS} for r in rows]}
 
-    @app.get("/jobs/{job_id}")
+    @api.get("/jobs/{job_id}")
     async def get_job(job_id: int, request: Request):
         job = _job(request, job_id)
         conn = request.app.state.mgr.conn
@@ -471,15 +506,15 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise HTTPException(409, f"目前狀態不能 {verb}")
         return {"ok": True}
 
-    @app.post("/jobs/{job_id}/cancel")
+    @api.post("/jobs/{job_id}/cancel")
     async def cancel(job_id: int, request: Request):
         return await _act(request, job_id, "cancel")
 
-    @app.post("/jobs/{job_id}/resume")
+    @api.post("/jobs/{job_id}/resume")
     async def resume(job_id: int, request: Request):
         return await _act(request, job_id, "resume")
 
-    @app.get("/jobs/{job_id}/events")
+    @api.get("/jobs/{job_id}/events")
     async def events(job_id: int, request: Request):
         _job(request, job_id)
         mgr = request.app.state.mgr
@@ -514,4 +549,12 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
+    app.include_router(api)
+
+    @app.api_route("/api/{rest:path}", include_in_schema=False)
+    async def api_not_found(rest: str):   # 沒對上的 /api/* 不能落到前端的 index.html
+        raise HTTPException(404, "not found")
+
+    if frontend_dir is not None:
+        app.frontend("/", directory=frontend_dir, fallback="index.html", check_dir=False)
     return app

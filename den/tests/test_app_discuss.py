@@ -81,7 +81,7 @@ def c(data, fake_chat):
 
 
 def post_raw(c, slug, sid, message="結尾太快?", anchors=()):
-    return c.post(f"/discuss/{slug}",
+    return c.post(f"/api/discuss/{slug}",
                   json={"session_id": sid, "message": message, "anchors": list(anchors)})
 
 
@@ -96,7 +96,7 @@ def first_turn(c, slug="mini") -> str:
 
 
 def turns(c, slug="mini"):
-    return c.get(f"/stories/{slug}/transcript").json()["turns"]
+    return c.get(f"/api/stories/{slug}/transcript").json()["turns"]
 
 
 def in_loop(c, fn):
@@ -228,7 +228,7 @@ def test_disconnect_mid_turn_kills_worker_and_writes_nothing(data, fake_chat):
             async def send(msg):
                 if msg["type"] == "http.response.body" and msg.get("body"):
                     got_body.set()
-            path = "/discuss/mini"
+            path = "/api/discuss/mini"
             scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
                      "http_version": "1.1", "method": "POST", "scheme": "http",
                      "path": path, "raw_path": path.encode(), "query_string": b"", "root_path": "",
@@ -342,7 +342,7 @@ def test_busy_lock_at_stream_start_yields_error(c):
                                   {"message": "x", "anchors": ["a"] * 9},
                                   {"message": "x", "session_id": "s" * 65}])
 def test_bad_body_422(c, fake_chat, body):
-    assert c.post("/discuss/mini", json=body).status_code == 422
+    assert c.post("/api/discuss/mini", json=body).status_code == 422
     assert fake_chat.calls == []
 
 
@@ -417,7 +417,7 @@ def _mini_id(conn):
 
 
 def test_unanalyzed_story_can_chat_with_source_only(c, fake_chat):
-    slug = c.post("/stories", json={"text": "未分析的稿。"}).json()["slug"]
+    slug = c.post("/api/stories", json={"text": "未分析的稿。"}).json()["slug"]
     evs = post_discuss(c, slug, None, "你覺得呢")
     assert evs[-1]["event"] == "done"
     system = fake_chat.calls[-1][0]
@@ -452,7 +452,7 @@ def test_mode_defaults_to_slow_and_is_recorded(c, fake_chat):
 
 
 def test_mode_carries_over_within_session(c, fake_chat):
-    evs = [json.loads(line[6:]) for line in c.post("/discuss/mini", json={
+    evs = [json.loads(line[6:]) for line in c.post("/api/discuss/mini", json={
         "message": "講重點", "mode": "direct"}).text.splitlines() if line.startswith("data: ")]
     sid = evs[-1]["data"]["session_id"]
     assert "你的讀法:直說" in fake_chat.calls[-1][0]
@@ -475,7 +475,7 @@ def test_empty_message_stores_only_assistant(c, fake_chat):
 
 
 def test_home_and_client_recorded(c):
-    r = c.post("/discuss/mini", json={"message": "q", "home": "mcp",
+    r = c.post("/api/discuss/mini", json={"message": "q", "home": "mcp",
                                       "client": {"name": "claude-code", "version": "2.1.314"}})
     sid = [json.loads(x[6:]) for x in r.text.splitlines() if x.startswith("data: ")][-1]["data"]["session_id"]
     d = in_loop(c, lambda conn: _session_rows(conn, sid))[0]

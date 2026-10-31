@@ -2,6 +2,7 @@
 import argparse
 import logging
 import socket
+from pathlib import Path
 
 import uvicorn
 
@@ -32,8 +33,9 @@ def main(argv: list[str] | None = None) -> None:
     port = pick_port(args.port)
     print(f"den token 檔:{d / 'den.token'}(請求帶 Authorization: Bearer <內容>)", flush=True)
     print(f"den port:{port}", flush=True)
+    dist = Path(__file__).resolve().parent.parent / "web" / "dist"
     server = uvicorn.Server(uvicorn.Config(
-        create_app(db.database_url(), d, port=port,
+        create_app(db.database_url(), d, port=port, frontend_dir=dist if dist.is_dir() else None,
                    on_idle=lambda: setattr(server, "should_exit", True)),
         host=HOST, port=port,
         timeout_graceful_shutdown=3))   # 開著的 SSE 不能讓 Ctrl+C 等到 job 跑完

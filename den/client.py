@@ -115,7 +115,7 @@ class DenClient:
             return None
         client = self._client_for(port)
         try:
-            r = client.get("/health", headers={"Authorization": f"Bearer {token}"},
+            r = client.get("/api/health", headers={"Authorization": f"Bearer {token}"},
                            timeout=_PROBE_TIMEOUT)
         except httpx.TransportError:
             return None
