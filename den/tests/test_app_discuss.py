@@ -75,7 +75,8 @@ def c(data, fake_chat):
     importer.import_story(conn, d / "other", 1.0)
     conn.close()
     with TestClient(den_app.create_app(url, d, run_factory=Run(),
-                                       chat_factory=fake_chat)) as client:
+                                       chat_factory=fake_chat),
+                    base_url="http://127.0.0.1") as client:
         client.headers.update(_auth(d))
         yield client
 
@@ -232,7 +233,7 @@ def test_disconnect_mid_turn_kills_worker_and_writes_nothing(data, fake_chat):
             scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
                      "http_version": "1.1", "method": "POST", "scheme": "http",
                      "path": path, "raw_path": path.encode(), "query_string": b"", "root_path": "",
-                     "headers": [(b"authorization", f"Bearer {app.state.token}".encode()),
+                     "headers": [(b"host", b"127.0.0.1"), (b"authorization", f"Bearer {app.state.token}".encode()),
                                  (b"content-type", b"application/json")],
                      "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 8788)}
             await asyncio.wait_for(app(scope, receive, send), 5)

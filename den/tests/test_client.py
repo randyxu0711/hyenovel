@@ -54,7 +54,8 @@ class FakeDen:
     # 注入點 ------------------------------------------------------------
     def start(self):
         self.tc = TestClient(den_app.create_app(self.url, self.dir, run_factory=self.run,
-                                                chat_factory=self.chat))
+                                                chat_factory=self.chat),
+                           base_url="http://127.0.0.1")
         self.tc.__enter__()
 
     def stop(self):
@@ -94,7 +95,7 @@ class FakeDen:
                                           stream=_Broken(r.content[:len(r.content) // 2], request))
                 return httpx.Response(r.status_code, headers=r.headers, content=r.content)
 
-        return httpx.Client(base_url="http://testserver", transport=Switch())
+        return httpx.Client(base_url="http://127.0.0.1", transport=Switch())
 
     def client(self, **kw):
         kw.setdefault("spawn", self.spawn)

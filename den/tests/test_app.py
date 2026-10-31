@@ -37,9 +37,13 @@ class Run:
         return run
 
 
+BASE = "http://127.0.0.1"   # guard 擋非本機 Host:TestClient 預設的 testserver 會被拒
+
+
 def _client(data, run=None, **kw):
     url, d = data
-    return TestClient(den_app.create_app(url, d, run_factory=run or Run(), **kw))
+    return TestClient(den_app.create_app(url, d, run_factory=run or Run(), **kw),
+                      base_url=BASE)
 
 
 def _auth(d):
@@ -306,7 +310,7 @@ def test_events_unsubscribes_on_client_disconnect(data):
                      "http_version": "1.1", "method": "GET", "scheme": "http",
                      "path": f"/api/jobs/{jid}/events", "raw_path": f"/api/jobs/{jid}/events".encode(),
                      "query_string": b"", "root_path": "",
-                     "headers": [(b"authorization", f"Bearer {tok}".encode())],
+                     "headers": [(b"host", b"127.0.0.1"), (b"authorization", f"Bearer {tok}".encode())],
                      "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 8788)}
             await asyncio.wait_for(app(scope, receive, send), 5)
             assert got_body.is_set()
@@ -344,7 +348,7 @@ def test_default_factory_uses_found_claude(data, monkeypatch):
     monkeypatch.setattr(den_app, "find_claude", lambda: "/fake/claude")
     monkeypatch.setattr(den_app, "cli_version", lambda exe: "1.2.3")
     url, d = data
-    with TestClient(den_app.create_app(url, d)) as c:
+    with TestClient(den_app.create_app(url, d), base_url=BASE) as c:
         mgr = c.app.state.mgr
         assert mgr._cli_version == "1.2.3"
         fn = mgr._run_factory(None)
@@ -526,7 +530,7 @@ def test_idle_exit_called_exactly_once(data):
     url, d = data
     app = den_app.create_app(url, d, run_factory=Run(), idle_exit=10, idle_check=0.01,
                              clock=clk, on_idle=lambda: calls.append(1))
-    with TestClient(app):
+    with TestClient(app, base_url=BASE):
         clk.t = 11
         assert _poll(lambda: calls)
         time.sleep(0.15)

@@ -3,6 +3,8 @@
 下列路由一律掛在 `/api` 底下(例:GET /api/health);錯誤回應可帶 `code`(ERROR_CODES)。
 有 frontend_dir 時 `/` 出建好的前端(SPA fallback 回 index.html),`/api/*` 對不上回 JSON 404。
 
+  POST /launch              (只收 Bearer)→ {url: /login?code=<32 hex>};碼單次有效、LAUNCH_TTL 秒
+  GET  /login?code=         (不在 /api 下)有效 → 303 到 / + HttpOnly cookie;無效 401 bad-launch-code
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
   GET  /stories             → {"stories": [...]}(領域形狀,見 den.views)
   GET  /stories/{slug}/viz  → VizData | 404 無 current analysis(feedback 欄 = 同版備課筆記,否則同版舊回饋)
@@ -35,9 +37,11 @@
 """
 import asyncio
 import functools
+import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import time
 from contextlib import aclosing, asynccontextmanager, nullcontext
@@ -46,12 +50,12 @@ from typing import Callable, Literal
 
 import filelock
 from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from den import discuss, stories, version, views, works
-from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, MAX_ANCHORS, MAX_CHAT_CHARS,
-                        MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
+from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
+                        MAX_CHAT_CHARS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
 from den.jobs import JobManager, NothingToResume
 from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
                         stream_chat)
@@ -97,6 +101,30 @@ class ApiError(HTTPException):
 async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
     return JSONResponse({"detail": exc.detail, "code": exc.code, "params": exc.params},
                         status_code=exc.status_code)
+
+
+SESSION_COOKIE = "hyenovel_session"
+_LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
+_HOST_RE = re.compile(r"(\[[0-9a-f:]+\]|[a-z0-9.\-]+)(:[0-9]{1,5})?")
+
+
+def session_cookie_value(token: str) -> str:
+    """cookie 值 = token 的 HMAC:token 輪替即全部登出;den 重啟(token 不變)不必重登。"""
+    return hmac.new(token.encode(), b"hyenovel-web-session", "sha256").hexdigest()
+
+
+def _host_ok(host: str) -> bool:
+    m = _HOST_RE.fullmatch(host.lower())
+    return bool(m) and m.group(1).strip("[]") in _LOCAL_HOSTS
+
+
+def _is_api(path: str) -> bool:
+    return path == "/api" or path.startswith("/api/")
+
+
+def _reject(status: int, code: str, detail: str, where: str) -> JSONResponse:
+    log.info("event=reject where=%s", where)
+    return JSONResponse({"detail": detail, "code": code, "params": {}}, status_code=status)
 
 
 class ClientIn(BaseModel):
@@ -246,7 +274,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                idle_exit: float = IDLE_EXIT, idle_check: float = IDLE_CHECK,
                on_idle: Callable[[], None] | None = None, clock=time.monotonic,
                frontend_dir: Path | None = None) -> FastAPI:
-    origins = {f"http://{HOST}:{port}", f"http://localhost:{port}"}
+    origins = {f"http://{HOST}:{port}", f"http://localhost:{port}", f"http://[::1]:{port}"}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -298,29 +326,64 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
     app.add_exception_handler(ApiError, _api_error_handler)
     api = APIRouter(prefix="/api")
 
+    app.state.launch_codes = {}   # 一次性啟動碼 → 到期時間(clock 的刻度);用掉即刪
+
     @app.middleware("http")
     async def guard(request: Request, call_next):
-        if not request.url.path.startswith("/api"):   # 前端靜態檔不帶 token;API 才守門
-            return await call_next(request)
+        """規則依序,套在所有路由(含靜態檔與 /login)。Origin / token 原值不進 log。"""
+        host = request.headers.get("host")
+        if host is None or not _host_ok(host):   # 擋 DNS rebinding
+            return _reject(403, "bad-host", "host not allowed", "host")
         origin = request.headers.get("origin")
         if origin is not None and origin not in origins:
-            # !r 且截斷:Origin 是外部輸入,可能夾換行偽造 log 行
-            log.info("event=reject where=origin origin=%r", origin[:64])
-            return JSONResponse({"detail": "origin not allowed"}, status_code=403)
-        auth = request.headers.get("authorization", "")
+            log.info("event=reject where=origin origin=%r", origin[:64])   # !r 且截斷:可能夾換行
+            return JSONResponse({"detail": "origin not allowed", "code": "bad-origin", "params": {}},
+                                status_code=403)
+        if not _is_api(request.url.path):   # 靜態檔與 /login 不帶 token
+            return await call_next(request)
         token = request.app.state.token
+        auth = request.headers.get("authorization", "")
         # token 為空時 want 會變成 "Bearer ",一律拒絕而非 fail-open
-        if not token or not secrets.compare_digest(auth.encode(), f"Bearer {token}".encode()):
-            log.info("event=reject where=token")
-            return JSONResponse({"detail": "bad token"}, status_code=401)
+        bearer = bool(token) and secrets.compare_digest(auth.encode(), f"Bearer {token}".encode())
+        if not bearer:
+            cookie = request.cookies.get(SESSION_COOKIE, "")
+            cookie_ok = (bool(token) and request.url.path != "/api/launch"   # launch 只認 Bearer
+                         and secrets.compare_digest(cookie.encode(),
+                                                    session_cookie_value(token).encode()))
+            if not cookie_ok:
+                return _reject(401, "bad-token", "bad token", "token")
+            if request.method != "GET" and origin is None \
+                    and request.headers.get("sec-fetch-site") != "same-origin":
+                return _reject(403, "bad-origin", "origin required", "origin-missing")   # CSRF
         request.app.state.last_seen = clock()   # 通過 guard 才算活動:被拒的探測不續命
         return await call_next(request)
+
+    @app.get("/login", include_in_schema=False)
+    async def login(request: Request, code: str = ""):
+        codes = request.app.state.launch_codes
+        expires = codes.pop(code, None)   # 先刪再判:過期的碼也不留
+        if expires is None or clock() > expires:
+            raise ApiError(401, "bad-launch-code", "launch code invalid or expired")
+        resp = RedirectResponse("/", status_code=303)
+        resp.set_cookie(SESSION_COOKIE, session_cookie_value(request.app.state.token),
+                        httponly=True, samesite="strict", path="/")
+        return resp
 
     def _job(request: Request, job_id: int) -> dict:
         job = repo.get_job(request.app.state.mgr.conn, job_id)
         if job is None:
             raise HTTPException(404, "job 不存在")
         return job
+
+    @api.post("/launch")
+    async def post_launch(request: Request):   # guard 保證只有 Bearer 到得了這裡
+        codes = request.app.state.launch_codes
+        now = clock()
+        for c in [c for c, exp in codes.items() if now > exp]:
+            del codes[c]
+        code = secrets.token_hex(16)
+        codes[code] = now + LAUNCH_TTL
+        return {"url": f"http://{HOST}:{port}/login?code={code}"}
 
     @api.post("/jobs", status_code=202)
     async def post_job(body: JobIn, request: Request):
