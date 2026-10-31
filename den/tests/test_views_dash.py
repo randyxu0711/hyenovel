@@ -37,31 +37,48 @@ def test_work_detail_without_notes_and_unknown(c):
         views.work_detail(c, "nope")
 
 
-def _say(c, d, seq, role, text, ts, **kw):
-    repo.add_utterance(c, d, seq, role, text, ts, "den", [], None, **kw)
+def _say(c, d, seq, role, text, ts, analysis_fp=None, **kw):
+    repo.add_utterance(c, d, seq, role, text, ts, "den", [], analysis_fp, **kw)
 
 
 def test_sessions_preview_mode_and_turns(c):
-    sid, _ = _story(c)
-    repo.add_source_version(c, sid, "二版", 10.0)
+    sid, v1 = _story(c)
+    a1, _ = repo.add_artifact(c, sid, v1, "analysis", 1, {"t": 1}, {}, 1.5)
+    fp1 = repo.artifact(c, a1)["sha256"]
     old = repo.ensure_discussion(c, sid, "old", "web", None, 2.0)
     _say(c, old, 0, "user", "問", 2.0)
-    _say(c, old, 1, "assistant", "舊答", 3.0, mode="direct", character="buffalo")
+    _say(c, old, 1, "assistant", "舊答", 3.0, mode="direct", character="buffalo", analysis_fp=fp1)
+    v2, _ = repo.add_source_version(c, sid, "二版", 10.0)
+    a2, _ = repo.add_artifact(c, sid, v2, "analysis", 1, {"t": 2}, {}, 10.5)
+    fp2 = repo.artifact(c, a2)["sha256"]
     new = repo.ensure_discussion(c, sid, "new", "web", None, 11.0)
     _say(c, new, 0, "user", "問", 11.0)
-    _say(c, new, 1, "assistant", "一" * 70, 12.0, mode="slow", character="hyena")
+    _say(c, new, 1, "assistant", "一" * 70, 12.0, mode="slow", character="hyena", analysis_fp=fp2)
     _say(c, new, 2, "user", "追問", 13.0)
-    pre = repo.ensure_discussion(c, sid, "early", "web", None, 0.5)       # 第一版交稿前就有的局
+    mid = repo.ensure_discussion(c, sid, "mid", "web", None, 9.0)         # 聊到一半交了新版:仍是讀 v1 的分析
+    _say(c, mid, 0, "user", "問", 9.0)
+    _say(c, mid, 1, "assistant", "答", 9.5, analysis_fp=fp1)
+    _say(c, mid, 2, "user", "再問", 13.5)
+    pre = repo.ensure_discussion(c, sid, "early", "web", None, 0.5)       # 分析前的聊天:fp 為 NULL
     _say(c, pre, 0, "user", "先問", 0.5)
-    got = views.sessions(c, "x1")
-    assert [s["session"] for s in got] == ["new", "old", "early"]
-    assert got[0] == {"session": "new", "started_at": 11.0, "last_at": 13.0, "turns": 1,
-                      "character": "hyena", "mode": "slow", "preview": "一" * 60, "version": 2}
-    assert got[1]["version"] == 1 and got[1]["character"] == "buffalo"
-    assert (got[2]["turns"], got[2]["character"], got[2]["mode"], got[2]["preview"],
-            got[2]["version"]) == (0, None, None, "", None)
+    _say(c, pre, 1, "assistant", "答", 0.6)
+    got = {s["session"]: s for s in views.sessions(c, "x1")}
+    assert [s["session"] for s in views.sessions(c, "x1")] == ["mid", "new", "old", "early"]
+    assert got["new"] == {"session": "new", "started_at": 11.0, "last_at": 13.0, "turns": 1,
+                          "character": "hyena", "mode": "slow", "preview": "一" * 60, "version": 2}
+    assert got["old"]["version"] == 1 and got["old"]["character"] == "buffalo"
+    assert got["mid"]["version"] == 1
+    assert got["early"]["version"] is None
     with pytest.raises(LookupError):
         views.sessions(c, "nope")
+
+
+def test_sessions_without_assistant_turn(c):
+    sid, _ = _story(c)
+    d = repo.ensure_discussion(c, sid, "q", "web", None, 1.0)
+    _say(c, d, 0, "user", "先問", 1.0)
+    [s] = views.sessions(c, "x1")
+    assert (s["turns"], s["character"], s["mode"], s["preview"], s["version"]) == (0, None, None, "", None)
 
 
 def test_session_turns_unknown_and_ambiguous(c):

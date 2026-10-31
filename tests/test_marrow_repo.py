@@ -265,7 +265,8 @@ def test_discussions_with_utterances_orders_by_ts_then_seq(conn):
     got = repo.discussions_with_utterances(conn, s)
     assert [(u["external_id"], u["text"]) for u in got] == [("A", "a0"), ("B", "b0"), ("A", "a1")]
     assert got[0]["anchors"] == ["t1"] and set(got[0]) == {
-        "external_id", "seq", "role", "text", "ts", "anchors", "mode", "character", "quotes"}
+        "external_id", "seq", "role", "text", "ts", "anchors", "mode", "character", "quotes",
+        "analysis_fp"}
 
 
 def test_discussions_with_utterances_carries_mode_character_quotes(conn):
@@ -297,15 +298,24 @@ def test_recent_discussions_orders_by_last_activity_and_limits(conn):
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["A"]
 
 
-def test_discussions_by_external_spans_stories_and_versions_listed(conn):
+def test_discussions_by_external_spans_stories(conn):
     s, _ = _story(conn)
     s2 = repo.ensure_story(conn, "s2", None, 0)
     repo.ensure_discussion(conn, s, "X", "web", None, 1.0)
     repo.ensure_discussion(conn, s2, "X", "web", None, 1.0)
     assert [d["slug"] for d in repo.discussions_by_external(conn, "X")] == ["s1", "s2"]
     assert repo.discussions_by_external(conn, "nope") == []
-    repo.add_source_version(conn, s, "乙", 7.0)
-    assert [(v["n"], v["created_at"]) for v in repo.source_versions(conn, s)] == [(1, 0), (2, 7.0)]
+
+
+def test_analysis_versions_maps_fp_to_source_version_n(conn):
+    s, v1 = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 7.0)
+    a1, _ = repo.add_artifact(conn, s, v1, "analysis", 1, {"t": 1}, {}, 1.0)
+    a2, _ = repo.add_artifact(conn, s, v2, "analysis", 1, {"t": 2}, {}, 8.0)
+    repo.add_artifact(conn, s, v2, "notes", 1, {"t": 3}, {}, 8.0)          # 非 analysis 不算
+    got = repo.analysis_versions(conn, s)
+    assert got == {repo.artifact(conn, a1)["sha256"]: 1, repo.artifact(conn, a2)["sha256"]: 2}
+
 
 
 def test_add_utterance_stores_usage_json(conn):
@@ -411,3 +421,4 @@ def test_add_utterance_stores_quotes(conn):
     repo.add_utterance(conn, d, 1, "user", "b", 2.0, "den", [], None, quotes=["甲", "乙"])
     rows = repo.utterances(conn, d)
     assert rows[0]["quotes"] is None and rows[1]["quotes"] == ["甲", "乙"]
+

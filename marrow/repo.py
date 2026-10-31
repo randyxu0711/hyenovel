@@ -182,7 +182,7 @@ def discussions_with_utterances(conn, story_id: int) -> list[dict]:
     return [_row(r) for r in conn.execute(
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
         "u.ts AS ts, u.anchors AS anchors, u.mode AS mode, u.character AS character, "
-        "u.quotes AS quotes FROM utterance u JOIN discussion d "
+        "u.quotes AS quotes, u.analysis_fp AS analysis_fp FROM utterance u JOIN discussion d "
         "ON d.id = u.discussion_id WHERE d.story_id = ? ORDER BY u.ts, u.seq", (story_id,))]
 
 
@@ -193,10 +193,11 @@ def discussions_by_external(conn, external_id: str) -> list[dict]:
         "WHERE d.external_id = ? ORDER BY d.id", (external_id,))]
 
 
-def source_versions(conn, story_id: int) -> list[dict]:
-    """一篇所有版本的 {n, created_at},n 由小到大(不含原文)。"""
-    return [_row(r) for r in conn.execute(
-        "SELECT n, created_at FROM source_version WHERE story_id = ? ORDER BY n", (story_id,))]
+def analysis_versions(conn, story_id: int) -> dict[str, int]:
+    """一篇所有 analysis artifact:sha256(= 發言的 analysis_fp)→ 它對的原文版本 n;一次查完。"""
+    return {r["sha256"]: r["n"] for r in conn.execute(
+        "SELECT a.sha256 AS sha256, sv.n AS n FROM artifact a JOIN source_version sv "
+        "ON sv.id = a.source_version_id WHERE a.story_id = ? AND a.kind = 'analysis'", (story_id,))}
 
 
 def recent_discussions(conn, limit: int) -> list[dict]:

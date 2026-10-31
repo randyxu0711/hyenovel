@@ -94,9 +94,9 @@ def work_detail(conn, slug: str) -> dict:
 
 
 def sessions(conn, slug: str) -> list[dict]:
-    """這篇的局,新到舊。version = 最後一則發言當時的最新版(依交稿時間對)。"""
+    """這篇的局,新到舊。version = 最後一則 assistant 發言讀的分析對應的原文版本(analysis_fp 精確對,沒有 → None)。"""
     st = _story(conn, slug)
-    versions = repo.source_versions(conn, st["id"])
+    versions = repo.analysis_versions(conn, st["id"])
     by: dict[str, list[dict]] = {}
     for u in repo.discussions_with_utterances(conn, st["id"]):
         by.setdefault(u["external_id"], []).append(u)
@@ -104,12 +104,11 @@ def sessions(conn, slug: str) -> list[dict]:
     for sid, us in by.items():
         asst = [u for u in us if u["role"] == "assistant"]
         last = us[-1]
-        at = [v["n"] for v in versions if v["created_at"] <= last["ts"]]
         out.append({"session": sid, "started_at": us[0]["ts"], "last_at": last["ts"],
                     "turns": len(asst), "character": asst[-1]["character"] if asst else None,
                     "mode": asst[-1]["mode"] if asst else None,
                     "preview": asst[-1]["text"][:60] if asst else "",
-                    "version": max(at) if at else None})
+                    "version": versions.get(asst[-1]["analysis_fp"]) if asst else None})
     out.sort(key=lambda s: s["last_at"], reverse=True)
     return out
 
