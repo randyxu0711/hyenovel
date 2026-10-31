@@ -76,7 +76,7 @@
   .dash-tabs{display:flex; gap:4px; padding:6px; background:var(--dash-panel)}
   .dash-tabs button{flex:1; padding:6px; border:0; border-radius:6px; background:transparent; font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
   .dash-tabs button[aria-selected="true"]{background:var(--dash-bubble); color:var(--dash-ui-ink)}
-  .dash > :not(.dash-tabs){display:none}
+  .dash > :not(.dash-tabs):not(.dash-notice){display:none}
   .dash[data-pane="works"] > .dash-rail, .dash[data-pane="desk"] > .dash-desk, .dash[data-pane="talk"] > .dash-talk{display:flex; flex-direction:column}
   .dash[data-pane="desk"] > .dash-desk{display:block}
   .dash .sheet{padding:36px 24px 48px}
