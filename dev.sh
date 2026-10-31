@@ -83,5 +83,6 @@ if $start_frontend; then
   printf '  開啟   http://localhost:%s\n' "$FRONTEND_PORT"
   printf '  日誌   tail -f %s/web.log\n' "$LOG_DIR"
   printf '  收工   Ctrl+C\n'
+  printf '  (不開發只要用:cd web && npm run build,再 .venv/bin/python -m den.open)\n'
   wait
 fi
