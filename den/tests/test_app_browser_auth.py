@@ -5,8 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
-from den.app import SESSION_COOKIE, session_cookie_value
+from den.app import session_cookie_name, session_cookie_valid, session_cookie_value
+from den.config import SESSION_MAX_AGE
 from den.tests.test_app import BASE, Run, _auth
+
+SESSION_COOKIE = session_cookie_name(8788)
 
 
 class Clock:
@@ -26,7 +29,7 @@ def make_app(data, clock):
     url, d = data
 
     def make(**kw):
-        return TestClient(den_app.create_app(url, d, run_factory=Run(), clock=clock, **kw),
+        return TestClient(den_app.create_app(url, d, run_factory=Run(), clock=clock, wall_clock=clock, **kw),
                           base_url=BASE)
     return make
 
@@ -62,8 +65,8 @@ def test_launch_code_single_use(client):
     r = client.get(f"/login?code={code}", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
     sc = r.headers["set-cookie"]
-    assert f"{SESSION_COOKIE}=" in sc and "HttpOnly" in sc and "SameSite=strict" in sc.replace(
-        "Strict", "strict") and "Path=/" in sc
+    assert f"{SESSION_COOKIE}=" in sc and "HttpOnly" in sc and "SameSite=strict" in sc
+    assert "Path=/" in sc and f"Max-Age={SESSION_MAX_AGE}" in sc
     r2 = client.get(f"/login?code={code}", follow_redirects=False)
     assert r2.status_code == 401 and r2.json()["code"] == "bad-launch-code"
 
@@ -177,10 +180,42 @@ def test_cookie_survives_restart_and_dies_on_token_rotation(make_app, data):
         assert c.get("/api/works").json()["code"] == "bad-token"
 
 
-def test_cookie_value_is_hmac_of_token():
-    assert session_cookie_value("a") != session_cookie_value("b")
-    assert len(session_cookie_value("a")) == 64
-    assert session_cookie_value("a") == session_cookie_value("a")
+def test_cookie_name_includes_port():
+    assert session_cookie_name(8788) == "hyenovel_session_8788"
+    assert session_cookie_name(9000) != session_cookie_name(8788)
+
+
+def test_cookie_value_shape_and_validity():
+    v = session_cookie_value("a", 1000)
+    assert v.startswith("1000.") and len(v) == 5 + 64
+    assert session_cookie_value("a", 1000) == v != session_cookie_value("b", 1000)
+    assert session_cookie_valid("a", v, 1000)
+    assert not session_cookie_valid("b", v, 1000)
+
+
+@pytest.mark.parametrize("bad", ["", "nodot", ".sig", "x.y", "-5.abc", "１０.abc"])
+def test_cookie_garbage_rejected(bad):
+    assert not session_cookie_valid("a", bad, 1000)
+
+
+def test_expired_cookie_401(cookie_client, clock):
+    clock.t += SESSION_MAX_AGE            # 邊界:剛好還有效
+    assert cookie_client.get("/api/works").status_code == 200
+    clock.t += 1
+    r = cookie_client.get("/api/works")
+    assert r.status_code == 401 and r.json()["code"] == "bad-token"
+
+
+def test_future_dated_cookie_401(cookie_client, clock):
+    clock.t -= 10                         # 簽發時間在「現在」之後
+    assert cookie_client.get("/api/works").json()["code"] == "bad-token"
+
+
+def test_tampered_issued_401(cookie_client, clock):
+    issued, sig = cookie_client.cookies[SESSION_COOKIE].split(".")
+    clock.t += SESSION_MAX_AGE + 5        # 真的過期了;偷改 issued 想續命,簽章就對不上
+    cookie_client.cookies.set(SESSION_COOKIE, f"{int(issued) + 10}.{sig}")
+    assert cookie_client.get("/api/works").json()["code"] == "bad-token"
 
 
 def test_rejects_do_not_refresh_last_seen(client, clock):

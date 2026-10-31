@@ -55,7 +55,8 @@ from pydantic import BaseModel, Field
 
 from den import discuss, stories, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
-                        MAX_CHAT_CHARS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, valid_slug)
+                        MAX_CHAT_CHARS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
+                        valid_slug)
 from den.jobs import JobManager, NothingToResume
 from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
                         stream_chat)
@@ -103,14 +104,31 @@ async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
                         status_code=exc.status_code)
 
 
-SESSION_COOKIE = "hyenovel_session"
 _LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 _HOST_RE = re.compile(r"(\[[0-9a-f:]+\]|[a-z0-9.\-]+)(:[0-9]{1,5})?")
 
 
-def session_cookie_value(token: str) -> str:
-    """cookie 值 = token 的 HMAC:token 輪替即全部登出;den 重啟(token 不變)不必重登。"""
-    return hmac.new(token.encode(), b"hyenovel-web-session", "sha256").hexdigest()
+def session_cookie_name(port: int) -> str:
+    return f"hyenovel_session_{port}"   # 不同 port 的 den / 別的本機 app 不互相蓋
+
+
+def session_cookie_value(token: str, issued: int) -> str:
+    """cookie 值 = `<issued>.<HMAC(token, issued)>`:無狀態,den 重啟不必重登;token 輪替即全部登出。
+
+    殘餘風險:cookie 不分 port,瀏覽器會把它送給本機任何 port 的伺服器(含別的程式);
+    SESSION_MAX_AGE 的過期簽章把被偷走的 cookie 的有效期限縮在這個窗口內。
+    """
+    sig = hmac.new(token.encode(), f"hyenovel-web-session|{issued}".encode(), "sha256").hexdigest()
+    return f"{issued}.{sig}"
+
+
+def session_cookie_valid(token: str, cookie: str, now: float) -> bool:
+    issued, _, _ = cookie.partition(".")
+    if not issued.isascii() or not issued.isdigit():
+        return False
+    if not 0 <= now - int(issued) <= SESSION_MAX_AGE:   # 未來簽發或過期都拒
+        return False
+    return secrets.compare_digest(cookie.encode(), session_cookie_value(token, int(issued)).encode())
 
 
 def _host_ok(host: str) -> bool:
@@ -273,6 +291,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                port: int = PORT,
                idle_exit: float = IDLE_EXIT, idle_check: float = IDLE_CHECK,
                on_idle: Callable[[], None] | None = None, clock=time.monotonic,
+               wall_clock=time.time,
                frontend_dir: Path | None = None) -> FastAPI:
     origins = {f"http://{HOST}:{port}", f"http://localhost:{port}", f"http://[::1]:{port}"}
 
@@ -326,6 +345,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
     app.add_exception_handler(ApiError, _api_error_handler)
     api = APIRouter(prefix="/api")
 
+    cookie_name = session_cookie_name(port)
     app.state.launch_codes = {}   # 一次性啟動碼 → 到期時間(clock 的刻度);用掉即刪
 
     @app.middleware("http")
@@ -346,10 +366,9 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         # token 為空時 want 會變成 "Bearer ",一律拒絕而非 fail-open
         bearer = bool(token) and secrets.compare_digest(auth.encode(), f"Bearer {token}".encode())
         if not bearer:
-            cookie = request.cookies.get(SESSION_COOKIE, "")
+            cookie = request.cookies.get(cookie_name, "")
             cookie_ok = (bool(token) and request.url.path != "/api/launch"   # launch 只認 Bearer
-                         and secrets.compare_digest(cookie.encode(),
-                                                    session_cookie_value(token).encode()))
+                         and session_cookie_valid(token, cookie, wall_clock()))
             if not cookie_ok:
                 return _reject(401, "bad-token", "bad token", "token")
             if request.method != "GET" and origin is None \
@@ -365,8 +384,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         if expires is None or clock() > expires:
             raise ApiError(401, "bad-launch-code", "launch code invalid or expired")
         resp = RedirectResponse("/", status_code=303)
-        resp.set_cookie(SESSION_COOKIE, session_cookie_value(request.app.state.token),
-                        httponly=True, samesite="strict", path="/")
+        resp.set_cookie(cookie_name, session_cookie_value(request.app.state.token, int(wall_clock())),
+                        httponly=True, samesite="strict", path="/", max_age=SESSION_MAX_AGE)
         return resp
 
     def _job(request: Request, job_id: int) -> dict:
