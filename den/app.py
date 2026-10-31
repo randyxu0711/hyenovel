@@ -55,7 +55,7 @@ from pydantic import BaseModel, Field
 
 from den import characters, discuss, stories, themes, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
-                        MAX_CHAT_CHARS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
+                        MAX_CHAT_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
                         valid_slug)
 from den.jobs import JobManager, NothingToResume
 from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
@@ -168,6 +168,7 @@ class DiscussIn(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
     anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
+    quotes: list[str] = Field(default_factory=list, max_length=MAX_QUOTES)   # 「帶這段」:原文逐字引文
     mode: Literal["direct", "slow", "imaginative"] | None = None   # 同 companion.MODES;MCP 只送這個
     character: str | None = Field(default=None, max_length=32)
     home: Literal["web", "mcp"] = "web"
@@ -558,11 +559,15 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise reject(422, "bad-slug", "bad slug")
         state = request.app.state
         try:
-            turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id)
+            turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes)
         except LookupError:
             raise reject(404, "unknown-slug", "這篇不在 DB") from None
         except discuss.UnknownSession:
             raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        except discuss.QuoteTooLong:
+            raise reject(422, "quote-too-long", "引文太長") from None
+        except discuss.QuoteNotInSource:
+            raise reject(422, "quote-not-in-source", "引文不在原文裡") from None
         lock = None
         if body.session_id is not None:   # 新局不會撞:id 這輪才發
             lock = state.chat_locks.setdefault(f"{slug}/{body.session_id}", asyncio.Lock())
@@ -574,7 +579,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         except characters.UnknownCharacter:
             raise reject(422, "unknown-character", "沒有這隻角色") from None
         events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors,
-                                  body.home, client)
+                                  body.home, client, quotes=body.quotes)
         return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

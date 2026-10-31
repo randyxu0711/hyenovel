@@ -148,12 +148,13 @@ def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
                   origin: str, anchors: list[str], analysis_fp: str | None,
                   usage: dict | None = None, mode: str | None = None,
-                  character: str | None = None) -> bool:
+                  character: str | None = None, quotes: list[str] | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage, mode, character) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, mode, character, quotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
-         None if usage is None else canonical_json(usage), mode, character))
+         None if usage is None else canonical_json(usage), mode, character,
+         canonical_json(quotes) if quotes else None))
     return cur.rowcount == 1
 
 

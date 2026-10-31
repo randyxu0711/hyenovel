@@ -8,7 +8,8 @@ import uuid
 from contextlib import aclosing
 
 from den import characters, companion, stories
-from marrow import repo
+from den.config import MAX_QUOTE_CHARS
+from marrow import gate, repo
 
 log = logging.getLogger("hyenovel")
 
@@ -18,26 +19,46 @@ OPENER = "(作者還沒說話。你先開口。)"
 CONTINUE = "(作者這次沒說話,等你接著說。)"
 
 
-def render_turn(history: list[dict], message: str) -> str:
-    """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。"""
+def _quotes_block(quotes) -> list[str]:
+    return ["作者指著原文的這幾段:", *[f"「{q}」" for q in quotes]] if quotes else []
+
+
+def render_turn(history: list[dict], message: str, quotes=()) -> str:
+    """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
+    作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。"""
+    block = _quotes_block(quotes)
     if not history:
-        return message
-    lines = [f"{_ROLE[h['role']]}:{h['text']}" for h in history]
+        return "\n".join([*block, "", "作者這一輪說:", message]) if block else message
+    lines = [x for h in history for x in (*_quotes_block(h.get("quotes")), f"{_ROLE[h['role']]}:{h['text']}")]
     return "\n".join(["以下是這一局到目前為止的對話(作者 = 使用者):",
-                      "<history>", *lines, "</history>", "", "作者這一輪說:", message])
+                      "<history>", *lines, "</history>", "", *block, "作者這一輪說:", message])
 
 
 class UnknownSession(Exception):
     """session_id 不是這篇的局。"""
 
 
+class QuoteNotInSource(Exception):
+    """帶的引文在最新版原文找不到(幻覺或過期)。"""
+
+
+class QuoteTooLong(Exception):
+    """某段引文超過 MAX_QUOTE_CHARS。"""
+
+
 _RECOVERABLE = ("usage-limit", "transient", "timeout")
 
 
-def prepare_turn(conn, slug: str, session_id: str | None) -> dict:
-    """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession。
+def prepare_turn(conn, slug: str, session_id: str | None, quotes=()) -> dict:
+    """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession /
+    QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
     沒分析也能聊(素材分層在 companion_context)。新局只發 id,discussion 列等整輪成功才建。"""
     ctx = stories.companion_context(conn, slug)
+    for q in quotes:
+        if len(q) > MAX_QUOTE_CHARS:
+            raise QuoteTooLong(len(q))
+        if not q.strip() or gate.locate(q, ctx["source"]) is None:
+            raise QuoteNotInSource(q)
     st = repo.story_by_slug(conn, slug)
     d = None
     if session_id is not None:
@@ -62,7 +83,8 @@ def pick_character(conn, turn: dict, character: str | None, mode: str | None) ->
 
 
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
-                   home: str = "web", client: dict | None = None, now=time.time):
+                   home: str = "web", client: dict | None = None, now=time.time,
+                   quotes: list[str] = ()):
     """一輪:重組歷史 → 轉發 delta 為 token → 整輪成功才在同一個 transaction 落 user+assistant。
 
     角色(與其模式)由 pick_character 定好放在 turn。message 空 = companion 先開口:工人收到 OPENER,只落 assistant 一筆。
@@ -80,7 +102,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     failed = False
     try:
         async with aclosing(chat(companion.render_companion(turn["ctx"], character),
-                                 render_turn(history, message or (CONTINUE if history else OPENER)))) as stream:
+                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes))) as stream:
             async for kind, val in stream:
                 if kind == "delta":
                     yield {"event": "token", "data": {"text": val}}
@@ -113,7 +135,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 d = repo.ensure_discussion(conn, turn["story_id"], sid, home,
                                            (client or {}).get("name") or home, user_ts)
             if message:
-                repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp)
+                repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
                 seq += 1
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
                                usage=usage, mode=character["mode"], character=character["id"])

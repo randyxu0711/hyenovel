@@ -43,3 +43,5 @@ RUNNER_ORDER = ("claude",)
 CHAT_TIMEOUT = 300
 MAX_CHAT_CHARS = 8000
 MAX_ANCHORS = 8
+MAX_QUOTES = 4          # 一輪最多帶幾段原文
+MAX_QUOTE_CHARS = 400   # 每段原文引文的字數上限

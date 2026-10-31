@@ -358,3 +358,16 @@ def test_last_character_and_stored_on_utterance(conn):
 def test_migration_0007_adds_character(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(utterance)")}
     assert "character" in cols
+
+
+def test_migration_0008_adds_quotes(conn):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(utterance)")}
+    assert "quotes" in cols
+
+
+def test_add_utterance_stores_quotes(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "user", "a", 1.0, "den", [], None)
+    repo.add_utterance(conn, d, 1, "user", "b", 2.0, "den", [], None, quotes=["甲", "乙"])
+    rows = repo.utterances(conn, d)
+    assert rows[0]["quotes"] is None and rows[1]["quotes"] == ["甲", "乙"]

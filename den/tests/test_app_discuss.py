@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
+from den.config import MAX_QUOTE_CHARS
 from den.runner import RunResult
 from den.tests.conftest import FIXTURES
 from den.tests.test_app import Run, _auth, _poll
@@ -555,3 +556,38 @@ def test_get_characters_route(c):
     body = r.json()
     assert r.status_code == 200 and body["default"] == "hyena"
     assert {x["id"] for x in body["characters"]} == {"hyena", "buffalo", "deer"}
+
+
+# ── 帶這段(quotes) ──
+
+def test_quote_not_in_source_rejected_before_stream(c, fake_chat):
+    r = _post(c, {"quotes": ["原文裡根本沒有這句"]})
+    assert r.status_code == 422 and r.json()["code"] == "quote-not-in-source"
+    assert fake_chat.calls == []
+
+
+def test_quote_too_long_rejected(c, fake_chat):
+    r = _post(c, {"quotes": ["他" * (MAX_QUOTE_CHARS + 1)]})
+    assert r.status_code == 422 and r.json()["code"] == "quote-too-long"
+    assert fake_chat.calls == []
+
+
+def test_blank_quote_rejected(c, fake_chat):
+    r = _post(c, {"quotes": ["  "]})
+    assert r.status_code == 422 and r.json()["code"] == "quote-not-in-source"
+
+
+def test_quotes_reach_companion_and_are_stored_on_user_turn(c, fake_chat):
+    r = _post(c, {"quotes": ["他把燈關了。"]})
+    assert r.status_code == 200
+    assert "作者指著原文的這幾段:\n「他把燈關了。」" in fake_chat.calls[-1][1]
+    sid = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")][-1]["data"]["session_id"]
+    rows = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert rows[0]["quotes"] == ["他把燈關了。"] and rows[1]["quotes"] is None
+    post_discuss(c, "mini", sid, "再說")
+    assert "「他把燈關了。」" in fake_chat.calls[-1][1]   # 歷史裡的舊引文照樣還原
+
+
+def test_quotes_matched_with_loose_punctuation(c, fake_chat):
+    r = _post(c, {"quotes": ["他走進門.屋裡沒有人."]})   # 原文是全形句點
+    assert r.status_code == 200
