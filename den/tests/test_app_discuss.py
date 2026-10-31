@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
-from den.config import MAX_QUOTE_CHARS
+from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from den.runner import RunResult
 from den.tests.conftest import FIXTURES
 from den.tests.test_app import Run, _auth, _poll
@@ -591,3 +591,16 @@ def test_quotes_reach_companion_and_are_stored_on_user_turn(c, fake_chat):
 def test_quotes_matched_with_loose_punctuation(c, fake_chat):
     r = _post(c, {"quotes": ["他走進門.屋裡沒有人."]})   # 原文是全形句點
     assert r.status_code == 200
+
+
+def test_quote_needs_message(c, fake_chat):
+    for msg in ("", "  "):
+        r = _post(c, {"message": msg, "quotes": ["他把燈關了。"]})
+        assert r.status_code == 422 and r.json()["code"] == "quote-needs-message"
+    assert fake_chat.calls == []
+
+
+def test_too_many_quotes(c, fake_chat):
+    r = _post(c, {"quotes": ["他把燈關了。"] * (MAX_QUOTES + 1)})
+    assert r.status_code == 422 and r.json()["code"] == "too-many-quotes"
+    assert fake_chat.calls == []

@@ -5,10 +5,11 @@ web 與 MCP talk_to_companion 共用,素材見 den.companion。
 import logging
 import time
 import uuid
+from collections.abc import Sequence
 from contextlib import aclosing
 
 from den import characters, companion, stories
-from den.config import MAX_QUOTE_CHARS
+from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from marrow import gate, repo
 
 log = logging.getLogger("hyenovel")
@@ -42,6 +43,14 @@ class QuoteNotInSource(Exception):
     """帶的引文在最新版原文找不到(幻覺或過期)。"""
 
 
+class TooManyQuotes(Exception):
+    """一輪帶的引文超過 MAX_QUOTES 段。"""
+
+
+class QuoteNeedsMessage(Exception):
+    """帶了引文卻沒說話:引文不會落檔,存下的逐字會跟陪讀者看到的不一致。"""
+
+
 class QuoteTooLong(Exception):
     """某段引文超過 MAX_QUOTE_CHARS。"""
 
@@ -49,11 +58,16 @@ class QuoteTooLong(Exception):
 _RECOVERABLE = ("usage-limit", "transient", "timeout")
 
 
-def prepare_turn(conn, slug: str, session_id: str | None, quotes=()) -> dict:
+def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] = (),
+                 message: str = "") -> dict:
     """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession /
-    QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
+    TooManyQuotes / QuoteNeedsMessage / QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
     沒分析也能聊(素材分層在 companion_context)。新局只發 id,discussion 列等整輪成功才建。"""
     ctx = stories.companion_context(conn, slug)
+    if len(quotes) > MAX_QUOTES:
+        raise TooManyQuotes(len(quotes))
+    if quotes and not message.strip():
+        raise QuoteNeedsMessage()
     for q in quotes:
         if len(q) > MAX_QUOTE_CHARS:
             raise QuoteTooLong(len(q))
@@ -84,7 +98,7 @@ def pick_character(conn, turn: dict, character: str | None, mode: str | None) ->
 
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                    home: str = "web", client: dict | None = None, now=time.time,
-                   quotes: list[str] = ()):
+                   quotes: Sequence[str] = ()):
     """一輪:重組歷史 → 轉發 delta 為 token → 整輪成功才在同一個 transaction 落 user+assistant。
 
     角色(與其模式)由 pick_character 定好放在 turn。message 空 = companion 先開口:工人收到 OPENER,只落 assistant 一筆。

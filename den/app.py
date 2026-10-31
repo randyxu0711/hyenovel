@@ -84,6 +84,7 @@ ERROR_CODES: tuple[str, ...] = (
     "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
     "unknown-character", "unknown-session-id", "ambiguous-session",
+    "quote-needs-message", "too-many-quotes",
 )
 
 _STORY_ERRORS = {"空白故事": "empty-story", "原文過長": "story-too-long", "bad slug": "bad-slug",
@@ -168,7 +169,7 @@ class DiscussIn(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
     anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
-    quotes: list[str] = Field(default_factory=list, max_length=MAX_QUOTES)   # 「帶這段」:原文逐字引文
+    quotes: list[str] = Field(default_factory=list, max_length=MAX_QUOTES * 8)   # 「帶這段」:原文逐字引文;段數上限由 prepare_turn 回 too-many-quotes,這裡只擋超大 body
     mode: Literal["direct", "slow", "imaginative"] | None = None   # 同 companion.MODES;MCP 只送這個
     character: str | None = Field(default=None, max_length=32)
     home: Literal["web", "mcp"] = "web"
@@ -559,11 +560,15 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise reject(422, "bad-slug", "bad slug")
         state = request.app.state
         try:
-            turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes)
+            turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes, body.message)
         except LookupError:
             raise reject(404, "unknown-slug", "這篇不在 DB") from None
         except discuss.UnknownSession:
             raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        except discuss.TooManyQuotes:
+            raise reject(422, "too-many-quotes", "一輪帶的引文太多段") from None
+        except discuss.QuoteNeedsMessage:
+            raise reject(422, "quote-needs-message", "帶引文要同時說點什麼") from None
         except discuss.QuoteTooLong:
             raise reject(422, "quote-too-long", "引文太長") from None
         except discuss.QuoteNotInSource:
