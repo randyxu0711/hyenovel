@@ -45,7 +45,14 @@ export default function Feed({ onClose, onSubmitted }: {
     const f = e.dataTransfer.files[0];
     if (f) void load(f);
   };
-  const requestClose = () => { if (text.trim() && !confirming) setConfirming(true); else onClose(); };
+  const keep = useRef<HTMLButtonElement>(null);
+  const dismiss = () => { setConfirming(false); area.current?.focus(); };
+  const requestClose = () => {
+    if (confirming) dismiss();
+    else if (text.trim()) setConfirming(true);
+    else onClose();
+  };
+  useEffect(() => { if (confirming) keep.current?.focus(); }, [confirming]);
   const go = async () => {
     if (!chars || busy) return;
     setBusy(true); setErr(null);
@@ -92,7 +99,7 @@ export default function Feed({ onClose, onSubmitted }: {
           {confirming ? (
             <>
               <span role="alert" className="feed-msg">{t("feed.discard")}</span>
-              <button type="button" onClick={() => setConfirming(false)}>{t("feed.keep")}</button>
+              <button type="button" ref={keep} onClick={dismiss}>{t("feed.keep")}</button>
               <button type="button" onClick={onClose}>{t("feed.discardYes")}</button>
             </>
           ) : <button type="button" onClick={requestClose}>{t("feed.cancel")}</button>}

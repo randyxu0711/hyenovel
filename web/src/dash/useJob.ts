@@ -19,7 +19,7 @@ export function useJob(jobId: number | null): Job {
           if (ev.event === "phase" && ev.data?.status === "start") set({ ...IDLE, step: ev.data.name });
           else if (ev.event === "state" && TERMINAL.includes(ev.data?.state)) {
             set(ev.data.state === "done" ? { step: null, done: true, error: null }
-              : { step: null, done: false, error: new DashError(0, ev.data.error_class ?? "cancelled") });
+              : { step: null, done: false, error: new DashError(0, ev.data.error_class ?? ev.data.state) });
             return;
           } else if (ev.event === "done") { set({ step: null, done: true, error: null }); return; }
           else if (ev.event === "error") {

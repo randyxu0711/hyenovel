@@ -74,6 +74,21 @@ describe("Feed", () => {
     fireEvent.click(screen.getByRole("button", { name: "丟掉" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+  it("確認中:焦點進到「繼續編輯」,Esc 等於繼續編輯(不丟稿),焦點回稿子欄,Tab 不離開對話框", () => {
+    const { onClose } = mount();
+    type("寫到一半");
+    const d = screen.getByRole("dialog");
+    fireEvent.keyDown(d, { key: "Escape" });
+    const keepBtn = screen.getByRole("button", { name: "繼續編輯" });
+    expect(document.activeElement).toBe(keepBtn);
+    fireEvent.keyDown(d, { key: "Tab", shiftKey: true });   // 往前:不該跑出對話框
+    expect(d.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(d, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "丟掉" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "稿子" }));
+    expect((screen.getByRole("textbox", { name: "稿子" }) as HTMLTextAreaElement).value).toBe("寫到一半");
+  });
   it("沒有稿時點遮罩直接關", () => {
     const { onClose } = mount();
     fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
