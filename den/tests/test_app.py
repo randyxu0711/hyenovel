@@ -893,6 +893,71 @@ def test_get_works_query_and_limit(data):
         assert c.get("/api/works", params={"limit": 51}, headers=h).status_code == 422
 
 
+def test_get_works_items_carry_version_and_chars(data):
+    with _client(data) as c:
+        w = c.get("/api/works", headers=_auth(data[1])).json()["works"][0]
+        assert w["version"] == 1 and w["chars"] > 0 and "latest_text" not in w
+
+
+def _seed_session(data, slug="mini", sid="sess1"):
+    conn = db.connect(data[0])
+    st = repo.story_by_slug(conn, slug)
+    with conn:
+        d = repo.ensure_discussion(conn, st["id"], sid, "web", None, 5.0)
+        repo.add_utterance(conn, d, 0, "user", "問", 5.0, "den", [], None)
+        repo.add_utterance(conn, d, 1, "assistant", "答", 6.0, "den", [], None,
+                           mode="slow", character="hyena")
+    conn.close()
+
+
+def test_work_detail_sessions_and_recent_routes(data):
+    _seed_session(data)
+    with _client(data) as c:
+        h = _auth(data[1])
+        d = c.get("/api/works/mini", headers=h).json()
+        assert d["slug"] == "mini" and d["version"] == 1 and d["text"] and "notes_ready" in d
+        [s] = c.get("/api/works/mini/sessions", headers=h).json()["sessions"]
+        assert (s["session"], s["turns"], s["character"]) == ("sess1", 1, "hyena")
+        [r] = c.get("/api/sessions", headers=h).json()["sessions"]
+        assert (r["external_id"], r["slug"]) == ("sess1", "mini")
+        t = c.get("/api/sessions/sess1", headers=h).json()
+        assert t["slug"] == "mini" and [x["role"] for x in t["turns"]] == ["user", "assistant"]
+
+
+def test_dashboard_read_routes_errors(data, caplog):
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        for path in ("/api/works/nope", "/api/works/nope/sessions"):
+            r = c.get(path, headers=h)
+            assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        assert c.get("/api/works/BAD!/sessions", headers=h).json()["code"] == "bad-slug"
+        r = c.get("/api/sessions/nope", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-session-id"
+        assert c.get("/api/sessions", params={"limit": 0}, headers=h).status_code == 422
+        assert c.get("/api/sessions", params={"limit": 101}, headers=h).status_code == 422
+        assert c.get("/api/estimate", params={"chars": -1}, headers=h).status_code == 422
+    assert "where=session-turns reason=unknown-session-id" in caplog.text
+
+
+def test_session_ambiguous_409(data):
+    conn = db.connect(data[0])
+    with conn:
+        other = repo.ensure_story(conn, "other", "乙", 0)
+        repo.add_source_version(conn, other, "x", 0)
+    conn.close()
+    _seed_session(data)
+    _seed_session(data, "other")
+    with _client(data) as c:
+        r = c.get("/api/sessions/sess1", headers=_auth(data[1]))
+        assert r.status_code == 409 and r.json()["code"] == "ambiguous-session"
+
+
+def test_estimate_route_null_without_history(data):
+    with _client(data) as c:
+        r = c.get("/api/estimate", params={"chars": 1000}, headers=_auth(data[1]))
+        assert r.status_code == 200 and r.json() == {"estimate": None}
+
+
 def test_get_work_part_status_codes(data):
     with _client(data) as c:
         h = _auth(data[1])

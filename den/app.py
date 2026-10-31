@@ -17,6 +17,11 @@
   POST /discuss/{slug}      {"session_id"?, "message", "anchors"} → SSE token* → message + done | error
                             (串流前判:422 slug/body、404 無此篇/非此篇的局、409 未分析/該局有一輪在跑)
   GET  /works?q=&limit=N    → {"works": [...]}(標題/開頭比對,最近活動在前;limit 預設 20,1–50)
+  GET  /works/{slug}        → 作品詳情(views.work_detail)| 404 unknown-work
+  GET  /works/{slug}/sessions → {"sessions": [...]}(這篇的局,新到舊)
+  GET  /sessions?limit=N    → {"sessions": [...]}(跨作品最近的局;1–100)
+  GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id | 409 ambiguous-session
+  GET  /estimate?chars=N    → {"estimate": {...} | null}(開跑前預估)
   GET  /works/{slug}/{part} → {"text"}(part = source/analysis/notes/feedback;422 part 不對、404 無此篇、
                             409 not-analyzed / no-notes / no-feedback)
   POST /works/{slug}/cancel → {"cancelled": [job_id...]} | 409 nothing-running
@@ -49,14 +54,15 @@ from pathlib import Path
 from typing import Callable, Literal
 
 import filelock
-from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import characters, discuss, stories, themes, version, views, works
+from den import characters, discuss, pipeline, stories, themes, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
                         MAX_CHAT_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
                         valid_slug)
+from den.estimate import estimate
 from den.jobs import JobManager, NothingToResume
 from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
                         stream_chat)
@@ -467,6 +473,46 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             log.info("event=reject where=list-works limit=%s", limit)
             raise HTTPException(422, f"limit 要在 1–{_WORKS_MAX}")
         return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
+
+    @api.get("/works/{slug}")
+    async def work_detail(slug: str, request: Request):
+        _slug_ok(slug, "work-detail")
+        try:
+            return views.work_detail(request.app.state.mgr.conn, slug)
+        except LookupError:
+            raise _unknown("work-detail") from None
+
+    @api.get("/works/{slug}/sessions")
+    async def work_sessions(slug: str, request: Request):
+        _slug_ok(slug, "work-sessions")
+        try:
+            return {"sessions": views.sessions(request.app.state.mgr.conn, slug)}
+        except LookupError:
+            raise _unknown("work-sessions") from None
+
+    @api.get("/sessions")
+    async def recent_sessions(request: Request, limit: int = 20):
+        if not 1 <= limit <= 100:
+            log.info("event=reject where=recent-sessions limit=%s", limit)
+            raise HTTPException(422, "limit 要在 1–100")
+        return {"sessions": views.recent_sessions(request.app.state.mgr.conn, limit)}
+
+    @api.get("/sessions/{session}")
+    async def session_turns(session: str, request: Request):
+        try:
+            return views.session_turns(request.app.state.mgr.conn, session)
+        except LookupError:
+            log.info("event=reject where=session-turns reason=unknown-session-id")
+            raise ApiError(404, "unknown-session-id", "沒有這一局") from None
+        except views.AmbiguousSession:
+            log.info("event=reject where=session-turns reason=ambiguous-session")
+            raise ApiError(409, "ambiguous-session", "這個局 id 在不只一篇出現") from None
+
+    @api.get("/estimate")
+    async def get_estimate(request: Request, chars: int = Query(ge=0)):
+        conn = request.app.state.mgr.conn
+        return {"estimate": estimate({s: repo.attempt_history(conn, s) for s in pipeline.CRITIQUE},
+                                     chars)}
 
     @api.get("/works/{slug}/{part}")
     async def read_work(slug: str, part: str, request: Request):

@@ -3,6 +3,7 @@
 den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的形狀——翻成畫面要的樣子
 是 client 自己的事。
 """
+from den import works
 from marrow import repo
 
 
@@ -69,3 +70,68 @@ def transcript(conn, slug: str) -> list[dict]:
     st = _story(conn, slug)
     return [{"ts": u["ts"], "session": u["external_id"], "role": u["role"], "text": u["text"],
              "anchors": u["anchors"]} for u in repo.discussions_with_utterances(conn, st["id"])]
+
+
+class AmbiguousSession(Exception):
+    """同一個 session id 在不只一篇都有局。"""
+
+
+def _title(conn, story_id: int, slug: str) -> str:
+    """與作品清單同口徑:分析標題 > 故事標題 > slug。"""
+    ana = repo.current_artifact(conn, story_id, "analysis")
+    return (ana or {}).get("body", {}).get("title") or repo.story(conn, story_id)["title"] or slug
+
+
+def work_detail(conn, slug: str) -> dict:
+    row = next((w for w in works.rows(conn) if w["slug"] == slug), None)
+    if row is None:
+        raise LookupError(slug)
+    st = repo.story_by_slug(conn, slug)
+    notes = repo.current_artifact(conn, st["id"], "notes")
+    return {"slug": slug, "title": row["title"], "version": row["version"], "text": row["latest_text"],
+            "state": row["state"], "job_id": row["job_id"],
+            "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
+
+
+def sessions(conn, slug: str) -> list[dict]:
+    """這篇的局,新到舊。version = 最後一則發言當時的最新版(依交稿時間對)。"""
+    st = _story(conn, slug)
+    versions = repo.source_versions(conn, st["id"])
+    by: dict[str, list[dict]] = {}
+    for u in repo.discussions_with_utterances(conn, st["id"]):
+        by.setdefault(u["external_id"], []).append(u)
+    out = []
+    for sid, us in by.items():
+        asst = [u for u in us if u["role"] == "assistant"]
+        last = us[-1]
+        at = [v["n"] for v in versions if v["created_at"] <= last["ts"]]
+        out.append({"session": sid, "started_at": us[0]["ts"], "last_at": last["ts"],
+                    "turns": len(asst), "character": asst[-1]["character"] if asst else None,
+                    "mode": asst[-1]["mode"] if asst else None,
+                    "preview": asst[-1]["text"][:60] if asst else "",
+                    "version": max(at) if at else None})
+    out.sort(key=lambda s: s["last_at"], reverse=True)
+    return out
+
+
+def session_turns(conn, session: str) -> dict:
+    found = repo.discussions_by_external(conn, session)
+    if not found:
+        raise LookupError(session)
+    if len(found) > 1:
+        raise AmbiguousSession(session)
+    d = found[0]
+    return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
+            "turns": [{"role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
+                       "character": u["character"], "quotes": u["quotes"] or []}
+                      for u in repo.utterances(conn, d["id"])]}
+
+
+def recent_sessions(conn, limit: int) -> list[dict]:
+    out = repo.recent_discussions(conn, limit)
+    titles = {c["story_id"]: c["artifact"]["body"].get("title")
+              for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
+    ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
+    for d in out:
+        d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
+    return out

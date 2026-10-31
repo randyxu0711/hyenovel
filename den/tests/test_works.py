@@ -202,3 +202,11 @@ def test_match_exact_title_beats_substring():
 def test_match_title_substring_beats_opening():
     rows = [_row("d02", "海-v2", "x"), _row("d03", "豆花", "海邊的早上。")]
     assert [r["slug"] for r in works.match(rows, "海")] == ["d02"]
+
+
+def test_listing_carries_version_and_chars_not_text(c):
+    sid, _ = _story(c, "d01", "t", "舊稿", 1.0)
+    repo.add_source_version(c, sid, "新稿比較長", 2.0)
+    [w] = works.listing(c, None)
+    assert (w["version"], w["chars"]) == (2, 5)
+    assert "latest_text" not in w and "latest_sv_id" not in w

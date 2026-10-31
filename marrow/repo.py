@@ -181,8 +181,44 @@ def discussions_with_utterances(conn, story_id: int) -> list[dict]:
     """一篇所有討論局的逐字,依 ts, seq 排;一次查完。"""
     return [_row(r) for r in conn.execute(
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
-        "u.ts AS ts, u.anchors AS anchors FROM utterance u JOIN discussion d "
+        "u.ts AS ts, u.anchors AS anchors, u.mode AS mode, u.character AS character, "
+        "u.quotes AS quotes FROM utterance u JOIN discussion d "
         "ON d.id = u.discussion_id WHERE d.story_id = ? ORDER BY u.ts, u.seq", (story_id,))]
+
+
+def discussions_by_external(conn, external_id: str) -> list[dict]:
+    """跨篇找局:同一個 external_id 可能在不同篇各有一局。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT d.*, st.slug AS slug FROM discussion d JOIN story st ON st.id = d.story_id "
+        "WHERE d.external_id = ? ORDER BY d.id", (external_id,))]
+
+
+def source_versions(conn, story_id: int) -> list[dict]:
+    """一篇所有版本的 {n, created_at},n 由小到大(不含原文)。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT n, created_at FROM source_version WHERE story_id = ? ORDER BY n", (story_id,))]
+
+
+def recent_discussions(conn, limit: int) -> list[dict]:
+    """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
+    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。"""
+    last = ("(SELECT {c} FROM utterance WHERE discussion_id = d.id AND role = 'assistant' "
+            "ORDER BY seq DESC LIMIT 1)")
+    out = []
+    for r in conn.execute(
+            "SELECT d.external_id AS external_id, st.slug AS slug, st.title AS title, "
+            "d.started_at AS started_at, "
+            "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
+            "(SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'assistant') AS turns, "
+            f"{last.format(c='character')} AS character, {last.format(c='mode')} AS mode, "
+            f"{last.format(c='text')} AS preview "
+            "FROM discussion d JOIN story st ON st.id = d.story_id "
+            "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
+            "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
+        row = _row(r)
+        row["preview"] = (row["preview"] or "")[:60]
+        out.append(row)
+    return out
 
 
 # ── conclusion / settlement ──

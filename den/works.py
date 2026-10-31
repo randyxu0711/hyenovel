@@ -52,8 +52,8 @@ def _opening(text: str) -> str:
     return flat[:_SHOWN] + ("…" if len(flat) > _SHOWN else "")
 
 
-def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
-    """依最近活動(聊過或交稿,取晚的)排序。固定 3 次查詢。"""
+def rows(conn) -> list[dict]:
+    """每篇一列(含最新版全文與 latest_sv_id)。固定 3 次查詢。"""
     cur: dict[int, dict] = {}
     for c in repo.current_artifacts(conn):
         if c["kind"] == "analysis":
@@ -66,14 +66,21 @@ def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
         st = state(r, ana, job)
         live = st in ("running", "stopped", "notes-running", "notes-stopped")
         out.append({"slug": r["slug"], "title": r["title"], "latest_text": r["latest_text"],
+                    "latest_sv_id": r["latest_sv_id"],
+                    "version": r["latest_n"], "chars": len(r["latest_text"]),
                     "opening": _opening(r["latest_text"]), "submitted_at": r["submitted_at"],
                     "talked_at": r["talked_at"], "state": st,
                     "job_id": job["id"] if live else None,
                     "error_class": job["error_class"] if live else None})
-    hits = match(out, query)
+    return out
+
+
+def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
+    """依最近活動(聊過或交稿,取晚的)排序。固定 3 次查詢。"""
+    hits = match(rows(conn), query)
     hits.sort(key=lambda w: max(w["talked_at"] or 0, w["submitted_at"]), reverse=True)
     for w in hits:
-        del w["latest_text"]
+        del w["latest_text"], w["latest_sv_id"]
     return hits[:limit]
 
 
