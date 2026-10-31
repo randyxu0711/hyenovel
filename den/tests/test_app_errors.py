@@ -62,3 +62,14 @@ def test_unmatched_api_path_is_json_404_not_index(data, tmp_path):
     with _client(data, frontend_dir=dist) as c:
         r = c.get("/api/nope", headers={**_auth(data[1]), **NAV})
     assert r.status_code == 404 and r.json() == {"detail": "not found"}
+
+
+def test_error_codes_match_web_list():
+    """前端 DEN_ERROR_CODES(手寫一份)必須與 ERROR_CODES 一致,外加前端自有的 den-down。"""
+    import re
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[2] / "web/src/dash/api.ts").read_text(encoding="utf8")
+    block = re.search(r"DEN_ERROR_CODES\s*=\s*\[(.*?)\]", src, re.S).group(1)
+    web = re.findall(r'"([a-z-]+)"', block)
+    assert len(web) == len(set(web))
+    assert set(web) == set(den_app.ERROR_CODES) | {"den-down"}

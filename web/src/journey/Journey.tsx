@@ -82,12 +82,12 @@ export default function Journey() {
   // 單篇退場 = 鏡頭抬起:overlay 淡出 → nav 回目錄 → 相機拉遠(--d-cam-out,Camera 自己判)。
   // 骨不演——它一直在自己的槽位上,離開只是視角收回。串行不重疊:兩件事同時動正是舊版「花」的成因。
   const startReturn = () => {
-    if (!slug) { nav("/"); return; }
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { nav("/"); return; }
+    if (!slug) { nav("/journey"); return; }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { nav("/journey"); return; }
     setClosing(true);
     returnTimers.current.forEach(clearTimeout);
     returnTimers.current = [
-      window.setTimeout(() => { setClosing(false); nav("/"); }, OVERLAY_OUT_MS),
+      window.setTimeout(() => { setClosing(false); nav("/journey"); }, OVERLAY_OUT_MS),
     ];
   };
 

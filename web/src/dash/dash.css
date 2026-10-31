@@ -1,0 +1,29 @@
+/* 只寫 var(--dash-*),不寫色碼:值由 theme.ts 在執行期設到根元素。 */
+.dash{
+  --dash-t-xs:12px; --dash-t-sm:13.5px; --dash-t-md:15px; --dash-t-lg:17.5px; --dash-t-xl:22px;
+  position:fixed; inset:0; display:grid; grid-template-columns:260px 1fr 340px;
+  background:var(--dash-desk); color:var(--dash-ui-ink);
+  font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
+}
+.dash button, .dash select{font:inherit; color:inherit}
+.dash-note{display:grid; place-items:center}
+.dash-rail{display:flex; flex-direction:column; gap:16px; padding:20px 16px; background:var(--dash-panel)}
+.dash-brand{display:flex; align-items:center; gap:10px; font-size:var(--dash-t-lg)}
+.dash-feed{
+  padding:10px 12px; border:0; border-radius:8px; cursor:pointer;
+  background:var(--dash-enamel); color:var(--dash-enamel-ink); font-size:var(--dash-t-sm);
+}
+.dash-keys{margin-top:auto; display:flex; flex-direction:column; gap:6px}
+.dash-key{
+  display:flex; align-items:center; gap:8px; padding:6px 10px; cursor:pointer;
+  border:1px solid var(--dash-line); border-radius:6px; background:transparent;
+  font-size:var(--dash-t-sm); color:var(--dash-ui-ink);
+}
+.dash-key span{color:var(--dash-ui-ink-2)}
+.dash-key select{margin-left:auto; background:var(--dash-panel); border:0}
+.dash-desk{padding:32px; color:var(--dash-ui-ink-2)}
+.dash-talk{padding:20px 16px; background:var(--dash-panel); color:var(--dash-ui-ink-2)}
+.avatar-fallback{
+  display:inline-grid; place-items:center; border-radius:50%;
+  border:2px solid var(--c-text); color:var(--c-text); background:var(--dash-panel);
+}
