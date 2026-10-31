@@ -40,7 +40,15 @@ export type RecentSession = SessionRow & { slug: string; title: string };
 export type Turn = {
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[];
 };
+export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
 export type SessionDetail = { session: string; slug: string; title: string; turns: Turn[] };
+
+/** 非 2xx 回應 → DashError(讀 den 的 {detail, code, params})。request 與串流共用。 */
+async function throwDashError(res: Response): Promise<never> {
+  let body: any = {};
+  try { body = await res.json(); } catch { /* 非 JSON 的錯誤 */ }
+  throw new DashError(res.status, body.code ?? "unknown", body.params ?? {}, typeof body.detail === "string" ? body.detail : "");
+}
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -49,11 +57,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new DashError(0, "den-down");
   }
-  if (!res.ok) {
-    let body: any = {};
-    try { body = await res.json(); } catch { /* 非 JSON 的錯誤 */ }
-    throw new DashError(res.status, body.code ?? "unknown", body.params ?? {}, typeof body.detail === "string" ? body.detail : "");
-  }
+  if (!res.ok) await throwDashError(res);
   return res.json() as Promise<T>;
 }
 
@@ -61,15 +65,14 @@ const post = (body: unknown): RequestInit => ({
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
 });
 
-/** sseFetch 只丟普通 Error(網路斷 = TypeError,非 2xx = "url(status)");在這裡收成 DashError。 */
+/** 非 2xx 由 throwDashError 接手(保留 den 的 code);網路斷(TypeError)→ den-down。 */
 async function* stream(url: string, init?: RequestInit): AsyncGenerator<SSEEvent> {
   try {
-    yield* sseFetch(url, init);
+    yield* sseFetch(url, init, throwDashError);
   } catch (e) {
     if (e instanceof DashError) throw e;
     if (e instanceof TypeError) throw new DashError(0, "den-down");
-    const m = /\((\d+)\)$/.exec(String((e as Error).message));
-    throw new DashError(m ? Number(m[1]) : 0, "unknown");
+    throw new DashError(0, "unknown");
   }
 }
 
@@ -92,7 +95,7 @@ export const api = {
     return request<{ filename: string; text: string; chars: number }>("/api/extract", { method: "POST", body: fd });
   },
   submit: (text: string, title?: string) =>
-    request<{ slug: string; title: string }>("/api/stories", post({ text, title })),
+    request<SubmitResult>("/api/stories", post({ text, title })),
   startJob: (slug: string) => request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug })),
   jobEvents: (jobId: number) => stream(`/api/jobs/${jobId}/events`),
   /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */

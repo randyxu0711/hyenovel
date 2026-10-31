@@ -49,4 +49,16 @@ describe("dash api", () => {
     expect(await api.startJob("d01")).toEqual({ job_id: 7 });
     expect(JSON.parse(f.mock.calls[0][1]!.body as string)).toEqual({ kind: "critique", slug: "d01" });
   });
+  it("串流的非 2xx 保留 den 的 code(talk 與 jobEvents)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "這一局還有一輪在跑", code: "busy", params: {} }, 409)));
+    const drain = async (g: AsyncGenerator<unknown>) => { for await (const _ of g); };
+    await expect(drain(api.talk("d01", { session: "s", message: "x", character: "hyena", quotes: [] })))
+      .rejects.toMatchObject({ status: 409, code: "busy" });
+    await expect(drain(api.jobEvents(3))).rejects.toMatchObject({ status: 409, code: "busy" });
+  });
+  it("submit 回 den 的完整形狀(含 reused)", async () => {
+    const r = { slug: "d01", title: "t", version: 2, new_version: false, reused: true };
+    vi.stubGlobal("fetch", vi.fn(async () => json(r, 201)));
+    expect((await api.submit("文")).reused).toBe(true);
+  });
 });
