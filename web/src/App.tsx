@@ -1,6 +1,7 @@
 import { MotionConfig } from "framer-motion";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Journey from "./journey/Journey";
+import Dash from "./dash/Dash";
 import Lab from "./lab/Lab";
 import BornLab from "./lab/BornLab";
 import CatalogLab from "./lab/CatalogLab";
@@ -12,7 +13,9 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Journey />} />
+          <Route path="/" element={<Dash />} />
+          <Route path="/w/:slug" element={<Dash />} />
+          <Route path="/journey" element={<Journey />} />
           <Route path="/story/:slug" element={<Journey />} />
           <Route path="/lab" element={<Lab />} />
           <Route path="/lab/born" element={<BornLab />} />

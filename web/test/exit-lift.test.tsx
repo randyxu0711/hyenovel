@@ -21,7 +21,7 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 function at(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes><Route path="/" element={<Journey />} /><Route path="/story/:slug" element={<Journey />} /></Routes>
+      <Routes><Route path="/journey" element={<Journey />} /><Route path="/story/:slug" element={<Journey />} /></Routes>
     </MemoryRouter>,
   );
 }

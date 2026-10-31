@@ -1,0 +1,153 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import Dash from "../src/dash/Dash";
+import { setLang } from "../src/dash/i18n";
+import { olive, hyena, buffalo, deer } from "./dash-fixtures";
+
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
+  start(c) {
+    const enc = new TextEncoder();
+    for (const [event, data] of evs) c.enqueue(enc.encode(`data: ${JSON.stringify({ event, data })}\n\n`));
+    c.close();
+  },
+}));
+const works = [{ slug: "d1", title: "海", version: 1, chars: 4 }];
+let talkBodies: any[];
+let talkReply: () => Response;
+let sessions: Record<string, object>;
+
+function mount(chars = [hyena, buffalo, deer]) {
+  const f = vi.fn(async (u: string, init?: RequestInit) => {
+    if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
+    if (u === "/api/characters") return json({ characters: chars, default: "hyena" });
+    if (u === "/api/works") return json({ works });
+    if (u === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, text: "第一段。", state: "ready", job_id: null, notes_ready: false });
+    if (u.startsWith("/api/discuss/")) { talkBodies.push(JSON.parse(String(init?.body))); return talkReply(); }
+    if (u.startsWith("/api/sessions/")) return json(sessions[decodeURIComponent(u.split("/").pop()!)]);
+    if (u.startsWith("/api/sessions?")) return json({ sessions: Object.keys(sessions).map(k => ({ session: k, slug: "d1", title: "海", started_at: 1, last_at: 2, turns: 4, character: null, mode: null, preview: "q1", version: 1 })) });
+    return json({ sessions: [] });
+  });
+  vi.stubGlobal("fetch", f);
+  return render(<Dash />);
+}
+const reply = (text: string, character = "hyena", sid = "s1") => () => sse(
+  ["token", { text: text.slice(0, 1) }], ["token", { text: text.slice(1) }],
+  ["message", { role: "assistant", text, session_id: sid, mode: "slow", character }], ["done", { ok: true, session_id: sid }]);
+const say = (s: string) => {
+  fireEvent.change(screen.getByLabelText("對話輸入"), { target: { value: s } });
+  fireEvent.click(screen.getByRole("button", { name: "送出" }));
+};
+
+beforeEach(() => { setLang("zh-Hant"); localStorage.clear(); talkBodies = []; talkReply = reply("嗯"); sessions = {}; });
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+describe("選人", () => {
+  it("第一次開會先選人、選過不再出現", async () => {
+    const { unmount } = mount();
+    expect(await screen.findByText("選誰陪你讀")).toBeTruthy();
+    expect(screen.getByText("水牛")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /水牛/ }));
+    expect(await screen.findByLabelText("對話輸入")).toBeTruthy();
+    expect(screen.queryByText("選誰陪你讀")).toBeNull();
+    unmount();
+    mount();
+    expect(await screen.findByLabelText("對話輸入")).toBeTruthy();
+    expect(screen.queryByText("選誰陪你讀")).toBeNull();
+  });
+  it("記住的角色不在清單時退回預設(視為沒選過)", async () => {
+    localStorage.setItem("hyenovel.companion", "ghost");
+    mount();
+    expect(await screen.findByText("選誰陪你讀")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /鬣狗/ }));
+    await screen.findByLabelText("對話輸入");
+    say("嗨");
+    await waitFor(() => expect(talkBodies[0].character).toBe("hyena"));
+  });
+});
+
+describe("對話", () => {
+  beforeEach(() => localStorage.setItem("hyenovel.companion", "buffalo"));
+  it("送出帶 character,帶著的引文送進 quotes 並顯示在訊息上", async () => {
+    mount();
+    await screen.findByText("第一段。");
+    const p = screen.getByText("第一段。").firstChild!;
+    const range = document.createRange(); range.setStart(p, 0); range.setEnd(p, 3);
+    document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    fireEvent.click(await screen.findByRole("button", { name: "帶給水牛聊" }));
+    say("這段怎麼樣");
+    await screen.findByText("嗯");
+    expect(talkBodies[0]).toMatchObject({ character: "buffalo", quotes: ["第一段"], message: "這段怎麼樣", session_id: null });
+    const log = screen.getByRole("log");
+    expect(within(log).getByText("第一段")).toBeTruthy();
+    expect(within(log).getByText("這段怎麼樣")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "拿掉這段引文" })).toBeNull();
+  });
+  it("token 逐段接上、沒有計時器;message 到了換成正式訊息並標說話者", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    talkReply = () => new Response(new ReadableStream({
+      async start(c) {
+        const enc = new TextEncoder();
+        const w = (event: string, data: unknown) => c.enqueue(enc.encode(`data: ${JSON.stringify({ event, data })}\n\n`));
+        w("token", { text: "半" });
+        await gate;
+        w("token", { text: "句" });
+        w("message", { role: "assistant", text: "半句", session_id: "s1", mode: "direct", character: "buffalo" });
+        w("done", { ok: true, session_id: "s1" });
+        c.close();
+      },
+    }));
+    mount();
+    await screen.findByText("第一段。");
+    vi.useFakeTimers();
+    const flush = async (until: () => boolean) => {
+      for (let i = 0; i < 200 && !until(); i++) await act(async () => { await Promise.resolve(); });
+    };
+    say("嗨");
+    await flush(() => !!screen.queryByText("半"));
+    expect(screen.getByText("半")).toBeTruthy();
+    expect(vi.getTimerCount()).toBe(0);   // 串流中沒有任何排程計時器
+    release();
+    await flush(() => !!screen.queryByText("半句"));
+    expect(within(screen.getByRole("log")).getByText("半句")).toBeTruthy();
+    expect(within(screen.getByRole("log")).getByText("水牛")).toBeTruthy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("說話者換人時有分隔線;舊局沒有 character 時用同 mode 的角色標示", async () => {
+    sessions.old = { session: "old", slug: "d1", title: "海", turns: [
+      { role: "user", text: "q1", ts: 1, mode: null, character: null, quotes: [] },
+      { role: "assistant", text: "a1", ts: 2, mode: "slow", character: null, quotes: [] },
+      { role: "user", text: "q2", ts: 3, mode: null, character: null, quotes: [] },
+      { role: "assistant", text: "a2", ts: 4, mode: "imaginative", character: "deer", quotes: [] },
+    ] };
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /q1/ }));
+    const log = await screen.findByRole("log");
+    await within(log).findByText("a2");
+    expect(within(log).getAllByText("鬣狗")).toHaveLength(1);   // a1:舊局無 character,同 mode(slow)→ 鬣狗
+    expect(within(log).getAllByText("鹿")).toHaveLength(1);
+    expect(within(log).getAllByRole("separator").map(e => e.textContent)).toEqual(["換鹿來讀"]);
+  });
+  it("409 busy 顯示訊息且輸入框保留原字", async () => {
+    talkReply = () => json({ detail: "busy", code: "busy" }, 409);
+    mount();
+    await screen.findByText("第一段。");
+    say("還沒說完的話");
+    expect((await screen.findByRole("alert")).textContent).toBe("這一局還有一輪在進行,稍等一下。");
+    expect((screen.getByLabelText("對話輸入") as HTMLTextAreaElement).value).toBe("還沒說完的話");
+  });
+});
+
+describe("沒有寫死角色", () => {
+  it("dash 目錄除 Avatar 外沒有 hyena/buffalo/deer 字面值", () => {
+    const dir = join(__dirname, "../src/dash");
+    for (const f of readdirSync(dir)) {
+      if (f === "Avatar.tsx" || !/\.(tsx?|css)$/.test(f)) continue;
+      expect(readFileSync(join(dir, f), "utf8"), f).not.toMatch(/hyena|buffalo|deer/);
+    }
+  });
+});
