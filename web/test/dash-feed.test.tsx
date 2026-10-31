@@ -51,9 +51,38 @@ describe("Feed", () => {
     await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith("d3", false));
     expect(start).toHaveBeenCalledWith("d3");
   });
-  it("reused 不開 job 並切到那篇", async () => {
+  it("reused 但那篇還沒分析(state none/stopped):補開 job", async () => {
     const { onSubmitted } = mount();
     vi.spyOn(api, "submit").mockResolvedValue({ slug: "d1", title: "t", version: 1, new_version: false, reused: true });
+    vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "none", job_id: null, notes_ready: false });
+    const start = vi.spyOn(api, "startJob").mockResolvedValue({ job_id: 3 });
+    type("稿");
+    fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith("d1", true));
+    expect(start).toHaveBeenCalledWith("d1");
+  });
+  it("有稿時點遮罩不會丟掉;Esc 先問,可繼續編輯或丟掉", () => {
+    const { onClose } = mount();
+    type("寫到一半");
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "繼續編輯" }));
+    expect(screen.queryByRole("button", { name: "丟掉" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "丟掉" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+  it("沒有稿時點遮罩直接關", () => {
+    const { onClose } = mount();
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
+    expect(onClose).toHaveBeenCalled();
+  });
+  it("reused 且已分析完(ready/running/stale):不呼叫 startJob", async () => {
+    const { onSubmitted } = mount();
+    vi.spyOn(api, "submit").mockResolvedValue({ slug: "d1", title: "t", version: 1, new_version: false, reused: true });
+    vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "ready", job_id: null, notes_ready: true });
     const start = vi.spyOn(api, "startJob");
     type("稿");
     fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));

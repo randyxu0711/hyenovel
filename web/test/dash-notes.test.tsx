@@ -61,4 +61,17 @@ describe("分析進度", () => {
     expect((await screen.findByRole("status")).textContent).toContain("正在讀這一篇");
     await screen.findByText(/寫備課筆記/);
   });
+  it("只收到終態 state 事件(已結束的 job)也算結束,重抓並通知", async () => {
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
+      yield { event: "state", data: { state: "done", step: null } };
+    });
+    const onFinished = mount(work({ state: "running", job_id: 5 }));
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+  });
+  it("串流沒收尾就斷了也算結束", async () => {
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () { /* 空串流 */ });
+    const onFinished = mount(work({ state: "running", job_id: 5 }));
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+  });
 });

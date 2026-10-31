@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 
 import { api, DashError, type Estimate } from "./api";
 import { errorMessage, useT } from "./i18n";
 
+const RESTART = ["none", "stopped", "notes-stopped"];
+
 /** 「捲進一張新稿」:貼上或選檔/拖檔 → 字數與預估 → 交稿並開跑(或切到已存在的同稿)。 */
 export default function Feed({ onClose, onSubmitted }: {
   onClose: () => void;
@@ -13,6 +15,7 @@ export default function Feed({ onClose, onSubmitted }: {
   const [title, setTitle] = useState<string | undefined>();
   const [est, setEst] = useState<{ chars: number; v: Estimate | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -42,18 +45,25 @@ export default function Feed({ onClose, onSubmitted }: {
     const f = e.dataTransfer.files[0];
     if (f) void load(f);
   };
+  const requestClose = () => { if (text.trim() && !confirming) setConfirming(true); else onClose(); };
   const go = async () => {
     if (!chars || busy) return;
     setBusy(true); setErr(null);
     try {
       const r = await api.submit(text, title);
-      if (r.reused) { onSubmitted(r.slug, true); return; }
+      if (r.reused) {
+        // 上次可能交稿成功但沒開成 job:沒分析過或停住的才補開(den 會續跑,不重跑)
+        const w = await api.work(r.slug);
+        if (RESTART.includes(w.state)) await api.startJob(r.slug);
+        onSubmitted(r.slug, true);
+        return;
+      }
       await api.startJob(r.slug);
       onSubmitted(r.slug, false);
     } catch (e) { fail(e); setBusy(false); }
   };
   const key = (e: KeyboardEvent) => {
-    if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+    if (e.key === "Escape") { e.stopPropagation(); requestClose(); return; }
     if (e.key !== "Tab") return;
     const els = [...box.current!.querySelectorAll<HTMLElement>("textarea, button, input")].filter(x => !(x as HTMLButtonElement).disabled);
     const first = els[0], last = els[els.length - 1];
@@ -63,7 +73,7 @@ export default function Feed({ onClose, onSubmitted }: {
 
   const fresh = est && est.chars === chars ? est : null;
   return (
-    <div className="feed-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="feed-scrim" onMouseDown={e => { if (e.target === e.currentTarget && !text.trim()) onClose(); }}>
       <div className="feed" role="dialog" aria-modal="true" aria-labelledby="feed-h" ref={box}
         onKeyDown={key} onDragOver={e => e.preventDefault()} onDrop={drop}>
         <h2 id="feed-h">{t("feed.title")}</h2>
@@ -79,7 +89,13 @@ export default function Feed({ onClose, onSubmitted }: {
         </div>
         {err && <p role="alert" className="feed-msg">{t(errorMessage(err))}</p>}
         <div className="feed-actions">
-          <button type="button" onClick={onClose}>{t("feed.cancel")}</button>
+          {confirming ? (
+            <>
+              <span role="alert" className="feed-msg">{t("feed.discard")}</span>
+              <button type="button" onClick={() => setConfirming(false)}>{t("feed.keep")}</button>
+              <button type="button" onClick={onClose}>{t("feed.discardYes")}</button>
+            </>
+          ) : <button type="button" onClick={requestClose}>{t("feed.cancel")}</button>}
           <button type="button" className="feed-go" disabled={!chars || busy} onClick={() => void go()}>
             {busy ? t("feed.sending") : t("feed.go")}
           </button>
