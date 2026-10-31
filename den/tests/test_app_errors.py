@@ -55,6 +55,13 @@ def test_frontend_served_with_spa_fallback(data, tmp_path):
         assert c.get("/api/works").status_code == 401    # /api 仍要 token
 
 
+def test_missing_dist_gives_clear_503_not_500(data, tmp_path):
+    with _client(data, frontend_dir=tmp_path / "no-dist") as c:
+        r = c.get("/", headers=NAV)
+        assert r.status_code == 503 and "npm run build" in r.text
+        assert c.get("/api/works", headers=_auth(data[1])).status_code == 200   # API 不受影響
+
+
 def test_unmatched_api_path_is_json_404_not_index(data, tmp_path):
     dist = tmp_path / "dist"
     dist.mkdir()

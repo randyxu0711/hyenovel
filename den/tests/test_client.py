@@ -530,6 +530,25 @@ def test_kill_permission_denied_is_den_unavailable(den):
     assert den.spawns == 0
 
 
+def test_probe_falls_back_to_legacy_health_on_404(data):
+    """main 上的舊 den 只有 /health:/api/health 404 時要認得它,才走得到版本不符的重啟。"""
+    url, d = data
+    (d / "den.token").write_text("tok", encoding="utf-8")
+    (d / "den.json").write_text(json.dumps({"port": 1234}), encoding="utf-8")
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path, request.headers["authorization"]))
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"version": "old", "pid": 4242, "busy": False})
+        return httpx.Response(404, json={"detail": "not found"})
+
+    c = DenClient(d, http=lambda base: httpx.Client(base_url=base, transport=httpx.MockTransport(handler)))
+    client, token, health = c._probe()
+    assert token == "tok" and health["pid"] == 4242
+    assert seen == [("/api/health", "Bearer tok"), ("/health", "Bearer tok")]
+
+
 def test_probe_uses_short_timeout(den, monkeypatch):
     den.start()
     seen = []

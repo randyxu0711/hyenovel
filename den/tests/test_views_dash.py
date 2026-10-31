@@ -107,6 +107,7 @@ def test_session_title_prefers_analysis_title(c):
     _say(c, d, 0, "user", "問", 1.0)
     assert views.session_turns(c, "s")["title"] == "分析標題"
     assert views.recent_sessions(c, 5)[0]["title"] == "分析標題"
+    assert views.recent_sessions(c, 5)[0]["session"] == "s"
 
 
 def test_recent_sessions_falls_back_to_story_title_then_slug(c):

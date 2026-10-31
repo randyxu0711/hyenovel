@@ -190,7 +190,7 @@ def test_usage_limit_maps_to_error_event(c, fake_chat):
     fake_chat.outcome = "usage-limit"
     evs = post_discuss(c, "mini", None, "x")
     assert evs[-1] == {"event": "error", "data": {"where": "discuss", "message": "用量已達上限",
-                                                  "recoverable": True}}
+                                                  "recoverable": True, "code": "usage-limit"}}
 
 
 @pytest.mark.parametrize("outcome, recoverable", [
@@ -200,6 +200,7 @@ def test_error_recoverable_mapping(c, fake_chat, outcome, recoverable):
     fake_chat.outcome = outcome
     evs = post_discuss(c, "mini", None, "x")
     assert evs[-1]["data"]["recoverable"] is recoverable
+    assert evs[-1]["data"]["code"] == ("usage-limit" if outcome == "usage-limit" else "chat-failed")
 
 
 # ── Review Focus ──
@@ -335,7 +336,7 @@ def test_busy_lock_at_stream_start_yields_error(c):
             lock.release()
     out = c.portal.call(drive)
     assert [json.loads(x[6:]) for x in out] == [{"event": "error", "data": {
-        "where": "discuss", "message": "這一局還有一輪在跑", "recoverable": True}}]
+        "where": "discuss", "message": "這一局還有一輪在跑", "recoverable": True, "code": "busy"}}]
     assert pulled == [] and c.app.state.streams == 0
 
 
@@ -383,6 +384,7 @@ def test_chat_raising_yields_error_and_persists_nothing(c, fake_chat, caplog):
     evs = post_discuss(c, "mini", None, "秘密提問")
     assert evs[-1]["event"] == "error"
     assert evs[-1]["data"]["where"] == "discuss" and evs[-1]["data"]["recoverable"] is False
+    assert evs[-1]["data"]["code"] == "no-response"
     assert turns(c) == []
     assert "event=discuss-turn-failed slug=mini stage=chat" in caplog.text
     assert "秘密提問" not in caplog.text
@@ -394,7 +396,7 @@ def test_chat_without_result_yields_error(c, fake_chat):
     fake_chat.override = empty
     evs = post_discuss(c, "mini", None, "q")
     assert [e["event"] for e in evs] == ["token", "error"]
-    assert evs[-1]["data"]["recoverable"] is False
+    assert evs[-1]["data"]["recoverable"] is False and evs[-1]["data"]["code"] == "no-response"
     assert turns(c) == []
 
 
@@ -407,6 +409,7 @@ def test_commit_failure_yields_error_and_does_not_log_ok(c, monkeypatch, caplog)
     caplog.set_level(logging.INFO)
     evs = post_discuss(c, "mini", None, "q")
     assert evs[-1]["event"] == "error" and evs[-1]["data"]["recoverable"] is False
+    assert evs[-1]["data"]["code"] == "commit-failed"
     assert "message" not in [e["event"] for e in evs]
     monkeypatch.undo()
     assert turns(c) == []

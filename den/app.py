@@ -91,6 +91,8 @@ ERROR_CODES: tuple[str, ...] = (
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
     "unknown-character", "unknown-session-id", "ambiguous-session",
     "quote-needs-message", "too-many-quotes",
+    # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
+    "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
 
 _STORY_ERRORS = {"空白故事": "empty-story", "原文過長": "story-too-long", "bad slug": "bad-slug",
@@ -271,7 +273,7 @@ def _sse_line(ev: dict) -> str:
 
 
 _BUSY = {"event": "error", "data": {"where": "discuss", "message": "這一局還有一輪在跑",
-                                   "recoverable": True}}
+                                   "recoverable": True, "code": "busy"}}
 
 
 async def _chat_stream(state, lock: asyncio.Lock | None, events):
@@ -369,6 +371,10 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             return JSONResponse({"detail": "origin not allowed", "code": "bad-origin", "params": {}},
                                 status_code=403)
         if not _is_api(request.url.path):   # 靜態檔與 /login 不帶 token
+            if (frontend_dir is not None and request.url.path != "/login"
+                    and not (frontend_dir / "index.html").is_file()):
+                # den 起來時 dist 可能還沒建;不讓靜態檔 mount 在請求時 500
+                return PlainTextResponse("dashboard 還沒建好:請先執行 cd web && npm run build", status_code=503)
             return await call_next(request)
         token = request.app.state.token
         auth = request.headers.get("authorization", "")

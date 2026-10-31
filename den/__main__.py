@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"den port:{port}", flush=True)
     dist = Path(__file__).resolve().parent.parent / "web" / "dist"
     server = uvicorn.Server(uvicorn.Config(
-        create_app(db.database_url(), d, port=port, frontend_dir=dist if dist.is_dir() else None,
+        create_app(db.database_url(), d, port=port, frontend_dir=dist,   # dist 之後才建也行:缺的時候 den 回 503 提示
                    on_idle=lambda: setattr(server, "should_exit", True)),
         host=HOST, port=port,
         timeout_graceful_shutdown=3))   # 開著的 SSE 不能讓 Ctrl+C 等到 job 跑完

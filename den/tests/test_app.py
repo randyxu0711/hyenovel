@@ -919,7 +919,7 @@ def test_work_detail_sessions_and_recent_routes(data):
         [s] = c.get("/api/works/mini/sessions", headers=h).json()["sessions"]
         assert (s["session"], s["turns"], s["character"]) == ("sess1", 1, "hyena")
         [r] = c.get("/api/sessions", headers=h).json()["sessions"]
-        assert (r["external_id"], r["slug"]) == ("sess1", "mini")
+        assert (r["session"], r["slug"]) == ("sess1", "mini") and "external_id" not in r
         t = c.get("/api/sessions/sess1", headers=h).json()
         assert t["slug"] == "mini" and [x["role"] for x in t["turns"]] == ["user", "assistant"]
 

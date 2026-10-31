@@ -45,6 +45,7 @@ def test_main_wires_on_idle_to_should_exit(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(m.uvicorn, "Config", lambda app, **kw: {"app": app, **kw})
     m.main([])
     assert seen["port"] == 4321 and seen["ran"]
+    assert seen["frontend_dir"] == m.Path(m.__file__).resolve().parent.parent / "web" / "dist"   # dist 不在也照傳
     assert seen["config"]["port"] == 4321 and seen["config"]["timeout_graceful_shutdown"] == 3
     # on_idle 要能把「同一個」server 的 should_exit 設 True
     assert seen["server"].should_exit is False

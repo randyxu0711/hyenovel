@@ -133,4 +133,5 @@ def recent_sessions(conn, limit: int) -> list[dict]:
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
     for d in out:
         d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
+        d["session"] = d.pop("external_id")   # 與 session_rows 同名,前端只認 session
     return out

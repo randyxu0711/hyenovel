@@ -132,13 +132,14 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
         if not failed:
             log.error("event=discuss-turn-failed slug=%s stage=no-result", slug)
         yield {"event": "error", "data": {"where": "discuss", "message": "討論工人沒有回應,這輪沒有存下",
-                                          "recoverable": False}}
+                                          "recoverable": False, "code": "no-response"}}
         return
     sid = turn["session_id"]
     if result.outcome != "ok":
         log.info("event=discuss-turn slug=%s outcome=%s ms=%s", slug, result.outcome, result.duration_ms)
         yield {"event": "error", "data": {"where": "discuss", "message": result.message,
-                                          "recoverable": result.outcome in _RECOVERABLE}}
+                                          "recoverable": result.outcome in _RECOVERABLE,
+                                          "code": "usage-limit" if result.outcome == "usage-limit" else "chat-failed"}}
         return
     end = now()
     usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
@@ -157,7 +158,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     except Exception:
         log.exception("event=discuss-turn-failed slug=%s stage=commit", slug)
         yield {"event": "error", "data": {"where": "discuss", "message": "存檔失敗,這輪沒有存下",
-                                          "recoverable": False}}
+                                          "recoverable": False, "code": "commit-failed"}}
         return
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,

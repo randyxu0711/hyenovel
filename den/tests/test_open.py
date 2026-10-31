@@ -27,3 +27,34 @@ def test_open_prints_and_opens_url(monkeypatch, capsys, tmp_path):
     assert seen["auth"] == "Bearer tok" and seen["path"] == "/api/launch"
     assert opened == ["http://127.0.0.1:8788/login?code=abc"]
     assert capsys.readouterr().out.strip() == "http://127.0.0.1:8788/login?code=abc"
+
+
+def _run_open(monkeypatch, tmp_path, built):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    if built:
+        (dist / "index.html").write_text("x")
+
+    class FakeDen:
+        def __init__(self, data_dir):
+            pass
+
+        def ensure(self):
+            return httpx.Client(base_url="http://127.0.0.1:8788", transport=httpx.MockTransport(
+                lambda r: httpx.Response(200, json={"url": "http://u"}))), "tok"
+
+    monkeypatch.setattr(den_open, "DenClient", FakeDen)
+    monkeypatch.setattr(den_open, "_DIST", dist)
+    monkeypatch.setattr(den_open.webbrowser, "open", lambda u: None)
+    den_open.main([])
+
+
+def test_open_hints_when_dist_not_built(monkeypatch, capsys, tmp_path):
+    _run_open(monkeypatch, tmp_path, built=False)
+    out = capsys.readouterr().out
+    assert "npm run build" in out and "http://u" in out
+
+
+def test_open_no_hint_when_dist_built(monkeypatch, capsys, tmp_path):
+    _run_open(monkeypatch, tmp_path, built=True)
+    assert capsys.readouterr().out.strip() == "http://u"
