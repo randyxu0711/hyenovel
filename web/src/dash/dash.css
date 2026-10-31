@@ -87,3 +87,53 @@
   display:inline-grid; place-items:center; border-radius:50%;
   border:2px solid var(--c-text); color:var(--c-text); background:var(--dash-panel);
 }
+
+/* ── 陪讀者:選人、對話、紙邊的座位 ── */
+.dash-talk{padding:0; min-height:0; min-width:0; overflow:hidden}
+.dash[data-talk="closed"]{grid-template-columns:260px 1fr 0}
+.dash[data-talk="closed"] > .dash-talk{display:none}
+.dash-seat{
+  position:fixed; right:16px; top:50%; transform:translateY(-50%); z-index:5;
+  display:grid; place-items:center; width:56px; height:56px; padding:0; cursor:pointer;
+  border:1px solid var(--dash-line); border-radius:50%; background:var(--dash-panel);
+}
+.dash button:focus-visible, .dash textarea:focus-visible, .dash select:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.pick{padding:24px 16px; display:flex; flex-direction:column; gap:14px; color:var(--dash-ui-ink)}
+.pick-h{margin:0; font-size:var(--dash-t-lg); font-weight:600}
+.pick-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
+.pick-card{
+  display:flex; width:100%; align-items:center; gap:12px; padding:12px; text-align:left; cursor:pointer;
+  border:1px solid var(--dash-line); border-radius:10px; background:var(--dash-bubble);
+}
+.pick-text{display:flex; flex-direction:column; gap:2px; font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
+.pick-text b{font-size:var(--dash-t-md)}
+.talk{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ui-ink)}
+.talk-head{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--dash-line)}
+.talk-roster{display:flex; gap:6px}
+.talk-pick{display:grid; place-items:center; padding:3px; cursor:pointer; border:2px solid transparent; border-radius:50%; background:transparent}
+.talk-pick[aria-pressed="true"]{border-color:var(--dash-sig-t)}
+.talk-collapse{border:0; background:transparent; cursor:pointer; font-size:var(--dash-t-lg); padding:2px 8px; color:var(--dash-ui-ink-2)}
+.talk-log{flex:1; min-height:0; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px}
+.talk-empty, .talk-wait{margin:0; color:var(--dash-ui-ink-2); font-size:var(--dash-t-sm)}
+.talk-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
+.talk-text{margin:0; white-space:pre-wrap; line-height:1.8}
+.talk-me{align-self:flex-end; max-width:90%; padding:8px 12px; border-radius:10px; background:var(--dash-bubble)}
+.talk-me p{margin:0; white-space:pre-wrap}
+.talk-quote{margin:0 0 6px; padding-left:10px; border-left:3px solid var(--dash-sig); font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
+.talk-switch{display:flex; align-items:center; gap:10px; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ui-ink-2)}
+.talk-switch::before, .talk-switch::after{content:""; flex:1; height:1px; background:var(--dash-line)}
+.talk-error{margin:0; padding:6px 16px; font-size:var(--dash-t-sm); color:var(--dash-ui-ink)}
+.talk-form{display:flex; flex-direction:column; gap:8px; padding:10px 12px 14px; border-top:1px solid var(--dash-line)}
+.talk-form textarea{
+  resize:none; padding:8px 10px; font:inherit; line-height:1.6; color:var(--dash-ui-ink);
+  border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-bubble);
+}
+.talk-carry{display:flex; align-items:flex-start; gap:6px}
+.talk-carry .talk-quote{flex:1; margin:0}
+.talk-carry button{border:0; background:transparent; cursor:pointer; color:var(--dash-ui-ink-2); font-size:var(--dash-t-md)}
+.talk-send{
+  align-self:flex-end; padding:8px 16px; border:0; border-radius:8px; cursor:pointer;
+  background:var(--dash-enamel); color:var(--dash-enamel-ink); font-size:var(--dash-t-sm);
+}
+.talk-send:disabled, .talk-form textarea:disabled{cursor:not-allowed; background:var(--dash-panel); color:var(--dash-ui-ink-2)}
+@media (max-width:979px){ .dash-seat{display:none} .dash[data-talk="closed"]{grid-template-columns:1fr} .dash[data-talk="closed"][data-pane="talk"] > .dash-talk{display:flex} }

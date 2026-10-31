@@ -4,6 +4,9 @@ import Avatar from "./Avatar";
 import { errorMessage, localized, setLang, useLang, useT, type MsgKey } from "./i18n";
 import Rail from "./Rail";
 import Reader from "./Reader";
+import Seat from "./Seat";
+import Talk from "./Talk";
+import { useTalk } from "./useTalk";
 import { applySignature, cycleMode, initThemes, selectTheme, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
 import "./dash.css";
@@ -37,15 +40,17 @@ function Shell({ chars }: { chars: Characters }) {
   const t = useT();
   const { mode } = useThemeState();
   const lang = useLang();
-  const me = chars.byId(null);
-  useEffect(() => applySignature(me, mode), [me, mode]);
   const [slug, setSlug] = useState<string | null>(null);
-  const [, setSession] = useState<string | null>(null);   // Task 8 接上
-  const [quote, setQuote] = useState<string | null>(null);   // Task 8 接上
+  const [session, setSession] = useState<string | null>(null);
+  const [quotes, setQuotes] = useState<string[]>([]);
+  const [open, setOpen] = useState(true);
+  const talk = useTalk(slug, session);
+  const me = chars.byId(talk.whoId);
+  useEffect(() => applySignature(me, mode), [me, mode]);
   const [pane, setPane] = useState<Pane>("works");
-  const pick = (s: string, sess: string | null = null) => { setSlug(s); setSession(sess); setPane("desk"); };
+  const pick = (s: string, sess: string | null = null) => { setSlug(s); setSession(sess); setQuotes([]); setPane("desk"); };
   return (
-    <div className="dash" data-pane={pane}>
+    <div className="dash" data-pane={pane} data-talk={open ? "open" : "closed"}>
       <div className="dash-tabs" role="tablist">
         {PANES.map(([id, key]) => (
           <button key={id} type="button" role="tab" aria-selected={pane === id} onClick={() => setPane(id)}>{t(key)}</button>
@@ -58,9 +63,14 @@ function Shell({ chars }: { chars: Characters }) {
         <Keys />
       </nav>
       <main className="dash-desk">
-        {slug ? <Reader slug={slug} companion={localized(me.name, lang)} onQuote={q => { setQuote(q); setPane("talk"); }} /> : t("desk.empty")}
+        {slug ? <Reader slug={slug} companion={localized(me.name, lang)} onQuote={q => { setQuotes(qs => qs.includes(q) ? qs : [...qs, q]); setOpen(true); setPane("talk"); }} /> : t("desk.empty")}
       </main>
-      <aside className="dash-talk">{quote ?? t("talk.empty")}</aside>
+      <aside className="dash-talk">
+        <Talk talk={talk} hasWork={slug !== null} quotes={quotes}
+          onDropQuote={i => setQuotes(qs => qs.filter((_, j) => j !== i))}
+          onSent={() => setQuotes([])} onCollapse={() => setOpen(false)} />
+      </aside>
+      {!open && <Seat character={me} onOpen={() => setOpen(true)} />}
     </div>
   );
 }
