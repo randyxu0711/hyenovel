@@ -4,6 +4,10 @@ import pytest
 from den.companion import MODE_LABELS, MODES, persona, render_companion
 
 
+def _c(mode, voice=""):
+    return {"mode": mode, "voice": voice}
+
+
 def test_persona_each_mode_has_base_and_its_own_rules():
     for m in MODES:
         p = persona(m)
@@ -36,7 +40,7 @@ def _ctx(**kw):
 
 
 def test_render_companion_source_only_mentions_no_structure():
-    out = render_companion(_ctx(progress="running"), "slow")
+    out = render_companion(_ctx(progress="running"), _c("slow"))
     assert "她把傘收進門縫。" in out and "你讀的時候注意到的結構" not in out
     assert "還在背景跑" in out and "你的讀法:慢讀" in out
 
@@ -44,7 +48,7 @@ def test_render_companion_source_only_mentions_no_structure():
 def test_render_companion_with_analysis_lists_nodes_not_edges():
     a = {"synopsis": "梗", "nodes": [{"id": "m1", "type": "motif", "label": "水", "note": "遞增"}],
          "edges": [{"from": "m1", "to": "t1", "type": "serves"}]}
-    out = render_companion(_ctx(analysis=a, progress="done"), "direct")
+    out = render_companion(_ctx(analysis=a, progress="done"), _c("direct"))
     assert "- motif 水:遞增" in out and "梗概:梗" in out
     assert "serves" not in out and "## 現在的狀況" not in out
     assert "你的讀法:直說" in out
@@ -52,16 +56,16 @@ def test_render_companion_with_analysis_lists_nodes_not_edges():
 
 def test_render_companion_not_running_says_reading_from_source():
     for prog in ("none", "paused", "failed", "cancelled", "done"):
-        assert "這篇目前沒有在跑結構分析,你憑原文讀。" in render_companion(_ctx(progress=prog), "slow")
+        assert "這篇目前沒有在跑結構分析,你憑原文讀。" in render_companion(_ctx(progress=prog), _c("slow"))
 
 
 def test_render_companion_title_falls_back_to_slug():
-    assert "# 《s》" in render_companion(_ctx(title=None), "slow")
+    assert "# 《s》" in render_companion(_ctx(title=None), _c("slow"))
 
 
 def test_running_hint_only_without_analysis():
     """reviewer 還在跑時已有分析:不能再說結構分析還在跑(analyst 成功就換 current)。"""
     a = {"synopsis": "梗", "nodes": [], "edges": []}
     for prog in ("queued", "running"):
-        assert "還在背景跑" not in render_companion(_ctx(analysis=a, progress=prog), "slow")
-        assert "還在背景跑" in render_companion(_ctx(progress=prog), "slow")
+        assert "還在背景跑" not in render_companion(_ctx(analysis=a, progress=prog), _c("slow"))
+        assert "還在背景跑" in render_companion(_ctx(progress=prog), _c("slow"))

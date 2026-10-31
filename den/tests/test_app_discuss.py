@@ -118,7 +118,8 @@ def test_first_turn_creates_session_and_persists_both(c):
     assert [e["data"] for e in evs[:2]] == [{"text": "A"}, {"text": "B"}]
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
-    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow"}
+    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow",
+                               "character": "hyena"}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
     assert [(t["role"], t["text"], t["session"]) for t in ts] == \
@@ -256,6 +257,7 @@ def test_body_aclose_at_yield_closes_chat(c, fake_chat):
     async def drive():
         conn = c.app.state.mgr.conn
         turn = den_app.discuss.prepare_turn(conn, "mini", sid)
+        den_app.discuss.pick_character(conn, turn, None, None)
         events = den_app.discuss.run_turn(conn, c.app.state.chat, turn, "x", [])
         gen = den_app._chat_stream(c.app.state, lock, events)
         first = await anext(gen)
@@ -496,3 +498,60 @@ def test_empty_message_mid_conversation_asks_to_continue(c, fake_chat):
     post_discuss(c, "mini", sid, "")
     user = fake_chat.calls[-1][1]
     assert user.rstrip().endswith(CONTINUE) and OPENER not in user
+
+
+def _post(c, body):
+    return c.post("/api/discuss/mini", json={"message": "q", **body})
+
+
+def _last_assistant(c, evs):
+    sid = evs[-1]["data"]["session_id"]
+    return in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]
+
+
+def test_unknown_character_is_422_before_stream(c, fake_chat):
+    r = _post(c, {"character": "dragon"})
+    assert r.status_code == 422 and r.json()["code"] == "unknown-character"
+    assert fake_chat.calls == []
+
+
+def test_mcp_mode_only_stores_matching_character(c, fake_chat):
+    r = _post(c, {"mode": "direct", "home": "mcp"})
+    evs = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
+    row = _last_assistant(c, evs)
+    assert (row["character"], row["mode"]) == ("buffalo", "direct")
+    assert evs[-2]["data"]["character"] == "buffalo"
+
+
+def test_character_carries_over_and_overrides(c, fake_chat):
+    evs = [json.loads(line[6:]) for line in _post(c, {"character": "deer"}).text.splitlines()
+           if line.startswith("data: ")]
+    sid = evs[-1]["data"]["session_id"]
+    assert (_last_assistant(c, evs)["character"], _last_assistant(c, evs)["mode"]) == ("deer", "imaginative")
+    post_discuss(c, "mini", sid, "然後")
+    assert _last_assistant(c, evs)["character"] == "deer"
+    assert "你的讀法:想像" in fake_chat.calls[-1][0]
+
+
+def test_legacy_session_with_only_mode_keeps_that_mode(c, fake_chat):
+    sid = first_turn(c)
+    def strip(conn):
+        with conn:
+            conn.execute("UPDATE utterance SET character = NULL, mode = 'direct' WHERE role = 'assistant'")
+    in_loop(c, strip)
+    post_discuss(c, "mini", sid, "再說")
+    assert "你的讀法:直說" in fake_chat.calls[-1][0]
+
+
+def test_get_themes_route(c):
+    r = c.get("/api/themes")
+    body = r.json()
+    assert r.status_code == 200 and body["default"] == "olive"
+    assert [t["id"] for t in body["themes"]] == ["grassland", "olive"]
+
+
+def test_get_characters_route(c):
+    r = c.get("/api/characters")
+    body = r.json()
+    assert r.status_code == 200 and body["default"] == "hyena"
+    assert {x["id"] for x in body["characters"]} == {"hyena", "buffalo", "deer"}

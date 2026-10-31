@@ -53,7 +53,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import discuss, stories, version, views, works
+from den import characters, discuss, stories, themes, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
                         MAX_CHAT_CHARS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
                         valid_slug)
@@ -168,7 +168,8 @@ class DiscussIn(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
     anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
-    mode: Literal["direct", "slow", "imaginative"] | None = None   # 同 companion.MODES
+    mode: Literal["direct", "slow", "imaginative"] | None = None   # 同 companion.MODES;MCP 只送這個
+    character: str | None = Field(default=None, max_length=32)
     home: Literal["web", "mcp"] = "web"
     client: ClientIn | None = None
 
@@ -450,6 +451,14 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
     async def list_stories(request: Request):
         return {"stories": views.stories(request.app.state.mgr.conn)}
 
+    @api.get("/characters")
+    async def list_characters():
+        return {"characters": characters.builtins(), "default": characters.DEFAULT_CHARACTER}
+
+    @api.get("/themes")
+    async def list_themes():
+        return {"themes": themes.builtins(), "default": themes.DEFAULT_THEME}
+
     @api.get("/works")
     async def list_works(request: Request, q: str | None = None, limit: int = 20):
         if not 1 <= limit <= _WORKS_MAX:
@@ -560,8 +569,12 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             if lock.locked():
                 raise reject(409, "busy", "這一局還有一輪在跑")
         client = body.client.model_dump() if body.client else None
+        try:
+            discuss.pick_character(state.mgr.conn, turn, body.character, body.mode)
+        except characters.UnknownCharacter:
+            raise reject(422, "unknown-character", "沒有這隻角色") from None
         events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors,
-                                  body.mode, body.home, client)
+                                  body.home, client)
         return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

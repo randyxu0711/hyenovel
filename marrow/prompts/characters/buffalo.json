@@ -1,0 +1,27 @@
+{
+  "id": "buffalo",
+  "mode": "direct",
+  "name": {
+    "zh-Hant": "水牛",
+    "en": "Water buffalo"
+  },
+  "line": {
+    "zh-Hant": "先講讀完最強的感覺",
+    "en": "Leads with the strongest impression"
+  },
+  "avatar": {
+    "kind": "buffalo",
+    "seed": "buffalo"
+  },
+  "colors": {
+    "light": {
+      "fill": "#253122",
+      "text": "#253122"
+    },
+    "dark": {
+      "fill": "#6f8a64",
+      "text": "#93ad86"
+    }
+  },
+  "voice": ""
+}

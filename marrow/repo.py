@@ -147,12 +147,13 @@ def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
 
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
                   origin: str, anchors: list[str], analysis_fp: str | None,
-                  usage: dict | None = None, mode: str | None = None) -> bool:
+                  usage: dict | None = None, mode: str | None = None,
+                  character: str | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, mode, character) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
-         None if usage is None else canonical_json(usage), mode))
+         None if usage is None else canonical_json(usage), mode, character))
     return cur.rowcount == 1
 
 
@@ -160,6 +161,13 @@ def last_mode(conn, discussion_id: int) -> str | None:
     """該局最後一筆有記模式的 assistant 發言用的模式(舊局沒有 → None)。"""
     r = conn.execute("SELECT mode FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
                      "AND mode IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
+    return r[0] if r else None
+
+
+def last_character(conn, discussion_id: int) -> str | None:
+    """該局最後一筆有記角色的 assistant 發言是誰說的(舊局沒有 → None)。"""
+    r = conn.execute("SELECT character FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
+                     "AND character IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
     return r[0] if r else None
 
 

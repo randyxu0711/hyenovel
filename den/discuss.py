@@ -7,7 +7,7 @@ import time
 import uuid
 from contextlib import aclosing
 
-from den import companion, stories
+from den import characters, companion, stories
 from marrow import repo
 
 log = logging.getLogger("hyenovel")
@@ -51,11 +51,21 @@ def prepare_turn(conn, slug: str, session_id: str | None) -> dict:
             "analysis_fp": analysis["sha256"] if ctx["analysis"] is not None else None}
 
 
-async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], mode: str | None = None,
+def pick_character(conn, turn: dict, character: str | None, mode: str | None) -> None:
+    """定這輪的角色(寫進 turn["character"]);characters.UnknownCharacter 要在串流開始前炸。
+    角色 > mode > 該局上一位 > 預設;舊局只記了 mode 沒記角色,就沿用那個 mode 的角色。"""
+    d = turn["discussion_id"]
+    last = repo.last_character(conn, d) if d is not None else None
+    if last is None and d is not None and (old := repo.last_mode(conn, d)):
+        last = characters.resolve(None, old, None)["id"]
+    turn["character"] = characters.resolve(character, mode, last)
+
+
+async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                    home: str = "web", client: dict | None = None, now=time.time):
     """一輪:重組歷史 → 轉發 delta 為 token → 整輪成功才在同一個 transaction 落 user+assistant。
 
-    模式 = mode > 該局上次 > 預設。message 空 = companion 先開口:工人收到 OPENER,只落 assistant 一筆。
+    角色(與其模式)由 pick_character 定好放在 turn。message 空 = companion 先開口:工人收到 OPENER,只落 assistant 一筆。
 
     失敗 / 斷線 = 這輪沒發生過。被 aclose 時一併關掉 chat(工人隨之被殺)。
     歷史在這裡(呼叫者已持該局的鎖)才讀,不在 prepare_turn 讀,免得拿到過期的。
@@ -63,13 +73,13 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], mod
     d = turn["discussion_id"]
     history = repo.utterances(conn, d) if d is not None else []
     seq = history[-1]["seq"] + 1 if history else 0
-    mode = mode or (repo.last_mode(conn, d) if d is not None else None) or companion.DEFAULT_MODE
+    character = turn["character"]
     user_ts = now()
     result = None
     slug = turn["slug"]
     failed = False
     try:
-        async with aclosing(chat(companion.render_companion(turn["ctx"], mode),
+        async with aclosing(chat(companion.render_companion(turn["ctx"], character),
                                  render_turn(history, message or (CONTINUE if history else OPENER)))) as stream:
             async for kind, val in stream:
                 if kind == "delta":
@@ -106,7 +116,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], mod
                 repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp)
                 seq += 1
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
-                               usage=usage, mode=mode)
+                               usage=usage, mode=character["mode"], character=character["id"])
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
     except Exception:
         log.exception("event=discuss-turn-failed slug=%s stage=commit", slug)
@@ -115,5 +125,6 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str], mod
         return
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
-                                        "session_id": sid, "mode": mode}}
+                                        "session_id": sid, "mode": character["mode"],
+                                        "character": character["id"]}}
     yield {"event": "done", "data": {"ok": True, "session_id": sid}}

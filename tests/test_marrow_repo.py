@@ -343,3 +343,18 @@ def test_active_jobs_of_story(conn):
         ids[st] = repo.create_job(conn, "critique", s, ver, {}, 0)
         repo.set_job_state(conn, ids[st], st, 1)
     assert [j["id"] for j in repo.active_jobs_of_story(conn, s)] == [ids["queued"], ids["running"]]
+
+
+def test_last_character_and_stored_on_utterance(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
+    assert repo.last_character(conn, d) is None
+    repo.add_utterance(conn, d, 1, "assistant", "b", 1.0, "den", [], None, mode="slow", character="hyena")
+    repo.add_utterance(conn, d, 2, "assistant", "c", 2.0, "den", [], None, mode="direct", character="buffalo")
+    assert repo.last_character(conn, d) == "buffalo"
+    assert repo.utterances(conn, d)[0]["character"] is None
+
+
+def test_migration_0007_adds_character(conn):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(utterance)")}
+    assert "character" in cols
