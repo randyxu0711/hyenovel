@@ -210,3 +210,18 @@ def test_listing_carries_version_and_chars_not_text(c):
     [w] = works.listing(c, None)
     assert (w["version"], w["chars"]) == (2, 5)
     assert "latest_text" not in w and "latest_sv_id" not in w
+
+
+def test_listing_updated_at(c):
+    sid, vid = _story(c, "d01", "t", "x", 1.0)
+    assert works.listing(c, None)[0]["updated_at"] == 1.0                 # 都沒有 → 交稿時間
+    aid, _ = repo.add_artifact(c, sid, vid, "analysis", 1, {"title": "t"}, {}, 4.0)
+    repo.set_current(c, sid, "analysis", aid)
+    assert works.listing(c, None)[0]["updated_at"] == 4.0
+    d = repo.ensure_discussion(c, sid, "s", "web", None, 5.0)
+    repo.add_utterance(c, d, 0, "user", "問", 9.0, "den", [], None)
+    assert works.listing(c, None)[0]["updated_at"] == 4.0                 # user 發言不算
+    repo.add_utterance(c, d, 1, "assistant", "答", 7.0, "den", [], None)
+    assert works.listing(c, None)[0]["updated_at"] == 7.0
+    nid, _ = repo.add_artifact(c, sid, vid, "notes", 1, {"n": 1}, {}, 8.0)
+    assert works.listing(c, None)[0]["updated_at"] == 8.0

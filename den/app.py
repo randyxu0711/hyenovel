@@ -6,6 +6,7 @@
   POST /launch              (只收 Bearer)→ {url: /login?code=<32 hex>};碼單次有效、LAUNCH_TTL 秒
   GET  /login?code=         (不在 /api 下)有效 → 303 到 / + HttpOnly cookie;無效 401 bad-launch-code
   POST /stories             {"text","title"?,"slug"?} → 201 {slug, title, version, new_version, reused}
+  GET  /works/{slug}?v=n    → 作品詳情(versions 升冪;version/text 為第 n 版,預設最新;沒有 → 404 unknown-version)
   GET  /stories             → {"stories": [...]}(領域形狀,見 den.views)
   GET  /stories/{slug}/viz  → VizData | 404 無 current analysis(feedback 欄 = 同版備課筆記,否則同版舊回饋)
   GET  /stories/{slug}/source → text/plain,current analysis 所對照那一版的原文(無則最新版)
@@ -18,6 +19,8 @@
                             (串流前判:422 slug/body、404 無此篇/非此篇的局、409 未分析/該局有一輪在跑)
   GET  /works?q=&limit=N    → {"works": [...]}(標題/開頭比對,最近活動在前;limit 預設 20,1–50)
   GET  /works/{slug}        → 作品詳情(views.work_detail)| 404 unknown-work
+  GET  /works/{slug}/map?v=n → 對位資料(beats/motifs/notes 的引文位移,對第 n 版原文;預設最新;
+                            404 unknown-work / unknown-version;要在 /works/{slug}/{part} 之前註冊)
   GET  /works/{slug}/sessions → {"sessions": [...]}(這篇的局,新到舊)
   GET  /sessions?limit=N    → {"sessions": [...]}(跨作品最近的局;1–100)
   GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id | 409 ambiguous-session
@@ -90,7 +93,7 @@ ERROR_CODES: tuple[str, ...] = (
     "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
     "unknown-character", "unknown-session-id", "ambiguous-session",
-    "quote-needs-message", "too-many-quotes",
+    "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
@@ -481,38 +484,55 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
 
     @api.get("/works/{slug}")
-    async def work_detail(slug: str, request: Request):
+    async def work_detail(slug: str, request: Request, v: int | None = Query(None, ge=1)):
         _slug_ok(slug, "work-detail")
         try:
-            return views.work_detail(request.app.state.mgr.conn, slug)
+            return views.work_detail(request.app.state.mgr.conn, slug, v)
         except LookupError:
             raise _unknown("work-detail") from None
+        except views.UnknownVersion:
+            log.info("event=reject where=work-detail reason=unknown-version v=%s", v)
+            raise ApiError(404, "unknown-version", "沒有這個版本") from None
+
+    @api.get("/works/{slug}/map")
+    async def work_map(slug: str, request: Request, v: int | None = Query(None, ge=1)):
+        _slug_ok(slug, "work-map")
+        try:
+            return views.work_map(request.app.state.mgr.conn, slug, v)
+        except LookupError:
+            raise _unknown("work-map") from None
+        except views.UnknownVersion:
+            log.info("event=reject where=work-map reason=unknown-version v=%s", v)
+            raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
     @api.get("/works/{slug}/sessions")
-    async def work_sessions(slug: str, request: Request):
+    async def work_sessions(slug: str, request: Request, legacy: bool = False):
         _slug_ok(slug, "work-sessions")
         try:
-            return {"sessions": views.sessions(request.app.state.mgr.conn, slug)}
+            return {"sessions": views.sessions(request.app.state.mgr.conn, slug, legacy)}
         except LookupError:
             raise _unknown("work-sessions") from None
 
     @api.get("/sessions")
-    async def recent_sessions(request: Request, limit: int = 20):
+    async def recent_sessions(request: Request, limit: int = 20, legacy: bool = False):
         if not 1 <= limit <= 100:
             log.info("event=reject where=recent-sessions limit=%s", limit)
             raise HTTPException(422, "limit 要在 1–100")
-        return {"sessions": views.recent_sessions(request.app.state.mgr.conn, limit)}
+        return {"sessions": views.recent_sessions(request.app.state.mgr.conn, limit, legacy)}
 
     @api.get("/sessions/{session}")
-    async def session_turns(session: str, request: Request):
+    async def session_turns(session: str, request: Request, v: int | None = Query(None, ge=1)):
         try:
-            return views.session_turns(request.app.state.mgr.conn, session)
+            return views.session_turns(request.app.state.mgr.conn, session, v)
         except LookupError:
             log.info("event=reject where=session-turns reason=unknown-session-id")
             raise ApiError(404, "unknown-session-id", "沒有這一局") from None
         except views.AmbiguousSession:
             log.info("event=reject where=session-turns reason=ambiguous-session")
             raise ApiError(409, "ambiguous-session", "這個局 id 在不只一篇出現") from None
+        except views.UnknownVersion:
+            log.info("event=reject where=session-turns reason=unknown-version v=%s", v)
+            raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
     @api.get("/estimate")
     async def get_estimate(request: Request, chars: int = Query(ge=0)):
@@ -617,6 +637,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise reject(404, "unknown-slug", "這篇不在 DB") from None
         except discuss.UnknownSession:
             raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        except discuss.LegacySession:
+            raise reject(409, "legacy-session", "這是改版前的舊討論,只能看不能續聊") from None
         except discuss.TooManyQuotes:
             raise reject(422, "too-many-quotes", "一輪帶的引文太多段") from None
         except discuss.QuoteNeedsMessage:

@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 from contextlib import aclosing
 
-from den import characters, companion, stories
+from den import characters, companion, spans, stories
 from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from marrow import gate, repo
 
@@ -39,6 +39,10 @@ class UnknownSession(Exception):
     """session_id 不是這篇的局。"""
 
 
+class LegacySession(Exception):
+    """改版前的舊局(沒有記 mode 的 assistant 發言):只能看,不能續聊。"""
+
+
 class QuoteNotInSource(Exception):
     """帶的引文在最新版原文找不到(幻覺或過期)。"""
 
@@ -61,7 +65,7 @@ _RECOVERABLE = ("usage-limit", "transient", "timeout")
 def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] = (),
                  message: str = "") -> dict:
     """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession /
-    TooManyQuotes / QuoteNeedsMessage / QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
+    LegacySession / TooManyQuotes / QuoteNeedsMessage / QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
     沒分析也能聊(素材分層在 companion_context)。新局只發 id,discussion 列等整輪成功才建。"""
     ctx = stories.companion_context(conn, slug)
     if len(quotes) > MAX_QUOTES:
@@ -79,6 +83,9 @@ def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] 
         row = repo.discussion_by_external(conn, st["id"], session_id)
         if row is None:
             raise UnknownSession(session_id)
+        us = repo.utterances(conn, row["id"])
+        if us and not any(u["role"] == "assistant" and u["mode"] is not None for u in us):
+            raise LegacySession(session_id)   # 空局(還沒有逐字)不算舊局
         d = row["id"]
     analysis = repo.current_artifact(conn, st["id"], "analysis")
     return {"slug": slug, "ctx": ctx, "story_id": st["id"], "discussion_id": d,
@@ -163,5 +170,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
                                         "session_id": sid, "mode": character["mode"],
-                                        "character": character["id"]}}
+                                        "character": character["id"],
+                                        "spans": spans.locate_all(
+                                            [q for q in spans.quotes_in(result.text)
+                                             if gate.locate(q, turn["ctx"]["source"])],
+                                            turn["ctx"]["source"])}}
     yield {"event": "done", "data": {"ok": True, "session_id": sid}}

@@ -43,6 +43,15 @@ describe("dash api", () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("x"); }));
     await expect((async () => { for await (const _ of api.jobEvents(3)); })()).rejects.toMatchObject({ code: "den-down" });
   });
+  it("版本與 legacy 查詢參數", async () => {
+    const f = vi.fn(async (_u: string) => json({ sessions: [] }));
+    vi.stubGlobal("fetch", f);
+    await api.work("d1", 2); await api.map("d1"); await api.map("d1", 3); await api.session("s1", 2);
+    await api.sessions("d1", { legacy: true }); await api.recentSessions(5, { legacy: true });
+    expect(f.mock.calls.map(c => c[0])).toEqual([
+      "/api/works/d1?v=2", "/api/works/d1/map", "/api/works/d1/map?v=3", "/api/sessions/s1?v=2",
+      "/api/works/d1/sessions?legacy=1", "/api/sessions?limit=5&legacy=1"]);
+  });
   it("startJob 打 critique job", async () => {
     const f = vi.fn(async (_u: string, _i?: RequestInit) => json({ job_id: 7 }, 202));
     vi.stubGlobal("fetch", f);

@@ -1,98 +1,127 @@
-import { useEffect, useRef, useState } from "react";
-import { api, DashError, type WorkDetail } from "./api";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { api, DashError, type Work, type WorkDetail, type WorkMap } from "./api";
 import { errorMessage, useT, type MsgKey } from "./i18n";
-import NotesPanel from "./NotesPanel";
+import Paper, { type Mark } from "./Paper";
+import PrintHead from "./PrintHead";
 import { useJob } from "./useJob";
-import { useSelectionQuote } from "./useSelectionQuote";
+import WorksMenu from "./WorksMenu";
 
 const ANALYZING = ["running", "notes-running"];
 const STOPPED = ["stopped", "notes-stopped"];
 
-/** 打字紙:滾筒在上、稿在下;選一段 → 浮動鈕帶進對話。 */
-export default function Reader({ slug, companion, onQuote, onFinished, reload = 0 }: {
-  slug: string; companion: string; onQuote: (q: string) => void;
+/** 作品狀態(den 的 state + notes_ready,都是最新版的)→ 頂列那句話。 */
+export function stateText(state: string, notesReady: boolean): MsgKey {
+  switch (state) {
+    case "running": return "state.running";
+    case "notes-running": return "state.notesRunning";
+    case "notes-stopped": return "state.notesStopped";
+    case "ready": return notesReady ? "state.allReady" : "state.ready";
+    case "stopped": return "state.stopped";
+    case "stale": return "state.stale";
+    default: return "state.none";
+  }
+}
+
+/** 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。 */
+export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, map = null, marks = [], drawing, reload = 0 }: {
+  slug: string; works: Work[];
+  onOpen: (slug: string) => void; onSubmitNew: () => void;
+  onQuote: (q: string) => void;
+  /** 指定版本(?v=);沒給就是最新。 */
+  version?: number;
+  /** 讀者痕跡與正在畫的那道。 */
+  marks?: Mark[]; drawing?: string;
   /** 外面遞增 = 這篇要重抓(例如重交了同一篇)。 */
   reload?: number;
   /** 分析跑完(重抓過這篇之後)通知,好讓左欄重抓。 */
   onFinished?: () => void;
+  /** analyst 那一步完成(結構資料有了):外面重抓 map。 */
+  onAnalysed?: () => void;
+  /** 稿上顯示的是哪篇、是不是最新版、原文(邊說邊畫線要在最新版原文裡找引文)。 */
+  onPaper?: (p: { slug: string; latest: boolean; text: string }) => void;
+  /** 這一版的對位資料(印字頭印的點陣張力)。 */
+  map?: WorkMap | null;
 }) {
   const t = useT();
+  const [, setSearch] = useSearchParams();
   const [work, setWork] = useState<WorkDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [resumeErr, setResumeErr] = useState<string | null>(null);
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rev, setRev] = useState(0);
-  const body = useRef<HTMLDivElement>(null);   // 只收正文的選取;標題不在內
-  const { quote, tooLong, clear } = useSelectionQuote(body);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
   const job = useJob(analyzing ? work!.job_id : null);
 
-  useEffect(() => { setNotesOpen(false); }, [slug]);
+  useEffect(() => { setResumeErr(null); }, [slug]);
+  useEffect(() => { if (job.analysed) onAnalysed?.(); }, [job.analysed]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (work) onPaper?.({ slug: work.slug, latest: work.version === Math.max(work.version, ...work.versions), text: work.text });
+  }, [work]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!job.done && !job.error) return;
     setRev(r => r + 1); onFinished?.();
   }, [job.done, job.error]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 換作品或換版本:先清掉舊的字,別讓新的痕跡落在上一篇/上一版上(續跑重抓過之後也一樣)。
+  useEffect(() => { setWork(null); setErr(null); }, [slug, version]);
   useEffect(() => {
     let live = true;
     if (rev === 0) { setWork(null); setErr(null); }
-    api.work(slug).then(w => { if (live) setWork(w); },
+    api.work(slug, version).then(w => { if (live) setWork(w); },
       e => { if (live) setErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
-  }, [slug, rev, reload]);
+  }, [slug, version, rev, reload]);
 
   if (err) return <div className="reader-note" role="alert">{t(errorMessage(err))}</div>;
   if (!work) return <div className="reader-note">{t("loading")}</div>;
 
-  const notesBlock = work.notes_ready ? null
-    : t(ANALYZING.includes(work.state) ? "notes.running" : "notes.none");
+  const latest = Math.max(work.version, ...work.versions);
+  const pickVersion = (n: number) => setSearch(prev => {   // 只動 ?v=,其他參數(?s= 目前這局)留著
+    const p = new URLSearchParams(prev);
+    if (n === latest) p.delete("v"); else p.set("v", String(n));
+    return p;
+  });
+  const resume = () => {
+    setResumeErr(null);
+    api.startJob(slug, { resumeOnly: true }).then(() => { setRev(r => r + 1); onFinished?.(); },
+      e => setResumeErr(e instanceof DashError ? e.code : "unknown"));
+  };
   return (
-    <div className="reader" data-notes={notesOpen ? "open" : "closed"}>
-      <div className="platen">
-        <i />
-        <span className="platen-tools">
-          {t("rail.version", { n: work.version })}
-          {analyzing && <>
-            <span className="platen-mark" aria-hidden="true" />
-            <span role="status">{t("job.reading")}{job.step && ` · ${t(`job.step.${job.step}` as MsgKey)}`}</span>
-          </>}
-          {STOPPED.includes(work.state) && <span role="status">{t(work.state === "stopped" ? "job.stopped" : "job.notesStopped")}</span>}
-        </span>
-        <i />
-      </div>
-      <div className="reader-bar">
-        <button type="button" className="reader-notes" disabled={notesBlock !== null} aria-pressed={notesOpen}
-          aria-describedby={notesBlock ? "notes-why" : undefined} onClick={() => setNotesOpen(o => !o)}>
-          {t(notesOpen ? "notes.close" : "notes.open")}
-        </button>
-        {notesBlock && <span id="notes-why" className="reader-why">{notesBlock}</span>}
-      </div>
-      <div className="reader-body">
-      <article className="sheet">
-        <h1>{work.title}</h1>
-        <div ref={body}>
-          {paragraphs(work.text, work.title).map((p, i) => <p key={i}>{p}</p>)}
-        </div>
-      </article>
-      {notesOpen && work.notes_ready && <NotesPanel slug={slug} />}
-      </div>
-      {quote && (
-        <div className="reader-float">
-          <button type="button" className="reader-bring" disabled={tooLong}
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => { onQuote(quote); clear(); }}>
-            {t("reader.bring", { name: companion })}
+    <div className="reader">
+      <header className="paper-top">
+        <h1 className="paper-h">
+          <button type="button" className="paper-title" aria-haspopup="dialog" aria-expanded={!!menu}
+            onClick={e => { const el = e.currentTarget; setMenu(m => (m ? null : el)); }}>
+            {work.title}<span aria-hidden="true"> ▾</span>
           </button>
-          {tooLong && <span role="status">{t("reader.tooLong")}</span>}
+        </h1>
+        <div className="paper-vers" role="group" aria-label={t("paper.versions")}>
+          {work.versions.map(n => (
+            <button key={n} type="button" className="dash-dm" aria-pressed={n === work.version} onClick={() => pickVersion(n)}>v{n}</button>
+          ))}
         </div>
+        <span className="paper-state" role="status">
+          {t(stateText(work.state, work.notes_ready))}
+          {analyzing && job.step && ` · ${t(`job.step.${job.step}` as MsgKey)}`}
+        </span>
+        {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={resume}>{t("paper.resume")}</button>}
+        {resumeErr && <span className="paper-state" role="alert">{t(errorMessage(resumeErr))}</span>}
+      </header>
+      {work.version !== latest && (
+        <p className="paper-old">
+          {t("paper.oldVersion", { n: work.version })}
+          <button type="button" onClick={() => pickVersion(latest)}>{t("paper.latest")}</button>
+        </p>
       )}
+      {work.version === latest && (
+        <PrintHead key={work.job_id ?? "none"} running={analyzing} map={map}
+          printed={job.analysed && !!map && map.analysis_version === map.version && map.beats.length > 0} />
+      )}
+      <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote} />
+      {menu && <WorksMenu anchor={menu} below works={works} current={slug} onOpen={onOpen}
+        onSubmitNew={onSubmitNew} onClose={() => setMenu(null)} />}
     </div>
   );
-}
-
-/** 原文分段;第一段若只是標題(標點、全半形、空白不計)就拿掉,標題已經在 h1 了。 */
-function paragraphs(text: string, title: string): string[] {
-  const ps = text.split(/\n+/).filter(p => p.trim());
-  const bare = (s: string) => s.normalize("NFKC").replace(/[\p{P}\p{S}\s]/gu, "");
-  return ps.length > 1 && bare(ps[0]) === bare(title) ? ps.slice(1) : ps;
 }

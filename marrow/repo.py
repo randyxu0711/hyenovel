@@ -83,6 +83,16 @@ def add_source_version(conn, story_id: int, text: str, now: float) -> tuple[int,
     return cur.lastrowid, True
 
 
+def source_versions(conn, story_id: int) -> list[dict]:
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM source_version WHERE story_id = ? ORDER BY n", (story_id,)).fetchall()]
+
+
+def source_version_by_n(conn, story_id: int, n: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM source_version WHERE story_id = ? AND n = ?",
+                             (story_id, n)).fetchone())
+
+
 def source_version(conn, source_version_id: int) -> dict | None:
     return _row(conn.execute("SELECT * FROM source_version WHERE id = ?",
                              (source_version_id,)).fetchone())
@@ -200,9 +210,10 @@ def analysis_versions(conn, story_id: int) -> dict[str, int]:
         "ON sv.id = a.source_version_id WHERE a.story_id = ? AND a.kind = 'analysis'", (story_id,))}
 
 
-def recent_discussions(conn, limit: int) -> list[dict]:
+def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
     """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
-    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。"""
+    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。
+    legacy = 沒有任何記了 mode 的 assistant 發言(改版前的舊局);只回 legacy 或只回非 legacy,過濾在 LIMIT 之前。"""
     last = ("(SELECT {c} FROM utterance WHERE discussion_id = d.id AND role = 'assistant' "
             "ORDER BY seq DESC LIMIT 1)")
     out = []
@@ -215,6 +226,8 @@ def recent_discussions(conn, limit: int) -> list[dict]:
             f"{last.format(c='text')} AS preview "
             "FROM discussion d JOIN story st ON st.id = d.story_id "
             "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
+            f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
+            "AND role = 'assistant' AND mode IS NOT NULL) "
             "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
         row = _row(r)
         row["preview"] = (row["preview"] or "")[:60]
@@ -269,6 +282,20 @@ def works(conn) -> list[dict]:
         "(SELECT MAX(ended_at) FROM discussion WHERE story_id = st.id) AS talked_at "
         "FROM story st JOIN source_version sv ON sv.story_id = st.id "
         "AND sv.n = (SELECT MAX(n) FROM source_version WHERE story_id = st.id) ORDER BY st.slug")]
+
+
+def activity_times(conn) -> dict[int, float]:
+    """story_id → 最新 analysis/notes artifact 建立時間與最新 assistant 發言時間取大者(都沒有就沒這個 key)。"""
+    out: dict[int, float] = {}
+    for r in conn.execute(
+            "SELECT story_id, MAX(created_at) AS t FROM artifact WHERE kind IN ('analysis', 'notes') "
+            "GROUP BY story_id"):
+        out[r["story_id"]] = r["t"]
+    for r in conn.execute(
+            "SELECT d.story_id AS story_id, MAX(u.ts) AS t FROM utterance u "
+            "JOIN discussion d ON d.id = u.discussion_id WHERE u.role = 'assistant' GROUP BY d.story_id"):
+        out[r["story_id"]] = max(out.get(r["story_id"], 0.0), r["t"])
+    return out
 
 
 def current_artifacts(conn) -> list[dict]:

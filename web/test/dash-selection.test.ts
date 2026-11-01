@@ -52,4 +52,11 @@ describe("useSelectionQuote", () => {
     act(() => select(inside.firstChild!, "字".repeat(400)));
     expect(result.current.tooLong).toBe(false);
   });
+  it("字數以 code point 算(跟 den 同):400 個 𠀋 不算太長", () => {
+    const { inside, box } = setup();
+    inside.textContent = "𠀋".repeat(400);
+    const { result } = renderHook(() => useSelectionQuote({ current: box }));
+    act(() => select(inside.firstChild!, "𠀋".repeat(400)));
+    expect(result.current.tooLong).toBe(false);
+  });
 });

@@ -924,14 +924,43 @@ def test_work_detail_sessions_and_recent_routes(data):
         assert t["slug"] == "mini" and [x["role"] for x in t["turns"]] == ["user", "assistant"]
 
 
+def test_legacy_query_and_session_version_routes(data, caplog):
+    _seed_session(data)
+    conn = db.connect(data[0])
+    with conn:
+        d = repo.ensure_discussion(conn, repo.story_by_slug(conn, "mini")["id"], "old", "web", None, 1.0)
+        repo.add_utterance(conn, d, 0, "assistant", "舊答", 1.0, "den", [], None)
+    conn.close()
+    with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
+        h = _auth(data[1])
+        got = lambda path, **p: [s["session"] for s in c.get(path, params=p, headers=h).json()["sessions"]]
+        assert got("/api/works/mini/sessions") == ["sess1"]
+        assert got("/api/works/mini/sessions", legacy="true") == ["old"]
+        assert got("/api/sessions") == ["sess1"]
+        assert got("/api/sessions", legacy="true") == ["old"]
+        t = c.get("/api/sessions/old", params={"v": 1}, headers=h).json()
+        assert t["legacy"] is True and t["version"] == 1
+        r = c.get("/api/sessions/old", params={"v": 9}, headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+        assert "where=session-turns reason=unknown-version" in caplog.text
+        assert c.get("/api/sessions/old", params={"v": 0}, headers=h).status_code == 422
+
+
 def test_dashboard_read_routes_errors(data, caplog):
     with _client(data) as c, caplog.at_level(logging.INFO, logger="hyenovel"):
         h = _auth(data[1])
         for path in ("/api/works/nope", "/api/works/nope/sessions"):
             r = c.get(path, headers=h)
             assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        r = c.get("/api/works/mini?v=9", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+        assert "reason=unknown-version" in caplog.text
+        assert c.get("/api/works/mini?v=1", headers=h).json()["version"] == 1
+        assert c.get("/api/works/mini?v=0", headers=h).status_code == 422
         assert c.get("/api/works/BAD!/sessions", headers=h).json()["code"] == "bad-slug"
         r = c.get("/api/sessions/nope", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-session-id"
+        r = c.get("/api/sessions/nope", params={"v": 1}, headers=h)
         assert r.status_code == 404 and r.json()["code"] == "unknown-session-id"
         assert c.get("/api/sessions", params={"limit": 0}, headers=h).status_code == 422
         assert c.get("/api/sessions", params={"limit": 101}, headers=h).status_code == 422
@@ -1000,3 +1029,17 @@ def test_cancel_work_nothing_running_409(data):
 def test_discussion_endpoint_gone(data):
     with _client(data) as c:
         assert c.get("/api/stories/mini/discussion", headers=_auth(data[1])).status_code == 404
+
+
+def test_map_route_not_shadowed(data, caplog):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.get("/api/works/mini/map", headers=h)
+        assert r.status_code == 200 and r.json()["version"] == 1 and "beats" in r.json()
+        assert c.get("/api/works/mini/map", params={"v": 1}, headers=h).json()["version"] == 1
+        r = c.get("/api/works/mini/map", params={"v": 9}, headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+        assert c.get("/api/works/mini/map", params={"v": 0}, headers=h).status_code == 422
+        r = c.get("/api/works/nope/map", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        assert c.get("/api/works/mini/source", headers=h).status_code == 200

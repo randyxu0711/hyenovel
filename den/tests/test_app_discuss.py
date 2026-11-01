@@ -120,7 +120,7 @@ def test_first_turn_creates_session_and_persists_both(c):
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
     assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow",
-                               "character": "hyena"}
+                               "character": "hyena", "spans": []}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
     assert [(t["role"], t["text"], t["session"]) for t in ts] == \
@@ -606,4 +606,26 @@ def test_quote_needs_message(c, fake_chat):
 def test_too_many_quotes(c, fake_chat):
     r = _post(c, {"quotes": ["他把燈關了。"] * (MAX_QUOTES + 1)})
     assert r.status_code == 422 and r.json()["code"] == "too-many-quotes"
+    assert fake_chat.calls == []
+
+
+def test_message_event_has_spans(c, fake_chat):
+    fake_chat.deltas = ["他說「他把燈關了。」,", "又說「原文沒有的話」。"]
+    evs = post_discuss(c, "mini", None, "q")
+    src = in_loop(c, lambda conn: repo.latest_source_version(
+        conn, repo.story_by_slug(conn, "mini")["id"]))["text"]
+    i = src.index("他把燈關了。")
+    assert evs[-2]["data"]["spans"] == [{"quote": "他把燈關了。", "start": i, "end": i + 6}]
+
+
+def test_discuss_legacy_rejected(c, fake_chat, caplog):
+    def seed(conn):
+        with conn:
+            d = repo.ensure_discussion(conn, repo.story_by_slug(conn, "mini")["id"], "oldsess", "web", None, 1.0)
+            repo.add_utterance(conn, d, 0, "assistant", "舊答", 1.0, "den", [], None)
+    in_loop(c, seed)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        r = post_raw(c, "mini", "oldsess", "再聊")
+    assert r.status_code == 409 and r.json()["code"] == "legacy-session"
+    assert "where=discuss reason=legacy-session" in caplog.text
     assert fake_chat.calls == []
