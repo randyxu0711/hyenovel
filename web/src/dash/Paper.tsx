@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import { cpLength, cpSlice } from "./cp";
 import { useT } from "./i18n";
 import { useLinks } from "./links";
@@ -6,8 +6,9 @@ import { useThemeState } from "./theme";
 import { useCharacters } from "./useCharacters";
 import { useSelectionQuote } from "./useSelectionQuote";
 
-/** 讀者在稿上的一道痕跡:位移是原文的 code point 索引(den 給的)。 */
+/** 讀者在稿上的一道痕跡:位移是原文的 code point 索引(den 給的)。id = markId(...),同一道痕跡跨重繪不變。 */
 export type Mark = { start: number; end: number; character: string; id: string };
+export const markId = (start: number, end: number, character: string) => `${start}-${end}-${character}`;
 type Segment = { start: number; text: string };
 
 const MARKS = ["pencil", "highlighter", "circle"];
@@ -31,19 +32,19 @@ export function segments(text: string, title: string): Segment[] {
 }
 
 /** 把一段切成「沒痕跡 / 某道痕跡」的小塊;同一處有多道時取陣列裡最後一道。 */
-function pieces(seg: Segment, marks: Mark[]): { text: string; mark: Mark | null }[] {
+function pieces(seg: Segment, marks: Mark[]): { text: string; mark: Mark | null; at: number }[] {
   const len = cpLength(seg.text);
   const local = marks
     .map(m => ({ m, a: Math.max(0, m.start - seg.start), b: Math.min(len, m.end - seg.start) }))
     .filter(x => x.a < x.b);
   const cuts = [...new Set([0, len, ...local.flatMap(x => [x.a, x.b])])].sort((x, y) => x - y);
-  const out: { text: string; mark: Mark | null }[] = [];
+  const out: { text: string; mark: Mark | null; at: number }[] = [];
   for (let i = 0; i + 1 < cuts.length; i++) {
     const [a, b] = [cuts[i], cuts[i + 1]];
     const mark = last(local.filter(x => x.a <= a && b <= x.b))?.m ?? null;
     const prev = last(out);
     if (prev && prev.mark === mark) prev.text += cpSlice(seg.text, a, b);
-    else out.push({ text: cpSlice(seg.text, a, b), mark });
+    else out.push({ text: cpSlice(seg.text, a, b), mark, at: a });
   }
   return out;
 }
@@ -87,22 +88,31 @@ export default function Paper({ text, title, marks, drawing, onBring }: {
     return () => { off(); clearTimeout(timer); };
   }, [registerPaper]);
 
+  // 正在畫的那道:稿捲到那句(找不到元素就算了)
+  useEffect(() => {
+    if (!drawing) return;
+    const el = box.current?.querySelector<HTMLElement>(`[data-id="${drawing}"]`);
+    el?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [drawing]);
+
   const hoverKey = hover ? bare(hover) : null;
   return (
     <article className="dash-paper paper-sheet">
       <div ref={box}>
         {segs.map(seg => (
-          <p key={flash?.start === seg.start ? `${seg.start}-${flash.n}` : seg.start} data-start={seg.start}
+          // 段落 key 不跟著閃動變(重掛載會重播畫線、丟掉選取);要重播閃動只換裡面那層的 key
+          <p key={seg.start} data-start={seg.start}
             className={flash?.start === seg.start ? "is-flash" : undefined}>
-            {pieces(seg, marks).map((pc, i) => {
-              if (!pc.mark) return pc.text;
+            {flash?.start === seg.start && <span key={flash.n} className="paper-flash" aria-hidden="true" />}
+            {pieces(seg, marks).map(pc => {
+              if (!pc.mark) return <Fragment key={`t${pc.at}`}>{pc.text}</Fragment>;
               const m = pc.mark;
               const c = chars.byId(m.character);
               const quote = cpSlice(text, m.start, m.end);
               const cls = ["dash-mark", m.id === drawing && "is-drawing", hoverKey && bare(quote) === hoverKey && (hoverAt === null || hoverAt === m.start) && "is-hover"]
                 .filter(Boolean).join(" ");
               return (
-                <span key={i} className={cls} data-mark={MARKS.includes(c.mark) ? c.mark : "pencil"} data-id={m.id}
+                <span key={`${m.id}@${pc.at}`} className={cls} data-mark={MARKS.includes(c.mark) ? c.mark : "pencil"} data-id={m.id}
                   style={{ "--dash-mark": c.colors[mode].fill } as CSSProperties}
                   role="button" tabIndex={0} onClick={() => jumpToTalk(quote)}
                   onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jumpToTalk(quote); } }}>

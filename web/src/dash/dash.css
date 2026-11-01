@@ -186,11 +186,11 @@
 .dash .dash-mark:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .dash-mark.is-drawing{animation:dash-mark-draw .9s cubic-bezier(.55,.1,.25,1) both}
 @keyframes dash-mark-draw{from{background-size:0 var(--dash-mark-h)}}
-.dash .paper-sheet p.is-flash::after{content:""; position:absolute; inset:-2px -6px; border-radius:4px; pointer-events:none; animation:dash-flash 1.4s ease-out forwards}
+.dash .paper-sheet .paper-flash{position:absolute; inset:-2px -6px; border-radius:4px; pointer-events:none; animation:dash-flash 1.4s ease-out forwards}
 @keyframes dash-flash{from{background:color-mix(in srgb, var(--dash-sig) 26%, transparent)}to{background:transparent}}
 @media (prefers-reduced-motion:reduce){
   .dash .dash-mark.is-drawing{animation:none}
-  .dash .paper-sheet p.is-flash::after{animation:none; background:color-mix(in srgb, var(--dash-sig) 18%, transparent)}
+  .dash .paper-sheet .paper-flash{animation:none; background:color-mix(in srgb, var(--dash-sig) 18%, transparent)}
 }
 /* 帶進對話:霧面浮層,貼在選取下方(量不到位置時黏在紙底) */
 .dash .paper-bring{position:sticky; bottom:16px; z-index:6; display:inline-flex; align-items:center; gap:10px; padding:4px; border-radius:12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2); text-indent:0}
@@ -244,5 +244,13 @@
 .dash .dash-mcol i{width:9px; height:9px; border-radius:50%; box-shadow:inset 0 0 0 1px var(--dash-line)}
 .dash .dash-mcol i.is-on{box-shadow:none; background:color-mix(in srgb, var(--dash-accent) calc(45% + var(--dash-k) * 6%), var(--dash-desk-2))}
 .dash .dash-mcol.is-peak i.is-on{box-shadow:0 0 6px color-mix(in srgb, var(--dash-accent) 60%, transparent)}
+/* 印字頭:分析中在紙頂來回(只表示在跑,不畫點陣、不顯示進度);analyst 完成時把點陣張力一欄一欄印一次 */
+.dash .dash-printhead{position:relative; height:3px; margin:0 auto 12px; max-width:34em; border-radius:2px; background:var(--dash-line); overflow:hidden}
+.dash .dash-printhead i{position:absolute; top:0; left:0; width:28px; height:100%; border-radius:2px; background:var(--dash-accent); animation:dash-printhead 1.6s ease-in-out infinite alternate}
+@keyframes dash-printhead{to{left:calc(100% - 28px)}}
+.dash .dash-print{max-width:34em; margin:0 auto 12px; cursor:pointer}
+.dash .side-matrix.is-print .dash-mcol{animation:dash-print-col .2s steps(5) both; animation-delay:calc(var(--dash-col) * 1s / var(--dash-cols))}
+@keyframes dash-print-col{from{clip-path:inset(100% 0 0 0)}}
+@media (prefers-reduced-motion:reduce){ .dash .dash-printhead i, .dash .side-matrix.is-print .dash-mcol{animation:none} }
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .side-who{width:6px; height:6px; border-radius:50%; margin-top:2px}

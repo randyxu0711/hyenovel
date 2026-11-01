@@ -120,6 +120,17 @@ describe("Paper", () => {
     act(() => { vi.advanceTimersByTime(1500); });
     expect(screen.getByText("第二段。").classList.contains("is-flash")).toBe(false);
   });
+  it("段落閃動不重掛載段落(正在畫的痕跡不重播、選取不丟);再跳一次也閃", () => {
+    mount("第一段。\n海很深。", [mk(5, 8)], { drawing: "5-8-hyena" });
+    const p = screen.getByText(/很深/).closest("p")!, m = marks()[0];
+    act(() => links.jumpToPaper({ quote: "海很深", start: 5, end: 8 }));
+    expect(p.classList.contains("is-flash")).toBe(true);
+    const flash = p.querySelector(".paper-flash");
+    act(() => links.jumpToPaper({ quote: "海很深", start: 5, end: 8 }));
+    expect(screen.getByText(/很深/).closest("p")).toBe(p);
+    expect(marks()[0]).toBe(m);
+    expect(p.querySelector(".paper-flash")).not.toBe(flash);   // 只換閃動那層,動畫重播
+  });
   it("jumpToPaper 的位置對不上這張稿(別版的位置)→ 不跳", () => {
     mount("第一段。\n第二段。", []);
     act(() => links.jumpToPaper({ quote: "第三段", start: 5, end: 8 }));

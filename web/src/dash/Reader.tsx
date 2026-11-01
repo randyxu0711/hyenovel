@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, DashError, type Work, type WorkDetail } from "./api";
+import { api, DashError, type Work, type WorkDetail, type WorkMap } from "./api";
 import { errorMessage, useT, type MsgKey } from "./i18n";
 import Paper, { type Mark } from "./Paper";
+import PrintHead from "./PrintHead";
 import { useJob } from "./useJob";
 import WorksMenu from "./WorksMenu";
 
@@ -23,7 +24,7 @@ export function stateText(state: string, notesReady: boolean): MsgKey {
 }
 
 /** 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。 */
-export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, marks = [], drawing, reload = 0 }: {
+export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, map = null, marks = [], drawing, reload = 0 }: {
   slug: string; works: Work[];
   onOpen: (slug: string) => void; onSubmitNew: () => void;
   onQuote: (q: string) => void;
@@ -35,6 +36,12 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   reload?: number;
   /** 分析跑完(重抓過這篇之後)通知,好讓左欄重抓。 */
   onFinished?: () => void;
+  /** analyst 那一步完成(結構資料有了):外面重抓 map。 */
+  onAnalysed?: () => void;
+  /** 稿上顯示的是哪篇、是不是最新版、原文(邊說邊畫線要在最新版原文裡找引文)。 */
+  onPaper?: (p: { slug: string; latest: boolean; text: string }) => void;
+  /** 這一版的對位資料(印字頭印的點陣張力)。 */
+  map?: WorkMap | null;
 }) {
   const t = useT();
   const [, setSearch] = useSearchParams();
@@ -48,6 +55,10 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const job = useJob(analyzing ? work!.job_id : null);
 
   useEffect(() => { setResumeErr(null); }, [slug]);
+  useEffect(() => { if (job.analysed) onAnalysed?.(); }, [job.analysed]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (work) onPaper?.({ slug: work.slug, latest: work.version === Math.max(work.version, ...work.versions), text: work.text });
+  }, [work]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!job.done && !job.error) return;
     setRev(r => r + 1); onFinished?.();
@@ -97,6 +108,10 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
           {t("paper.oldVersion", { n: work.version })}
           <button type="button" onClick={() => pickVersion(latest)}>{t("paper.latest")}</button>
         </p>
+      )}
+      {work.version === latest && (
+        <PrintHead key={work.job_id ?? "none"} running={analyzing} map={map}
+          printed={job.analysed && !!map && map.analysis_version === map.version && map.beats.length > 0} />
       )}
       <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote} />
       {menu && <WorksMenu anchor={menu} below works={works} current={slug} onOpen={onOpen}

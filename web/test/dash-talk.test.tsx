@@ -329,3 +329,109 @@ describe("沒有寫死角色", () => {
     }
   });
 });
+
+describe("邊說邊畫線", () => {
+  beforeEach(() => { text = "海很藍。第二句。"; localStorage.setItem("hyenovel.companion", "buffalo"); });
+  afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+  /** 先送 tokens,等 release() 才送 message(帶 spans)。 */
+  const gated = (tokens: string[], spans: Span[], before?: () => void) => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const full = tokens.join("");
+    talkReply = () => new Response(new ReadableStream({
+      async start(c) {
+        const enc = new TextEncoder();
+        const w = (event: string, data: unknown) => c.enqueue(enc.encode(`data: ${JSON.stringify({ event, data })}\n\n`));
+        for (const t of tokens) w("token", { text: t });
+        await gate;
+        before?.();
+        w("message", { role: "assistant", text: full, session_id: "s1", mode: "direct", character: "buffalo", spans });
+        w("done", { ok: true, session_id: "s1" });
+        c.close();
+      },
+    }));
+    return () => release();
+  };
+  const markEls = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>(".dash-mark")];
+  const reduce = () => {
+    window.matchMedia = ((q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+  };
+
+  it("串流中引文一收尾、稿上逐字找得到 → message 前就畫上(is-drawing);message 後同一段不出現第二個", async () => {
+    const release = gated(["我讀到「海", "很藍」,"], [{ quote: "海很藍", start: 0, end: 3 }]);
+    const { container } = mount();
+    await screen.findByText("海很藍。第二句。");
+    say("看看");
+    await waitFor(() => expect(markEls(container)).toHaveLength(1));
+    const m = markEls(container)[0];
+    expect(m.textContent).toBe("海很藍");
+    expect(m.classList.contains("is-drawing")).toBe(true);
+    expect(log().queryByRole("button", { name: "「海很藍」" })).toBeNull();   // 還沒到 message
+    release();
+    await (await findLog()).findByRole("button", { name: "「海很藍」" });
+    expect(markEls(container)).toHaveLength(1);
+    expect(markEls(container)[0]).toBe(m);   // 同一個元素,沒有重掛載重畫
+  });
+  it("引文只差標點(逐字找不到)→ message 前沒有;message 帶 spans 後補畫", async () => {
+    const release = gated(["「海很藍,第二句」"], [{ quote: "海很藍,第二句", start: 0, end: 7 }]);
+    const { container } = mount();
+    await screen.findByText("海很藍。第二句。");
+    say("看看");
+    await screen.findByText("「海很藍,第二句」");
+    expect(markEls(container)).toHaveLength(0);
+    release();
+    await waitFor(() => expect(markEls(container)).toHaveLength(1));
+    expect(markEls(container)[0].textContent).toBe("海很藍。第二句");
+    expect(markEls(container)[0].classList.contains("is-drawing")).toBe(true);
+  });
+  it("多段排隊:一次畫一筆,前一筆畫完才換下一筆", async () => {
+    gated(["「海很藍」和「第二句」"], []);
+    const { container } = mount();
+    await screen.findByText("海很藍。第二句。");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {});
+    vi.useFakeTimers();
+    const flush = async (until: () => boolean) => {
+      for (let i = 0; i < 300 && !until(); i++) await act(async () => { await Promise.resolve(); });
+    };
+    say("看看");
+    await flush(() => markEls(container).length === 2);
+    const drawing = () => markEls(container).map(m => m.classList.contains("is-drawing"));
+    expect(drawing()).toEqual([true, false]);
+    act(() => { vi.advanceTimersByTime(600); });
+    expect(drawing()).toEqual([false, true]);
+    act(() => { vi.advanceTimersByTime(600); });
+    expect(drawing()).toEqual([false, false]);
+  });
+  it("減動:痕跡直接到終態,沒有 is-drawing", async () => {
+    reduce();
+    const release = gated(["「海很藍」"], [{ quote: "海很藍", start: 0, end: 3 }]);
+    const { container } = mount();
+    await screen.findByText("海很藍。第二句。");
+    say("看看");
+    await waitFor(() => expect(markEls(container)).toHaveLength(1));
+    expect(container.querySelector(".is-drawing")).toBeNull();
+    release();
+    await (await findLog()).findByRole("button", { name: "「海很藍」" });
+    expect(container.querySelector(".is-drawing")).toBeNull();
+  });
+  it("看舊版:串流中不畫;message 後以 ?v= 重抓這局,依回來的 spans 直接畫上(不播動畫)", async () => {
+    versions = [1, 2];
+    rows = [row("s1")];
+    session("s1", [u("先前"), a("嗯", "buffalo")]);
+    const release = gated(["「海很藍」"], [{ quote: "海很藍", start: 4, end: 7 }], () => {
+      session("s1", [u("先前"), a("嗯", "buffalo"), u("看看"), a("「海很藍」", "buffalo", [{ quote: "海很藍", start: 0, end: 3 }])]);
+    });
+    const { container } = mount("/w/d1?v=1");
+    await (await findLog()).findByText("嗯");
+    const before = calls().filter(c => c === "/api/sessions/s1?v=1").length;
+    say("看看");
+    await screen.findByText("「海很藍」");
+    expect(markEls(container)).toHaveLength(0);
+    release();
+    await waitFor(() => expect(calls().filter(c => c === "/api/sessions/s1?v=1").length).toBeGreaterThan(before));
+    await waitFor(() => expect(markEls(container)).toHaveLength(1));
+    expect(markEls(container)[0].textContent).toBe("海很藍");
+    expect(markEls(container)[0].classList.contains("is-drawing")).toBe(false);
+  });
+});

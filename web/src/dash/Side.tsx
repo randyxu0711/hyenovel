@@ -4,7 +4,7 @@ import Avatar from "./Avatar";
 import ChartTab from "./ChartTab";
 import { localized, useLang, useT, type MsgKey } from "./i18n";
 import NotesTab from "./NotesTab";
-import type { Mark } from "./Paper";
+import { markId, type Mark } from "./Paper";
 import Talk from "./Talk";
 import type { Characters } from "./useCharacters";
 import { useCharacters } from "./useCharacters";
@@ -16,14 +16,14 @@ const TABS: [Tab, MsgKey][] = [["talk", "side.talk"], ["notes", "side.notes"], [
 /** 每則 assistant 的引文(這一版找得到的)→ 該角色在稿上的痕跡;作者帶的引文不畫。同一位置取最後一筆。 */
 export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
   const at = new Map<string, Mark>();
-  turns.forEach((turn, i) => {
+  turns.forEach(turn => {
     if (turn.role !== "assistant") return;
     const character = chars.byId(turn.character, turn.mode).id;
-    turn.spans.forEach((s, j) => {
+    turn.spans.forEach(s => {
       if (s.start === null || s.end === null) return;
       const key = `${s.start}:${s.end}`;
       at.delete(key);   // 重新插入:順序跟著最後一筆
-      at.set(key, { start: s.start, end: s.end, character, id: `${i}-${j}` });
+      at.set(key, { start: s.start, end: s.end, character, id: markId(s.start, s.end, character) });
     });
   });
   return [...at.values()];

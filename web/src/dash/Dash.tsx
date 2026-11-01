@@ -43,7 +43,10 @@ function Shell({ chars }: { chars: Characters }) {
     return () => { live = false; };
   }, [refresh]);
 
-  const talk = useTalk(slug, version);
+  // 稿上正顯示的原文:是這篇的最新版時才交給 useTalk(邊說邊畫線在這裡找引文)
+  const [paper, setPaper] = useState<{ slug: string; latest: boolean; text: string } | null>(null);
+  const source = version === undefined && paper && paper.slug === slug && paper.latest ? paper.text : null;
+  const talk = useTalk(slug, version, source);
   const me = chars.byId(talk.whoId);
   const { markSeen } = useSeen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,7 +65,7 @@ function Shell({ chars }: { chars: Characters }) {
     return () => { live = false; };
   }, [slug, version, mapRev, reload]);
   // 痕跡只在逐字稿的位置對的就是這一版時才畫(換版本重抓完之前不畫)。
-  const marks = talk.spansV === version ? marksFrom(talk.turns, chars) : [];
+  const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
   const split = useSplit();
   useEffect(() => applySignature(me, mode), [me, mode]);
@@ -97,7 +100,8 @@ function Shell({ chars }: { chars: Characters }) {
       <Rail collapsed={view !== "home"} works={works} current={slug} onOpen={open}
         onNew={goHome} onSubmitNew={goHome} />
       <main className="dash-desk">
-        {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks}
+        {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
+          map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           works={works} onOpen={open} onSubmitNew={goHome}
           onQuote={q => setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; })} />}
