@@ -84,7 +84,7 @@
 .dash .platen i{width:14px; height:22px; border-radius:5px; background:var(--dash-ink-2)}
 .dash .platen-tools{font-size:var(--dash-t-xs); color:var(--dash-paper)}
 .dash .sheet{
-  width:min(640px,86%); margin:-6px auto 80px; padding:64px 64px 56px; position:relative;
+  width:min(640px,86%); margin:-6px auto 80px; padding:64px 64px 72px; position:relative;
   background:var(--dash-paper); color:var(--dash-paper-ink);
   box-shadow:0 18px 40px -18px color-mix(in srgb, var(--dash-ink) 45%, transparent);
 }
@@ -169,4 +169,5 @@
 .dash .feed-actions .feed-go:disabled{cursor:not-allowed; background:var(--dash-paper); color:var(--dash-ink-2)}
 @media (prefers-reduced-motion:reduce){ .dash .platen-mark{animation:none} }
 @media (max-width:979px){ .dash .reader-body{flex-direction:column; align-items:stretch} .dash .notes{max-width:none; flex-basis:auto; position:static; max-height:none; margin:8px 4% 0} }
-.dash .rail-foot .rail-btn{width:36px; height:36px; padding:0; justify-content:center}
+.dash-rail:not([data-collapsed="true"]) .rail-foot .rail-btn{width:36px; height:36px; padding:0; justify-content:center}
+.dash-rail[data-collapsed="true"] .rail-foot{flex-direction:column}
