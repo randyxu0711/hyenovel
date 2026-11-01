@@ -182,7 +182,7 @@ def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:
         out.append({"session": sid, "started_at": us[0]["ts"], "last_at": last["ts"],
                     "turns": len(asst), "character": asst[-1]["character"] if asst else None,
                     "mode": asst[-1]["mode"] if asst else None,
-                    "preview": asst[-1]["text"][:60] if asst else "",
+                    "preview": us[0]["text"][:60],   # 這局的第一句話(us 依 ts, seq 排)
                     "version": versions.get(asst[-1]["analysis_fp"]) if asst else None,
                     "legacy": is_legacy})
     out.sort(key=lambda s: s["last_at"], reverse=True)
