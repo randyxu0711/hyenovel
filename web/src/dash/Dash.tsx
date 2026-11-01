@@ -52,11 +52,13 @@ function Shell({ chars }: { chars: Characters }) {
   // 這一版的對位資料(結構圖、筆記);分析跑完或重交時重抓。
   const [mapRev, setMapRev] = useState(0);
   const [map, setMap] = useState<WorkMap | null>(null);
+  const [mapErr, setMapErr] = useState<string | null>(null);   // 這篇這版抓不到對位資料的錯誤碼
   useEffect(() => {
-    setMap(null);
+    setMap(null); setMapErr(null);
     if (!slug) return;
     let live = true;
-    api.map(slug, version).then(m => { if (live) setMap(m); }, () => { /* 抓不到:分頁停在載入中,稿與對話照用 */ });
+    api.map(slug, version).then(m => { if (live) setMap(m); },
+      e => { if (live) setMapErr(e instanceof DashError ? e.code : "unknown"); });   // 稿與對話照用,分頁說錯誤
     return () => { live = false; };
   }, [slug, version, mapRev, reload]);
   // 痕跡只在逐字稿的位置對的就是這一版時才畫(換版本重抓完之前不畫)。
@@ -115,7 +117,7 @@ function Shell({ chars }: { chars: Characters }) {
       )}
       {view === "work" && (
         <aside className="dash-side">
-          <Side version={version ?? work?.version ?? 0} map={map} state={String(work?.state ?? "")} marks={marks}
+          <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
             talk={talk} quotes={quotes}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />

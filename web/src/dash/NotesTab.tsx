@@ -1,5 +1,5 @@
 import type { WorkMap } from "./api";
-import { useT, type MsgKey } from "./i18n";
+import { errorMessage, useT, type MsgKey } from "./i18n";
 import Iq from "./Iq";
 
 const KINDS = ["moved", "confused", "wondering", "opinion"];
@@ -13,8 +13,9 @@ function why(state: string): MsgKey {
 }
 
 /** 筆記分頁:冷讀者(reviewer)的備課筆記。陪讀者看不到這些。 */
-export default function NotesTab({ map, state }: { map: WorkMap | null; state: string }) {
+export default function NotesTab({ map, state, error = null }: { map: WorkMap | null; state: string; error?: string | null }) {
   const t = useT();
+  if (!map && error) return <p className="side-lede" role="alert">{t(errorMessage(error))}</p>;
   if (!map) return <p className="side-lede">{t("loading")}</p>;
   if (!map.notes) return <p className="side-lede">{t(why(state))}</p>;
   return (

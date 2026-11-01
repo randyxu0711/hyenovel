@@ -37,10 +37,12 @@ export function fmtTime(ts: number, now = new Date()): string {
 }
 
 /** 右欄:對話 | 筆記 | 結構圖。對話一直掛著(切走也不丟草稿、稿上痕跡點得回來),另兩頁切到才畫。 */
-export default function Side({ version, map, state, marks, talk, quotes, onDropQuote, onSent }: {
+export default function Side({ version, map, mapError, state, marks, talk, quotes, onDropQuote, onSent }: {
   /** 正在看的版本號。 */
   version: number;
   map: WorkMap | null;
+  /** 對位資料抓不到時的 den 錯誤碼。 */
+  mapError: string | null;
   /** 作品(最新版)的 state:筆記分頁說明為什麼沒有筆記。 */
   state: string;
   marks: Mark[];
@@ -66,7 +68,7 @@ export default function Side({ version, map, state, marks, talk, quotes, onDropQ
       </div>
       {tab !== "talk" && (
         <div className="side-panel side-scroll" role="tabpanel" id={`side-panel-${tab}`} aria-labelledby={`side-tab-${tab}`}>
-          {tab === "notes" ? <NotesTab map={map} state={state} /> : <ChartTab map={map} marks={marks} />}
+          {tab === "notes" ? <NotesTab map={map} state={state} error={mapError} /> : <ChartTab map={map} marks={marks} error={mapError} />}
         </div>
       )}
     </div>

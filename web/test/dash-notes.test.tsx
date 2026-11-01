@@ -23,8 +23,8 @@ const notes: WorkMap["notes"] = {
     { kind: "moved", title: "泥的溫度", body: "觸覺開場。", question: null, spans: [{ quote: "泥是溫的", start: null, end: null }] },
   ],
 };
-function mount(m: WorkMap | null, state = "ready", on = vi.fn()) {
-  render(<LinksProvider><PaperSpy on={on} /><HoverSpy /><NotesTab map={m} state={state} /></LinksProvider>);
+function mount(m: WorkMap | null, state = "ready", on = vi.fn(), error: string | null = null) {
+  render(<LinksProvider><PaperSpy on={on} /><HoverSpy /><NotesTab map={m} state={state} error={error} /></LinksProvider>);
   return on;
 }
 
@@ -68,6 +68,11 @@ describe("筆記分頁", () => {
   ])("沒有筆記、作品 %s → %s", (state, text) => {
     mount(map(), state);
     expect(screen.getByText(text)).toBeTruthy();
+  });
+  it("對位資料抓不到:顯示錯誤,不停在載入中", () => {
+    mount(null, "ready", vi.fn(), "den-down");
+    expect(screen.getByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
+    expect(screen.queryByText("載入中……")).toBeNull();
   });
   it("對位資料還沒到:載入中", () => {
     mount(null);

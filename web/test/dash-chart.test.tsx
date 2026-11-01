@@ -19,9 +19,9 @@ const beats = INT.map((intensity, i) => ({ id: `b${i}`, label: `節拍${i}`, int
 const map = (o: Partial<WorkMap> = {}): WorkMap => ({
   version: 2, analysis_version: 2, notes_version: null, beats, motifs: [], notes: null, ...o,
 });
-function mount(m: WorkMap | null, marks: Mark[] = [], on = vi.fn()) {
+function mount(m: WorkMap | null, marks: Mark[] = [], on = vi.fn(), error: string | null = null) {
   const r = render(<CharactersProvider value={makeCharacters([hyena, buffalo], "hyena")}><LinksProvider>
-    <PaperSpy on={on} /><ChartTab map={m} marks={marks} />
+    <PaperSpy on={on} /><ChartTab map={m} marks={marks} error={error} />
   </LinksProvider></CharactersProvider>);
   return { ...r, on };
 }
@@ -72,6 +72,11 @@ describe("結構圖分頁", () => {
   it("分析屬於別版 → 頂端「這是第 N 版的分析」", () => {
     mount(map({ analysis_version: 1 }));
     expect(screen.getByText("這是第 1 版的分析")).toBeTruthy();
+  });
+  it("對位資料抓不到:顯示錯誤,不停在載入中", () => {
+    mount(null, [], vi.fn(), "den-down");
+    expect(screen.getByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
+    expect(screen.queryByText("載入中……")).toBeNull();
   });
   it("同版就不提示", () => {
     mount(map());

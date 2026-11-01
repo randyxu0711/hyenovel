@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Span, WorkMap } from "./api";
-import { useLang, useT } from "./i18n";
+import { errorMessage, useLang, useT } from "./i18n";
 import { useLinks } from "./links";
 import type { Mark } from "./Paper";
 import { useThemeState } from "./theme";
@@ -11,12 +11,13 @@ const inside = (s: Span | null, at: number | null): boolean =>
   !!s && s.start !== null && s.end !== null && at !== null && s.start <= at && at < s.end;
 
 /** 結構圖分頁:點陣張力(每欄一個節拍、10 顆點)+ 意象出現在哪幾段。 */
-export default function ChartTab({ map, marks }: { map: WorkMap | null; marks: Mark[] }) {
+export default function ChartTab({ map, marks, error = null }: { map: WorkMap | null; marks: Mark[]; error?: string | null }) {
   const t = useT();
   const lang = useLang();
   const chars = useCharacters();
   const { mode } = useThemeState();
   const { jumpToPaper } = useLinks();
+  if (!map && error) return <p className="side-lede" role="alert">{t(errorMessage(error))}</p>;
   if (!map) return <p className="side-lede">{t("loading")}</p>;
   if (map.analysis_version === null) return <p className="side-lede">{t("chart.none")}</p>;
 
