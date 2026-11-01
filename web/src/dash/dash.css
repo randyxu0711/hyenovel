@@ -254,3 +254,20 @@
 @media (prefers-reduced-motion:reduce){ .dash .dash-printhead i, .dash .side-matrix.is-print .dash-mcol{animation:none} }
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .side-who{width:6px; height:6px; border-radius:50%; margin-top:2px}
+
+/* ── 設定頁 ── */
+.dash .dash-settings{max-width:40em; margin:0 auto; padding:8px 24px 80px}
+.dash .dash-settings section{margin:0 0 32px}
+.dash .dash-settings h2{margin:0 0 12px; font-size:var(--dash-t-md); font-weight:600; color:var(--dash-ink)}
+.dash .dash-set-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .dash-set-row > span{min-width:6em}
+.dash .dash-set-opt{display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--dash-line); border-radius:6px; background:transparent; cursor:pointer; font:inherit; color:var(--dash-ink)}
+.dash .dash-set-opt[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); border-color:var(--dash-accent)}
+.dash .dash-set-chip{width:14px; height:14px; border-radius:50%; border:1px solid var(--dash-line)}
+.dash .dash-set-who{display:flex; align-items:center; gap:10px; margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-ink); cursor:pointer}
+.dash .dash-set-who small{color:var(--dash-ink-2); font-size:var(--dash-t-xs)}
+.dash .dash-set-archive li{list-style:none; margin:0 0 6px}
+.dash .dash-set-archive ul{margin:0; padding:0}
+.dash .dash-set-log{margin-top:12px}
+.dash .paper-sheet[data-size="s"]{--dash-t-paper:14.5px}
+.dash .paper-sheet[data-size="l"]{--dash-t-paper:19px}

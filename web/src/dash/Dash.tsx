@@ -6,6 +6,7 @@ import { LinksProvider } from "./links";
 import Home from "./Home";
 import Rail from "./Rail";
 import Reader from "./Reader";
+import Settings from "./Settings";
 import Side, { marksFrom } from "./Side";
 import { useSeen } from "./useSeen";
 import { useTalk } from "./useTalk";
@@ -106,7 +107,7 @@ function Shell({ chars }: { chars: Characters }) {
           works={works} onOpen={open} onSubmitNew={goHome}
           onQuote={q => setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; })} />}
         {view === "home" && <Home works={works} onSubmitted={submitted} />}
-        {view === "settings" && <h1 className="dash-h">{t("rail.settings")}</h1>}
+        {view === "settings" && <Settings />}
       </main>
       {notice && (
         <p className="dash-notice" role="status">

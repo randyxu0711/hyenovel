@@ -13,6 +13,13 @@ export const DRAW_MS = 900;
 export const markId = (start: number, end: number, character: string) => `${start}-${end}-${character}`;
 type Segment = { start: number; text: string };
 
+/** 設定頁選的稿字級(小/中/大 = s/m/l),存 localStorage;沒存或值不認得 = 中。 */
+export const PAPER_SIZE_KEY = "hyenovel.paperSize";
+export type PaperSize = "s" | "m" | "l";
+export function loadPaperSize(): PaperSize {
+  try { const v = localStorage.getItem(PAPER_SIZE_KEY); return v === "s" || v === "l" ? v : "m"; } catch { return "m"; }
+}
+
 const MARKS = ["pencil", "highlighter", "circle"];
 const FLASH_MS = 1400;
 const last = <T,>(xs: T[]): T | undefined => xs[xs.length - 1];
@@ -99,7 +106,7 @@ export default function Paper({ text, title, marks, drawing, onBring }: {
 
   const hoverKey = hover ? bare(hover) : null;
   return (
-    <article className="dash-paper paper-sheet">
+    <article className="dash-paper paper-sheet" data-size={loadPaperSize()}>
       <div ref={box}>
         {segs.map(seg => (
           // 段落 key 不跟著閃動變(重掛載會重播畫線、丟掉選取);要重播閃動只換裡面那層的 key

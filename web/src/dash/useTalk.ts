@@ -20,6 +20,9 @@ const writeDraft = (slug: string, text: string) => {
   try { if (text) localStorage.setItem(draftKey(slug), text); else localStorage.removeItem(draftKey(slug)); } catch { /* 存不了就算了 */ }
 };
 
+/** 設定頁選的預設陪讀者:進門畫面與新局用它。 */
+export const setCompanion = write;
+
 /** 記住的陪讀者(要在清單裡),沒有就預設。進門畫面用它決定誰接話。 */
 export function companionId(chars: { list: { id: string }[]; defaultId: string }): string {
   const saved = read();
