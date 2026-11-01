@@ -110,4 +110,28 @@ describe("鍵盤", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "作品" })).toBeNull();
   });
+  it("輸入法組字中:Enter / 方向鍵 / Esc 不執行、不移動、不關閉(isComposing 與 keyCode 229)", async () => {
+    mount("/w/d1");
+    await screen.findByLabelText("對話輸入");
+    ctrlK();
+    const dlg = await screen.findByRole("dialog", { name: "指令框" });
+    const input = within(dlg).getByRole("combobox");
+    const sel = () => within(dlg).getAllByRole("option").findIndex(o => o.getAttribute("aria-selected") === "true");
+    for (const init of [{ isComposing: true }, { keyCode: 229 }]) {
+      fireEvent.keyDown(input, { key: "ArrowDown", ...init });
+      expect(sel()).toBe(0);
+      fireEvent.keyDown(input, { key: "Enter", ...init });
+      expect(where()).toBe("/w/d1");
+      fireEvent.keyDown(input, { key: "Escape", ...init });
+      expect(screen.getByRole("dialog", { name: "指令框" })).toBeTruthy();
+    }
+  });
+  it("組字中的 / 不聚焦輸入框", async () => {
+    mount("/w/d1");
+    const box = await screen.findByLabelText("對話輸入");
+    fireEvent.keyDown(document.body, { key: "/", isComposing: true });
+    expect(document.activeElement).not.toBe(box);
+    fireEvent.keyDown(document.body, { key: "/", keyCode: 229 });
+    expect(document.activeElement).not.toBe(box);
+  });
 });

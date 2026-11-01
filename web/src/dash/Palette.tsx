@@ -33,6 +33,7 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
   const active = Math.min(at, items.length - 1);
   const run = (i: Item | undefined) => { if (!i) return; i.run(); onClose(); };
   const onKey = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;   // 輸入法組字中:這些鍵是給候選字的
     if (e.key === "Escape") { e.preventDefault(); onClose(); }
     else if (e.key === "ArrowDown" && items.length) { e.preventDefault(); setAt((active + 1) % items.length); }
     else if (e.key === "ArrowUp" && items.length) { e.preventDefault(); setAt((active - 1 + items.length) % items.length); }

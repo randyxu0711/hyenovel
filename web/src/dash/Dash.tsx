@@ -81,6 +81,7 @@ function Shell({ chars }: { chars: Characters }) {
   // 鍵盤:Ctrl/⌘+K 開指令框(輸入框裡也算);「/」聚焦輸入框(焦點已在輸入元素時不攔)
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
