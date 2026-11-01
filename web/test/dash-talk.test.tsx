@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
+import { DRAW_MS } from "../src/dash/Paper";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
@@ -384,7 +385,7 @@ describe("邊說邊畫線", () => {
     expect(markEls(container)[0].textContent).toBe("海很藍。第二句");
     expect(markEls(container)[0].classList.contains("is-drawing")).toBe(true);
   });
-  it("多段排隊:一次畫一筆,前一筆畫完才換下一筆", async () => {
+  it("多段排隊:一次畫一筆,前一筆畫完(停留 = 筆畫動畫長度,至少 600ms)才換下一筆", async () => {
     gated(["「海很藍」和「第二句」"], []);
     const { container } = mount();
     await screen.findByText("海很藍。第二句。");
@@ -398,9 +399,13 @@ describe("邊說邊畫線", () => {
     await flush(() => markEls(container).length === 2);
     const drawing = () => markEls(container).map(m => m.classList.contains("is-drawing"));
     expect(drawing()).toEqual([true, false]);
-    act(() => { vi.advanceTimersByTime(600); });
+    // 佇列每筆停留 = 筆畫動畫長度(同一個常數):畫到一半不換下一筆
+    expect(markEls(container)[0].style.getPropertyValue("--dash-draw")).toBe(`${DRAW_MS}ms`);
+    act(() => { vi.advanceTimersByTime(DRAW_MS - 1); });
+    expect(drawing()).toEqual([true, false]);
+    act(() => { vi.advanceTimersByTime(1); });
     expect(drawing()).toEqual([false, true]);
-    act(() => { vi.advanceTimersByTime(600); });
+    act(() => { vi.advanceTimersByTime(DRAW_MS); });
     expect(drawing()).toEqual([false, false]);
   });
   it("減動:痕跡直接到終態,沒有 is-drawing", async () => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, DashError, type SessionRow, type Turn, type TalkMessage } from "./api";
 import { cpLength } from "./cp";
 import { liveQuotes } from "./liveQuotes";
-import { markId, type Mark } from "./Paper";
+import { DRAW_MS, markId, type Mark } from "./Paper";
 import { marksFrom } from "./Side";
 import { useCharacters } from "./useCharacters";
 import { useSeen } from "./useSeen";
@@ -30,8 +30,6 @@ export function companionId(chars: { list: { id: string }[]; defaultId: string }
 export const MAX_CHAT = 8000;
 
 export type Pending = { text: string; quotes: string[] };
-/** 畫線佇列:一次畫一筆,每筆至少這麼久。 */
-export const DRAW_MS = 600;
 const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "unknown"));
 

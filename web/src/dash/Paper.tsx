@@ -8,6 +8,8 @@ import { useSelectionQuote } from "./useSelectionQuote";
 
 /** 讀者在稿上的一道痕跡:位移是原文的 code point 索引(den 給的)。id = markId(...),同一道痕跡跨重繪不變。 */
 export type Mark = { start: number; end: number; character: string; id: string };
+/** 一筆畫上去的時間:CSS 動畫長度(--dash-draw)與畫線佇列每筆的停留都用它,佇列才不會把筆畫截斷。 */
+export const DRAW_MS = 900;
 export const markId = (start: number, end: number, character: string) => `${start}-${end}-${character}`;
 type Segment = { start: number; text: string };
 
@@ -113,7 +115,7 @@ export default function Paper({ text, title, marks, drawing, onBring }: {
                 .filter(Boolean).join(" ");
               return (
                 <span key={`${m.id}@${pc.at}`} className={cls} data-mark={MARKS.includes(c.mark) ? c.mark : "pencil"} data-id={m.id}
-                  style={{ "--dash-mark": c.colors[mode].fill } as CSSProperties}
+                  style={{ "--dash-mark": c.colors[mode].fill, "--dash-draw": `${DRAW_MS}ms` } as CSSProperties}
                   role="button" tabIndex={0} onClick={() => jumpToTalk(quote)}
                   onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jumpToTalk(quote); } }}>
                   {pc.text}

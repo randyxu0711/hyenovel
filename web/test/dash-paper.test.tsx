@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import { useEffect } from "react";
-import Paper, { segments, type Mark } from "../src/dash/Paper";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import Paper, { DRAW_MS, segments, type Mark } from "../src/dash/Paper";
 import { cpLength, cpSlice } from "../src/dash/cp";
 import { setLang } from "../src/dash/i18n";
 import { LinksProvider, useLinks, type Links } from "../src/dash/links";
@@ -153,5 +155,13 @@ describe("Paper", () => {
     select(screen.getByText("字".repeat(450)).firstChild!, 450);
     expect((screen.getByRole("button", { name: "帶進對話" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("選短一點(400 字內)")).toBeTruthy();
+  });
+});
+
+describe("筆畫長度", () => {
+  it("CSS 的畫線動畫長度取自 DRAW_MS(--dash-draw),且至少 600ms", () => {
+    const css = readFileSync(join(__dirname, "../src/dash/dash.css"), "utf8");
+    expect(css).toMatch(/\.dash-mark\.is-drawing\{animation:dash-mark-draw var\(--dash-draw\)/);
+    expect(DRAW_MS).toBeGreaterThanOrEqual(600);
   });
 });
