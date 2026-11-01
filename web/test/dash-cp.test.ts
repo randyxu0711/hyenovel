@@ -6,6 +6,8 @@ describe("code point 工具", () => {
     expect(cpLength("𠀋石")).toBe(2);
     expect(cpSlice("𠀋石頭", 1, 3)).toBe("石頭");
     expect(cpSlice("𠀋石頭", 1)).toBe("石頭");
+    expect(cpSlice("𠀋石頭", -5, 2)).toBe("𠀋石");
+    expect(cpSlice("𠀋石頭", 2, 1)).toBe("");
   });
   it("cpToUnit 轉 UTF-16 位移;越界夾到字串長度", () => {
     expect(cpToUnit("𠀋石", 0)).toBe(0);

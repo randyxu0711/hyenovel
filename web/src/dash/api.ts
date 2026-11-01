@@ -45,12 +45,16 @@ export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title:
 export type Turn = {
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
 };
+/** den/discuss.py 的 message 事件資料。 */
+export type TalkMessage = {
+  role: "assistant"; text: string; session_id: string; mode: string; character: string; spans: Span[];
+};
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
 export type SessionDetail = { session: string; slug: string; title: string; turns: Turn[]; legacy: boolean; version: number };
 export type WorkMap = {
   version: number; analysis_version: number | null; notes_version: number | null;
-  beats: { id: string; label: string; intensity: number | null; span: Span }[];
+  beats: { id: string; label: string; intensity: number | null; span: Span | null }[];
   motifs: { id: string; label: string; spans: Span[] }[];
   notes: { read: string; one_line: string; points: { kind: string; title: string; body: string; question: string | null; spans: Span[] }[] } | null;
 };

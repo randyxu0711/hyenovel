@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, DashError, type Turn } from "./api";
+import { api, DashError, type Turn, type TalkMessage } from "./api";
 import { useCharacters } from "./useCharacters";
 
 const WHO_KEY = "hyenovel.companion";
@@ -55,11 +55,11 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") { acc += ev.data.text; setStreaming(acc); }
         else if (ev.event === "message") {
-          const d = ev.data, ts = Date.now() / 1000;
+          const d: TalkMessage = ev.data, ts = Date.now() / 1000;
           setSession(d.session_id);
           setTurns(t => [...t,
             { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [] },
-            { role: "assistant", text: d.text, ts, mode: d.mode ?? null, character: d.character ?? null, quotes: [], spans: d.spans ?? [] }]);
+            { role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: d.spans }]);
           ok = true;
         } else if (ev.event === "error") {
           fail(new DashError(0, ev.data?.code ?? "unknown", {}, ev.data?.message ?? ""));
