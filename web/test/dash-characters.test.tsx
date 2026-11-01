@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { setLang } from "../src/dash/i18n";
 import { makeCharacters } from "../src/dash/useCharacters";
 import Avatar from "../src/dash/Avatar";
@@ -26,9 +26,11 @@ describe("Avatar", () => {
     expect(svg.getAttribute("width")).toBe("40");
     expect(svg.style.getPropertyValue("--c-fill")).toMatch(/^#/);
   });
-  it("未知 avatar.kind 不 crash,顯示名字首字", () => {
+  it("未知 avatar.kind 不 crash,畫通用圖示的徽章", () => {
     setLang("zh-Hant");
-    render(<Avatar character={ch("fox", "slow", "狐狸", "Fox", "zzz")} />);
-    expect(screen.getByText("狐")).toBeTruthy();
+    const { container } = render(<Avatar character={ch("fox", "slow", "狐狸", "Fox", "zzz")} />);
+    const svg = container.querySelector("svg")!;
+    expect(svg.getAttribute("data-kind")).toBe("zzz");
+    expect(svg.querySelector("path, circle")).toBeTruthy();
   });
 });

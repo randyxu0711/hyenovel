@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { applyTheme, pickTheme, nextPref, cycleMode, setMode, toggleDayNight, initThemes, selectTheme, getThemeState } from "../src/dash/theme";
+import { applyTheme, pickTheme, setMode, toggleDayNight, initThemes, selectTheme, getThemeState } from "../src/dash/theme";
 import { olive, grass } from "./dash-fixtures";
 
 beforeEach(() => { vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null); localStorage.clear(); document.documentElement.removeAttribute("style"); });
@@ -21,18 +21,6 @@ describe("theme", () => {
     expect(pickTheme([olive, grass], "olive").id).toBe("olive");
     localStorage.setItem("hyenovel.theme", "grass");
     expect(pickTheme([olive, grass], "olive").id).toBe("grass");
-  });
-  it("主題循環 system→light→dark→system 並記住", () => {
-    expect(nextPref("system")).toBe("light");
-    expect(nextPref("light")).toBe("dark");
-    expect(nextPref("dark")).toBe("system");
-    initThemes([olive, grass], "olive");
-    cycleMode();
-    expect(getThemeState().pref).toBe("light");
-    expect(localStorage.getItem("hyenovel.mode")).toBe("light");
-    cycleMode();
-    expect(getThemeState().mode).toBe("dark");
-    expect(v("desk")).toBe(olive.dark.desk);
   });
   it("selectTheme 立刻套用並記住", () => {
     initThemes([olive, grass], "olive");

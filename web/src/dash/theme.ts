@@ -7,12 +7,9 @@ export type Mode = "light" | "dark";
 
 const THEME_KEY = "hyenovel.theme";
 const MODE_KEY = "hyenovel.mode";
-const NEXT: Record<ModePref, ModePref> = { system: "light", light: "dark", dark: "system" };
 
 const read = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 存不了也照用 */ } };
-
-export const nextPref = (p: ModePref): ModePref => NEXT[p];
 
 export function loadModePref(): ModePref {
   const v = read(MODE_KEY);
@@ -80,7 +77,6 @@ export function selectTheme(id: string): void {
   write(THEME_KEY, id);
   commit({ theme });
 }
-export function cycleMode(): void { setMode(nextPref(state.pref)); }
 export function setMode(pref: ModePref): void {
   write(MODE_KEY, pref);
   commit({ pref });

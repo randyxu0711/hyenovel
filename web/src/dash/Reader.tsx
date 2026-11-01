@@ -9,8 +9,10 @@ const ANALYZING = ["running", "notes-running"];
 const STOPPED = ["stopped", "notes-stopped"];
 
 /** 打字紙:滾筒在上、稿在下;選一段 → 浮動鈕帶進對話。 */
-export default function Reader({ slug, companion, onQuote, onFinished, reload = 0 }: {
+export default function Reader({ slug, version, companion, onQuote, onFinished, reload = 0 }: {
   slug: string; companion: string; onQuote: (q: string) => void;
+  /** 指定版本(?v=);沒給就是最新。 */
+  version?: number;
   /** 外面遞增 = 這篇要重抓(例如重交了同一篇)。 */
   reload?: number;
   /** 分析跑完(重抓過這篇之後)通知,好讓左欄重抓。 */
@@ -36,10 +38,10 @@ export default function Reader({ slug, companion, onQuote, onFinished, reload = 
   useEffect(() => {
     let live = true;
     if (rev === 0) { setWork(null); setErr(null); }
-    api.work(slug).then(w => { if (live) setWork(w); },
+    api.work(slug, version).then(w => { if (live) setWork(w); },
       e => { if (live) setErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
-  }, [slug, rev, reload]);
+  }, [slug, version, rev, reload]);
 
   if (err) return <div className="reader-note" role="alert">{t(errorMessage(err))}</div>;
   if (!work) return <div className="reader-note">{t("loading")}</div>;

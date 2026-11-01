@@ -1,90 +1,80 @@
 import { useEffect, useState } from "react";
-import { api, DashError } from "./api";
-import Avatar from "./Avatar";
-import { errorMessage, localized, setLang, useLang, useT, type MsgKey } from "./i18n";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { api, DashError, type Work } from "./api";
+import { errorMessage, localized, useLang, useT } from "./i18n";
 import Feed from "./Feed";
 import Rail from "./Rail";
 import Reader from "./Reader";
-import Seat from "./Seat";
 import Talk from "./Talk";
 import { useTalk } from "./useTalk";
-import { applySignature, cycleMode, initThemes, selectTheme, useThemeState } from "./theme";
+import { applySignature, initThemes, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
 import "./dash.css";
 
-function Keys() {
-  const t = useT();
-  const lang = useLang();
-  const { themes, theme, pref } = useThemeState();
-  return (
-    <div className="dash-keys">
-      <label className="dash-key">
-        <span>{t("keys.theme")}</span>
-        <select value={theme?.id ?? ""} onChange={e => selectTheme(e.target.value)}>
-          {themes.map(th => <option key={th.id} value={th.id}>{localized(th.name, lang)}</option>)}
-        </select>
-      </label>
-      <button type="button" className="dash-key" onClick={cycleMode}>
-        <span>{t("keys.mode")}</span> {t(`mode.${pref}` as MsgKey)}
-      </button>
-      <button type="button" className="dash-key" onClick={() => setLang(lang === "en" ? "zh-Hant" : "en")}>
-        <span>{t("keys.lang")}</span> {lang === "en" ? "中文" : "EN"}
-      </button>
-    </div>
-  );
-}
-
-type Pane = "works" | "desk" | "talk";
-const PANES: [Pane, MsgKey][] = [["works", "rail.works"], ["desk", "nav.paper"], ["talk", "rail.sessions"]];
+type View = "home" | "work" | "settings";
 
 function Shell({ chars }: { chars: Characters }) {
   const t = useT();
   const { mode } = useThemeState();
   const lang = useLang();
-  const [slug, setSlug] = useState<string | null>(null);
-  const [session, setSession] = useState<string | null>(null);
-  const [quotes, setQuotes] = useState<string[]>([]);
-  const [open, setOpen] = useState(true);
+  const nav = useNavigate();
+  const { slug: routeSlug } = useParams();
+  const { pathname } = useLocation();
+  const [search] = useSearchParams();
+  const view: View = pathname === "/settings" ? "settings" : routeSlug ? "work" : "home";
+  const slug = view === "work" ? routeSlug! : null;
+  const v = Number(search.get("v"));
+  const version = Number.isInteger(v) && v > 0 ? v : undefined;
+
+  // 帶進對話的引文與提示綁在它們所屬的作品上:換作品(含瀏覽器上一頁)自然看不到舊的。
+  const [carried, setCarried] = useState<{ slug: string; list: string[] }>({ slug: "", list: [] });
+  const [note, setNote] = useState<{ slug: string; text: string } | null>(null);
+  const quotes = carried.slug === slug ? carried.list : [];
+  const notice = note && note.slug === slug ? note.text : null;
   const [feeding, setFeeding] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [reload, setReload] = useState(0);   // 重交已開著的那篇:Reader 要重抓
-  const [notice, setNotice] = useState<string | null>(null);
+  const [works, setWorks] = useState<Work[]>([]);
   const bump = () => setRefresh(n => n + 1);
-  const talk = useTalk(slug, session);
+  useEffect(() => {
+    let live = true;
+    api.works().then(ws => { if (live) setWorks(ws); }, () => { /* 清單載入失敗:左欄空著,閱讀區自己會顯示錯誤 */ });
+    return () => { live = false; };
+  }, [refresh]);
+
+  const talk = useTalk(slug, null);
   const me = chars.byId(talk.whoId);
   useEffect(() => applySignature(me, mode), [me, mode]);
-  const [pane, setPane] = useState<Pane>("works");
-  const pick = (s: string, sess: string | null = null) => { setSlug(s); setSession(sess); setQuotes([]); setNotice(null); setPane("desk"); };
+  const open = (s: string) => { setNote(null); nav(`/w/${encodeURIComponent(s)}`); };
+
   return (
-    <div className="dash" data-pane={pane} data-talk={open ? "open" : "closed"}>
-      <div className="dash-tabs" role="tablist">
-        {PANES.map(([id, key]) => (
-          <button key={id} type="button" role="tab" aria-selected={pane === id} onClick={() => setPane(id)}>{t(key)}</button>
-        ))}
-      </div>
-      <nav className="dash-rail" aria-label={t("rail.works")}>
-        <div className="dash-brand"><Avatar character={me} size={30} /><b>{t("brand")}</b></div>
-        <button type="button" className="dash-feed" onClick={() => setFeeding(true)}>{t("rail.feed")}</button>
-        <Rail refresh={refresh} current={slug} onLoaded={ws => setSlug(cur => cur ?? ws[0]?.slug ?? null)} onPick={s => pick(s)} onPickSession={pick} />
-        <Keys />
-      </nav>
+    <div className="dash" data-view={view} data-mode={mode}>
+      <Rail collapsed={view !== "home"} works={works} current={slug} onOpen={open}
+        onNew={() => nav("/")} onSubmitNew={() => setFeeding(true)} />
       <main className="dash-desk">
-        {slug ? <Reader slug={slug} reload={reload} onFinished={bump} companion={localized(me.name, lang)} onQuote={q => { setQuotes(qs => qs.includes(q) ? qs : [...qs, q]); setOpen(true); setPane("talk"); }} /> : t("desk.empty")}
+        {view === "work" && <Reader slug={slug!} version={version} reload={reload} onFinished={bump} companion={localized(me.name, lang)}
+          onQuote={q => setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; })} />}
+        {view === "home" && (works.length === 0 ? t("rail.firstDraft") : t("desk.empty"))}
+        {view === "settings" && <h1 className="dash-h">{t("rail.settings")}</h1>}
       </main>
       {notice && (
         <p className="dash-notice" role="status">
           {notice}
-          <button type="button" aria-label={t("notice.dismiss")} onClick={() => setNotice(null)}>×</button>
+          <button type="button" aria-label={t("notice.dismiss")} onClick={() => setNote(null)}>×</button>
         </p>
       )}
-      <aside className="dash-talk">
-        <Talk talk={talk} hasWork={slug !== null} quotes={quotes}
-          onDropQuote={i => setQuotes(qs => qs.filter((_, j) => j !== i))}
-          onSent={() => { setQuotes([]); setNotice(null); bump(); }} onCollapse={() => setOpen(false)} />
-      </aside>
+      {view === "work" && (
+        <aside className="dash-talk">
+          <Talk talk={talk} hasWork quotes={quotes}
+            onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
+            onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
+        </aside>
+      )}
       {feeding && <Feed onClose={() => setFeeding(false)}
-        onSubmitted={(s, existing) => { setFeeding(false); pick(s); bump(); setReload(n => n + 1); setNotice(existing ? t("feed.already") : null); }} />}
-      {!open && <Seat character={me} onOpen={() => setOpen(true)} />}
+        onSubmitted={(s, existing) => {
+          setFeeding(false); nav(`/w/${encodeURIComponent(s)}`); bump(); setReload(n => n + 1);
+          setNote(existing ? { slug: s, text: t("feed.already") } : null);
+        }} />}
     </div>
   );
 }

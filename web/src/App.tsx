@@ -15,6 +15,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dash />} />
           <Route path="/w/:slug" element={<Dash />} />
+          <Route path="/settings" element={<Dash />} />
           <Route path="/journey" element={<Journey />} />
           <Route path="/story/:slug" element={<Journey />} />
           <Route path="/lab" element={<Lab />} />

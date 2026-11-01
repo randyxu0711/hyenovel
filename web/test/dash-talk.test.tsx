@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
@@ -31,7 +32,7 @@ function mount(chars = [hyena, buffalo, deer]) {
     return json({ sessions: [] });
   });
   vi.stubGlobal("fetch", f);
-  return render(<Dash />);
+  return render(<MemoryRouter initialEntries={["/w/d1"]}><Routes><Route path="/w/:slug" element={<Dash />} /></Routes></MemoryRouter>);
 }
 const reply = (text: string, character = "hyena", sid = "s1") => () => sse(
   ["token", { text: text.slice(0, 1) }], ["token", { text: text.slice(1) }],
@@ -45,35 +46,20 @@ beforeEach(() => { setLang("zh-Hant"); localStorage.clear(); talkBodies = []; ta
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("選人", () => {
-  it("第一次開會先選人、選過不再出現", async () => {
+  it("在名冊上選過的角色會被記住", async () => {
     const { unmount } = mount();
-    expect(await screen.findByText("選誰陪你讀")).toBeTruthy();
-    expect(screen.getByText("水牛")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /水牛/ }));
-    expect(await screen.findByLabelText("對話輸入")).toBeTruthy();
-    expect(screen.queryByText("選誰陪你讀")).toBeNull();
+    const pick = async () => screen.findByRole("button", { name: "水牛" });
+    fireEvent.click(await pick());
+    expect((await pick()).getAttribute("aria-pressed")).toBe("true");
     unmount();
     mount();
-    expect(await screen.findByLabelText("對話輸入")).toBeTruthy();
-    expect(screen.queryByText("選誰陪你讀")).toBeNull();
+    expect((await pick()).getAttribute("aria-pressed")).toBe("true");
   });
-  it("沒選過人時打開既有的局:直接看逐字,接著由最後說話的那位陪讀", async () => {
-    sessions.old = { session: "old", slug: "d1", title: "海", turns: [
-      { role: "user", text: "q1", ts: 1, mode: null, character: null, quotes: [] },
-      { role: "assistant", text: "a1", ts: 2, mode: "imaginative", character: "deer", quotes: [] },
-    ] };
-    mount();
-    fireEvent.click(await screen.findByRole("button", { name: /q1/ }));
-    await within(await screen.findByRole("log")).findByText("a1");
-    expect(screen.queryByText("選誰陪你讀")).toBeNull();
-    say("嗨");
-    await waitFor(() => expect(talkBodies[0].character).toBe("deer"));
-  });
-  it("記住的角色不在清單時退回預設(視為沒選過)", async () => {
+  // TODO(Task 12): 作品頁要能打開既有的局(舊的左欄「對話」清單已移除)
+  it.todo("沒選過人時打開既有的局:直接看逐字,接著由最後說話的那位陪讀");
+  it("記住的角色不在清單時退回預設", async () => {
     localStorage.setItem("hyenovel.companion", "ghost");
     mount();
-    expect(await screen.findByText("選誰陪你讀")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /鬣狗/ }));
     await screen.findByLabelText("對話輸入");
     say("嗨");
     await waitFor(() => expect(talkBodies[0].character).toBe("hyena"));
@@ -129,21 +115,8 @@ describe("對話", () => {
     expect(within(screen.getByRole("log")).getByText("水牛")).toBeTruthy();
     expect(vi.getTimerCount()).toBe(0);
   });
-  it("說話者換人時有分隔線;舊局沒有 character 時用同 mode 的角色標示", async () => {
-    sessions.old = { session: "old", slug: "d1", title: "海", turns: [
-      { role: "user", text: "q1", ts: 1, mode: null, character: null, quotes: [] },
-      { role: "assistant", text: "a1", ts: 2, mode: "slow", character: null, quotes: [] },
-      { role: "user", text: "q2", ts: 3, mode: null, character: null, quotes: [] },
-      { role: "assistant", text: "a2", ts: 4, mode: "imaginative", character: "deer", quotes: [] },
-    ] };
-    mount();
-    fireEvent.click(await screen.findByRole("button", { name: /q1/ }));
-    const log = await screen.findByRole("log");
-    await within(log).findByText("a2");
-    expect(within(log).getAllByText("鬣狗")).toHaveLength(1);   // a1:舊局無 character,同 mode(slow)→ 鬣狗
-    expect(within(log).getAllByText("鹿")).toHaveLength(1);
-    expect(within(log).getAllByRole("separator").map(e => e.textContent)).toEqual(["換鹿來讀"]);
-  });
+  // TODO(Task 12): 同上,需要作品頁能打開既有的局
+  it.todo("說話者換人時有分隔線;舊局沒有 character 時用同 mode 的角色標示");
   it("409 busy 顯示訊息且輸入框保留原字", async () => {
     talkReply = () => json({ detail: "busy", code: "busy" }, 409);
     mount();
@@ -174,11 +147,11 @@ describe("對話錯誤與上限", () => {
     mount();
     expect((await screen.findByLabelText("對話輸入") as HTMLTextAreaElement).maxLength).toBe(8000);
   });
-  it("送出一輪後左欄對話清單重抓(新局才會出現)", async () => {
+  it("送出一輪後作品清單重抓(updated_at 才會更新)", async () => {
     mount();
     const f = fetch as unknown as ReturnType<typeof vi.fn>;
     await screen.findByText("第一段。");
-    const recent = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/sessions?")).length;
+    const recent = () => f.mock.calls.filter(c => c[0] === "/api/works").length;
     const before = recent();
     say("嗨");
     await waitFor(() => expect(recent()).toBeGreaterThan(before));

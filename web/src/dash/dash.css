@@ -8,10 +8,9 @@
 .dash{
   --dash-t-xs:12px; --dash-t-sm:13.5px; --dash-t-md:15px; --dash-t-lg:17.5px; --dash-t-xl:22px;
   --dash-dot-font:"Doto", ui-monospace, monospace;
-  --dash-muzzle:var(--dash-paper);
   --dash-sh-raise:0 1px 0 var(--dash-sheen) inset, 0 1px 2px color-mix(in srgb, var(--dash-ink) 14%, transparent);
   --dash-sh-float:0 1px 0 var(--dash-sheen) inset, 0 8px 24px color-mix(in srgb, var(--dash-ink) 16%, transparent);
-  position:fixed; inset:0; display:grid; grid-template-columns:260px 1fr 340px;
+  position:fixed; inset:0; display:grid; grid-template-columns:260px 1fr;
   background-color:var(--dash-desk); background-image:var(--dash-spots,none); background-size:480px 480px;
   color:var(--dash-ink);
   font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
@@ -40,40 +39,35 @@
 @media (prefers-reduced-motion:reduce){ .dash-key{transition:none} }
 .dash button, .dash select{font:inherit; color:inherit}
 .dash-note{display:grid; place-items:center}
-.dash-rail{display:flex; flex-direction:column; gap:16px; padding:20px 16px; background:var(--dash-desk-2)}
-.dash-brand{display:flex; align-items:center; gap:10px; font-size:var(--dash-t-lg)}
-.dash-feed{
-  padding:10px 12px; border:0; border-radius:8px; cursor:pointer;
-  background:var(--dash-accent); color:var(--dash-accent-ink); font-size:var(--dash-t-sm);
+.dash-rail{display:flex; flex-direction:column; gap:12px; padding:20px 16px; background:var(--dash-desk-2); overflow:hidden; min-height:0}
+.dash-rail > *{flex:none}
+.dash-rail[data-collapsed="true"]{align-items:center; padding:16px 8px}
+.dash .rail-brand{font-size:var(--dash-t-lg)}
+.dash-rail[data-collapsed="true"] .rail-brand{display:none}
+.dash .rail-btn{
+  display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; cursor:pointer;
+  border:1px solid var(--dash-line); border-radius:8px; background:transparent; color:var(--dash-ink); font-size:var(--dash-t-sm);
 }
-.dash-keys{margin-top:auto; display:flex; flex-direction:column; gap:6px}
-.dash-key span{color:var(--dash-ink-2)}
-.dash-key select{margin-left:auto; background:var(--dash-desk-2); border:0}
+.dash-rail[data-collapsed="true"] .rail-btn{width:40px; height:40px; padding:0}
+.dash-rail:not([data-collapsed="true"]) .rail-btn{justify-content:flex-start}
+.dash .rail-foot{margin-top:auto; display:flex; flex-direction:column; gap:8px}
 .dash-desk{padding:0; color:var(--dash-ink-2); overflow:auto; min-width:0}
 .dash-desk:not(:has(.reader)){padding:32px}
-.dash-tabs{display:none}
-/* 左欄本身不捲:品牌、交稿、設定固定,只有清單捲動(不然清單溢出會疊到設定上)。 */
-.dash-rail{overflow:hidden; min-height:0}
-.dash-rail > *{flex:none}
-.dash .rail-lists{display:flex; flex-direction:column; gap:14px; min-height:0; flex:1 1 auto; overflow:auto}
-.dash .rail-h{font-size:var(--dash-t-xs); font-weight:600; color:var(--dash-ink-2); margin:0 0 4px}
-.dash .rail-lists ul{list-style:none; margin:0; padding:0}
-.dash .rail-work, .dash .rail-session, .dash .rail-convo{
-  display:flex; width:100%; text-align:left; gap:8px; padding:6px 8px; border:0; border-radius:6px;
+/* 左欄本身不捲:品牌與按鈕固定,只有作品清單捲動(不然清單溢出會疊到設定上)。 */
+.dash .rail-lists{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; min-height:0; flex:1 1 auto; overflow:auto}
+.dash .rail-work, .dash .works-item{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; text-align:left; padding:6px 8px; border:0; border-radius:6px;
   background:transparent; cursor:pointer; color:var(--dash-ink);
 }
-.dash .rail-work{flex-direction:column; gap:0}
-.dash .rail-work[aria-current="true"]{background:var(--dash-paper)}
+.dash .rail-work[aria-current="true"], .dash .works-item[aria-current="true"]{background:var(--dash-paper)}
 .dash .rail-title{font-family:var(--serif); font-size:var(--dash-t-md)}
-.dash .rail-meta{font-size:var(--dash-t-xs); color:var(--dash-ink-2); margin:0}
-.dash .rail-sessions{padding-left:12px !important}
-.dash .rail-session{font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .rail-convo{align-items:flex-start; font-size:var(--dash-t-sm)}
-.dash .rail-convo-text{display:flex; flex-direction:column; min-width:0}
-.dash .rail-dots i{display:inline-block; width:5px; height:5px; margin-right:3px; border-radius:50%; background:var(--dash-sig-t); animation:rail-hop 1.2s ease-in-out infinite}
-.dash .rail-dots i:nth-child(2){animation-delay:.15s}
-.dash .rail-dots i:nth-child(3){animation-delay:.3s}
-@keyframes rail-hop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+.dash .rail-dot{flex:none; width:7px; height:7px; border-radius:50%}
+.dash .rail-dot[data-state="fresh"]{background:var(--dash-accent)}
+.dash .rail-dot[data-state="busy"]{border:1.5px solid var(--dash-ink-2)}
+.dash .works-menu{position:fixed; z-index:8; min-width:220px; max-height:70vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px}
+.dash .works-menu ul{list-style:none; margin:0; padding:0}
+.dash .works-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .works-new{padding:8px 10px; text-align:left; cursor:pointer; border:0; border-top:1px solid var(--dash-line); background:transparent; color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .reader{position:relative; min-height:100%}
 .dash .reader-note{padding:32px; color:var(--dash-ink-2)}
 .dash .platen{
@@ -102,47 +96,21 @@
 }
 .dash .reader-bring:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2); border:1px solid var(--dash-line)}
 @media (max-width:979px){
-  .dash{grid-template-columns:1fr; grid-template-rows:auto 1fr}
-  .dash-tabs{display:flex; gap:4px; padding:6px; background:var(--dash-desk-2)}
-  .dash-tabs button{flex:1; padding:6px; border:0; border-radius:6px; background:transparent; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-  .dash-tabs button[aria-selected="true"]{background:var(--dash-paper); color:var(--dash-ink)}
-  .dash > :not(.dash-tabs):not(.dash-notice){display:none}
-  .dash[data-pane="works"] > .dash-rail, .dash[data-pane="desk"] > .dash-desk, .dash[data-pane="talk"] > .dash-talk{display:flex; flex-direction:column}
-  .dash[data-pane="desk"] > .dash-desk{display:block}
   .dash .sheet{padding:36px 24px 48px}
 }
-@media (prefers-reduced-motion:reduce){ .dash .rail-dots i{animation:none} }
 .dash-talk{padding:20px 16px; background:var(--dash-desk-2); color:var(--dash-ink-2)}
-.dash .avatar-fallback{
-  display:inline-grid; place-items:center; border-radius:50%;
-  border:2px solid var(--c-text); color:var(--c-text); background:var(--dash-desk-2);
-}
 
 /* ── 陪讀者:選人、對話、紙邊的座位 ── */
 .dash-talk{padding:0; min-height:0; min-width:0; overflow:hidden}
-.dash[data-talk="closed"]{grid-template-columns:260px 1fr 0}
-.dash[data-talk="closed"] > .dash-talk{display:none}
-.dash-seat{
-  position:fixed; right:16px; top:50%; transform:translateY(-50%); z-index:5;
-  display:grid; place-items:center; width:56px; height:56px; padding:0; cursor:pointer;
-  border:1px solid var(--dash-line); border-radius:50%; background:var(--dash-desk-2);
-}
+.dash[data-view="work"]{grid-template-columns:72px 1fr 340px}
+.dash[data-view="settings"]{grid-template-columns:72px 1fr}
+.dash-h{margin:0; font-size:var(--dash-t-xl); font-weight:600; color:var(--dash-ink)}
 .dash button:focus-visible, .dash textarea:focus-visible, .dash select:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
-.dash .pick{padding:24px 16px; display:flex; flex-direction:column; gap:14px; color:var(--dash-ink)}
-.dash .pick-h{margin:0; font-size:var(--dash-t-lg); font-weight:600}
-.dash .pick-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
-.dash .pick-card{
-  display:flex; width:100%; align-items:center; gap:12px; padding:12px; text-align:left; cursor:pointer;
-  border:1px solid var(--dash-line); border-radius:10px; background:var(--dash-paper);
-}
-.dash .pick-text{display:flex; flex-direction:column; gap:2px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .pick-text b{font-size:var(--dash-t-md)}
 .dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ink)}
 .dash .chat-head{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--dash-line)}
 .dash .chat-roster{display:flex; gap:6px}
 .dash .chat-pick{display:grid; place-items:center; padding:3px; cursor:pointer; border:2px solid transparent; border-radius:50%; background:transparent}
 .dash .chat-pick[aria-pressed="true"]{border-color:var(--dash-sig-t)}
-.dash .chat-collapse{border:0; background:transparent; cursor:pointer; font-size:var(--dash-t-lg); padding:2px 8px; color:var(--dash-ink-2)}
 .dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px}
 .dash .chat-empty, .dash .chat-wait{margin:0; color:var(--dash-ink-2); font-size:var(--dash-t-sm)}
 .dash .chat-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
@@ -166,7 +134,6 @@
   background:var(--dash-accent); color:var(--dash-accent-ink); font-size:var(--dash-t-sm);
 }
 .dash .chat-send:disabled, .dash .chat-form textarea:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2)}
-@media (max-width:979px){ .dash .chat-collapse{display:none} .dash-seat{display:none} .dash[data-talk="closed"]{grid-template-columns:1fr} .dash[data-talk="closed"][data-pane="talk"] > .dash-talk{display:flex} }
 
 /* ── 交稿、分析進度、冷讀者的筆記 ── */
 .dash .platen-mark{display:inline-block; width:34px; height:3px; margin:0 8px 3px 12px; border-radius:2px; background:var(--dash-ink-2); vertical-align:middle; animation:platen-slide 3.2s ease-in-out infinite alternate}

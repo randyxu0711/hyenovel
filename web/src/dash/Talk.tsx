@@ -2,15 +2,14 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { Turn } from "./api";
 import Avatar from "./Avatar";
 import { errorMessage, localized, useLang, useT } from "./i18n";
-import PickCompanion from "./PickCompanion";
 import { useThemeState } from "./theme";
 import { useCharacters } from "./useCharacters";
 import { MAX_CHAT, type Talk as TalkState } from "./useTalk";
 
-/** 對話欄:選人 → 逐字稿(標說話者、換人有分隔)→ 輸入。 */
-export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCollapse }: {
+/** 對話欄:逐字稿(標說話者、換人有分隔)→ 輸入。 */
+export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent }: {
   talk: TalkState; hasWork: boolean; quotes: string[];
-  onDropQuote: (i: number) => void; onSent: () => void; onCollapse: () => void;
+  onDropQuote: (i: number) => void; onSent: () => void;
 }) {
   const t = useT();
   const lang = useLang();
@@ -25,8 +24,6 @@ export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCol
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [turns, streaming, pending]);
-
-  if (!talk.chosen) return <PickCompanion onPick={talk.setWho} />;
 
   const submit = async () => {
     const text = draft.trim();
@@ -74,7 +71,6 @@ export default function Talk({ talk, hasWork, quotes, onDropQuote, onSent, onCol
             </button>
           ))}
         </div>
-        <button type="button" className="chat-collapse" aria-label={t("talk.collapse")} onClick={onCollapse}>›</button>
       </header>
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
         {!hasWork || (!turns.length && !pending) ? <p className="chat-empty">{hasWork ? t("talk.start", { name: nameOf(whoId) }) : t("talk.empty")}</p> : null}

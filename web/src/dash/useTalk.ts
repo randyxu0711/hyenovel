@@ -25,12 +25,11 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<DashError | null>(null);
   const [draft, setDraft] = useState("");
-  const epoch = useRef(0);
+  const epoch = useRef(0);   // 換作品/換局後,舊串流的尾巴不准再寫進來
   // 沒選過人時,既有的局由最後說話的那位接著陪讀(舊局只有 mode 也照樣對到角色)。
   const last = [...turns].reverse().find(t => t.role === "assistant");
   const inherited = last ? chars.byId(last.character, last.mode).id : null;
   const whoId = picked ?? inherited ?? chars.defaultId;
-  const chosen = picked !== null || inherited !== null;   // 換作品/換局後,舊串流的尾巴不准再寫進來
 
   useEffect(() => {
     const mine = ++epoch.current;
@@ -72,7 +71,7 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
     return ok;
   }, [slug, session, whoId, streaming]);
 
-  return { turns, streaming, pending, send, whoId, chosen, setWho, session, error, draft, setDraft };
+  return { turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft };
 }
 
 export type Talk = ReturnType<typeof useTalk>;
