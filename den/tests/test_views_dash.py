@@ -194,3 +194,104 @@ def test_session_turns_unknown_version_and_legacy(c):
     assert views.session_turns(c, "s")["legacy"] is True
     with pytest.raises(views.UnknownVersion):
         views.session_turns(c, "s", v=9)
+
+
+TEXT = "他進了門。窗外下雨。她沒說話。雨停了。"
+
+
+def _ana(c, sid, vid, job=None, nodes=None, edges=None, now=2.0):
+    nodes = nodes if nodes is not None else [
+        {"id": "b2", "type": "beat", "label": "雨", "intensity": 0.7, "evidence": [{"quote": "窗外下雨", "note": ""}]},
+        {"id": "b1", "type": "beat", "label": "門", "intensity": 0.3, "evidence": [{"quote": "他進了門", "note": ""}]},
+        {"id": "b3", "type": "beat", "label": "靜", "intensity": 0.5, "evidence": [{"quote": "她沒說話", "note": ""}]},
+        {"id": "m1", "type": "motif", "label": "雨", "intensity": None,
+         "evidence": [{"quote": "窗外下雨", "note": ""}, {"quote": "雨停了", "note": ""}]},
+        {"id": "t1", "type": "theme", "label": "主題", "evidence": []}]
+    edges = edges if edges is not None else [
+        {"type": "precedes", "from": "b1", "to": "b2", "note": ""},
+        {"type": "precedes", "from": "b2", "to": "b3", "note": ""}]
+    aid, _ = repo.add_artifact(c, sid, vid, "analysis", 1, {"title": "t", "nodes": nodes, "edges": edges},
+                               {"job": job} if job else {}, now)
+    repo.set_current(c, sid, "analysis", aid)
+
+
+def _notes(c, sid, vid, job=None):
+    body = {"read": "讀", "one_line": "一句", "points": [
+        {"kind": "strength", "title": "標", "quotes": ["雨停了", "不存在的句子"], "refs": ["m1"],
+         "body": "內文", "question": "問?"}]}
+    nid, _ = repo.add_artifact(c, sid, vid, "notes", 1, body, {"job": job} if job else {}, 3.0)
+    repo.set_current(c, sid, "notes", nid)
+
+
+def test_map_full(c):
+    sid, vid = _story(c, text=TEXT)
+    _ana(c, sid, vid)
+    _notes(c, sid, vid)
+    m = views.work_map(c, "x1")
+    assert (m["version"], m["analysis_version"], m["notes_version"]) == (1, 1, 1)
+    assert [b["id"] for b in m["beats"]] == ["b1", "b2", "b3"]          # 依 precedes,不是陣列順序
+    assert m["beats"][0] == {"id": "b1", "label": "門", "intensity": 0.3,
+                             "span": {"quote": "他進了門", "start": 0, "end": 4}}
+    [mo] = m["motifs"]
+    assert mo["id"] == "m1" and [(s["start"], s["end"]) for s in mo["spans"]] == [(5, 9), (15, 18)]
+    n = m["notes"]
+    assert (n["read"], n["one_line"]) == ("讀", "一句")
+    [p] = n["points"]
+    assert (p["kind"], p["title"], p["body"], p["question"]) == ("strength", "標", "內文", "問?")
+    assert p["spans"] == [{"quote": "雨停了", "start": 15, "end": 18},
+                          {"quote": "不存在的句子", "start": None, "end": None}]
+
+
+def test_map_beats_without_edges_sort_by_span_unlocated_last(c):
+    sid, vid = _story(c, text=TEXT)
+    nodes = [
+        {"id": "b1", "type": "beat", "label": "x", "intensity": 0.1, "evidence": [{"quote": "不存在", "note": ""}]},
+        {"id": "b2", "type": "beat", "label": "y", "intensity": 0.1, "evidence": [{"quote": "雨停了", "note": ""}]},
+        {"id": "b3", "type": "beat", "label": "z", "intensity": 0.1, "evidence": [{"quote": "他進了門", "note": ""}]},
+        {"id": "b4", "type": "beat", "label": "w", "intensity": 0.1, "evidence": None}]
+    _ana(c, sid, vid, nodes=nodes, edges=[])
+    m = views.work_map(c, "x1")
+    assert [b["id"] for b in m["beats"]] == ["b3", "b2", "b1", "b4"]
+    assert m["beats"][3]["span"] is None
+
+
+def test_map_no_analysis(c):
+    _story(c)
+    assert views.work_map(c, "x1") == {"version": 1, "analysis_version": None, "notes_version": None,
+                                       "beats": [], "motifs": [], "notes": None}
+
+
+def test_map_stale_analysis(c):
+    sid, v1 = _story(c, text=TEXT)
+    _ana(c, sid, v1)
+    repo.add_source_version(c, sid, "他進了門。完全改寫。", 3.0)
+    m = views.work_map(c, "x1")
+    assert m["version"] == 2 and m["analysis_version"] == 1
+    b = {x["id"]: x for x in m["beats"]}
+    assert b["b1"]["span"]["start"] == 0 and b["b2"]["span"]["start"] is None
+    old = views.work_map(c, "x1", v=1)
+    assert old["version"] == 1 and old["analysis_version"] == 1
+    assert old["beats"][1]["span"]["start"] == 5
+
+
+def test_map_notes_missing(c):
+    sid, vid = _story(c, text=TEXT)
+    _ana(c, sid, vid)
+    m = views.work_map(c, "x1")
+    assert m["beats"] and m["notes"] is None and m["notes_version"] is None
+
+
+def test_map_notes_from_other_job_not_paired(c):
+    sid, vid = _story(c, text=TEXT)
+    _ana(c, sid, vid, job=2)
+    _notes(c, sid, vid, job=1)
+    m = views.work_map(c, "x1")
+    assert m["notes"] is None and m["notes_version"] is None
+
+
+def test_map_unknown_version_and_work(c):
+    _story(c)
+    with pytest.raises(views.UnknownVersion):
+        views.work_map(c, "x1", v=9)
+    with pytest.raises(LookupError):
+        views.work_map(c, "nope")

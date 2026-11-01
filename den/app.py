@@ -19,6 +19,8 @@
                             (串流前判:422 slug/body、404 無此篇/非此篇的局、409 未分析/該局有一輪在跑)
   GET  /works?q=&limit=N    → {"works": [...]}(標題/開頭比對,最近活動在前;limit 預設 20,1–50)
   GET  /works/{slug}        → 作品詳情(views.work_detail)| 404 unknown-work
+  GET  /works/{slug}/map?v=n → 對位資料(beats/motifs/notes 的引文位移,對第 n 版原文;預設最新;
+                            404 unknown-work / unknown-version;要在 /works/{slug}/{part} 之前註冊)
   GET  /works/{slug}/sessions → {"sessions": [...]}(這篇的局,新到舊)
   GET  /sessions?limit=N    → {"sessions": [...]}(跨作品最近的局;1–100)
   GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id | 409 ambiguous-session
@@ -490,6 +492,17 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise _unknown("work-detail") from None
         except views.UnknownVersion:
             log.info("event=reject where=work-detail reason=unknown-version v=%s", v)
+            raise ApiError(404, "unknown-version", "沒有這個版本") from None
+
+    @api.get("/works/{slug}/map")
+    async def work_map(slug: str, request: Request, v: int | None = Query(None, ge=1)):
+        _slug_ok(slug, "work-map")
+        try:
+            return views.work_map(request.app.state.mgr.conn, slug, v)
+        except LookupError:
+            raise _unknown("work-map") from None
+        except views.UnknownVersion:
+            log.info("event=reject where=work-map reason=unknown-version v=%s", v)
             raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
     @api.get("/works/{slug}/sessions")

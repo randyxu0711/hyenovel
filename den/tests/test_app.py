@@ -1029,3 +1029,17 @@ def test_cancel_work_nothing_running_409(data):
 def test_discussion_endpoint_gone(data):
     with _client(data) as c:
         assert c.get("/api/stories/mini/discussion", headers=_auth(data[1])).status_code == 404
+
+
+def test_map_route_not_shadowed(data, caplog):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.get("/api/works/mini/map", headers=h)
+        assert r.status_code == 200 and r.json()["version"] == 1 and "beats" in r.json()
+        assert c.get("/api/works/mini/map", params={"v": 1}, headers=h).json()["version"] == 1
+        r = c.get("/api/works/mini/map", params={"v": 9}, headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+        assert c.get("/api/works/mini/map", params={"v": 0}, headers=h).status_code == 422
+        r = c.get("/api/works/nope/map", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        assert c.get("/api/works/mini/source", headers=h).status_code == 200

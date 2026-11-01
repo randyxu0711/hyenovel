@@ -4,7 +4,7 @@ den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的�
 是 client 自己的事。
 """
 from den import spans, works
-from marrow import gate, repo
+from marrow import gate, repo, vizdata
 
 
 def _current(art: dict | None) -> dict | None:
@@ -100,6 +100,69 @@ def work_detail(conn, slug: str, v: int | None = None) -> dict:
             "versions": [x["n"] for x in repo.source_versions(conn, st["id"])],
             "state": row["state"], "job_id": row["job_id"],
             "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
+
+
+def _order_beats(beats: list[dict], edges: list[dict]) -> list[dict]:
+    """沿 precedes 邊排成一條鏈;沒邊、斷鏈、分岔、有環 → 退回依 span.start(找不到位置的放最後,同位置保持原序)。"""
+    ids = {b["id"] for b in beats}
+    nxt = {e["from"]: e["to"] for e in edges
+           if e["type"] == "precedes" and e["from"] in ids and e["to"] in ids}
+    heads = [b for b in beats if b["id"] not in nxt.values()]
+    if len(heads) == 1:
+        by_id = {b["id"]: b for b in beats}
+        chain, cur = [], heads[0]["id"]
+        while cur in by_id and by_id[cur] not in chain:
+            chain.append(by_id[cur])
+            cur = nxt.get(cur)
+        if len(chain) == len(beats):
+            return chain
+    def key(b):
+        start = (b["span"] or {}).get("start")
+        return (start is None, start or 0)
+    return sorted(beats, key=key)
+
+
+def work_map(conn, slug: str, v: int | None = None) -> dict:
+    """對位資料:分析的 beat/motif 與同版同 job 的筆記,引文一律定位到第 v 版(預設最新)原文。
+    分析屬較舊版時照給(analysis_version 老實標),定位不到的 start/end 為 None。"""
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise LookupError(slug)
+    shown = repo.latest_source_version(conn, st["id"]) if v is None \
+        else repo.source_version_by_n(conn, st["id"], v)
+    if shown is None:
+        raise UnknownVersion(v)
+    text = shown["text"]
+    out = {"version": shown["n"], "analysis_version": None, "notes_version": None,
+           "beats": [], "motifs": [], "notes": None}
+    ana = repo.current_artifact(conn, st["id"], "analysis")
+    if ana is None:
+        return out
+    out["analysis_version"] = repo.source_version(conn, ana["source_version_id"])["n"]
+    nodes = ana["body"].get("nodes") or []
+
+    def spans_of(node):
+        return spans.locate_all([e["quote"] for e in node.get("evidence") or []], text)
+
+    beats = []
+    for n in nodes:
+        if n["type"] == "beat":
+            sp = spans_of(n)
+            beats.append({"id": n["id"], "label": n["label"], "intensity": n.get("intensity"),
+                          "span": sp[0] if sp else None})
+    out["beats"] = _order_beats(beats, ana["body"].get("edges") or [])
+    out["motifs"] = [{"id": n["id"], "label": n["label"], "spans": spans_of(n)}
+                     for n in nodes if n["type"] == "motif"]
+    picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"), None)
+    if picked is not None:
+        body = picked[1]
+        out["notes_version"] = out["analysis_version"]    # 配對要求同版,所以就是分析那一版
+        out["notes"] = {"read": body.get("read"), "one_line": body.get("one_line"),
+                        "points": [{"kind": p["kind"], "title": p["title"], "body": p.get("body"),
+                                    "question": p.get("question"),
+                                    "spans": spans.locate_all(p.get("quotes") or [], text)}
+                                   for p in body.get("points") or []]}
+    return out
 
 
 def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:

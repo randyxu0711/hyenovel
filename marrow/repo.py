@@ -284,6 +284,20 @@ def works(conn) -> list[dict]:
         "AND sv.n = (SELECT MAX(n) FROM source_version WHERE story_id = st.id) ORDER BY st.slug")]
 
 
+def activity_times(conn) -> dict[int, float]:
+    """story_id → 最新 analysis/notes artifact 建立時間與最新 assistant 發言時間取大者(都沒有就沒這個 key)。"""
+    out: dict[int, float] = {}
+    for r in conn.execute(
+            "SELECT story_id, MAX(created_at) AS t FROM artifact WHERE kind IN ('analysis', 'notes') "
+            "GROUP BY story_id"):
+        out[r["story_id"]] = r["t"]
+    for r in conn.execute(
+            "SELECT d.story_id AS story_id, MAX(u.ts) AS t FROM utterance u "
+            "JOIN discussion d ON d.id = u.discussion_id WHERE u.role = 'assistant' GROUP BY d.story_id"):
+        out[r["story_id"]] = max(out.get(r["story_id"], 0.0), r["t"])
+    return out
+
+
 def current_artifacts(conn) -> list[dict]:
     """所有篇的 current:`{story_id, kind, artifact}`,一次查完。"""
     out = []
