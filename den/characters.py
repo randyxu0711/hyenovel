@@ -9,6 +9,7 @@ _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characte
 
 DEFAULT_CHARACTER = "hyena"
 _FIELDS = {"id", "mode", "name", "line", "avatar", "colors", "voice"}
+MARKS = ("pencil", "highlighter", "circle")
 
 
 class UnknownCharacter(Exception):
@@ -22,8 +23,10 @@ def _load() -> tuple[dict, ...]:
     if len(set(ids)) != len(ids):
         raise ValueError(f"character id 重複: {ids}")
     for c in out:
-        if set(c) != _FIELDS:
+        if not (_FIELDS <= set(c) <= _FIELDS | {"mark"}):
             raise ValueError(f"character {c.get('id')} 欄位不齊")
+        if c.get("mark") not in MARKS:
+            c["mark"] = "pencil"
         if c["mode"] not in companion.MODES:
             raise ValueError(f"character {c['id']} mode 不明: {c['mode']}")
     if DEFAULT_CHARACTER not in ids:
