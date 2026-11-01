@@ -42,3 +42,7 @@ htmlcov/
 # Playwright MCP 的截圖/快照(視覺驗證用暫存,不版控)
 .playwright-mcp/
 /*.png
+
+# graphify 知識圖(本機產物)
+graphify-out/
+CLAUDE.local.md
