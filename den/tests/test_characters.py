@@ -27,7 +27,7 @@ def test_check_colors_rejects_low_contrast_text():
 def test_check_colors_covers_every_theme(monkeypatch):
     t = copy.deepcopy(themes.builtins()[0])
     t["id"] = "weird"
-    t["light"]["desk"] = t["light"]["panel"] = "#000000"
+    t["light"]["desk"] = t["light"]["desk-2"] = "#000000"
     monkeypatch.setattr(themes, "builtins", lambda: [t])
     msgs = characters.check_colors(characters.get("hyena")["colors"])
     assert any(m.startswith("weird light text/desk") for m in msgs)

@@ -6,8 +6,8 @@ from pathlib import Path
 _DIR = Path(__file__).resolve().parent.parent / "marrow" / "themes"
 
 DEFAULT_THEME = "olive"
-KEYS = ("enamel", "enamel-ink", "desk", "panel", "bubble", "paper", "paper-ink", "paper-ink-2",
-        "ui-ink", "ui-ink-2", "line", "platen", "knob", "muzzle")
+KEYS = ("desk", "desk-2", "paper", "paper-ink", "paper-ink-2", "ink", "ink-2",
+        "line", "accent", "accent-ink", "spot", "sheen")
 
 
 def _lum(h: str) -> float:
@@ -23,20 +23,25 @@ def contrast(a: str, b: str) -> float:
 
 
 def check_theme(theme: dict) -> list[str]:
-    """對比規則(spec §4.5);回傳不合格的描述,空 list = 合格。line 帶透明度,不驗。"""
+    """鍵集合與對比規則(spec §4.5、改版 §6.1);回傳不合格的描述,空 list = 合格。line/spot/sheen 帶透明度,不驗。"""
     bad = []
     for scheme in ("light", "dark"):
         t = theme[scheme]
+        extra, missing = sorted(set(t) - set(KEYS)), sorted(set(KEYS) - set(t))
+        if extra or missing:
+            bad.append(f"{theme['id']} {scheme} 鍵不符: 多 {extra} 少 {missing}")
+            continue
 
         def need(ink: str, bg: str, lo: float, hi: float = float("inf")):
             r = contrast(t[ink], t[bg])
             if not lo <= r <= hi:
                 bad.append(f"{theme['id']} {scheme} {ink}/{bg} = {r:.2f}")
-        need("ui-ink", "desk", 10, 13)
-        need("ui-ink-2", "desk", 4.5)
-        need("ui-ink-2", "panel", 4.5)
+        need("ink", "desk", 10, 13)
+        need("ink-2", "desk", 4.5)
+        need("ink-2", "desk-2", 4.5)
         need("paper-ink", "paper", 9.5)
-        need("enamel-ink", "enamel", 4.5)
+        need("paper-ink-2", "paper", 4.5)
+        need("accent-ink", "accent", 4.5)
     return bad
 
 

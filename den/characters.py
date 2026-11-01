@@ -56,7 +56,7 @@ def check_colors(colors: dict) -> list[str]:
     bad = []
     for theme in themes.builtins():
         for scheme in ("light", "dark"):
-            for bg in ("panel", "desk"):
+            for bg in ("desk-2", "desk"):
                 r = themes.contrast(colors[scheme]["text"], theme[scheme][bg])
                 if r < 4.5:
                     bad.append(f"{theme['id']} {scheme} text/{bg} = {r:.2f}")
