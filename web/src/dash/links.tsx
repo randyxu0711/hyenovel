@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Span } from "./api";
 
 type Pane = "paper" | "side";
@@ -22,6 +22,19 @@ const Ctx = createContext<Links | null>(null);
 
 const isNarrow = () =>
   typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width:1100px)").matches;
+
+/** < 1100px:一次只顯示一個窗格。隨視窗變動;沒有 matchMedia 就當寬螢幕。 */
+export function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(isNarrow);
+  useEffect(() => {
+    const mq = typeof window.matchMedia === "function" ? window.matchMedia("(max-width:1100px)") : null;
+    if (!mq?.addEventListener) return;
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
 
 export function LinksProvider({ children }: { children: ReactNode }) {
   const [hovered, setHovered] = useState<{ q: string | null; at: number | null }>({ q: null, at: null });

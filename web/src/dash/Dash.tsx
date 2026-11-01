@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, DashError, type Work, type WorkMap } from "./api";
 import { errorMessage, useT } from "./i18n";
-import { LinksProvider } from "./links";
+import { flushSync } from "react-dom";
+import { LinksProvider, useLinks, useNarrow } from "./links";
+import Palette from "./Palette";
 import Home from "./Home";
 import Rail from "./Rail";
 import Reader from "./Reader";
@@ -10,7 +12,7 @@ import Settings from "./Settings";
 import Side, { marksFrom } from "./Side";
 import { useSeen } from "./useSeen";
 import { useTalk } from "./useTalk";
-import { applySignature, initThemes, useThemeState } from "./theme";
+import { applySignature, initThemes, toggleDayNight, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
 import "./dash.css";
 
@@ -69,6 +71,28 @@ function Shell({ chars }: { chars: Characters }) {
   const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
   const split = useSplit();
+  const narrow = useNarrow();
+  const { pane, setPane } = useLinks();
+  const [palette, setPalette] = useState(false);
+  const hidePaper = narrow && view === "work" && pane !== "paper";
+  const hideSide = narrow && pane !== "side";
+  // 窄螢幕打開一篇 → 先看稿(兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方)
+  useEffect(() => { if (slug && narrow) setPane("paper"); }, [slug, narrow, setPane]);
+  // 鍵盤:Ctrl/⌘+K 開指令框(輸入框裡也算);「/」聚焦輸入框(焦點已在輸入元素時不攔)
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (view === "settings") return;
+      e.preventDefault();
+      if (view === "work" && hideSide) flushSync(() => setPane("side"));
+      document.querySelector<HTMLElement>(view === "work" ? ".dash-side textarea" : ".home textarea")?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [view, hideSide, setPane]);
   useEffect(() => applySignature(me, mode), [me, mode]);
   // 進門畫面送出的第一句:作品頁掛載時以新局送出一次,並清掉 router state(重新整理不重送)。
   // 延到下一個 tick 才送:StrictMode 的 effect 清理會取消第一次排程,且送出在 useTalk 重設之後。
@@ -95,12 +119,22 @@ function Shell({ chars }: { chars: Characters }) {
   const open = (s: string) => { setNote(null); nav(`/w/${encodeURIComponent(s)}`); };
 
   return (
-    <LinksProvider>
-    <div className="dash" data-view={view} data-mode={mode}
+    <div className="dash" data-view={view} data-mode={mode} data-narrow={narrow ? "true" : "false"}
       style={split.width ? { "--dash-split": `${split.width}px` } as CSSProperties : undefined}>
+      {narrow && (
+        <div className="dash-bar">
+          {view === "work" && (
+            <div className="dash-pane-switch" role="group" aria-label={t("pane.label")}>
+              <button type="button" aria-pressed={pane === "paper"} onClick={() => setPane("paper")}>{t("pane.paper")}</button>
+              <button type="button" aria-pressed={pane === "side"} onClick={() => setPane("side")}>{t("pane.talk")}</button>
+            </div>
+          )}
+          <button type="button" className="dash-bar-palette" aria-haspopup="dialog" onClick={() => setPalette(true)}>{t("palette.open")}</button>
+        </div>
+      )}
       <Rail collapsed={view !== "home"} works={works} current={slug} onOpen={open}
         onNew={goHome} onSubmitNew={goHome} />
-      <main className="dash-desk">
+      <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
           map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
@@ -115,21 +149,22 @@ function Shell({ chars }: { chars: Characters }) {
           <button type="button" aria-label={t("notice.dismiss")} onClick={() => setNote(null)}>×</button>
         </p>
       )}
-      {view === "work" && (
+      {view === "work" && !narrow && (
         <div className="dash-grip" role="separator" aria-orientation="vertical" aria-label={t("split.label")} tabIndex={0}
           aria-valuemin={MIN} aria-valuenow={split.width ?? undefined}
           onPointerDown={split.onPointerDown} onKeyDown={split.onKeyDown} />
       )}
       {view === "work" && (
-        <aside className="dash-side">
+        <aside className="dash-side" hidden={hideSide}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
             talk={talk} quotes={quotes}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>
       )}
+      {palette && <Palette works={works} chars={chars} onOpen={open} onSettings={() => nav("/settings")}
+        onToggle={toggleDayNight} onClose={() => setPalette(false)} />}
     </div>
-    </LinksProvider>
   );
 }
 
@@ -179,5 +214,5 @@ export default function Dash() {
   }, []);
   if (err) return <div className="dash dash-note" role="alert">{t(errorMessage(err))}</div>;
   if (!chars) return <div className="dash dash-note">{t("loading")}</div>;
-  return <CharactersProvider value={chars}><Shell chars={chars} /></CharactersProvider>;
+  return <CharactersProvider value={chars}><LinksProvider><Shell chars={chars} /></LinksProvider></CharactersProvider>;
 }

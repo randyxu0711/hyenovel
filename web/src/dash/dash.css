@@ -271,3 +271,21 @@
 .dash .dash-set-log{margin-top:12px}
 .dash .paper-sheet[data-size="s"]{--dash-t-paper:14.5px}
 .dash .paper-sheet[data-size="l"]{--dash-t-paper:19px}
+
+/* 窄螢幕(< 1100px):左欄與分隔線隱藏,一次一個窗格;頂列放「稿|對話」與指令鍵 */
+.dash-desk[hidden], .dash-side[hidden]{display:none}
+.dash .dash-bar{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; min-height:44px; box-sizing:border-box}
+.dash .dash-pane-switch{display:flex; gap:2px; padding:2px; border-radius:8px; background:var(--dash-desk-2)}
+.dash .dash-pane-switch button{padding:3px 14px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .dash-pane-switch button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .dash-bar-palette{margin-left:auto; padding:3px 12px; border:1px solid var(--dash-line); border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash[data-narrow="true"][data-view]{grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr)}
+.dash[data-narrow="true"] .dash-rail{display:none}
+.dash-palette-scrim{position:fixed; inset:0; z-index:20; display:flex; justify-content:center; align-items:flex-start; padding-top:14vh; background:color-mix(in srgb, var(--dash-ink) 18%, transparent)}
+.dash .dash-palette{position:static; display:flex; flex-direction:column; gap:6px; width:min(520px, 92vw); max-height:60vh; padding:10px}
+.dash .dash-palette input{padding:8px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); color:var(--dash-paper-ink); font:inherit}
+.dash .dash-palette input:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.dash .dash-palette ul{list-style:none; margin:0; padding:0; overflow:auto}
+.dash .dash-palette li{padding:7px 10px; border-radius:6px; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .dash-palette li[aria-selected="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .dash-palette-empty{margin:0; padding:7px 10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
