@@ -431,3 +431,16 @@ def test_source_versions_and_by_n(conn):
     assert [(v["n"], v["text"]) for v in repo.source_versions(conn, s)] == [(1, "甲"), (2, "乙"), (3, "丙")]
     assert repo.source_version_by_n(conn, s, 2)["text"] == "乙"
     assert repo.source_version_by_n(conn, s, 9) is None
+
+
+def test_recent_discussions_legacy_filter_applies_before_limit(conn):
+    s, _ = _story(conn)
+    new = repo.ensure_discussion(conn, s, "new", "web", None, 1.0)
+    repo.add_utterance(conn, new, 0, "assistant", "答", 1.0, "den", [], None, mode="slow", character="hyena")
+    for i, ext in enumerate(["old1", "old2"]):   # 舊局:assistant 沒記 mode(或只有 user)
+        d = repo.ensure_discussion(conn, s, ext, "web", None, 2.0 + i)
+        repo.add_utterance(conn, d, 0, "user", "問", 2.0 + i, "den", [], None)
+        repo.add_utterance(conn, d, 1, "assistant", "舊答", 3.0 + i, "den", [], None)
+    assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["new"]
+    assert [g["external_id"] for g in repo.recent_discussions(conn, 1, legacy=True)] == ["old2"]
+    assert [g["external_id"] for g in repo.recent_discussions(conn, 5, legacy=True)] == ["old2", "old1"]

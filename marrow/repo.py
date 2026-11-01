@@ -210,9 +210,10 @@ def analysis_versions(conn, story_id: int) -> dict[str, int]:
         "ON sv.id = a.source_version_id WHERE a.story_id = ? AND a.kind = 'analysis'", (story_id,))}
 
 
-def recent_discussions(conn, limit: int) -> list[dict]:
+def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
     """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
-    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。"""
+    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。
+    legacy = 沒有任何記了 mode 的 assistant 發言(改版前的舊局);只回 legacy 或只回非 legacy,過濾在 LIMIT 之前。"""
     last = ("(SELECT {c} FROM utterance WHERE discussion_id = d.id AND role = 'assistant' "
             "ORDER BY seq DESC LIMIT 1)")
     out = []
@@ -225,6 +226,8 @@ def recent_discussions(conn, limit: int) -> list[dict]:
             f"{last.format(c='text')} AS preview "
             "FROM discussion d JOIN story st ON st.id = d.story_id "
             "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
+            f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
+            "AND role = 'assistant' AND mode IS NOT NULL) "
             "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
         row = _row(r)
         row["preview"] = (row["preview"] or "")[:60]

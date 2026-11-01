@@ -91,7 +91,7 @@ ERROR_CODES: tuple[str, ...] = (
     "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
     "unknown-character", "unknown-session-id", "ambiguous-session",
-    "quote-needs-message", "too-many-quotes", "unknown-version",
+    "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
@@ -493,30 +493,33 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
     @api.get("/works/{slug}/sessions")
-    async def work_sessions(slug: str, request: Request):
+    async def work_sessions(slug: str, request: Request, legacy: bool = False):
         _slug_ok(slug, "work-sessions")
         try:
-            return {"sessions": views.sessions(request.app.state.mgr.conn, slug)}
+            return {"sessions": views.sessions(request.app.state.mgr.conn, slug, legacy)}
         except LookupError:
             raise _unknown("work-sessions") from None
 
     @api.get("/sessions")
-    async def recent_sessions(request: Request, limit: int = 20):
+    async def recent_sessions(request: Request, limit: int = 20, legacy: bool = False):
         if not 1 <= limit <= 100:
             log.info("event=reject where=recent-sessions limit=%s", limit)
             raise HTTPException(422, "limit 要在 1–100")
-        return {"sessions": views.recent_sessions(request.app.state.mgr.conn, limit)}
+        return {"sessions": views.recent_sessions(request.app.state.mgr.conn, limit, legacy)}
 
     @api.get("/sessions/{session}")
-    async def session_turns(session: str, request: Request):
+    async def session_turns(session: str, request: Request, v: int | None = Query(None, ge=1)):
         try:
-            return views.session_turns(request.app.state.mgr.conn, session)
+            return views.session_turns(request.app.state.mgr.conn, session, v)
         except LookupError:
             log.info("event=reject where=session-turns reason=unknown-session-id")
             raise ApiError(404, "unknown-session-id", "沒有這一局") from None
         except views.AmbiguousSession:
             log.info("event=reject where=session-turns reason=ambiguous-session")
             raise ApiError(409, "ambiguous-session", "這個局 id 在不只一篇出現") from None
+        except views.UnknownVersion:
+            log.info("event=reject where=session-turns reason=unknown-version v=%s", v)
+            raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
     @api.get("/estimate")
     async def get_estimate(request: Request, chars: int = Query(ge=0)):
@@ -621,6 +624,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise reject(404, "unknown-slug", "這篇不在 DB") from None
         except discuss.UnknownSession:
             raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        except discuss.LegacySession:
+            raise reject(409, "legacy-session", "這是改版前的舊討論,只能看不能續聊") from None
         except discuss.TooManyQuotes:
             raise reject(422, "too-many-quotes", "一輪帶的引文太多段") from None
         except discuss.QuoteNeedsMessage:

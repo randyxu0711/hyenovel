@@ -7,7 +7,7 @@ export const DEN_ERROR_CODES = [
   "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
   "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
   "unknown-character", "unknown-session-id", "ambiguous-session",
-  "quote-needs-message", "too-many-quotes", "unknown-version", "usage-limit", "no-response", "commit-failed", "chat-failed",
+  "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session", "usage-limit", "no-response", "commit-failed", "chat-failed",
   "den-down",
 ];
 

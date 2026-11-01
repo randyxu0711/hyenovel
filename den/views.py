@@ -3,8 +3,8 @@
 den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的形狀——翻成畫面要的樣子
 是 client 自己的事。
 """
-from den import works
-from marrow import repo
+from den import spans, works
+from marrow import gate, repo
 
 
 def _current(art: dict | None) -> dict | None:
@@ -102,7 +102,7 @@ def work_detail(conn, slug: str, v: int | None = None) -> dict:
             "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
 
 
-def sessions(conn, slug: str) -> list[dict]:
+def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:
     """這篇的局,新到舊。version = 最後一則 assistant 發言讀的分析對應的原文版本(analysis_fp 精確對,沒有 → None)。"""
     st = _story(conn, slug)
     versions = repo.analysis_versions(conn, st["id"])
@@ -113,34 +113,55 @@ def sessions(conn, slug: str) -> list[dict]:
     for sid, us in by.items():
         asst = [u for u in us if u["role"] == "assistant"]
         last = us[-1]
+        is_legacy = not any(u["mode"] is not None for u in asst)
+        if is_legacy != legacy:
+            continue
         out.append({"session": sid, "started_at": us[0]["ts"], "last_at": last["ts"],
                     "turns": len(asst), "character": asst[-1]["character"] if asst else None,
                     "mode": asst[-1]["mode"] if asst else None,
                     "preview": asst[-1]["text"][:60] if asst else "",
-                    "version": versions.get(asst[-1]["analysis_fp"]) if asst else None})
+                    "version": versions.get(asst[-1]["analysis_fp"]) if asst else None,
+                    "legacy": is_legacy})
     out.sort(key=lambda s: s["last_at"], reverse=True)
     return out
 
 
-def session_turns(conn, session: str) -> dict:
+def session_turns(conn, session: str, v: int | None = None) -> dict:
+    """單局逐字。每則 turn 帶 spans = 引文在第 v 版(預設最新)原文的位移。
+    assistant 的「」只收最新版原文找得到的(其餘是強調或複述,不是引文);再對 v 定位,這版沒有 → None。
+    user 用其存下的 quotes。"""
     found = repo.discussions_by_external(conn, session)
     if not found:
         raise LookupError(session)
     if len(found) > 1:
         raise AmbiguousSession(session)
     d = found[0]
+    latest = repo.latest_source_version(conn, d["story_id"])
+    shown = latest if v is None else repo.source_version_by_n(conn, d["story_id"], v)
+    if shown is None:
+        raise UnknownVersion(v)
+    us = repo.utterances(conn, d["id"])
+    turns = []
+    for u in us:
+        if u["role"] == "assistant":
+            qs = [q for q in spans.quotes_in(u["text"]) if gate.locate(q, latest["text"])]
+        else:
+            qs = u["quotes"] or []
+        turns.append({"role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
+                      "character": u["character"], "quotes": u["quotes"] or [],
+                      "spans": spans.locate_all(qs, shown["text"])})
     return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
-            "turns": [{"role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
-                       "character": u["character"], "quotes": u["quotes"] or []}
-                      for u in repo.utterances(conn, d["id"])]}
+            "legacy": not any(u["role"] == "assistant" and u["mode"] is not None for u in us),
+            "version": shown["n"], "turns": turns}
 
 
-def recent_sessions(conn, limit: int) -> list[dict]:
-    out = repo.recent_discussions(conn, limit)
+def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:
+    out = repo.recent_discussions(conn, limit, legacy)
     titles = {c["story_id"]: c["artifact"]["body"].get("title")
               for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
     for d in out:
         d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
         d["session"] = d.pop("external_id")   # 與 session_rows 同名,前端只認 session
+        d["legacy"] = legacy
     return out
