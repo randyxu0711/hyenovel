@@ -117,7 +117,9 @@ export const api = {
   },
   submit: (text: string, title?: string) =>
     request<SubmitResult>("/api/stories", post({ text, title })),
-  startJob: (slug: string) => request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug })),
+  /** resumeOnly:只接續停住的那次分析,沒有可續的就 409 nothing-to-resume(不開新的一次)。 */
+  startJob: (slug: string, opts: { resumeOnly?: boolean } = {}) =>
+    request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug, ...(opts.resumeOnly ? { resume_only: true } : {}) })),
   jobEvents: (jobId: number) => stream(`/api/jobs/${jobId}/events`),
   /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */
   talk: (slug: string, body: { session: string | null; message: string; character: string; quotes: string[] }) =>

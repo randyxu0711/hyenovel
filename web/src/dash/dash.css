@@ -75,34 +75,6 @@
 .dash .works-new{padding:8px 10px; text-align:left; cursor:pointer; border:0; border-top:1px solid var(--dash-line); background:transparent; color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .reader{position:relative; min-height:100%}
 .dash .reader-note{padding:32px; color:var(--dash-ink-2)}
-.dash .platen{
-  position:sticky; top:0; z-index:2; height:34px; margin:0 auto; width:min(760px,92%);
-  background:var(--dash-ink); border-radius:0 0 14px 14px; padding:0 10px;
-  display:flex; align-items:center; justify-content:space-between;
-  box-shadow:0 6px 14px color-mix(in srgb, var(--dash-ink) 40%, transparent);
-}
-.dash .platen i{width:14px; height:22px; border-radius:5px; background:var(--dash-ink-2)}
-.dash .platen-tools{font-size:var(--dash-t-xs); color:var(--dash-paper)}
-.dash .sheet{
-  width:min(640px,86%); margin:-6px auto 80px; padding:64px 64px 72px; position:relative;
-  background:var(--dash-paper); color:var(--dash-paper-ink);
-  box-shadow:0 18px 40px -18px color-mix(in srgb, var(--dash-ink) 45%, transparent);
-}
-.dash .sheet h1{font-family:var(--serif); font-size:var(--dash-t-xl); font-weight:600; margin:0 0 28px}
-.dash .sheet p{font-family:var(--serif); font-size:var(--dash-t-lg); line-height:2.05; margin:0 0 1.15em; text-align:justify}
-.dash .sheet ::selection{background:color-mix(in srgb, var(--dash-sig) 28%, transparent)}
-.dash .reader-float{
-  position:sticky; bottom:16px; z-index:3; display:flex; gap:10px; align-items:center; justify-content:center;
-  font-size:var(--dash-t-xs); color:var(--dash-ink-2);
-}
-.dash .reader-bring{
-  padding:8px 14px; border:0; border-radius:8px; cursor:pointer; font-size:var(--dash-t-sm);
-  background:var(--dash-accent); color:var(--dash-accent-ink);
-}
-.dash .reader-bring:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2); border:1px solid var(--dash-line)}
-@media (max-width:979px){
-  .dash .sheet{padding:36px 24px 48px}
-}
 .dash-talk{padding:20px 16px; background:var(--dash-desk-2); color:var(--dash-ink-2)}
 
 /* ── 陪讀者:選人、對話、紙邊的座位 ── */
@@ -141,20 +113,14 @@
 .dash .chat-send:disabled, .dash .chat-form textarea:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2)}
 
 /* ── 交稿、分析進度、冷讀者的筆記 ── */
-.dash .platen-mark{display:inline-block; width:34px; height:3px; margin:0 8px 3px 12px; border-radius:2px; background:var(--dash-ink-2); vertical-align:middle; animation:platen-slide 3.2s ease-in-out infinite alternate}
-@keyframes platen-slide{from{transform:translateX(-10px)}to{transform:translateX(10px)}}
-.dash .reader-bar{width:min(760px,92%); margin:10px auto 0; display:flex; align-items:center; gap:10px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .reader-notes{padding:5px 10px; cursor:pointer; border:1px solid var(--dash-line); border-radius:6px; background:transparent; font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .reader-notes[aria-pressed="true"]{background:var(--dash-paper)}
 .dash .reader-notes:disabled{cursor:not-allowed; color:var(--dash-ink-2)}
 .dash .reader-body{display:flex; align-items:flex-start; justify-content:center; gap:20px}
-.dash .reader-body .sheet{margin-left:0; margin-right:0; flex:0 1 640px; min-width:0}
-.dash .reader:not([data-notes="open"]) .reader-body .sheet{margin:-6px auto 80px}
 .dash .notes{flex:0 0 300px; max-width:34%; margin-top:8px; padding:16px 18px; border-radius:10px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-sm); line-height:1.8; position:sticky; top:44px; max-height:calc(100vh - 64px); overflow:auto}
 .dash .notes-lead{margin:0 0 10px; font-weight:600; color:var(--dash-ink-2)}
 .dash-notice{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:6; margin:0; padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .dash-notice button{margin-left:10px; border:0; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-size:var(--dash-t-md)}
-@media (prefers-reduced-motion:reduce){ .dash .platen-mark{animation:none} }
 @media (max-width:979px){ .dash .reader-body{flex-direction:column; align-items:stretch} .dash .notes{max-width:none; flex-basis:auto; position:static; max-height:none; margin:8px 4% 0} }
 .dash-rail:not([data-collapsed="true"]) .rail-foot .rail-btn{width:36px; height:36px; padding:0; justify-content:center}
 .dash-rail[data-collapsed="true"] .rail-foot{flex-direction:column}
@@ -184,3 +150,55 @@
 .dash .home-who-menu{position:absolute; left:0; bottom:calc(100% + 6px); z-index:5; display:flex; flex-direction:column; gap:2px; padding:6px; min-width:140px}
 .dash .home-who-item{display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:6px; background:transparent; cursor:pointer; color:var(--dash-ink); text-align:left}
 .dash .home-who-item[aria-pressed="true"]{background:var(--dash-desk-2); font-weight:600}
+/* 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。紙約 34 個全形字/行,多的寬度變成兩側留白。 */
+.dash .reader{padding:0 24px}
+.dash .paper-top{position:sticky; top:0; z-index:2; display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px; min-height:54px; padding:8px 0; background:var(--dash-desk)}
+.dash .paper-h{margin:0; font-size:var(--dash-t-md); font-weight:600}
+.dash .paper-title{display:inline-flex; align-items:center; gap:4px; padding:3px 8px; margin-left:-8px; border:0; border-radius:7px; background:none; cursor:pointer; font-weight:600; color:var(--dash-ink)}
+.dash .paper-title:hover, .dash .paper-title[aria-expanded="true"]{background:var(--dash-desk-2)}
+.dash .paper-vers{display:flex; gap:2px; padding:2px; border-radius:7px; background:var(--dash-desk-2)}
+.dash .paper-vers button{padding:1px 9px; border:0; border-radius:5px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .paper-vers button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .paper-resume, .dash .paper-old button{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
+.dash .paper-old{display:flex; align-items:center; justify-content:center; gap:12px; max-width:34em; margin:4px auto 10px; padding:6px 12px; border-radius:8px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .reader-body .paper-sheet{flex:0 1 auto; min-width:0}
+.dash .paper-sheet{
+  --dash-t-paper:16.5px;
+  box-sizing:content-box; width:34em; margin:4px auto 80px; padding:44px 48px 56px; position:relative;
+  background:linear-gradient(180deg, var(--dash-sheen), transparent 30%), var(--dash-paper);
+  font-family:var(--serif); font-size:var(--dash-t-paper); line-height:2.05;
+}
+.dash .paper-sheet p{position:relative; margin:0 0 .95em; text-indent:2em; text-align:justify; border-radius:3px}
+.dash .paper-sheet ::selection{background:color-mix(in srgb, var(--dash-sig) 28%, transparent)}
+@media (max-width:979px){ .dash .paper-sheet{padding:32px 22px 44px} .dash .reader{padding:0 12px} }
+/* 讀者痕跡:用背景畫(不是 text-decoration),才能一筆畫上去(背景寬 0 → 100%)。疊加:閃動 > 滑過 > 痕跡。 */
+.dash .dash-mark{
+  --dash-mark-h:1.5px;
+  cursor:pointer; border-radius:2px; padding-bottom:3px;
+  background-repeat:no-repeat; background-position:0 100%; background-size:100% var(--dash-mark-h);
+  background-image:linear-gradient(var(--dash-mark), var(--dash-mark));
+  -webkit-box-decoration-break:clone; box-decoration-break:clone;
+}
+.dash .dash-mark[data-mark="highlighter"]{
+  --dash-mark-h:.62em; padding-bottom:0; background-position:0 88%;
+  background-image:linear-gradient(color-mix(in srgb, var(--dash-mark) 30%, transparent), color-mix(in srgb, var(--dash-mark) 30%, transparent));
+}
+.dash .dash-mark[data-mark="circle"]{
+  --dash-mark-h:100%; padding:.08em .22em; margin:0 -.1em; border-radius:50%; background-position:0 50%;
+  background-image:radial-gradient(farthest-side, transparent calc(100% - 2px), var(--dash-mark) calc(100% - 1.5px), var(--dash-mark) 100%, transparent 100%);
+}
+.dash .dash-mark:hover, .dash .dash-mark.is-hover{background-color:color-mix(in srgb, var(--dash-mark) 16%, transparent)}
+.dash .dash-mark:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.dash .dash-mark.is-drawing{animation:dash-mark-draw .9s cubic-bezier(.55,.1,.25,1) both}
+@keyframes dash-mark-draw{from{background-size:0 var(--dash-mark-h)}}
+.dash .paper-sheet p.is-flash::after{content:""; position:absolute; inset:-2px -6px; border-radius:4px; pointer-events:none; animation:dash-flash 1.4s ease-out forwards}
+@keyframes dash-flash{from{background:color-mix(in srgb, var(--dash-sig) 26%, transparent)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){
+  .dash .dash-mark.is-drawing{animation:none}
+  .dash .paper-sheet p.is-flash::after{animation:none; background:color-mix(in srgb, var(--dash-sig) 18%, transparent)}
+}
+/* 帶進對話:霧面浮層,貼在選取下方(量不到位置時黏在紙底) */
+.dash .paper-bring{position:sticky; bottom:16px; z-index:6; display:inline-flex; align-items:center; gap:10px; padding:4px; border-radius:12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2); text-indent:0}
+.dash .paper-bring button{padding:6px 12px; border:0; border-radius:8px; cursor:pointer; font-family:var(--sans); font-size:var(--dash-t-sm); background:var(--dash-accent); color:var(--dash-accent-ink)}
+.dash .paper-bring button:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2)}

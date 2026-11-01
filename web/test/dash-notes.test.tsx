@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import Reader from "../src/dash/Reader";
 import { api, type WorkDetail } from "../src/dash/api";
 import { setLang } from "../src/dash/i18n";
+import { LinksProvider } from "../src/dash/links";
+import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
+import { hyena } from "./dash-fixtures";
 
 afterEach(() => vi.restoreAllMocks());
 const work = (o: Partial<WorkDetail>): WorkDetail => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "ready", job_id: null, notes_ready: true, versions: [2], ...o });
@@ -10,7 +14,9 @@ const work = (o: Partial<WorkDetail>): WorkDetail => ({ slug: "d1", title: "海"
 function mount(w: WorkDetail, onFinished = vi.fn()) {
   setLang("zh-Hant");
   vi.spyOn(api, "work").mockResolvedValue(w);
-  render(<Reader slug="d1" companion="鬣狗" onQuote={vi.fn()} onFinished={onFinished} />);
+  render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
+    <Reader slug="d1" works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onFinished={onFinished} />
+  </LinksProvider></CharactersProvider></MemoryRouter>);
   return onFinished;
 }
 
@@ -52,13 +58,13 @@ describe("分析進度", () => {
     await waitFor(() => expect(onFinished).toHaveBeenCalled());
     await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
   });
-  it("分析中時滾筒上有記號與「正在讀」", async () => {
+  it("分析中時頂列說「分析中」與目前步驟", async () => {
     vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
       yield { event: "phase", data: { name: "reviewer", status: "start" } };
       await new Promise(() => {});
     });
     mount(work({ state: "running", job_id: 5 }));
-    expect((await screen.findByRole("status")).textContent).toContain("正在讀這一篇");
+    expect((await screen.findByRole("status")).textContent).toContain("分析中");
     await screen.findByText(/寫備課筆記/);
   });
   it("只收到終態 state 事件(已結束的 job)也算結束,重抓並通知", async () => {

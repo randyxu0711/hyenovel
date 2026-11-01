@@ -25,7 +25,7 @@ function mount(chars = [hyena, buffalo, deer]) {
     if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
     if (u === "/api/characters") return json({ characters: chars, default: "hyena" });
     if (u === "/api/works") return json({ works });
-    if (u === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, text: "第一段。", state: "ready", job_id: null, notes_ready: false });
+    if (u === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "第一段。", state: "ready", job_id: null, notes_ready: false });
     if (u.startsWith("/api/discuss/")) { talkBodies.push(JSON.parse(String(init?.body))); return talkReply(); }
     if (u.startsWith("/api/sessions/")) return json(sessions[decodeURIComponent(u.split("/").pop()!)]);
     if (u.startsWith("/api/sessions?")) return json({ sessions: Object.keys(sessions).map(k => ({ session: k, slug: "d1", title: "海", started_at: 1, last_at: 2, turns: 4, character: null, mode: null, preview: "q1", version: 1 })) });
@@ -75,7 +75,7 @@ describe("對話", () => {
     const range = document.createRange(); range.setStart(p, 0); range.setEnd(p, 3);
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     act(() => { document.dispatchEvent(new Event("selectionchange")); });
-    fireEvent.click(await screen.findByRole("button", { name: "帶給水牛聊" }));
+    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
     say("這段怎麼樣");
     await screen.findByText("嗯");
     expect(talkBodies[0]).toMatchObject({ character: "buffalo", quotes: ["第一段"], message: "這段怎麼樣", session_id: null });

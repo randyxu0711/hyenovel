@@ -4,8 +4,10 @@ import { useT } from "./i18n";
 import { dotState, useSeen } from "./useSeen";
 
 /** 收起的左欄裡「作品」鍵彈出的浮層:列作品與狀態;Esc 或點外面關閉。 */
-export default function WorksMenu({ anchor, works, current, onOpen, onSubmitNew, onClose }: {
+export default function WorksMenu({ anchor, below = false, works, current, onOpen, onSubmitNew, onClose }: {
   anchor: HTMLElement; works: Work[]; current: string | null;
+  /** 開在錨的下方(稿窗格的標題);預設開在右側(收起的左欄)。 */
+  below?: boolean;
   onOpen: (slug: string) => void; onSubmitNew: () => void; onClose: () => void;
 }) {
   const t = useT();
@@ -29,7 +31,7 @@ export default function WorksMenu({ anchor, works, current, onOpen, onSubmitNew,
   const r = anchor.getBoundingClientRect();
   return (
     <div ref={box} className="dash-float works-menu" role="dialog" aria-label={t("rail.works")}
-      style={{ left: r.right + 8, top: r.top }}>
+      style={below ? { left: r.left, top: r.bottom + 6 } : { left: r.right + 8, top: r.top }}>
       <ul>
         {works.map(w => {
           const s = dotState(w, seen(w.slug));

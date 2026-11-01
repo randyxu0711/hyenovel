@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, DashError, type Work } from "./api";
-import { errorMessage, localized, useLang, useT } from "./i18n";
+import { errorMessage, useT } from "./i18n";
+import { LinksProvider } from "./links";
 import Home from "./Home";
 import Rail from "./Rail";
 import Reader from "./Reader";
@@ -16,7 +17,6 @@ type View = "home" | "work" | "settings";
 function Shell({ chars }: { chars: Characters }) {
   const t = useT();
   const { mode } = useThemeState();
-  const lang = useLang();
   const nav = useNavigate();
   const { slug: routeSlug } = useParams();
   const loc = useLocation();
@@ -70,11 +70,13 @@ function Shell({ chars }: { chars: Characters }) {
   const open = (s: string) => { setNote(null); nav(`/w/${encodeURIComponent(s)}`); };
 
   return (
+    <LinksProvider>
     <div className="dash" data-view={view} data-mode={mode}>
       <Rail collapsed={view !== "home"} works={works} current={slug} onOpen={open}
         onNew={goHome} onSubmitNew={goHome} />
       <main className="dash-desk">
-        {view === "work" && <Reader slug={slug!} version={version} reload={reload} onFinished={bump} companion={localized(me.name, lang)}
+        {view === "work" && <Reader slug={slug!} version={version} reload={reload} onFinished={bump}
+          works={works} onOpen={open} onSubmitNew={goHome}
           onQuote={q => setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; })} />}
         {view === "home" && <Home works={works} onSubmitted={submitted} />}
         {view === "settings" && <h1 className="dash-h">{t("rail.settings")}</h1>}
@@ -93,6 +95,7 @@ function Shell({ chars }: { chars: Characters }) {
         </aside>
       )}
     </div>
+    </LinksProvider>
   );
 }
 

@@ -24,7 +24,7 @@ function mount(path: string, works: object[] = WORKS) {
     if (u === "/api/works") return json({ works });
     if (u.startsWith("/api/works/")) {
       return u.endsWith("/sessions") ? json({ sessions: [] })
-        : json({ slug: "d2", title: "最近的", version: 1, text: "內文一行", state: "ready", job_id: null, notes_ready: false });
+        : json({ slug: "d2", title: "最近的", version: 1, versions: [1], text: "內文一行", state: "ready", job_id: null, notes_ready: false });
     }
     return json({ sessions: [] });
   });
