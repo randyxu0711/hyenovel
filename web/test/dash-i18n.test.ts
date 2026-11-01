@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, it, expect, beforeEach } from "vitest";
 import { en, zhHant, errorMessage, localized, setLang, getLang, resetLang, translate } from "../src/dash/i18n";
 import { DEN_ERROR_CODES } from "../src/dash/api";
@@ -39,5 +40,19 @@ describe("i18n", () => {
   it("translate 代入參數", () => {
     // 字典第 1 批沒有帶參數的訊息;直接驗代入規則
     expect(translate("en", "loading", {})).toBe(en.loading);
+  });
+
+  it("沒有孤兒鍵:字典每個鍵都被 dash 程式碼引用", () => {
+    const dir = "src/dash";
+    const src = readdirSync(dir)
+      .filter(f => /\.(ts|tsx)$/.test(f) && f !== "i18n.ts")
+      .map(f => readFileSync(`${dir}/${f}`, "utf8")).join("\n");
+    // 動態引用:`prefix.${x}` 視為引用該前綴下全部鍵;err.<code> 由 DEN_ERROR_CODES 推導
+    const prefixes = [...src.matchAll(/["'`]([\w.]+\.)\$\{/g)].map(m => m[1]);
+    const errKeys = new Set(["err.unknown", ...DEN_ERROR_CODES.map(c => `err.${c}`)]); // err.unknown 由 errorMessage 回傳
+    const orphans = Object.keys(zhHant).filter(k =>
+      !src.includes(`"${k}"`) && !src.includes(`'${k}'`) && !src.includes(`\`${k}\``) &&
+      !errKeys.has(k) && !prefixes.some(p => k.startsWith(p)));
+    expect(orphans).toEqual([]);
   });
 });

@@ -15,9 +15,6 @@
   color:var(--dash-ink);
   font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
 }
-/* 點線:只用在分隔,不承載文字 */
-.dash-dots-h{height:2px; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) 0 0/6px 2px repeat-x}
-.dash-dots-v{width:2px; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) 0 0/2px 6px repeat-y}
 /* 點陣字:只用在品牌、版本、時間、段號;要讀的字不用 */
 .dash-dm{font-family:var(--dash-dot-font); font-weight:800; letter-spacing:.06em; font-variant-numeric:tabular-nums}
 /* 紙:稿子本體 */
