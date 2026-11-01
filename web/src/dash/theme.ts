@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { Character, Theme } from "./api";
+import { paintSpots } from "./spots";
 
 export type ModePref = "system" | "light" | "dark";
 export type Mode = "light" | "dark";
@@ -33,6 +34,21 @@ export function pickTheme(themes: Theme[], defaultId: string): Theme {
 export function applyTheme(theme: Theme, mode: Mode): void {
   const root = document.documentElement;
   for (const [k, v] of Object.entries(theme[mode])) root.style.setProperty(`--dash-${k}`, v);
+  applySpots(theme[mode].spot);
+}
+
+/** 斑點桌面:減動或高對比時不畫(拿掉背景圖變數);其餘依當前主題色重畫。 */
+function applySpots(color: string | undefined): void {
+  const mq = (q: string) => !!window.matchMedia?.(q).matches;
+  const root = document.documentElement;
+  if (!color || mq("(prefers-reduced-motion: reduce)") || mq("(prefers-contrast: more)")) {
+    root.style.removeProperty("--dash-spots");
+    return;
+  }
+  let url = "";
+  try { url = paintSpots(color); } catch { /* 沒 canvas 就沒斑點 */ }
+  if (url) root.style.setProperty("--dash-spots", `url(${url})`);
+  else root.style.removeProperty("--dash-spots");
 }
 
 /** 目前陪讀者的招牌色(--dash-sig 毛色、--dash-sig-t 文字色),跟著角色資料走。 */
@@ -64,10 +80,14 @@ export function selectTheme(id: string): void {
   write(THEME_KEY, id);
   commit({ theme });
 }
-export function cycleMode(): void {
-  const pref = nextPref(state.pref);
+export function cycleMode(): void { setMode(nextPref(state.pref)); }
+export function setMode(pref: ModePref): void {
   write(MODE_KEY, pref);
   commit({ pref });
+}
+/** 一鍵晝夜:現在實際是夜 → light,否則 → dark(把「跟系統」換成明確選擇)。 */
+export function toggleDayNight(): void {
+  setMode(state.mode === "dark" ? "light" : "dark");
 }
 export const getThemeState = () => state;
 
