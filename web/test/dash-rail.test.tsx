@@ -91,6 +91,24 @@ describe("Rail", () => {
     expect(within(screen.getByRole("button", { name: /湖/ })).getByRole("img").getAttribute("aria-label")).toBe("有新東西");
     expect(within(screen.getByRole("button", { name: /海/ })).queryByRole("img")).toBeNull();
   });
+  it("收起時,別篇有新東西 → 作品鍵上亮點;只有目前這篇新就不亮", () => {
+    localStorage.setItem("hyenovel.seen", JSON.stringify({ d1: 50 }));
+    const { unmount } = mount(true, "d3");
+    expect(within(screen.getByRole("button", { name: "作品" })).getByRole("img").getAttribute("aria-label")).toBe("有新東西");
+    unmount();
+    mount(true, "d1");
+    expect(within(screen.getByRole("button", { name: "作品" })).queryByRole("img")).toBeNull();
+  });
+  it("沒新東西的作品畫空心環(不給可及名稱);分析中、有新東西各有名字", () => {
+    localStorage.setItem("hyenovel.seen", JSON.stringify({ d3: 150 }));
+    mount(false);
+    expect(within(screen.getByRole("button", { name: /湖/ })).queryByRole("img")).toBeNull();
+    expect(document.querySelector('.rail-dot[data-state="none"]')).toBeTruthy();
+  });
+  it("展開時底部是兩顆圖示鍵(晝夜、設定),沒有文字", () => {
+    mount(false);
+    for (const n of ["切換晝夜", "設定"]) expect(screen.getByRole("button", { name: n }).querySelector("[aria-hidden]")).toBeTruthy();   // 只有圖示
+  });
   it("設定鍵導到 /settings(展開、收起都有)", () => {
     mount(false);
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
@@ -112,6 +130,7 @@ describe("Rail", () => {
     expect(within(menu).getByRole("button", { name: /湖/ }).getAttribute("aria-current")).toBe("true");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "作品" }));
     fireEvent.click(screen.getByRole("button", { name: "作品" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /山/ }));
     expect(onOpen).toHaveBeenCalledWith("d2");

@@ -50,7 +50,7 @@
 }
 .dash-rail[data-collapsed="true"] .rail-btn{width:40px; height:40px; padding:0}
 .dash-rail:not([data-collapsed="true"]) .rail-btn{justify-content:flex-start}
-.dash .rail-foot{margin-top:auto; display:flex; flex-direction:column; gap:8px}
+.dash .rail-foot{margin-top:auto; display:flex; flex-direction:row; gap:8px}
 .dash-desk{padding:0; color:var(--dash-ink-2); overflow:auto; min-width:0}
 .dash-desk:not(:has(.reader)){padding:32px}
 /* 左欄本身不捲:品牌與按鈕固定,只有作品清單捲動(不然清單溢出會疊到設定上)。 */
@@ -63,7 +63,12 @@
 .dash .rail-title{font-family:var(--serif); font-size:var(--dash-t-md)}
 .dash .rail-dot{flex:none; width:7px; height:7px; border-radius:50%}
 .dash .rail-dot[data-state="fresh"]{background:var(--dash-accent)}
-.dash .rail-dot[data-state="busy"]{border:1.5px solid var(--dash-ink-2)}
+.dash .rail-dot[data-state="busy"]{background:var(--dash-accent); animation:rail-pulse 2.4s ease-in-out infinite}
+.dash .rail-dot[data-state="none"]{border:1.5px solid var(--dash-line)}
+.dash .rail-news{position:absolute; top:4px; right:4px}
+.dash .rail-btn{position:relative}
+@keyframes rail-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){ .dash .rail-dot[data-state="busy"]{animation:none} }
 .dash .works-menu{position:fixed; z-index:8; min-width:220px; max-height:70vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px}
 .dash .works-menu ul{list-style:none; margin:0; padding:0}
 .dash .works-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
@@ -79,7 +84,7 @@
 .dash .platen i{width:14px; height:22px; border-radius:5px; background:var(--dash-ink-2)}
 .dash .platen-tools{font-size:var(--dash-t-xs); color:var(--dash-paper)}
 .dash .sheet{
-  width:min(640px,86%); margin:-6px auto 80px; padding:64px 64px 72px; position:relative;
+  width:min(640px,86%); margin:-6px auto 80px; padding:64px 64px 56px; position:relative;
   background:var(--dash-paper); color:var(--dash-paper-ink);
   box-shadow:0 18px 40px -18px color-mix(in srgb, var(--dash-ink) 45%, transparent);
 }
@@ -102,8 +107,8 @@
 
 /* ── 陪讀者:選人、對話、紙邊的座位 ── */
 .dash-talk{padding:0; min-height:0; min-width:0; overflow:hidden}
-.dash[data-view="work"]{grid-template-columns:72px 1fr 340px}
-.dash[data-view="settings"]{grid-template-columns:72px 1fr}
+.dash[data-view="work"]{grid-template-columns:56px 1fr 340px}
+.dash[data-view="settings"]{grid-template-columns:56px 1fr}
 .dash-h{margin:0; font-size:var(--dash-t-xl); font-weight:600; color:var(--dash-ink)}
 .dash button:focus-visible, .dash textarea:focus-visible, .dash select:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ink)}
@@ -164,3 +169,4 @@
 .dash .feed-actions .feed-go:disabled{cursor:not-allowed; background:var(--dash-paper); color:var(--dash-ink-2)}
 @media (prefers-reduced-motion:reduce){ .dash .platen-mark{animation:none} }
 @media (max-width:979px){ .dash .reader-body{flex-direction:column; align-items:stretch} .dash .notes{max-width:none; flex-basis:auto; position:static; max-height:none; margin:8px 4% 0} }
+.dash .rail-foot .rail-btn{width:36px; height:36px; padding:0; justify-content:center}

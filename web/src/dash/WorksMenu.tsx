@@ -21,7 +21,10 @@ export default function WorksMenu({ anchor, works, current, onOpen, onSubmitNew,
     document.addEventListener("mousedown", onDown);
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
   }, [anchor, onClose]);
-  useEffect(() => { box.current?.querySelector("button")?.focus(); }, []);
+  useEffect(() => {
+    box.current?.querySelector("button")?.focus();
+    return () => anchor.focus();   // 關閉(Esc/選取/點外面)時把焦點還給錨
+  }, [anchor]);
 
   const r = anchor.getBoundingClientRect();
   return (
