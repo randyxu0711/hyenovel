@@ -15,7 +15,7 @@ const mount = async (d: object, onQuote = vi.fn()) => {
     <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
       <Reader slug="d1" companion="鬣狗" onQuote={onQuote} />
     </CharactersProvider>);
-  await screen.findByText("海");
+  await screen.findByText((d as { title?: string }).title ?? "海");
   return { ...r, onQuote };
 };
 const select = (node: Node, len: number) => {
@@ -31,6 +31,21 @@ describe("Reader", () => {
     await mount(detail());
     expect(screen.getByText("第一段。")).toBeTruthy();
     expect(screen.getByText("第 2 版")).toBeTruthy();
+  });
+  it("原文第一行就是標題(含《》)時不重複顯示;不同的第一行照留", async () => {
+    await mount(detail({ text: "《海》\n\n第一段。" }));
+    expect(screen.getAllByText(/海/)).toHaveLength(1);
+    expect(screen.getByText("第一段。")).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+  it("標題與第一行只差全半形標點也算同一個", async () => {
+    await mount(detail({ title: "海,開賣啦!", text: "《海，開賣啦！》\n\n第一段。" }));
+    expect(screen.queryByText("《海，開賣啦！》")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+  it("第一行只是提到標題的句子時不拿掉", async () => {
+    await mount(detail({ text: "海很深。\n\n第一段。" }));
+    expect(screen.getByText("海很深。")).toBeTruthy();
   });
   it("未分析的作品也能讀", async () => {
     await mount(detail({ state: "none", version: 1 }));

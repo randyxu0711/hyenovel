@@ -24,8 +24,10 @@
 .dash-desk{padding:0; color:var(--dash-ui-ink-2); overflow:auto; min-width:0}
 .dash-desk:not(:has(.reader)){padding:32px}
 .dash-tabs{display:none}
-.dash-rail{overflow:auto; min-height:0}
-.dash .rail-lists{display:flex; flex-direction:column; gap:14px; min-height:0}
+/* 左欄本身不捲:品牌、交稿、設定固定,只有清單捲動(不然清單溢出會疊到設定上)。 */
+.dash-rail{overflow:hidden; min-height:0}
+.dash-rail > *{flex:none}
+.dash .rail-lists{display:flex; flex-direction:column; gap:14px; min-height:0; flex:1 1 auto; overflow:auto}
 .dash .rail-h{font-size:var(--dash-t-xs); font-weight:600; color:var(--dash-ui-ink-2); margin:0 0 4px}
 .dash .rail-lists ul{list-style:none; margin:0; padding:0}
 .dash .rail-work, .dash .rail-session, .dash .rail-convo{
@@ -107,36 +109,36 @@
 }
 .dash .pick-text{display:flex; flex-direction:column; gap:2px; font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
 .dash .pick-text b{font-size:var(--dash-t-md)}
-.dash .talk{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ui-ink)}
-.dash .talk-head{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--dash-line)}
-.dash .talk-roster{display:flex; gap:6px}
-.dash .talk-pick{display:grid; place-items:center; padding:3px; cursor:pointer; border:2px solid transparent; border-radius:50%; background:transparent}
-.dash .talk-pick[aria-pressed="true"]{border-color:var(--dash-sig-t)}
-.dash .talk-collapse{border:0; background:transparent; cursor:pointer; font-size:var(--dash-t-lg); padding:2px 8px; color:var(--dash-ui-ink-2)}
-.dash .talk-log{flex:1; min-height:0; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px}
-.dash .talk-empty, .dash .talk-wait{margin:0; color:var(--dash-ui-ink-2); font-size:var(--dash-t-sm)}
-.dash .talk-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
-.dash .talk-text{margin:0; white-space:pre-wrap; line-height:1.8}
-.dash .talk-me{align-self:flex-end; max-width:90%; padding:8px 12px; border-radius:10px; background:var(--dash-bubble)}
-.dash .talk-me p{margin:0; white-space:pre-wrap}
-.dash .talk-quote{margin:0 0 6px; padding-left:10px; border-left:3px solid var(--dash-sig); font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
-.dash .talk-switch{display:flex; align-items:center; gap:10px; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ui-ink-2)}
-.dash .talk-switch::before, .dash .talk-switch::after{content:""; flex:1; height:1px; background:var(--dash-line)}
-.dash .talk-error{margin:0; padding:6px 16px; font-size:var(--dash-t-sm); color:var(--dash-ui-ink)}
-.dash .talk-form{display:flex; flex-direction:column; gap:8px; padding:10px 12px 14px; border-top:1px solid var(--dash-line)}
-.dash .talk-form textarea{
+.dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ui-ink)}
+.dash .chat-head{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--dash-line)}
+.dash .chat-roster{display:flex; gap:6px}
+.dash .chat-pick{display:grid; place-items:center; padding:3px; cursor:pointer; border:2px solid transparent; border-radius:50%; background:transparent}
+.dash .chat-pick[aria-pressed="true"]{border-color:var(--dash-sig-t)}
+.dash .chat-collapse{border:0; background:transparent; cursor:pointer; font-size:var(--dash-t-lg); padding:2px 8px; color:var(--dash-ui-ink-2)}
+.dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px}
+.dash .chat-empty, .dash .chat-wait{margin:0; color:var(--dash-ui-ink-2); font-size:var(--dash-t-sm)}
+.dash .chat-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
+.dash .chat-text{margin:0; white-space:pre-wrap; line-height:1.8}
+.dash .chat-me{align-self:flex-end; max-width:90%; padding:8px 12px; border-radius:10px; background:var(--dash-bubble)}
+.dash .chat-me p{margin:0; white-space:pre-wrap}
+.dash .chat-quote{margin:0 0 6px; padding-left:10px; border-left:3px solid var(--dash-sig); font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ui-ink-2)}
+.dash .chat-switch{display:flex; align-items:center; gap:10px; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ui-ink-2)}
+.dash .chat-switch::before, .dash .chat-switch::after{content:""; flex:1; height:1px; background:var(--dash-line)}
+.dash .chat-error{margin:0; padding:6px 16px; font-size:var(--dash-t-sm); color:var(--dash-ui-ink)}
+.dash .chat-form{display:flex; flex-direction:column; gap:8px; padding:10px 12px 14px; border-top:1px solid var(--dash-line)}
+.dash .chat-form textarea{
   resize:none; padding:8px 10px; font:inherit; line-height:1.6; color:var(--dash-ui-ink);
   border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-bubble);
 }
-.dash .talk-carry{display:flex; align-items:flex-start; gap:6px}
-.dash .talk-carry .talk-quote{flex:1; margin:0}
-.dash .talk-carry button{border:0; background:transparent; cursor:pointer; color:var(--dash-ui-ink-2); font-size:var(--dash-t-md)}
-.dash .talk-send{
+.dash .chat-carry{display:flex; align-items:flex-start; gap:6px}
+.dash .chat-carry .chat-quote{flex:1; margin:0}
+.dash .chat-carry button{border:0; background:transparent; cursor:pointer; color:var(--dash-ui-ink-2); font-size:var(--dash-t-md)}
+.dash .chat-send{
   align-self:flex-end; padding:8px 16px; border:0; border-radius:8px; cursor:pointer;
   background:var(--dash-enamel); color:var(--dash-enamel-ink); font-size:var(--dash-t-sm);
 }
-.dash .talk-send:disabled, .dash .talk-form textarea:disabled{cursor:not-allowed; background:var(--dash-panel); color:var(--dash-ui-ink-2)}
-@media (max-width:979px){ .dash .talk-collapse{display:none} .dash-seat{display:none} .dash[data-talk="closed"]{grid-template-columns:1fr} .dash[data-talk="closed"][data-pane="talk"] > .dash-talk{display:flex} }
+.dash .chat-send:disabled, .dash .chat-form textarea:disabled{cursor:not-allowed; background:var(--dash-panel); color:var(--dash-ui-ink-2)}
+@media (max-width:979px){ .dash .chat-collapse{display:none} .dash-seat{display:none} .dash[data-talk="closed"]{grid-template-columns:1fr} .dash[data-talk="closed"][data-pane="talk"] > .dash-talk{display:flex} }
 
 /* ── 交稿、分析進度、冷讀者的筆記 ── */
 .dash .platen-mark{display:inline-block; width:34px; height:3px; margin:0 8px 3px 12px; border-radius:2px; background:var(--dash-knob); vertical-align:middle; animation:platen-slide 3.2s ease-in-out infinite alternate}

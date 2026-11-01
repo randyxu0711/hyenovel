@@ -71,7 +71,7 @@ export default function Reader({ slug, companion, onQuote, onFinished, reload = 
       <article className="sheet">
         <h1>{work.title}</h1>
         <div ref={body}>
-          {work.text.split(/\n+/).filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}
+          {paragraphs(work.text, work.title).map((p, i) => <p key={i}>{p}</p>)}
         </div>
       </article>
       {notesOpen && work.notes_ready && <NotesPanel slug={slug} />}
@@ -88,4 +88,11 @@ export default function Reader({ slug, companion, onQuote, onFinished, reload = 
       )}
     </div>
   );
+}
+
+/** 原文分段;第一段若只是標題(標點、全半形、空白不計)就拿掉,標題已經在 h1 了。 */
+function paragraphs(text: string, title: string): string[] {
+  const ps = text.split(/\n+/).filter(p => p.trim());
+  const bare = (s: string) => s.normalize("NFKC").replace(/[\p{P}\p{S}\s]/gu, "");
+  return ps.length > 1 && bare(ps[0]) === bare(title) ? ps.slice(1) : ps;
 }
