@@ -23,6 +23,7 @@ const ch = (id: string, mode: string, zh: string, en: string, kind = id): Charac
   id, mode, name: { "zh-Hant": zh, en }, line: { "zh-Hant": "一句話", en: "A line" },
   avatar: { kind, seed: id },
   colors: { light: { fill: "#cc8650", text: "#925a2b" }, dark: { fill: "#dc9a66", text: "#dc9a66" } }, voice: "",
+  mark: (({ hyena: "pencil", buffalo: "highlighter", deer: "circle" }) as Record<string, Character["mark"]>)[id] ?? "pencil",
 });
 export const hyena = ch("hyena", "slow", "鬣狗", "Hyena");
 export const buffalo = ch("buffalo", "direct", "水牛", "Water buffalo");

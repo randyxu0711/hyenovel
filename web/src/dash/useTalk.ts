@@ -58,8 +58,8 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
           const d = ev.data, ts = Date.now() / 1000;
           setSession(d.session_id);
           setTurns(t => [...t,
-            { role: "user", text: message, ts, mode: null, character: null, quotes },
-            { role: "assistant", text: d.text, ts, mode: d.mode ?? null, character: d.character ?? null, quotes: [] }]);
+            { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [] },
+            { role: "assistant", text: d.text, ts, mode: d.mode ?? null, character: d.character ?? null, quotes: [], spans: d.spans ?? [] }]);
           ok = true;
         } else if (ev.event === "error") {
           fail(new DashError(0, ev.data?.code ?? "unknown", {}, ev.data?.message ?? ""));

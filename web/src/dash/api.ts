@@ -24,26 +24,36 @@ export type Character = {
   avatar: { kind: string; seed: string };
   colors: { light: ColorPair; dark: ColorPair };
   voice: string;
+  mark: "pencil" | "highlighter" | "circle";
 };
 export type ThemeTokens = Record<string, string>;
 export type Theme = { id: string; name: LText; source: string; light: ThemeTokens; dark: ThemeTokens };
 
-export type Work = { slug: string; title: string; version: number; chars: number; [k: string]: unknown };
+export type Span = { quote: string; start: number | null; end: number | null };
+export type Work = {
+  slug: string; title: string; version: number; chars: number; updated_at: number; state: string; [k: string]: unknown;
+};
 export type WorkDetail = {
   slug: string; title: string; version: number; text: string; state: string;
-  job_id: number | null; notes_ready: boolean;
+  job_id: number | null; notes_ready: boolean; versions: number[];
 };
 export type SessionRow = {
   session: string; started_at: number; last_at: number; turns: number;
-  character: string | null; mode: string | null; preview: string; version: number | null;
+  character: string | null; mode: string | null; preview: string; version: number | null; legacy: boolean;
 };
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type Turn = {
-  role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[];
+  role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
 };
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
-export type SessionDetail = { session: string; slug: string; title: string; turns: Turn[] };
+export type SessionDetail = { session: string; slug: string; title: string; turns: Turn[]; legacy: boolean; version: number };
+export type WorkMap = {
+  version: number; analysis_version: number | null; notes_version: number | null;
+  beats: { id: string; label: string; intensity: number | null; span: Span }[];
+  motifs: { id: string; label: string; spans: Span[] }[];
+  notes: { read: string; one_line: string; points: { kind: string; title: string; body: string; question: string | null; spans: Span[] }[] } | null;
+};
 
 /** 非 2xx 回應 → DashError(讀 den 的 {detail, code, params})。request 與串流共用。 */
 async function throwDashError(res: Response): Promise<never> {
@@ -78,14 +88,18 @@ async function* stream(url: string, init?: RequestInit): AsyncGenerator<SSEEvent
   }
 }
 
+const vq = (v?: number) => (v === undefined ? "" : `?v=${v}`);
+
 export const api = {
   works: async () => (await request<{ works: Work[] }>("/api/works")).works,
-  work: (slug: string) => request<WorkDetail>(`/api/works/${encodeURIComponent(slug)}`),
-  sessions: async (slug: string) =>
-    (await request<{ sessions: SessionRow[] }>(`/api/works/${encodeURIComponent(slug)}/sessions`)).sessions,
-  session: (session: string) => request<SessionDetail>(`/api/sessions/${encodeURIComponent(session)}`),
-  recentSessions: async (limit = 20) =>
-    (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}`)).sessions,
+  work: (slug: string, v?: number) => request<WorkDetail>(`/api/works/${encodeURIComponent(slug)}${vq(v)}`),
+  map: (slug: string, v?: number) => request<WorkMap>(`/api/works/${encodeURIComponent(slug)}/map${vq(v)}`),
+  sessions: async (slug: string, opts: { legacy?: boolean } = {}) =>
+    (await request<{ sessions: SessionRow[] }>(
+      `/api/works/${encodeURIComponent(slug)}/sessions${opts.legacy ? "?legacy=1" : ""}`)).sessions,
+  session: (session: string, v?: number) => request<SessionDetail>(`/api/sessions/${encodeURIComponent(session)}${vq(v)}`),
+  recentSessions: async (limit = 20, opts: { legacy?: boolean } = {}) =>
+    (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}${opts.legacy ? "&legacy=1" : ""}`)).sessions,
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),
   part: async (slug: string, part: "notes") =>

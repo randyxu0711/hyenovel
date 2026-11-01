@@ -5,7 +5,7 @@ import { api, type WorkDetail } from "../src/dash/api";
 import { setLang } from "../src/dash/i18n";
 
 afterEach(() => vi.restoreAllMocks());
-const work = (o: Partial<WorkDetail>): WorkDetail => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "ready", job_id: null, notes_ready: true, ...o });
+const work = (o: Partial<WorkDetail>): WorkDetail => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "ready", job_id: null, notes_ready: true, versions: [2], ...o });
 
 function mount(w: WorkDetail, onFinished = vi.fn()) {
   setLang("zh-Hant");

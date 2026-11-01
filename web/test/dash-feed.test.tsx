@@ -54,7 +54,7 @@ describe("Feed", () => {
   it("reused 但那篇還沒分析(state none/stopped):補開 job", async () => {
     const { onSubmitted } = mount();
     vi.spyOn(api, "submit").mockResolvedValue({ slug: "d1", title: "t", version: 1, new_version: false, reused: true });
-    vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "none", job_id: null, notes_ready: false });
+    vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "none", job_id: null, notes_ready: false, versions: [1] });
     const start = vi.spyOn(api, "startJob").mockResolvedValue({ job_id: 3 });
     type("稿");
     fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));
@@ -97,7 +97,7 @@ describe("Feed", () => {
   it("reused 且已分析完(ready/running/stale):不呼叫 startJob", async () => {
     const { onSubmitted } = mount();
     vi.spyOn(api, "submit").mockResolvedValue({ slug: "d1", title: "t", version: 1, new_version: false, reused: true });
-    vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "ready", job_id: null, notes_ready: true });
+    vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "ready", job_id: null, notes_ready: true, versions: [1] });
     const start = vi.spyOn(api, "startJob");
     type("稿");
     fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));
