@@ -180,3 +180,7 @@
 .dash .home-meet{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
 .dash .home-meet li{display:flex; align-items:center; gap:10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .home-meet b{color:var(--dash-ink)}
+.dash .home-who-pick{position:relative}
+.dash .home-who-menu{position:absolute; left:0; bottom:calc(100% + 6px); z-index:5; display:flex; flex-direction:column; gap:2px; padding:6px; min-width:140px}
+.dash .home-who-item{display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:6px; background:transparent; cursor:pointer; color:var(--dash-ink); text-align:left}
+.dash .home-who-item[aria-pressed="true"]{background:var(--dash-desk-2); font-weight:600}

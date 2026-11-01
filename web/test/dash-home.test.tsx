@@ -80,7 +80,7 @@ describe("進門畫面", () => {
   it("剛讀完沒聊過:顯示《海》讀完了。與連到作品頁的「聽聽看」;只查最近那篇的局", async () => {
     mount();
     expect(await screen.findByText("《海》讀完了。")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "聽聽看" }).getAttribute("href")).toBe("/w/d2");
+    expect(screen.getByRole("link", { name: /聽聽看/ }).getAttribute("href")).toBe("/w/d2");
     const asked = calls.filter(c => c.url.endsWith("/sessions")).map(c => c.url);
     expect(asked).toEqual(["/api/works/d2/sessions"]);
   });
@@ -112,6 +112,27 @@ describe("進門畫面", () => {
     await screen.findByText("嗯");
     await new Promise(r => setTimeout(r, 30));
     expect(discuss()).toHaveLength(1);
+  });
+  it("陪讀者選單:選別位 → 送出的 /api/discuss 帶那位;Esc 關閉", async () => {
+    mount();
+    await box();
+    fireEvent.click(screen.getByRole("button", { name: "陪讀者" }));
+    const g = within(screen.getByRole("group", { name: "陪讀者" }));
+    fireEvent.keyDown(g.getByRole("button", { name: "鬣狗" }), { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "陪讀者" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "陪讀者" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "陪讀者" })).getByRole("button", { name: "水牛" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "對話輸入" }), { target: { value: "嗨" } });
+    fireEvent.click(screen.getByRole("button", { name: "送出" }));
+    await waitFor(() => expect(discuss()).toHaveLength(1));
+    expect(discuss()[0].body.character).toBe("buffalo");
+  });
+  it("chips 最多 5 個(最近的 5 篇)", async () => {
+    works = Array.from({ length: 7 }, (_, i) => W(`d${i}`, `作${i}`, 100 - i));
+    mount();
+    const g = within(await screen.findByRole("group", { name: "聊哪一篇" }));
+    expect(g.getAllByRole("button")).toHaveLength(5);
+    expect(g.queryByRole("button", { name: "作5" })).toBeNull();
   });
   it("包在 StrictMode 裡送出也只打一次", async () => {
     mount(true);

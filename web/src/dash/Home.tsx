@@ -7,6 +7,7 @@ import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
 import { useCharacters } from "./useCharacters";
 import { companionId, MAX_CHAT } from "./useTalk";
 
+const CHIPS = 5;
 const READ_STATES = ["ready", "notes-running", "notes-stopped"];
 
 /** 最近一篇讀完了、而且它的最新版還沒聊過 → 回它,否則 null。works 已依最近活動排序。 */
@@ -33,9 +34,12 @@ export default function Home({ works, onSubmitted }: {
   const [picked, setPicked] = useState<string | null>(null);
   const [talked, setTalked] = useState<Record<string, number[]>>({});
   const { draft, busy, error, fromFile, fromText, confirm, cancel } = useSubmitDraft();
-  const me = chars.byId(companionId(chars));
+  const [who, setWho] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const me = chars.byId(who ?? companionId(chars));
   const latest = works[0];
-  const chosen = picked && works.some(w => w.slug === picked) ? picked : latest?.slug;
+  const chosen = picked && works.slice(0, CHIPS).some(w => w.slug === picked) ? picked : latest?.slug;
 
   // 新對話 / 交一篇新的 回到這裡時,把游標放進輸入框。
   const wantsFocus = (loc.state as { focus?: boolean } | null)?.focus === true;
@@ -68,7 +72,7 @@ export default function Home({ works, onSubmitted }: {
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f) void fromFile(f);
+    if (f && !busy) void fromFile(f);
   };
   const submitDraft = async () => {
     const r: SubmitResult | null = await confirm();
@@ -113,7 +117,24 @@ export default function Home({ works, onSubmitted }: {
             {error && <p role="alert" className="home-msg">{t(errorMessage(error))}</p>}
             {!none && (
               <div className="home-row">
-                <Avatar character={me} size={22} />
+                <div className="home-who-pick">
+                  <button type="button" ref={toggle} className="dash-key home-who-btn" aria-haspopup="true" aria-expanded={menu}
+                    aria-label={t("talk.who")} onClick={() => setMenu(m => !m)}>
+                    <Avatar character={me} size={22} />{localized(me.name, lang)} <span aria-hidden="true">▾</span>
+                  </button>
+                  {menu && (
+                    <div className="dash-float home-who-menu" role="group" aria-label={t("talk.who")}
+                      onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenu(false); toggle.current?.focus(); } }}>
+                      {chars.list.map(c => (
+                        <button key={c.id} type="button" className="home-who-item" aria-pressed={c.id === me.id}
+                          autoFocus={c.id === me.id}
+                          onClick={() => { setWho(c.id); setMenu(false); toggle.current?.focus(); }}>
+                          <Avatar character={c} size={22} />{localized(c.name, lang)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button type="submit" className="dash-key home-send" disabled={!text.trim()}>{t("talk.send")}</button>
               </div>
             )}
@@ -132,7 +153,7 @@ export default function Home({ works, onSubmitted }: {
         ) : (
           <div className="home-recent" role="group" aria-label={t("home.which")}>
             <span>{t("home.which")}</span>
-            {works.map(w => (
+            {works.slice(0, CHIPS).map(w => (
               <button key={w.slug} type="button" className="home-chip" aria-pressed={w.slug === chosen}
                 onClick={() => setPicked(w.slug)}>{w.title}</button>
             ))}
