@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, DashError, type Work, type WorkDetail } from "./api";
 import { errorMessage, useT, type MsgKey } from "./i18n";
-import NotesPanel from "./NotesPanel";
 import Paper, { type Mark } from "./Paper";
 import { useJob } from "./useJob";
 import WorksMenu from "./WorksMenu";
@@ -42,14 +41,13 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const [work, setWork] = useState<WorkDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [resumeErr, setResumeErr] = useState<string | null>(null);
-  const [notesOpen, setNotesOpen] = useState(false);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rev, setRev] = useState(0);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
   const job = useJob(analyzing ? work!.job_id : null);
 
-  useEffect(() => { setNotesOpen(false); setResumeErr(null); }, [slug]);
+  useEffect(() => { setResumeErr(null); }, [slug]);
   useEffect(() => {
     if (!job.done && !job.error) return;
     setRev(r => r + 1); onFinished?.();
@@ -73,10 +71,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
     api.startJob(slug, { resumeOnly: true }).then(() => { setRev(r => r + 1); onFinished?.(); },
       e => setResumeErr(e instanceof DashError ? e.code : "unknown"));
   };
-  const notesBlock = work.notes_ready ? null
-    : t(ANALYZING.includes(work.state) ? "notes.running" : "notes.none");
   return (
-    <div className="reader" data-notes={notesOpen ? "open" : "closed"}>
+    <div className="reader">
       <header className="paper-top">
         <h1 className="paper-h">
           <button type="button" className="paper-title" aria-haspopup="dialog" aria-expanded={!!menu}
@@ -95,11 +91,6 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
         </span>
         {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={resume}>{t("paper.resume")}</button>}
         {resumeErr && <span className="paper-state" role="alert">{t(errorMessage(resumeErr))}</span>}
-        <button type="button" className="reader-notes" disabled={notesBlock !== null} aria-pressed={notesOpen}
-          aria-describedby={notesBlock ? "notes-why" : undefined} onClick={() => setNotesOpen(o => !o)}>
-          {t(notesOpen ? "notes.close" : "notes.open")}
-        </button>
-        {notesBlock && <span id="notes-why" className="reader-why">{notesBlock}</span>}
       </header>
       {work.version !== latest && (
         <p className="paper-old">
@@ -107,10 +98,7 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
           <button type="button" onClick={() => pickVersion(latest)}>{t("paper.latest")}</button>
         </p>
       )}
-      <div className="reader-body">
-        <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote} />
-        {notesOpen && work.notes_ready && <NotesPanel slug={slug} />}
-      </div>
+      <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote} />
       {menu && <WorksMenu anchor={menu} below works={works} current={slug} onOpen={onOpen}
         onSubmitNew={onSubmitNew} onClose={() => setMenu(null)} />}
     </div>

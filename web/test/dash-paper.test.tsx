@@ -98,6 +98,11 @@ describe("Paper", () => {
     act(() => links.setHover(null));
     expect(marks()[0].classList.contains("is-hover")).toBe(false);
   });
+  it("滑過帶位置 → 只亮那個位置的痕跡(同一句出現兩處)", () => {
+    mount("海。海。", [mk(0, 1), mk(2, 3, "buffalo")]);
+    act(() => links.setHover("海", 2));
+    expect(marks().map(m => m.classList.contains("is-hover"))).toEqual([false, true]);
+  });
   it("點痕跡 → jumpToTalk(那句原文)", () => {
     mount("海很深。", [mk(0, 3)]);
     const talk = vi.fn(() => true);
@@ -114,6 +119,11 @@ describe("Paper", () => {
     expect(p.classList.contains("is-flash")).toBe(true);
     act(() => { vi.advanceTimersByTime(1500); });
     expect(screen.getByText("第二段。").classList.contains("is-flash")).toBe(false);
+  });
+  it("jumpToPaper 的位置對不上這張稿(別版的位置)→ 不跳", () => {
+    mount("第一段。\n第二段。", []);
+    act(() => links.jumpToPaper({ quote: "第三段", start: 5, end: 8 }));
+    expect(document.querySelector(".is-flash")).toBeNull();
   });
   it("jumpToPaper 對不到位置(start 為 null)什麼都不做", () => {
     mount("第一段。", []);

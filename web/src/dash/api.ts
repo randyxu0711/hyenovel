@@ -106,8 +106,6 @@ export const api = {
     (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}${opts.legacy ? "&legacy=1" : ""}`)).sessions,
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),
-  part: async (slug: string, part: "notes") =>
-    (await request<{ text: string }>(`/api/works/${encodeURIComponent(slug)}/${part}`)).text,
   estimate: async (chars: number) =>
     (await request<{ estimate: Estimate | null }>(`/api/estimate?chars=${chars}`)).estimate,
   extract: (file: File) => {

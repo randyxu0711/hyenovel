@@ -1,83 +1,76 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import Reader from "../src/dash/Reader";
-import { api, type WorkDetail } from "../src/dash/api";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useEffect } from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import NotesTab from "../src/dash/NotesTab";
+import type { Span, WorkMap } from "../src/dash/api";
 import { setLang } from "../src/dash/i18n";
-import { LinksProvider } from "../src/dash/links";
-import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
-import { hyena } from "./dash-fixtures";
+import { LinksProvider, useLinks } from "../src/dash/links";
 
-afterEach(() => vi.restoreAllMocks());
-const work = (o: Partial<WorkDetail>): WorkDetail => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "ready", job_id: null, notes_ready: true, versions: [2], ...o });
+function PaperSpy({ on }: { on: (s: Span) => void }) {
+  const { registerPaper } = useLinks();
+  useEffect(() => registerPaper(on), [registerPaper, on]);
+  return null;
+}
+function HoverSpy() { const l = useLinks(); return <output data-testid="hover" data-at={l.hoverAt ?? ""}>{l.hover ?? ""}</output>; }
 
-function mount(w: WorkDetail, onFinished = vi.fn()) {
-  setLang("zh-Hant");
-  vi.spyOn(api, "work").mockResolvedValue(w);
-  render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
-    <Reader slug="d1" works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onFinished={onFinished} />
-  </LinksProvider></CharactersProvider></MemoryRouter>);
-  return onFinished;
+const map = (o: Partial<WorkMap> = {}): WorkMap => ({
+  version: 2, analysis_version: 2, notes_version: 2, beats: [], motifs: [], notes: null, ...o,
+});
+const notes: WorkMap["notes"] = {
+  read: "讀到的", one_line: "一件事",
+  points: [
+    { kind: "confused", title: "鑰匙突然出現", body: "前面沒提過。", question: "早一點出現?", spans: [{ quote: "她摸出鑰匙", start: 4, end: 9 }] },
+    { kind: "moved", title: "泥的溫度", body: "觸覺開場。", question: null, spans: [{ quote: "泥是溫的", start: null, end: null }] },
+  ],
+};
+function mount(m: WorkMap | null, state = "ready", on = vi.fn()) {
+  render(<LinksProvider><PaperSpy on={on} /><HoverSpy /><NotesTab map={m} state={state} /></LinksProvider>);
+  return on;
 }
 
-describe("冷讀者的筆記", () => {
-  it("notes_ready=false 且沒在分析:disabled 並說明沒有筆記", async () => {
-    mount(work({ notes_ready: false, state: "none" }));
-    const b = await screen.findByRole("button", { name: "冷讀者的筆記" }) as HTMLButtonElement;
-    expect(b.disabled).toBe(true);
-    expect(screen.getByText("還沒有筆記")).toBeTruthy();
-  });
-  it("分析中:disabled 並說筆記還在寫", async () => {
-    vi.spyOn(api, "jobEvents").mockImplementation(async function* () { await new Promise(() => {}); });
-    mount(work({ notes_ready: false, state: "notes-running", job_id: 5 }));
-    expect((await screen.findByRole("button", { name: "冷讀者的筆記" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("筆記還在寫")).toBeTruthy();
-  });
-  it("預設不顯示;打開後第一行是冷讀者說明,內文用 markdown,稿仍在", async () => {
-    mount(work({}));
-    const part = vi.spyOn(api, "part").mockResolvedValue("## 第一點\n\n**粗** 的");
-    await screen.findByText("內文");
-    expect(part).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "冷讀者的筆記" }));
-    const panel = await screen.findByRole("complementary", { name: "冷讀者的筆記" });
-    expect(panel.firstElementChild!.textContent).toBe("這是另一位冷讀者的筆記");
-    expect(await screen.findByRole("heading", { name: "第一點" })).toBeTruthy();
-    expect(screen.getByText("內文")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "收起筆記" }));
-    expect(screen.queryByRole("complementary")).toBeNull();
-  });
-});
+beforeEach(() => setLang("zh-Hant"));
 
-describe("分析進度", () => {
-  it("顯示步驟;done 後重抓這篇並通知左欄", async () => {
-    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
-      yield { event: "phase", data: { name: "analyst", status: "start" } };
-      yield { event: "done", data: { ok: true } };
-    });
-    const onFinished = mount(work({ state: "running", job_id: 5, notes_ready: false }));
-    await waitFor(() => expect(onFinished).toHaveBeenCalled());
-    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+describe("筆記分頁", () => {
+  it("開頭說是冷讀者讀完第 N 版留下的、陪讀者看不到;各點有類型、標題、說明、問題", () => {
+    mount(map({ notes }));
+    expect(screen.getByText("冷讀者讀完第 2 版留下的筆記。陪讀者看不到這些。")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "鑰匙突然出現" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "泥的溫度" })).toBeTruthy();
+    expect(screen.getByText("卡住的")).toBeTruthy();
+    expect(screen.getByText("前面沒提過。")).toBeTruthy();
+    expect(screen.getByText("早一點出現?")).toBeTruthy();
   });
-  it("分析中時頂列說「分析中」與目前步驟", async () => {
-    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
-      yield { event: "phase", data: { name: "reviewer", status: "start" } };
-      await new Promise(() => {});
-    });
-    mount(work({ state: "running", job_id: 5 }));
-    expect((await screen.findByRole("status")).textContent).toContain("分析中");
-    await screen.findByText(/寫備課筆記/);
+  it("引文是按鈕:滑過設 hover、點了跳到稿", () => {
+    const on = mount(map({ notes }));
+    const b = screen.getByRole("button", { name: "「她摸出鑰匙」" });
+    fireEvent.mouseEnter(b);
+    expect(screen.getByTestId("hover").textContent).toBe("她摸出鑰匙");
+    expect(screen.getByTestId("hover").dataset.at).toBe("4");
+    fireEvent.mouseLeave(b);
+    expect(screen.getByTestId("hover").textContent).toBe("");
+    fireEvent.click(b);
+    expect(on).toHaveBeenCalledWith({ quote: "她摸出鑰匙", start: 4, end: 9 });
   });
-  it("只收到終態 state 事件(已結束的 job)也算結束,重抓並通知", async () => {
-    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
-      yield { event: "state", data: { state: "done", step: null } };
-    });
-    const onFinished = mount(work({ state: "running", job_id: 5 }));
-    await waitFor(() => expect(onFinished).toHaveBeenCalled());
-    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+  it("這版對不到的引文是灰的、有說明,點了不跳", () => {
+    const on = mount(map({ notes }));
+    const b = screen.getByRole("button", { name: "「泥是溫的」" });
+    expect(b.getAttribute("title")).toBe("這句在第 2 版找不到");
+    fireEvent.click(b);
+    expect(on).not.toHaveBeenCalled();
   });
-  it("串流沒收尾就斷了也算結束", async () => {
-    vi.spyOn(api, "jobEvents").mockImplementation(async function* () { /* 空串流 */ });
-    const onFinished = mount(work({ state: "running", job_id: 5 }));
-    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+  it.each([
+    ["notes-running", "筆記還在寫。"],
+    ["running", "筆記還在寫。"],
+    ["notes-stopped", "筆記停住了。"],
+    ["stopped", "筆記停住了。"],
+    ["ready", "這篇是舊版流程讀的,沒有筆記。"],
+    ["none", "還沒分析,所以還沒有筆記。"],
+  ])("沒有筆記、作品 %s → %s", (state, text) => {
+    mount(map(), state);
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+  it("對位資料還沒到:載入中", () => {
+    mount(null);
+    expect(screen.getByText("載入中……")).toBeTruthy();
   });
 });

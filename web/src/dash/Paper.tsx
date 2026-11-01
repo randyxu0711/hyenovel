@@ -13,7 +13,8 @@ type Segment = { start: number; text: string };
 const MARKS = ["pencil", "highlighter", "circle"];
 const FLASH_MS = 1400;
 const last = <T,>(xs: T[]): T | undefined => xs[xs.length - 1];
-const bare = (s: string) => s.normalize("NFKC").replace(/[\p{P}\p{S}\s]/gu, "");
+/** 寬鬆比對用:去標點、符號、空白,NFKC。 */
+export const bare = (s: string) => s.normalize("NFKC").replace(/[\p{P}\p{S}\s]/gu, "");
 
 /** 原文分段(換行切),每段記它在原文的 code point 起點;段頭尾空白不算進段裡。
  *  第一段若只是標題(標點、全半形、空白不計)就略過,標題已經在頂列了。 */
@@ -57,7 +58,7 @@ export default function Paper({ text, title, marks, drawing, onBring }: {
   const t = useT();
   const chars = useCharacters();
   const { mode } = useThemeState();
-  const { hover, jumpToTalk, registerPaper } = useLinks();
+  const { hover, hoverAt, jumpToTalk, registerPaper } = useLinks();
   const box = useRef<HTMLDivElement>(null);
   const { quote, tooLong, rect, clear } = useSelectionQuote(box);
   const [flash, setFlash] = useState<{ start: number; n: number } | null>(null);
@@ -66,10 +67,14 @@ export default function Paper({ text, title, marks, drawing, onBring }: {
   // 跳到稿:找包含 span 起點的那段,捲過去並閃一下
   const segsRef = useRef(segs);
   segsRef.current = segs;
+  const textRef = useRef(text);
+  textRef.current = text;
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = registerPaper(span => {
       if (span.start === null) return;
+      // 位置要對得上這張稿(寬鬆比對);別版的位置不跳,免得捲到錯的段落
+      if (span.end === null || bare(cpSlice(textRef.current, span.start, span.end)) !== bare(span.quote)) return;
       const seg = last(segsRef.current.filter(s => s.start <= span.start!));
       if (!seg) return;
       const el = box.current?.querySelector<HTMLElement>(`p[data-start="${seg.start}"]`);
@@ -94,7 +99,7 @@ export default function Paper({ text, title, marks, drawing, onBring }: {
               const m = pc.mark;
               const c = chars.byId(m.character);
               const quote = cpSlice(text, m.start, m.end);
-              const cls = ["dash-mark", m.id === drawing && "is-drawing", hoverKey && bare(quote) === hoverKey && "is-hover"]
+              const cls = ["dash-mark", m.id === drawing && "is-drawing", hoverKey && bare(quote) === hoverKey && (hoverAt === null || hoverAt === m.start) && "is-hover"]
                 .filter(Boolean).join(" ");
               return (
                 <span key={i} className={cls} data-mark={MARKS.includes(c.mark) ? c.mark : "pencil"} data-id={m.id}

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom";
 import Reader, { stateText } from "../src/dash/Reader";
+import { api, type WorkDetail } from "../src/dash/api";
 import { setLang, translate } from "../src/dash/i18n";
 import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
@@ -147,5 +148,54 @@ describe("stateText", () => {
   it("兩種語言都有", () => {
     for (const s of ["running", "notes-running", "notes-stopped", "ready", "stopped", "stale", "none"])
       expect(translate("en", stateText(s, s === "ready"))).not.toBe(translate("zh-Hant", stateText(s, s === "ready")));
+  });
+});
+
+describe("分析進度", () => {
+  const work = (o: object) => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "ready", job_id: null, notes_ready: true, versions: [2], ...o });
+  const mountSpy = (w: object, onFinished = vi.fn()) => {
+    setLang("zh-Hant");
+    vi.spyOn(api, "work").mockResolvedValue(w as WorkDetail);
+    render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
+      <Reader slug="d1" works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onFinished={onFinished} />
+    </LinksProvider></CharactersProvider></MemoryRouter>);
+    return onFinished;
+  };
+  afterEach(() => vi.restoreAllMocks());
+  it("顯示步驟;done 後重抓這篇並通知左欄", async () => {
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
+      yield { event: "phase", data: { name: "analyst", status: "start" } };
+      yield { event: "done", data: { ok: true } };
+    });
+    const onFinished = mountSpy(work({ state: "running", job_id: 5, notes_ready: false }));
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+  });
+  it("分析中時頂列說「分析中」與目前步驟", async () => {
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
+      yield { event: "phase", data: { name: "reviewer", status: "start" } };
+      await new Promise(() => {});
+    });
+    mountSpy(work({ state: "running", job_id: 5 }));
+    expect((await screen.findByRole("status")).textContent).toContain("分析中");
+    await screen.findByText(/寫備課筆記/);
+  });
+  it("只收到終態 state 事件(已結束的 job)也算結束,重抓並通知", async () => {
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
+      yield { event: "state", data: { state: "done", step: null } };
+    });
+    const onFinished = mountSpy(work({ state: "running", job_id: 5 }));
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+  });
+  it("串流沒收尾就斷了也算結束", async () => {
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () { /* 空串流 */ });
+    const onFinished = mountSpy(work({ state: "running", job_id: 5 }));
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+  });
+  it("稿窗格頂列不再有筆記鍵(筆記在右欄分頁)", async () => {
+    mountSpy(work({}));
+    await screen.findByText("內文");
+    expect(screen.queryByRole("button", { name: /筆記/ })).toBeNull();
   });
 });

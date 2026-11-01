@@ -5,6 +5,7 @@ import Avatar from "./Avatar";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
 import { useCharacters } from "./useCharacters";
+import WhoPick from "./WhoPick";
 import { companionId, MAX_CHAT } from "./useTalk";
 
 const CHIPS = 5;
@@ -35,8 +36,6 @@ export default function Home({ works, onSubmitted }: {
   const [talked, setTalked] = useState<Record<string, number[]>>({});
   const { draft, busy, error, fromFile, fromText, confirm, cancel } = useSubmitDraft();
   const [who, setWho] = useState<string | null>(null);
-  const [menu, setMenu] = useState(false);
-  const toggle = useRef<HTMLButtonElement>(null);
   const me = chars.byId(who ?? companionId(chars));
   const latest = works[0];
   const chosen = picked && works.slice(0, CHIPS).some(w => w.slug === picked) ? picked : latest?.slug;
@@ -117,24 +116,7 @@ export default function Home({ works, onSubmitted }: {
             {error && <p role="alert" className="home-msg">{t(errorMessage(error))}</p>}
             {!none && (
               <div className="home-row">
-                <div className="home-who-pick">
-                  <button type="button" ref={toggle} className="dash-key home-who-btn" aria-haspopup="true" aria-expanded={menu}
-                    aria-label={t("talk.who")} onClick={() => setMenu(m => !m)}>
-                    <Avatar character={me} size={22} />{localized(me.name, lang)} <span aria-hidden="true">▾</span>
-                  </button>
-                  {menu && (
-                    <div className="dash-float home-who-menu" role="group" aria-label={t("talk.who")}
-                      onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenu(false); toggle.current?.focus(); } }}>
-                      {chars.list.map(c => (
-                        <button key={c.id} type="button" className="home-who-item" aria-pressed={c.id === me.id}
-                          autoFocus={c.id === me.id}
-                          onClick={() => { setWho(c.id); setMenu(false); toggle.current?.focus(); }}>
-                          <Avatar character={c} size={22} />{localized(c.name, lang)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <WhoPick me={me} onPick={setWho} />
                 <button type="submit" className="dash-key home-send" disabled={!text.trim()}>{t("talk.send")}</button>
               </div>
             )}
