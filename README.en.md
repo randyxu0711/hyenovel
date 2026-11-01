@@ -20,24 +20,22 @@
 
 For people who **write literary short fiction in Chinese / Taiwanese (< 10k characters)**.
 
-It isn't a paste-and-get-a-review one-shot. It's a personal thinking partner that **analyzes, gives developmental feedback, discusses back and forth, and visualizes** the analysis — helping you read one piece to the bottom. When a story comes in, two **deliberately isolated** AIs split the work: one only **observes** (extracting themes / motifs / techniques / effects / characters / beats, each pinned to verbatim quotes), the other only **judges** (a developmental-editor persona giving weighted, sycophancy-free feedback). Observation and judgment stay apart — that's what keeps the judgment independent.
+It isn't a paste-and-get-a-review one-shot. It's a **reading companion**: it reads your draft, talks it through with you, and visualizes the analysis — helping you read one piece to the bottom. When a story comes in, two **deliberately isolated** AIs work in the background: one only **observes** (extracting themes / motifs / techniques / effects / characters / beats, each pinned to verbatim quotes), the other is a **neutral reader** who writes down what it actually felt, where it got stuck, and what it thinks (prep notes, ranked by weight, no flattery). Observation and judgment stay apart — that's what keeps the judgment independent. The companion you talk to gets only the source and a condensed analysis — **never the notes** — and speaks from its own reading.
 
 ## A look at the interface
 
-You arrive in a starfield where each story is a **data-driven star-bone** (spine = tension curve, ribs = themes and motifs). Dive into one and you land on its three views.
+<!-- screenshots and demo to come -->
 
-<div align="center">
-<img src="assets/demo.gif" alt="hyenovel journey: enter → pick → dive → dissect" width="80%">
-</div>
+Dot-matrix type, soft blobs, one-key day/night. Three screens:
 
-<div align="center">
-<img src="assets/shot-catalog.png" alt="Catalog starfield: each story is a star-bone" width="80%">
-</div>
+- **Entrance**: one sentence, one input box. Submit a draft or just start talking; recent works are listed below, and you can pick today's companion.
+- **Work**: the draft on the left (paper, the reader's marks, version switching), three tabs on the right —
+  - **Talk**: back-and-forth with the companion; whatever line it quotes gets underlined in the draft.
+  - **Notes**: the neutral reader's prep notes, ranked by weight, each anchored to the source.
+  - **Structure**: a dot-matrix intention chain (technique → effect → theme) and the text's tension.
+- **Settings**: appearance, language, companions and data on their own page.
 
-| Intention chain | Text-axis anatomy | Developmental feedback |
-|:---:|:---:|:---:|
-| ![intention chain](assets/shot-chain.png) | ![text axis](assets/shot-axis.png) | ![feedback](assets/shot-feedback.png) |
-| technique → effect → theme: see exactly what recoil each move produces | tension curve + motif recurrence + technique/effect marks, laid out along the text | editor overview, the few things that matter most, strengths, the one change to make — each anchored to the source |
+Narrow screens switch to a single pane; `⌘K` opens a command palette, with keyboard navigation throughout.
 
 ## Why it's different
 
@@ -45,10 +43,10 @@ You arrive in a starfield where each story is a **data-driven star-bone** (spine
 |---|---|---|
 | **Observe vs. judge** | two isolated subagents: observe first, judge second — judgment stays independent | one model writes it all at once; observation is polluted by judgment |
 | **Citations** | every claim is **pinned to a verbatim quote**; a hard gate verifies it against the source and blocks hallucinated quotes | often riffs from impression, hard to trace back |
-| **Billing** | runs on Claude Code, **on your subscription** — the whole pipeline isn't metered per token. At API price-list rates a single critique costs roughly **$0.7–0.9** (analyst + criticizer + deterministic layer); multi-turn discussion rides the cache and costs less. That delta is what the subscription saves versus per-token billing. | metered per API token; the more you talk, the more it costs |
+| **Billing** | runs on Claude Code, **on your subscription** — the whole pipeline isn't metered per token. At API price-list rates a single critique costs roughly **$0.7–0.9** (analyst + reviewer + deterministic layer); multi-turn discussion rides the cache and costs less. That delta is what the subscription saves versus per-token billing. | metered per API token; the more you talk, the more it costs |
 | **Privacy** | **localhost, single-user** only; your story is processed through your own Claude Code subscription (Anthropic) — not uploaded to a separate third-party review service, not stored in a vendor database. Your writing stays in a local database | content uploaded to a third-party cloud review site |
-| **Visualization** | intention chain (technique→effect→theme) + text-axis tension curve | plain bulleted text |
-| **Interaction** | **discuss** a piece back and forth — opinionated, anti-sycophancy, asks back | one-shot, tends toward flattering summaries |
+| **Visualization** | intention chain (technique→effect→theme) + text tension; the draft is underlined wherever the companion quotes | plain bulleted text |
+| **Interaction** | **talk** a piece through with the companion in three readings (direct / slow / imaginative) — doesn't just agree, doesn't rewrite for you, asks back | one-shot, tends toward flattering summaries |
 
 ## Install
 
@@ -73,13 +71,18 @@ cd web && npm install && cd ..
 
 ## Run & use
 
-### Web app (recommended)
+### Dashboard (main entrance)
 
 ```bash
-./dev.sh          # ensures den is running + starts the frontend, Ctrl+C stops the frontend
+cd web && npm run build && cd ..   # first time, and after every pull
+.venv/bin/python -m den.open       # ensures den is running, opens the browser
 ```
 
-(Equivalent to `python -m den` then `cd web && npm run dev`.) Existing users: after pulling (old server stopped), run `python -m marrow.importer` once so old conclusions link to their analysis. Open http://localhost:5173 — dive into a story, view the intention chain / text axis, read the editor feedback. To talk with the companion in the agent, use `/hyenovel:companion`.
+`den.open` exchanges a one-time launch code (valid for 120 s) and opens your default browser; if it can't (common on WSL), click the URL it prints. den serves the dashboard same-origin, with the API under `/api`.
+
+For frontend development use `./dev.sh` instead (ensures den is running + starts vite at http://localhost:5173; Ctrl+C stops only the frontend).
+
+Existing users: import pieces from the old `stories/` once with `python -m marrow.importer`.
 
 > localhost, single-user only; subscription auth is bound to local credentials — **do not deploy to the cloud**.
 
@@ -92,14 +95,14 @@ cd web && npm install && cd ..
 ## How it works
 
 ```
-submit_work(file path)  ─▶ den ─ analyst ▶ criticizer ─▶ DB (source of truth: observation + judgment)
-                                                           │
-                          ┌────────────────┬───────────────┘
-                          ▼                ▼
-                   web (reads den)   python -m export ─▶ md + html
+submit_work(file path)  ─▶ den ─ analyst ▶ reviewer ─▶ DB (source of truth: observation + judgment)
+                                                         │
+                    ┌───────────────────┬────────────────┴────────────────┐
+                    ▼                   ▼                                 ▼
+          web (reads den /api)   talk_to_companion (MCP)        python -m export ─▶ md + html
 ```
 
-The observer and the judge are **two independent steps with separate contexts** — never the same context — so judgment independence isn't polluted. Their outputs feed the visualization, drawing out the technique → effect → theme intention chain and the text tension curve. **Every claim must match the source verbatim** (a hard gate that blocks hallucinated quotes).
+The observer and the judge are **two independent steps with separate contexts** — never the same context — so judgment independence isn't polluted. The companion can start talking as soon as the analysis is ready, without waiting for the notes. Their outputs feed the visualization, drawing out the technique → effect → theme intention chain and the text tension curve. **Every claim must match the source verbatim** (a hard gate that blocks hallucinated quotes).
 
 > For the internal contracts and design: `schemas/analysis.schema.json`, `docs/DESIGN.md`.
 
