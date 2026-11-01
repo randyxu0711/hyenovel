@@ -83,6 +83,16 @@ def add_source_version(conn, story_id: int, text: str, now: float) -> tuple[int,
     return cur.lastrowid, True
 
 
+def source_versions(conn, story_id: int) -> list[dict]:
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM source_version WHERE story_id = ? ORDER BY n", (story_id,)).fetchall()]
+
+
+def source_version_by_n(conn, story_id: int, n: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM source_version WHERE story_id = ? AND n = ?",
+                             (story_id, n)).fetchone())
+
+
 def source_version(conn, source_version_id: int) -> dict | None:
     return _row(conn.execute("SELECT * FROM source_version WHERE id = ?",
                              (source_version_id,)).fetchone())

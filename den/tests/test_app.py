@@ -930,6 +930,11 @@ def test_dashboard_read_routes_errors(data, caplog):
         for path in ("/api/works/nope", "/api/works/nope/sessions"):
             r = c.get(path, headers=h)
             assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        r = c.get("/api/works/mini?v=9", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+        assert "reason=unknown-version" in caplog.text
+        assert c.get("/api/works/mini?v=1", headers=h).json()["version"] == 1
+        assert c.get("/api/works/mini?v=0", headers=h).status_code == 422
         assert c.get("/api/works/BAD!/sessions", headers=h).json()["code"] == "bad-slug"
         r = c.get("/api/sessions/nope", headers=h)
         assert r.status_code == 404 and r.json()["code"] == "unknown-session-id"

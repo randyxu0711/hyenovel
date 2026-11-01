@@ -82,13 +82,22 @@ def _title(conn, story_id: int, slug: str) -> str:
     return (ana or {}).get("body", {}).get("title") or repo.story(conn, story_id)["title"] or slug
 
 
-def work_detail(conn, slug: str) -> dict:
+class UnknownVersion(Exception):
+    """指定的原文版本不存在。"""
+
+
+def work_detail(conn, slug: str, v: int | None = None) -> dict:
     row = next((w for w in works.rows(conn) if w["slug"] == slug), None)
     if row is None:
         raise LookupError(slug)
     st = repo.story_by_slug(conn, slug)
     notes = repo.current_artifact(conn, st["id"], "notes")
-    return {"slug": slug, "title": row["title"], "version": row["version"], "text": row["latest_text"],
+    shown = row if v is None else repo.source_version_by_n(conn, st["id"], v)
+    if shown is None:
+        raise UnknownVersion(v)
+    return {"slug": slug, "title": row["title"], "version": shown["version"] if v is None else shown["n"],
+            "text": shown["latest_text"] if v is None else shown["text"],
+            "versions": [x["n"] for x in repo.source_versions(conn, st["id"])],
             "state": row["state"], "job_id": row["job_id"],
             "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
 

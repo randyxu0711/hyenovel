@@ -422,3 +422,12 @@ def test_add_utterance_stores_quotes(conn):
     rows = repo.utterances(conn, d)
     assert rows[0]["quotes"] is None and rows[1]["quotes"] == ["甲", "乙"]
 
+
+
+def test_source_versions_and_by_n(conn):
+    s = repo.ensure_story(conn, "s1", None, 0)
+    for i, t in enumerate(["甲", "乙", "丙"]):
+        repo.add_source_version(conn, s, t, float(i))
+    assert [(v["n"], v["text"]) for v in repo.source_versions(conn, s)] == [(1, "甲"), (2, "乙"), (3, "丙")]
+    assert repo.source_version_by_n(conn, s, 2)["text"] == "乙"
+    assert repo.source_version_by_n(conn, s, 9) is None

@@ -27,7 +27,7 @@ def test_work_detail_notes_ready_only_for_latest_version(c):
     repo.add_source_version(c, sid, "新版原文", 3.0)
     d = views.work_detail(c, "x1")
     assert d == {"slug": "x1", "title": "標", "version": 2, "text": "新版原文", "state": "none",
-                 "job_id": None, "notes_ready": False}
+                 "job_id": None, "notes_ready": False, "versions": [1, 2]}
 
 
 def test_work_detail_without_notes_and_unknown(c):
@@ -35,6 +35,22 @@ def test_work_detail_without_notes_and_unknown(c):
     assert views.work_detail(c, "x1")["notes_ready"] is False
     with pytest.raises(LookupError):
         views.work_detail(c, "nope")
+
+
+def test_work_detail_versions(c):
+    sid, v1 = _story(c)
+    repo.add_source_version(c, sid, "新版原文", 3.0)
+    d = views.work_detail(c, "x1")
+    assert d["versions"] == [1, 2] and d["version"] == 2 and d["text"] == "新版原文"
+    old = views.work_detail(c, "x1", v=1)
+    assert old["version"] == 1 and old["text"] == "原文" and old["versions"] == [1, 2]
+    assert old["state"] == d["state"] and old["notes_ready"] == d["notes_ready"]
+
+
+def test_work_detail_unknown_version(c):
+    _story(c)
+    with pytest.raises(views.UnknownVersion):
+        views.work_detail(c, "x1", v=9)
 
 
 def _say(c, d, seq, role, text, ts, analysis_fp=None, **kw):
