@@ -154,20 +154,29 @@
 .dash .notes-lead{margin:0 0 10px; font-weight:600; color:var(--dash-ink-2)}
 .dash-notice{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:6; margin:0; padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .dash-notice button{margin-left:10px; border:0; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-size:var(--dash-t-md)}
-.dash .feed-scrim{position:fixed; inset:0; z-index:10; display:grid; place-items:center; background:color-mix(in srgb, var(--dash-desk) 70%, transparent)}
-.dash .feed{width:min(560px,92vw); display:flex; flex-direction:column; gap:12px; padding:20px; border:1px solid var(--dash-line); border-radius:12px; background:var(--dash-desk-2); color:var(--dash-ink)}
-.dash .feed h2{margin:0; font-size:var(--dash-t-lg); font-weight:600}
-.dash .feed textarea{min-height:240px; resize:vertical; padding:10px 12px; font:inherit; font-family:var(--serif); line-height:1.8; color:var(--dash-paper-ink); border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-paper)}
-.dash .feed-meta{display:flex; align-items:center; gap:14px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .feed-file{cursor:pointer; padding:5px 10px; border:1px solid var(--dash-line); border-radius:6px; color:var(--dash-ink)}
-.dash .feed-file input{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
-.dash .feed-file:focus-within{outline:2px solid var(--dash-sig-t); outline-offset:2px}
-.dash .feed-msg{margin:0; font-size:var(--dash-t-sm)}
-.dash .feed-actions{display:flex; justify-content:flex-end; gap:10px}
-.dash .feed-actions button{padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:transparent; cursor:pointer; font-size:var(--dash-t-sm)}
-.dash .feed-actions .feed-go{border:0; background:var(--dash-accent); color:var(--dash-accent-ink)}
-.dash .feed-actions .feed-go:disabled{cursor:not-allowed; background:var(--dash-paper); color:var(--dash-ink-2)}
 @media (prefers-reduced-motion:reduce){ .dash .platen-mark{animation:none} }
 @media (max-width:979px){ .dash .reader-body{flex-direction:column; align-items:stretch} .dash .notes{max-width:none; flex-basis:auto; position:static; max-height:none; margin:8px 4% 0} }
 .dash-rail:not([data-collapsed="true"]) .rail-foot .rail-btn{width:36px; height:36px; padding:0; justify-content:center}
 .dash-rail[data-collapsed="true"] .rail-foot{flex-direction:column}
+/* 進門 */
+.dash .home{min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px}
+.dash .home-inner{width:min(600px,100%); display:flex; flex-direction:column; gap:22px}
+.dash .home-waiting{display:flex; gap:12px; align-items:flex-start}
+.dash .home-waiting p{margin:0}
+.dash .home-who{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .home-line{font-size:var(--dash-t-lg); color:var(--dash-ink)}
+.dash .home-listen{display:inline-block; margin-top:8px; font-weight:600; color:var(--dash-sig-t)}
+.dash .home-box{display:flex; flex-direction:column; gap:8px; padding:10px 12px}
+.dash .home-box textarea{border:0; background:none; resize:none; font:inherit; color:var(--dash-ink); min-height:44px; outline:none}
+.dash .home-box textarea:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:4px}
+.dash .home-row, .dash .home-actions{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.dash .home-actions{justify-content:flex-end}
+.dash .home-send:disabled, .dash .home-go:disabled{cursor:not-allowed; color:var(--dash-ink-2)}
+.dash .home-meta{display:flex; gap:14px; margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .home-msg{margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .home-recent{display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .home-chip{padding:2px 10px; border:1px dashed var(--dash-line); border-radius:999px; background:none; cursor:pointer; color:var(--dash-ink)}
+.dash .home-chip[aria-pressed="true"]{border-style:solid; background:var(--dash-desk-2); font-weight:600}
+.dash .home-meet{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
+.dash .home-meet li{display:flex; align-items:center; gap:10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .home-meet b{color:var(--dash-ink)}

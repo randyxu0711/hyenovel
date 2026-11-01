@@ -6,6 +6,12 @@ const WHO_KEY = "hyenovel.companion";
 const read = (): string | null => { try { return localStorage.getItem(WHO_KEY); } catch { return null; } };
 const write = (v: string) => { try { localStorage.setItem(WHO_KEY, v); } catch { /* 存不了也照用 */ } };
 
+/** 記住的陪讀者(要在清單裡),沒有就預設。進門畫面用它決定誰接話。 */
+export function companionId(chars: { list: { id: string }[]; defaultId: string }): string {
+  const saved = read();
+  return saved && chars.list.some(c => c.id === saved) ? saved : chars.defaultId;
+}
+
 /** 與 den/config.py 的 MAX_CHAT_CHARS 一致(den/tests/test_app_errors.py 比對)。 */
 export const MAX_CHAT = 8000;
 
@@ -41,7 +47,7 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
   }, [slug, initialSession]);
 
   /** 回傳這一輪有沒有成功存下(呼叫端據此清掉帶著的引文)。 */
-  const send = useCallback(async (message: string, quotes: string[]): Promise<boolean> => {
+  const send = useCallback(async (message: string, quotes: string[], character?: string): Promise<boolean> => {
     if (!slug || streaming !== null) return false;
     const mine = epoch.current;
     const live = () => epoch.current === mine;
@@ -49,7 +55,7 @@ export function useTalk(slug: string | null, initialSession: string | null = nul
     let acc = "", got = false, ok = false;
     const fail = (e: DashError) => { if (live()) { setError(e); setDraft(d => d || message); } };
     try {
-      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes })) {
+      for await (const ev of api.talk(slug, { session, message, character: character ?? whoId, quotes })) {
         if (!live()) return false;
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") { acc += ev.data.text; setStreaming(acc); }

@@ -93,9 +93,9 @@ describe("Dash 殼與路由", () => {
     fireEvent.click(rail.getByRole("button", { name: "切換晝夜" }));
     expect(dash().dataset.mode).toBe(before === "dark" ? "light" : "dark");
   });
-  it("沒有作品時 home 邀請交第一張稿", async () => {
+  it("沒有作品時 home 邀請把稿拖進來或貼上", async () => {
     mount("/", []);
-    expect(await screen.findByText("還沒有作品。捲進第一張稿吧。")).toBeTruthy();
+    expect((await screen.findByRole("textbox", { name: "對話輸入" }) as HTMLTextAreaElement).placeholder).toBe("把稿拖進來,或貼上");
   });
 });
 
@@ -103,8 +103,9 @@ describe("Dash 交稿後", () => {
   const draft = async () => {
     fireEvent.click(within(await nav()).getByRole("button", { name: "作品" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "交一篇新的" }));
-    fireEvent.change(await screen.findByRole("textbox", { name: "稿子" }), { target: { value: "稿" } });
-    fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));
+    await screen.findByRole("textbox", { name: "對話輸入" });   // 「交一篇新的」回到進門畫面
+    fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [new File(["x"], "最近的.md")] } });
+    fireEvent.click(await screen.findByRole("button", { name: /交稿並開始分析/ }));
   };
   const mountSubmitting = () => {
     const f = mount("/w/d2");
@@ -112,6 +113,7 @@ describe("Dash 交稿後", () => {
     f.mockImplementation(async (u: string, init?: RequestInit) =>
       u === "/api/stories" && init?.method === "POST"
         ? json({ slug: "d2", title: "最近的", version: 1, new_version: false, reused: true })
+        : u === "/api/extract" ? json({ filename: "最近的.md", text: "稿", chars: 1 })
         : inner(u));
     return f;
   };
