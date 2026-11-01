@@ -130,7 +130,7 @@ export default function Settings() {
             <input type="radio" name="default-companion" checked={who === c.id}
               onChange={() => { setCompanion(c.id); setWho(c.id); }} />
             <Avatar character={c} size={28} />
-            <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small> · {t("set.default")}</span>
+            <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
           </label>
         ))}
       </section>

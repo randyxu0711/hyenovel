@@ -64,20 +64,22 @@ describe("Dash 殼與路由", () => {
     await screen.findByText("內文一行");
     expect(f.mock.calls.map(c => c[0])).toContain("/api/works/d2?v=3");
   });
-  it("/settings 是 settings:左欄收起,有「設定」標題", async () => {
+  it("/settings 是 settings:左欄展開並列出作品標題,有「設定」標題", async () => {
     mount("/settings");
-    await nav();
+    const rail = within(await nav());
     expect(dash().dataset.view).toBe("settings");
     expect(screen.getByRole("heading", { name: "設定" })).toBeTruthy();
+    expect(screen.getByRole("navigation").getAttribute("data-collapsed")).toBe("false");
+    expect(await rail.findByText("最近的")).toBeTruthy();
   });
-  it("點設定 → /settings;點作品浮層裡的一篇 → /w/<slug>;點新對話 → /", async () => {
+  it("點設定 → /settings(左欄展開);點左欄的一篇 → /w/<slug>(左欄收起)", async () => {
     mount("/w/d2");
     const rail = within(await nav());
     fireEvent.click(rail.getByRole("button", { name: "設定" }));
     expect(screen.getByTestId("loc").textContent).toBe("/settings");
-    fireEvent.click(rail.getByRole("button", { name: "作品" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /舊的/ }));
+    fireEvent.click(await rail.findByRole("button", { name: /舊的/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
+    expect(screen.getByRole("navigation").getAttribute("data-collapsed")).toBe("true");
   });
   it("新對話鈕回到 /", async () => {
     mount("/w/d2");

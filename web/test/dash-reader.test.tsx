@@ -120,6 +120,16 @@ describe("Reader(稿窗格)", () => {
     const call = f.mock.calls.find(c => c[0] === "/api/jobs")!;
     expect(JSON.parse(String(call[1]!.body))).toMatchObject({ kind: "critique", slug: "d1", resume_only: true });
   });
+  it("續跑過(重抓過)之後換版本:新版回來前不留著舊的字", async () => {
+    const { f } = await mount(detail({ state: "stopped" }));
+    fireEvent.click(screen.getByRole("button", { name: "續跑" }));
+    await waitFor(() => expect(f.mock.calls.filter(c => c[0] === "/api/works/d1").length).toBe(2));
+    const inner = f.getMockImplementation()!;
+    f.mockImplementation(async (u: string, init?: RequestInit) => (u.includes("?v=") ? new Promise<Response>(() => {}) : inner(u, init)));
+    fireEvent.click(screen.getByRole("button", { name: "v1" }));
+    await waitFor(() => expect(screen.queryByText("第一段。")).toBeNull());
+    expect(screen.getByText("載入中……")).toBeTruthy();
+  });
   it("沒停住就沒有續跑鍵", async () => {
     await mount(detail());
     expect(screen.queryByRole("button", { name: "續跑" })).toBeNull();

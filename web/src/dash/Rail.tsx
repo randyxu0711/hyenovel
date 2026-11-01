@@ -6,7 +6,7 @@ import { toggleDayNight } from "./theme";
 import { dotState, useSeen } from "./useSeen";
 import WorksMenu from "./WorksMenu";
 
-/** 左欄。展開(home)列作品;收起(作品頁、設定)只剩圖示鍵,作品從浮層選。 */
+/** 左欄。展開(進門、設定)列作品;收起(作品頁)只剩圖示鍵,作品從浮層選。 */
 export default function Rail({ collapsed, works, current, onOpen, onNew, onSubmitNew }: {
   collapsed: boolean; works: Work[]; current: string | null;
   onOpen: (slug: string) => void; onNew: () => void;

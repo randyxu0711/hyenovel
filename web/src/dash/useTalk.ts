@@ -9,7 +9,11 @@ import { useSeen } from "./useSeen";
 
 const WHO_KEY = "hyenovel.companion";
 const read = (): string | null => { try { return localStorage.getItem(WHO_KEY); } catch { return null; } };
-const write = (v: string) => { try { localStorage.setItem(WHO_KEY, v); } catch { /* 存不了也照用 */ } };
+const whoListeners = new Set<(id: string) => void>();
+const write = (v: string) => {
+  try { localStorage.setItem(WHO_KEY, v); } catch { /* 存不了也照用 */ }
+  whoListeners.forEach(fn => fn(v));   // 指令框、設定頁換人:開著的對話立刻跟著換
+};
 
 const draftKey = (slug: string) => `hyenovel.draft.${slug}`;
 const readDraft = (slug: string | null): string => {
@@ -38,14 +42,18 @@ const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "
 
 /** 一篇作品上的對話:局清單、目前這局的逐字稿、串流中的字、誰在陪讀、草稿、邊說邊畫的痕跡。
  *  version = 正在看的版本(undefined = 最新);逐字稿裡的引文位置(spans)都對這一版。
- *  source = 最新版原文(稿上正顯示最新版時才給):串流中的引文在這裡逐字找位置。 */
-export function useTalk(slug: string | null, version?: number, source: string | null = null) {
+ *  source = 最新版原文(稿上正顯示最新版時才給):串流中的引文在這裡逐字找位置。
+ *  wanted = 換作品時要打開的局(網址的 ?s=;不在這篇的清單裡就照常開最近那局)。
+ *  onSession = 使用者選局、開新局、新局第一輪存下時通知(呼叫端寫回網址)。 */
+export function useTalk(slug: string | null, version?: number, source: string | null = null,
+  wanted: string | null = null, onSession?: (id: string | null) => void) {
   const chars = useCharacters();
   const { markSeen } = useSeen();
   // 記住的 id 要對照清單:找不到就當作沒選過、用預設。
   const saved = read();
   const [picked, setPicked] = useState<string | null>(saved && chars.list.some(c => c.id === saved) ? saved : null);
   const setWho = useCallback((id: string) => { write(id); setPicked(id); }, []);
+  useEffect(() => { whoListeners.add(setPicked); return () => { whoListeners.delete(setPicked); }; }, []);
 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [spansV, setSpansV] = useState<number | undefined>(version);   // turns 的 spans 是對哪一版
@@ -59,8 +67,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const draft = draftOf.slug === slug ? draftOf.text : readDraft(slug);
   const epoch = useRef(0);       // 換作品/換局/送出後,舊的回應不准再寫進來
   const touched = useRef(false); // 使用者已經自己選局或送出:不再自動打開最近那局
-  const now = useRef({ slug, version, draft, source, turns });
-  now.current = { slug, version, draft, source, turns };
+  const now = useRef({ slug, version, draft, source, turns, wanted, onSession });
+  now.current = { slug, version, draft, source, turns, wanted, onSession };
 
   // 邊說邊畫線:串流中找到的痕跡(message 到了就交給逐字稿的 spans),與一次一筆的畫線佇列。
   const [liveMarks, setLiveMarks] = useState<Mark[]>([]);
@@ -88,7 +96,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   // 沒選過人時,既有的局由最後說話的那位接著陪讀(舊局只有 mode 也照樣對到角色)。
   const last = [...turns].reverse().find(t => t.role === "assistant");
   const inherited = last ? chars.byId(last.character, last.mode).id : null;
-  const whoId = picked ?? inherited ?? chars.defaultId;
+  const whoId = picked ?? inherited ?? companionId(chars);
 
   const setDraft = useCallback((v: string | ((d: string) => string)) => {
     const s = now.current.slug;
@@ -118,7 +126,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     }, () => { /* 清單抓不到:選單空著,目前這局照用 */ });
   }, []);
 
-  // 換作品:清空,抓局清單;使用者還沒動作就打開最近那局。
+  // 換作品:清空,抓局清單;使用者還沒動作就打開網址指定的局,沒有就最近那局。
   useEffect(() => {
     ++epoch.current;
     touched.current = false;
@@ -128,7 +136,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     refreshSessions(slug, rows => {
       if (touched.current || !rows.length) return;
       touched.current = true;
-      load(rows.reduce((a, b) => (b.last_at > a.last_at ? b : a)).session);
+      const asked = rows.find(r => r.session === now.current.wanted);
+      load((asked ?? rows.reduce((a, b) => (b.last_at > a.last_at ? b : a))).session);
     });
   }, [slug, load, refreshSessions, stopDrawing]);
 
@@ -143,9 +152,10 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     else setSpansV(version);
   }, [version, busy, spansV, load]);
 
-  const open = useCallback((id: string) => { touched.current = true; load(id); }, [load]);
+  const open = useCallback((id: string) => { touched.current = true; load(id); now.current.onSession?.(id); }, [load]);
   const fresh = useCallback(() => {
     touched.current = true;
+    now.current.onSession?.(null);
     ++epoch.current;
     stopDrawing();
     setTurns([]); setSession(null); setLegacy(false); setError(null); setSpansV(now.current.version);
@@ -188,6 +198,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           // message 的 spans 對最新版;看舊版時先不帶位置,下面以 ?v= 重抓
           const old = now.current.version !== undefined;
           setSession(d.session_id);
+          if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
             { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [] },
             { role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans }]);

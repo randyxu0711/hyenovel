@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
@@ -19,12 +19,12 @@ const narrow = (on: boolean) => {
 beforeEach(() => { vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null); localStorage.clear(); setLang("zh-Hant"); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delete (window as { matchMedia?: unknown }).matchMedia; });
 
-function mount() {
+function mount(path = "/w/d1") {
   vi.stubGlobal("fetch", vi.fn(async (u: string) => {
     const p = u.split("?")[0];
     if (p === "/api/themes") return json({ themes: [olive], default: "olive" });
     if (p === "/api/characters") return json({ characters: [hyena, buffalo], default: "hyena" });
-    if (p === "/api/works") return json({ works: [{ slug: "d1", title: "海", version: 1, chars: 4 }] });
+    if (p === "/api/works") return json({ works: [{ slug: "d1", title: "海", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
     if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "海水很藍", state: "ready", job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map") return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
     if (p.startsWith("/api/discuss/")) return sse(
@@ -32,7 +32,7 @@ function mount() {
       ["done", { ok: true, session_id: "s1" }]);
     return json({ sessions: [] });
   }));
-  render(<MemoryRouter initialEntries={["/w/d1"]}><Routes><Route path="/w/:slug" element={<Dash />} /></Routes></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/" element={<Dash />} /><Route path="/w/:slug" element={<Dash />} /></Routes></MemoryRouter>);
 }
 const paper = () => document.querySelector(".dash-desk") as HTMLElement;
 const side = () => document.querySelector(".dash-side") as HTMLElement;
@@ -68,5 +68,25 @@ describe("窄螢幕單窗格", () => {
     fireEvent.click(await screen.findByRole("button", { name: "「海」" }));
     expect(paper().hidden).toBe(false);
     expect(side().hidden).toBe(true);
+  });
+  it("從進門畫面帶著第一句話打開作品 → 落在對話窗格,回覆在看得見的那邊", async () => {
+    narrow(true); mount("/");
+    fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "嗨" } });
+    fireEvent.click(await screen.findByRole("button", { name: "送出" }));
+    await waitFor(() => expect(within(side()).getByRole("log").textContent).toContain("好"));
+    expect(side().hidden).toBe(false);
+    expect(paper().hidden).toBe(true);
+  });
+  it("在稿上「帶進對話」→ 切到對話窗格", async () => {
+    narrow(true); mount();
+    await screen.findByText("海水很藍");
+    await waitFor(() => expect(side().hidden).toBe(true));
+    const node = screen.getByText("海水很藍").firstChild!;
+    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 2);
+    document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
+    expect(side().hidden).toBe(false);
+    expect(paper().hidden).toBe(true);
   });
 });

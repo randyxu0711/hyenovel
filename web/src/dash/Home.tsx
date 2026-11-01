@@ -20,8 +20,11 @@ export function waitingLine(works: Work[], talkedVersions: Record<string, number
 }
 
 /** 進門:一句話、一個輸入框。送出不在這裡做,導到作品頁由那邊以新局送出。 */
-export default function Home({ works, onSubmitted }: {
-  works: Work[];
+export default function Home({ works: loaded, error: listError = null, onSubmitted }: {
+  /** null = 清單還沒到或抓不到(這時不說「沒有作品」)。 */
+  works: Work[] | null;
+  /** 清單抓不到的 den 錯誤碼。 */
+  error?: string | null;
   /** 交稿完成(含已存在的同稿)。existing = 沒有開新 job。 */
   onSubmitted: (slug: string, existing: boolean) => void;
 }) {
@@ -30,6 +33,7 @@ export default function Home({ works, onSubmitted }: {
   const nav = useNavigate();
   const loc = useLocation();
   const chars = useCharacters();
+  const works = loaded ?? [];
   const area = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
@@ -78,7 +82,7 @@ export default function Home({ works, onSubmitted }: {
     if (r) onSubmitted(r.slug, r.reused);
   };
 
-  const none = works.length === 0;
+  const none = loaded !== null && loaded.length === 0;
   const est = draft?.estimate;
   return (
     <div className="home" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
@@ -114,7 +118,7 @@ export default function Home({ works, onSubmitted }: {
               placeholder={t(none ? "home.placeholderEmpty" : "home.placeholder")}
               onChange={e => setText(e.target.value)} onKeyDown={onKey} onPaste={onPaste} />
             {error && <p role="alert" className="home-msg">{t(errorMessage(error))}</p>}
-            {!none && (
+            {works.length > 0 && (
               <div className="home-row">
                 <WhoPick me={me} onPick={setWho} />
                 <button type="submit" className="dash-key home-send" disabled={!text.trim()}>{t("talk.send")}</button>
@@ -122,7 +126,11 @@ export default function Home({ works, onSubmitted }: {
             )}
           </form>
         )}
-        {none ? (
+        {loaded === null ? (
+          listError
+            ? <p role="alert" className="home-msg">{t(errorMessage(listError))}</p>
+            : <p className="home-msg" role="status">{t("loading")}</p>
+        ) : none ? (
           <ul className="home-meet" aria-label={t("home.meet")}>
             {chars.list.map(c => (
               <li key={c.id}>

@@ -64,6 +64,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
     setRev(r => r + 1); onFinished?.();
   }, [job.done, job.error]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 換作品或換版本:先清掉舊的字,別讓新的痕跡落在上一篇/上一版上(續跑重抓過之後也一樣)。
+  useEffect(() => { setWork(null); setErr(null); }, [slug, version]);
   useEffect(() => {
     let live = true;
     if (rev === 0) { setWork(null); setErr(null); }
@@ -76,7 +78,11 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   if (!work) return <div className="reader-note">{t("loading")}</div>;
 
   const latest = Math.max(work.version, ...work.versions);
-  const pickVersion = (n: number) => setSearch(n === latest ? {} : { v: String(n) });
+  const pickVersion = (n: number) => setSearch(prev => {   // 只動 ?v=,其他參數(?s= 目前這局)留著
+    const p = new URLSearchParams(prev);
+    if (n === latest) p.delete("v"); else p.set("v", String(n));
+    return p;
+  });
   const resume = () => {
     setResumeErr(null);
     api.startJob(slug, { resumeOnly: true }).then(() => { setRev(r => r + 1); onFinished?.(); },

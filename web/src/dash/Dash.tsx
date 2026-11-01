@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, DashError, type Work, type WorkMap } from "./api";
 import { errorMessage, useT } from "./i18n";
@@ -25,7 +25,7 @@ function Shell({ chars }: { chars: Characters }) {
   const { slug: routeSlug } = useParams();
   const loc = useLocation();
   const { pathname } = loc;
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
   const view: View = pathname === "/settings" ? "settings" : routeSlug ? "work" : "home";
   const slug = view === "work" ? routeSlug! : null;
   const v = Number(search.get("v"));
@@ -38,18 +38,30 @@ function Shell({ chars }: { chars: Characters }) {
   const notice = note && note.slug === slug ? note.text : null;
   const [refresh, setRefresh] = useState(0);
   const [reload, setReload] = useState(0);   // 重交已開著的那篇:Reader 要重抓
-  const [works, setWorks] = useState<Work[]>([]);
+  // null = 還沒到(進門畫面不能說「沒有作品」);抓失敗記錯誤碼,左欄空著,閱讀區自己會顯示錯誤。
+  const [loaded, setLoaded] = useState<Work[] | null>(null);
+  const [worksErr, setWorksErr] = useState<string | null>(null);
+  const works = loaded ?? [];
   const bump = () => setRefresh(n => n + 1);
   useEffect(() => {
     let live = true;
-    api.works().then(ws => { if (live) setWorks(ws); }, () => { /* 清單載入失敗:左欄空著,閱讀區自己會顯示錯誤 */ });
+    api.works().then(ws => { if (live) { setLoaded(ws); setWorksErr(null); } },
+      e => { if (live) setWorksErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
   }, [refresh]);
 
   // 稿上正顯示的原文:是這篇的最新版時才交給 useTalk(邊說邊畫線在這裡找引文)
   const [paper, setPaper] = useState<{ slug: string; latest: boolean; text: string } | null>(null);
   const source = version === undefined && paper && paper.slug === slug && paper.latest ? paper.text : null;
-  const talk = useTalk(slug, version, source);
+  // 目前這局記在網址的 ?s=(重新整理回到同一局);只換網址不進歷史。
+  const setSearchRef = useRef(setSearch);
+  setSearchRef.current = setSearch;
+  const onSession = useCallback((id: string | null) => setSearchRef.current(prev => {
+    const p = new URLSearchParams(prev);
+    if (id) p.set("s", id); else p.delete("s");
+    return p;
+  }, { replace: true }), []);
+  const talk = useTalk(slug, version, source, search.get("s"), onSession);
   const me = chars.byId(talk.whoId);
   const { markSeen } = useSeen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,8 +88,11 @@ function Shell({ chars }: { chars: Characters }) {
   const [palette, setPalette] = useState(false);
   const hidePaper = narrow && view === "work" && pane !== "paper";
   const hideSide = narrow && pane !== "side";
-  // 窄螢幕打開一篇 → 先看稿(兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方)
-  useEffect(() => { if (slug && narrow) setPane("paper"); }, [slug, narrow, setPane]);
+  // 窄螢幕打開一篇 → 先看稿;從進門帶著第一句話來的 → 看對話(回覆在那邊串流)。
+  // 兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方。
+  const firstMessage = !!(loc.state as { firstMessage?: string } | null)?.firstMessage;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (slug && narrow) setPane(firstMessage ? "side" : "paper"); }, [slug, narrow, setPane]);
   // 鍵盤:Ctrl/⌘+K 開指令框(輸入框裡也算);「/」聚焦輸入框(焦點已在輸入元素時不攔)
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -133,15 +148,18 @@ function Shell({ chars }: { chars: Characters }) {
           <button type="button" className="dash-bar-palette" aria-haspopup="dialog" onClick={() => setPalette(true)}>{t("palette.open")}</button>
         </div>
       )}
-      <Rail collapsed={view !== "home"} works={works} current={slug} onOpen={open}
+      <Rail collapsed={view === "work"} works={works} current={slug} onOpen={open}
         onNew={goHome} onSubmitNew={goHome} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
           map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           works={works} onOpen={open} onSubmitNew={goHome}
-          onQuote={q => setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; })} />}
-        {view === "home" && <Home works={works} onSubmitted={submitted} />}
+          onQuote={q => {
+            setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
+            if (narrow) setPane("side");
+          }} />}
+        {view === "home" && <Home works={loaded} error={worksErr} onSubmitted={submitted} />}
         {view === "settings" && <Settings />}
       </main>
       {notice && (

@@ -103,6 +103,16 @@ describe("設定頁", () => {
     expect(screen.getByRole("button", { name: "陪讀者" }).textContent).toContain("水牛");
   });
 
+  it("「預設」只標在選中的那位", async () => {
+    mount();
+    const p = await page();
+    const tagged = () => p.getAllByRole("radio").filter(r => r.closest("label")!.textContent!.includes("預設"));
+    expect(tagged()).toHaveLength(1);
+    expect((tagged()[0] as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(p.getByRole("radio", { name: /鹿/ }));
+    expect(tagged()).toEqual([p.getByRole("radio", { name: /鹿/ })]);
+  });
+
   it("舊討論:只數 legacy 局,打開封存看得到逐字,沒有輸入框", async () => {
     const f = mount();
     const p = await page();

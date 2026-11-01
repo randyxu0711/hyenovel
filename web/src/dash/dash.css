@@ -79,7 +79,6 @@
 .dash-grip{cursor:col-resize; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) center top/9px 6px repeat-y; touch-action:none}
 .dash-grip:hover, .dash-grip:focus-visible{background-image:radial-gradient(circle, var(--dash-accent) 1.4px, transparent 1.8px); outline:none}
 .dash-side{min-height:0; min-width:0; overflow:hidden; color:var(--dash-ink)}
-.dash[data-view="settings"]{grid-template-columns:56px 1fr}
 .dash-h{margin:0; font-size:var(--dash-t-xl); font-weight:600; color:var(--dash-ink)}
 .dash button:focus-visible, .dash textarea:focus-visible, .dash select:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ink)}

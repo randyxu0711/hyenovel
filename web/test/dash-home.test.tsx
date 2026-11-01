@@ -20,6 +20,7 @@ const W = (slug: string, title: string, updated_at: number, state = "ready", ver
 let works: object[];
 let sessionRows: object[];
 let calls: { url: string; body?: any }[];
+let worksFetch: (() => Promise<Response>) | null;
 
 function Where() { const l = useLocation(); return <output data-testid="loc">{l.pathname}</output>; }
 function mount(strict = false) {
@@ -27,7 +28,7 @@ function mount(strict = false) {
     calls.push({ url: u, body: init?.body && typeof init.body === "string" ? JSON.parse(init.body) : undefined });
     if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
     if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
-    if (u === "/api/works") return json({ works });
+    if (u === "/api/works") return worksFetch ? worksFetch() : json({ works });
     if (u === "/api/estimate?chars=2001") return json({ estimate: { seconds: 300, output_tokens: 1, basis: 2 } });
     if (u === "/api/extract") return json({ filename: "海.md", text: "檔案內容", chars: 4 });
     if (u === "/api/stories") return json({ slug: "d9", title: "海", version: 1, new_version: true, reused: false });
@@ -55,7 +56,7 @@ const box = () => screen.findByRole("textbox", { name: "對話輸入" });
 
 beforeEach(() => {
   setLang("zh-Hant"); localStorage.clear(); calls = [];
-  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = [];
+  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null;
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -187,5 +188,24 @@ describe("沒有作品", () => {
     expect(await screen.findByText("預估約 5 分鐘")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(await box()).toBeTruthy();
+  });
+});
+
+describe("作品清單還沒到 / 抓不到", () => {
+  it("載入中:說載入中,不說沒有作品(沒有陪讀者介紹、placeholder 不是空書架那句)", async () => {
+    worksFetch = () => new Promise<Response>(() => {});
+    mount();
+    const b = await box() as HTMLTextAreaElement;
+    expect(screen.getByText("載入中……")).toBeTruthy();
+    expect(b.placeholder).not.toBe("把稿拖進來,或貼上");
+    expect(screen.queryByRole("list", { name: "陪讀者" })).toBeNull();
+  });
+  it("抓失敗:顯示錯誤,不說沒有作品", async () => {
+    worksFetch = async () => { throw new TypeError("down"); };
+    mount();
+    expect(await screen.findByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toBe("連不上本機的 den,請確認它有在跑。");
+    expect(((await box()) as HTMLTextAreaElement).placeholder).not.toBe("把稿拖進來,或貼上");
+    expect(screen.queryByRole("list", { name: "陪讀者" })).toBeNull();
   });
 });
