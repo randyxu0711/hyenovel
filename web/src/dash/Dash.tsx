@@ -119,7 +119,6 @@ function Shell({ chars }: { chars: Characters }) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); toggleShelf.current(); return; }
       if (e.key === "Escape" && focused && !palette) { setFocus(false); return; }
-      if (e.key === "Escape" && focused && !palette) { setFocus(false); return; }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;

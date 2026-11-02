@@ -237,12 +237,12 @@ function Running({ jobId, state, sseStep, onStopped }: {
   const t = useT();
   const [since, setSince] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => setSince(null), [jobId]);
   useEffect(() => {
     let live = true;
-    setSince(null);
     api.job(jobId).then(j => { if (live && j.state === "running") setSince(j.created_at); }, () => {});
     return () => { live = false; };
-  }, [jobId]);
+  }, [jobId, sseStep]);
   useEffect(() => {
     if (since === null) return;
     setNow(Date.now() / 1000);

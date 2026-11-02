@@ -282,6 +282,24 @@ describe("稿頂分析進度", () => {
     expect(running()!.textContent).toContain("觀察中");
     expect(running()!.querySelector(".t")).toBeNull();
   });
+  it("掛上時還在排隊、之後 SSE 送來步驟 → 重抓 job,計時出現", async () => {
+    vi.useRealTimers();
+    let push!: () => void;
+    const started = new Promise<void>(r => { push = r; });
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
+      await started;
+      yield { event: "phase", data: { name: "analyst", status: "start" } };
+      await new Promise(() => {});
+    });
+    const job = vi.spyOn(api, "job").mockResolvedValueOnce({ id: 7, state: "queued", step: null, created_at: 1 })
+      .mockResolvedValue({ id: 7, state: "running", step: "analyst", created_at: Date.now() / 1000 - 3 });
+    mount(work({}));
+    await waitFor(() => expect(job).toHaveBeenCalledTimes(1));
+    expect(running()!.querySelector(".t")).toBeNull();
+    push();
+    await waitFor(() => expect(running()!.querySelector(".t")).not.toBeNull());
+    expect(job).toHaveBeenCalledTimes(2);
+  });
   it("停下:打 cancel,之後重抓這篇", async () => {
     vi.useRealTimers();
     hang(); jobIs();
