@@ -4,6 +4,7 @@ import { api, DashError, type RecentSession, type SessionDetail } from "./api";
 import Avatar from "./Avatar";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
+import { setPaperFlow, usePaperFlow } from "./paperFlow";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
 import { selectTheme, setMode, useThemeState, type ModePref } from "./theme";
 import { useCharacters } from "./useCharacters";
@@ -108,15 +109,26 @@ export function SettingsNav({ section, onPick, back }: {
 }
 
 /** 一列:左標籤、右控制。 */
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="set-row"><span className="set-lab">{label}</span><div className="set-ctl">{children}</div></div>;
+function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="set-row">
+      <span className="set-lab">{label}{hint && <span className="set-hint">{hint}</span>}</span>
+      <div className="set-ctl">{children}</div>
+    </div>
+  );
 }
+
+const FLOWS = [
+  { flow: "v", key: "flow.v", icon: "vert" },
+  { flow: "h", key: "flow.h", icon: "hori" },
+] as const;
 
 function Look() {
   const t = useT();
   const lang = useLang();
   const { themes, theme, pref, mode } = useThemeState();
   const [size, setSize] = useState<PaperSize>(loadPaperSize);
+  const flow = usePaperFlow();
   const pickSize = (s: PaperSize) => {
     try { localStorage.setItem(PAPER_SIZE_KEY, s); } catch { /* 存不了就只這次有效 */ }
     setSize(s);
@@ -145,6 +157,14 @@ function Look() {
           <div className="set-seg" role="group" aria-label={t("set.lang")}>
             {LANGS.map(l => (
               <button key={l.lang} type="button" aria-pressed={lang === l.lang} onClick={() => setLang(l.lang)}>{l.label}</button>
+            ))}
+          </div>
+        </Row>
+        <Row label={t("set.flow")} hint={t("set.flowHint")}>
+          <div className="set-seg" role="group" aria-label={t("set.flow")}>
+            {FLOWS.map(f => (
+              <button key={f.flow} type="button" aria-pressed={flow === f.flow} aria-label={t(f.key)} title={t(f.key)}
+                onClick={() => setPaperFlow(f.flow)}><Icon name={f.icon} /></button>
             ))}
           </div>
         </Row>

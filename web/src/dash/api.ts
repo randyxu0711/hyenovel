@@ -39,6 +39,8 @@ export type Work = {
 export type WorkDetail = {
   slug: string; title: string; version: number; text: string; state: string;
   job_id: number | null; notes_ready: boolean; versions: number[];
+  /** 每一版:建立時間(秒)、那版有沒有分析 / 筆記(不論 current) */
+  history?: { n: number; at: number; analysed: boolean; noted: boolean }[];
 };
 export type SessionRow = {
   session: string; started_at: number; last_at: number; turns: number;

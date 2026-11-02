@@ -325,6 +325,7 @@
 .dash .set-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; padding:12px 14px; border-radius:10px; color:var(--dash-ink)}
 .dash .set-row:hover{background:var(--dash-desk-2)}
 .dash .set-lab{font-weight:500}
+.dash .set-hint{display:block; font-weight:400; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .set-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
 .dash .set-seg{display:flex; gap:2px; padding:2px; border-radius:9px; background:var(--dash-desk-2)}
 .dash .set-seg button{display:grid; place-items:center; min-width:30px; height:28px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import Paper from "../src/dash/Paper";
+import { loadPaperFlow, setPaperFlow } from "../src/dash/paperFlow";
 import { setLang } from "../src/dash/i18n";
 import { getThemeState, setMode } from "../src/dash/theme";
 import { LinksProvider } from "../src/dash/links";
@@ -119,6 +120,17 @@ describe("設定頁", () => {
     fireEvent.click(p.getByRole("button", { name: "English" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Appearance" })).toBeTruthy();
     expect(localStorage.getItem("hyenovel.lang")).toBe("en");
+  });
+
+  it("排法:預設直排;按橫排 → 存成 h", async () => {
+    mount();
+    const p = await page();
+    const g = within(p.getByRole("group", { name: "排法" }));
+    expect(g.getByRole("button", { name: "直排" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(g.getByRole("button", { name: "橫排" }));
+    expect(loadPaperFlow()).toBe("h");
+    expect(g.getByRole("button", { name: "橫排" }).getAttribute("aria-pressed")).toBe("true");
+    setPaperFlow("v");
   });
 
   it("稿字級存 localStorage,預覽紙與 Paper 都套 data-size", async () => {

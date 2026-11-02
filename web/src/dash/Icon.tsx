@@ -16,6 +16,9 @@ const PATHS = {
   auto: <><circle cx="9" cy="9" r="6" /><path d="M9 3a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" /></>,
   sun: <><circle cx="9" cy="9" r="3.2" /><path d="M9 2v1.6M9 14.4V16M2 9h1.6M14.4 9H16M4 4l1.1 1.1M12.9 12.9L14 14M4 14l1.1-1.1M12.9 5.1L14 4" /></>,
   moon: <path d="M14.5 11.5A6 6 0 0 1 6.5 3.5a6 6 0 1 0 8 8z" />,
+  hori: <path d="M3 5h12M3 9h12M3 13h8" />,
+  vert: <path d="M13 3v12M9 3v12M5 3v8" />,
+  stack: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /><path d="M10.5 7.5v4M8.5 9.5h4" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;
