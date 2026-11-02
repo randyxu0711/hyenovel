@@ -512,3 +512,53 @@ describe("邊說邊畫線", () => {
     expect(markEls(container)[0].classList.contains("is-drawing")).toBe(false);
   });
 });
+
+describe("交新版之後", () => {
+  const submitFrom = async (path: string, newVersion = true) => {
+    versions = [1, 2];
+    rows = [row("abc")];
+    session("abc", [u("q1"), a("水牛說", "buffalo")]);
+    const r = mount(path);
+    await (await findLog()).findByText("水牛說");
+    const f = fetch as unknown as ReturnType<typeof vi.fn>;
+    const inner = f.getMockImplementation()!;
+    f.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/extract") return json({ filename: "海.md", text: "新的稿", chars: 3 });
+      if (url.startsWith("/api/estimate")) return json({ estimate: null });
+      if (url === "/api/stories") {
+        if (newVersion) versions = [1, 2, 3];
+        return json({ slug: "d1", title: "海", version: newVersion ? 3 : 2, new_version: newVersion, reused: !newVersion });
+      }
+      if (url === "/api/jobs") return json({ job_id: 9 }, 202);
+      return inner(url, init);
+    });
+    await screen.findByRole("button", { name: "交新版" });
+    fireEvent.change(r.container.querySelector('input[type="file"]')!, { target: { files: [new File(["新的稿"], "海.md")] } });
+    const before = calls().filter(c => c.startsWith("/api/sessions/abc")).length;
+    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    await waitFor(() => expect(calls()).toContain("/api/stories"));
+    return before;
+  };
+  const sessionCalls = () => calls().filter(c => c.startsWith("/api/sessions/abc")).length;
+
+  it("在 /w/d1?v=1&s=abc 交新版成功 → 網址變 /w/d1?s=abc,且這局的逐字稿重抓一次", async () => {
+    const before = await submitFrom("/w/d1?v=1&s=abc");
+    await waitFor(() => expect(loc()).toBe("/w/d1?s=abc"));
+    await waitFor(() => expect(sessionCalls()).toBe(before + 1));
+    await new Promise(r => setTimeout(r, 30));
+    expect(sessionCalls()).toBe(before + 1);
+    expect(calls().filter(c => c.startsWith("/api/sessions/abc")).pop()).toBe("/api/sessions/abc");   // 重抓的是最新版的位置
+  });
+  it("在最新版交新版成功 → 這局的逐字稿也重抓一次", async () => {
+    const before = await submitFrom("/w/d1?s=abc");
+    await waitFor(() => expect(sessionCalls()).toBe(before + 1));
+    await new Promise(r => setTimeout(r, 30));
+    expect(sessionCalls()).toBe(before + 1);
+    expect(loc()).toBe("/w/d1?s=abc");
+  });
+  it("跟最新版一字不差 → 提示「跟第 2 版一字不差」,逐字稿不重抓", async () => {
+    const before = await submitFrom("/w/d1?s=abc", false);
+    expect(await screen.findByText("跟第 2 版一字不差,沒有新增版本")).toBeTruthy();
+    expect(sessionCalls()).toBe(before);
+  });
+});
