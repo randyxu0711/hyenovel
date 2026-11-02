@@ -19,6 +19,10 @@ const PATHS = {
   hori: <path d="M3 5h12M3 9h12M3 13h8" />,
   vert: <path d="M13 3v12M9 3v12M5 3v8" />,
   stack: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /><path d="M10.5 7.5v4M8.5 9.5h4" /></>,
+  send: <><path d="M3 9.5L15 3.5 11.5 15 9 10z" /><path d="M9 10l6-6.5" /></>,
+  stop: <rect x="5" y="5" width="8" height="8" rx="1.5" />,
+  focus: <path d="M3 7V3h4M15 7V3h-4M3 11v4h4M15 11v4h-4" />,
+  sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, DashError, type RecentSession, type SessionDetail } from "./api";
-import Avatar from "./Avatar";
+import Blob from "./Blob";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
@@ -70,7 +70,7 @@ function Archive() {
             const c = chars.byId(turn.character, turn.mode);
             return (
               <div key={i} className="chat-turn">
-                <p className="chat-who"><Avatar character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+                <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
                 <p className="chat-text">{turn.text}</p>
               </div>
             );
@@ -194,7 +194,7 @@ function Companions() {
         <label key={c.id} className="dash-set-who">
           <input type="radio" name="default-companion" checked={who === c.id}
             onChange={() => { setCompanion(c.id); setWho(c.id); }} />
-          <Avatar character={c} size={28} />
+          <Blob character={c} size={28} />
           <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
         </label>
       ))}

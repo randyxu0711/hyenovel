@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Turn } from "./api";
-import Avatar from "./Avatar";
+import Blob from "./Blob";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
 import { useLinks } from "./links";
@@ -103,7 +103,7 @@ export default function Talk({ talk, version, quotes, onDropQuote, onSent, onRev
       <div key={lit ? `${i}-${flash!.n}` : i}>
         {divider && <div className="chat-switch" role="separator">{t("talk.switched", { name: localized(c.name, lang) })}</div>}
         <div className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
-          <p className="chat-who"><Avatar character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+          <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
           <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
         </div>
       </div>,
@@ -123,7 +123,7 @@ export default function Talk({ talk, version, quotes, onDropQuote, onSent, onRev
         )}
         {streaming !== null && (
           <div className="chat-turn">
-            <p className="chat-who"><Avatar character={me} size={22} /><b style={{ color: me.colors[mode].text }}>{nameOf(whoId)}</b></p>
+            <p className="chat-who"><Blob character={me} size={22} /><b style={{ color: me.colors[mode].text }}>{nameOf(whoId)}</b></p>
             {streaming ? <p className="chat-text">{streaming}</p>
               : <p className="chat-wait" role="status"><span>{t("talk.waiting", { name: nameOf(whoId) })}</span><i className="chat-pen" aria-hidden="true" /></p>}
           </div>

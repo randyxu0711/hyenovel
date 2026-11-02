@@ -391,10 +391,10 @@ describe("對話錯誤與上限", () => {
 });
 
 describe("沒有寫死角色", () => {
-  it("dash 目錄除 Avatar 外沒有 hyena/buffalo/deer 字面值", () => {
+  it("dash 目錄沒有 hyena/buffalo/deer 字面值", () => {
     const dir = join(__dirname, "../src/dash");
     for (const f of readdirSync(dir)) {
-      if (f === "Avatar.tsx" || !/\.(tsx?|css)$/.test(f)) continue;
+      if (!/\.(tsx?|css)$/.test(f)) continue;
       expect(readFileSync(join(dir, f), "utf8"), f).not.toMatch(/hyena|buffalo|deer/);
     }
   });

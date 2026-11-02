@@ -14,6 +14,9 @@ describe("Icon", () => {
       unmount();
     }
   });
+  it("有第 3 批的四顆", () => {
+    for (const n of ["send", "stop", "focus", "sheet2"]) expect(ICON_NAMES).toContain(n);
+  });
   it("auto 的右半是實心", () => {
     const { container } = render(<Icon name="auto" />);
     expect(container.querySelector('path[fill="currentColor"]')).not.toBeNull();

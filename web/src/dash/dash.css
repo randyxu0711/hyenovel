@@ -354,3 +354,21 @@
 .dash[data-narrow="true"] .dash-settings .set-nav .set-back{margin:0 8px 0 0}
 .dash[data-narrow="true"] .set-look{grid-template-columns:minmax(0,1fr)}
 .dash[data-narrow="true"] .set-prev{display:none}
+/* 佔位角色 */
+.dash .blob{display:block; flex:none; overflow:visible}
+.dash .blob .body{fill:color-mix(in srgb, var(--char) 22%, var(--dash-paper)); stroke:var(--char); stroke-width:1.6}
+.dash .blob .eye{fill:var(--dash-ink)}
+.dash .blob .eyes{transition:transform .5s cubic-bezier(.3,.7,.2,1)}
+.dash .blob .lid{transform-box:fill-box; transform-origin:center; animation:dash-blink 5.2s infinite}
+.dash .blob .shape{transform-box:fill-box; transform-origin:50% 100%}
+.dash .blob[data-state="idle"] .shape, .dash .blob[data-state="reading"] .shape{animation:dash-breathe 4.5s ease-in-out infinite}
+.dash .blob .mouth{fill:none; stroke:var(--dash-ink); stroke-width:1.6; stroke-linecap:round; opacity:0; transition:opacity .2s}
+.dash .blob[data-state="reading"] .eyes, .dash .blob[data-state="scanning"] .eyes{transform:translate(-4px,1px)}
+.dash .blob[data-state="scanning"] .eyes{animation:dash-scan 2.8s ease-in-out infinite}
+.dash .blob[data-state="speaking"] .shape{animation:dash-talk .42s ease-in-out infinite alternate}
+.dash .blob[data-state="speaking"] .mouth{opacity:1}
+@keyframes dash-breathe{0%,100%{transform:scale(1,1)} 50%{transform:scale(1.025,.975)}}
+@keyframes dash-talk{from{transform:translateY(0) scale(1,1)} to{transform:translateY(-3px) scale(.985,1.02)}}
+@keyframes dash-blink{0%,94%,100%{transform:scaleY(1)} 96%{transform:scaleY(.1)}}
+@keyframes dash-scan{0%{transform:translate(-6px,-1px)} 45%{transform:translate(-6px,4px)} 50%{transform:translate(-3px,-1px)} 95%{transform:translate(-3px,4px)} 100%{transform:translate(-6px,-1px)}}
+@media (prefers-reduced-motion:reduce){ .dash .blob .lid, .dash .blob[data-state] .shape, .dash .blob[data-state] .eyes{animation:none; transition:none} }

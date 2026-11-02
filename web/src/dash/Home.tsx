@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api, type SubmitResult, type Work } from "./api";
-import Avatar from "./Avatar";
+import Blob from "./Blob";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
 import { useCharacters } from "./useCharacters";
@@ -89,7 +89,7 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
       <div className="home-inner">
         {waiting && (
           <div className="home-waiting">
-            <Avatar character={me} size={32} />
+            <Blob character={me} size={32} />
             <div>
               <p className="home-who">{localized(me.name, lang)}</p>
               <p className="home-line">{t("home.waiting", { title: waiting.title })}</p>
@@ -134,7 +134,7 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
           <ul className="home-meet" aria-label={t("home.meet")}>
             {chars.list.map(c => (
               <li key={c.id}>
-                <Avatar character={c} size={26} />
+                <Blob character={c} size={26} />
                 <b>{localized(c.name, lang)}</b>
                 <span>{localized(c.line, lang)}</span>
               </li>
