@@ -8,7 +8,7 @@ import Palette from "./Palette";
 import Home from "./Home";
 import Rail from "./Rail";
 import Reader from "./Reader";
-import Settings from "./Settings";
+import Settings, { SettingsNav, type SettingsSection } from "./Settings";
 import Side, { marksFrom } from "./Side";
 import { useSeen } from "./useSeen";
 import { useTalk } from "./useTalk";
@@ -84,6 +84,13 @@ function Shell({ chars }: { chars: Characters }) {
   // 痕跡只在逐字稿的位置對的就是這一版時才畫(換版本重抓完之前不畫)。
   const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
+  // 設定頁的回去鍵:回到進設定前開著的那篇;沒開過 → 進門。分區只記在這裡,不進網址。
+  const [last, setLast] = useState<string | null>(null);
+  useEffect(() => { if (slug) setLast(slug); }, [slug]);
+  const [section, setSection] = useState<SettingsSection>("look");
+  const lastTitle = last ? works.find(w => w.slug === last)?.title ?? last : null;
+  const setNav = <SettingsNav section={section} onPick={setSection}
+    back={last ? { label: t("set.backTo", { title: lastTitle! }), to: `/w/${encodeURIComponent(last)}` } : { label: t("set.backHome"), to: "/" }} />;
   const shelf = useShelf();
   const split = useSplit(SHELF_W[shelf.mode]);
   const narrow = useNarrow();
@@ -162,7 +169,8 @@ function Shell({ chars }: { chars: Characters }) {
         </div>
       )}
       <Rail mode={shelf.mode} onToggle={shelf.toggle} works={works} current={slug} talk={talk} view={view}
-        onOpen={open} onNew={goHome} onFind={() => setPalette(true)} />
+        onOpen={open} onNew={goHome} onFind={() => setPalette(true)}
+        settingsNav={view === "settings" ? setNav : null} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
           map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
@@ -173,7 +181,7 @@ function Shell({ chars }: { chars: Characters }) {
             if (narrow) setPane("side");
           }} />}
         {view === "home" && <Home works={loaded} error={worksErr} onSubmitted={submitted} />}
-        {view === "settings" && <Settings />}
+        {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
       </main>
       {notice && (
         <p className="dash-notice" role="status">

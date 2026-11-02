@@ -66,19 +66,23 @@ describe("Dash 殼與路由", () => {
     await screen.findByText("內文一行");
     expect(f.mock.calls.map(c => c[0])).toContain("/api/works/d2?v=3");
   });
-  it("/settings 是 settings:有「設定」標題", async () => {
+  it("/settings 是 settings:設定區開在外觀", async () => {
     mount("/settings");
     await nav();
     expect(dash().dataset.view).toBe("settings");
-    expect(screen.getByRole("heading", { name: "設定" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "設定" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "外觀" })).toBeTruthy();
   });
-  it("點設定 → /settings;點書架的一篇 → /w/<slug>;書架形態不隨畫面改變", async () => {
+  it("點設定 → /settings;回去鍵回到那篇;點書架的一篇 → /w/<slug>;書架形態不隨畫面改變", async () => {
     localStorage.setItem("hyenovel.shelf", "open");
     mount("/w/d2");
     const rail = within(await nav());
-    fireEvent.click(rail.getByRole("button", { name: "設定" }));
+    fireEvent.click(await rail.findByRole("button", { name: "設定" }));
     expect(screen.getByTestId("loc").textContent).toBe("/settings");
-    fireEvent.click(await rail.findByRole("button", { name: /舊的/ }));
+    expect(dash().dataset.shelf).toBe("open");
+    fireEvent.click(await rail.findByRole("button", { name: "回到〈最近的〉" }));
+    expect(screen.getByTestId("loc").textContent).toBe("/w/d2");
+    fireEvent.click(await rail.findByRole("button", { name: /^舊的/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
     expect(dash().dataset.shelf).toBe("open");
   });

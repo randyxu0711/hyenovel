@@ -117,6 +117,7 @@ describe("換預設陪讀者在作品頁立即生效", () => {
     await screen.findByText("第一段。");
     expect(whoKey().textContent).toContain("水牛");
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(await within(screen.getByRole("navigation")).findByRole("button", { name: "陪讀者" }));
     fireEvent.click(await screen.findByRole("radio", { name: /鹿/ }));
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品:海" }));

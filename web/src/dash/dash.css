@@ -226,10 +226,8 @@
 
 /* ── 設定頁 ── */
 .dash .dash-settings{max-width:40em; margin:0 auto; padding:8px 24px 80px}
-.dash .dash-settings section{margin:0 0 32px}
-.dash .dash-settings h2{margin:0 0 12px; font-size:var(--dash-t-md); font-weight:600; color:var(--dash-ink)}
-.dash .dash-set-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .dash-set-row > span{min-width:6em}
+.dash .dash-settings[data-section="look"]{max-width:calc(40em + 300px)}
+.dash .dash-settings .dash-h{margin:0 0 14px; font-family:var(--serif); font-size:var(--dash-t-xl)}
 .dash .dash-set-opt{display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--dash-line); border-radius:6px; background:transparent; cursor:pointer; font:inherit; color:var(--dash-ink)}
 .dash .dash-set-opt[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); border-color:var(--dash-accent)}
 .dash .dash-set-chip{width:14px; height:14px; border-radius:50%; border:1px solid var(--dash-line)}
@@ -311,3 +309,31 @@
 .dash .shelf-pop .shelf-sess{margin:0}
 .dash .shelf-foot{margin-top:auto; display:flex; padding:8px 10px 12px 12px}
 .dash-rail[data-shelf="rail"] .shelf-foot{justify-content:center; padding:8px 0 12px}
+
+/* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
+.dash .set-nav{display:flex; flex-direction:column; gap:2px; padding:4px 10px}
+.dash .set-nav button{display:flex; align-items:center; gap:10px; padding:7px 10px; border:0; border-radius:8px; background:none; cursor:pointer; text-align:left; color:var(--dash-ink-2)}
+.dash .set-nav button:hover{background:var(--dash-line); color:var(--dash-ink)}
+.dash .set-nav button[aria-current="true"]{background:var(--dash-paper); color:var(--dash-ink); box-shadow:var(--dash-sh-raise)}
+.dash .set-nav .set-back{margin-bottom:10px; font-size:var(--dash-t-sm)}
+.dash .set-nav span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dash-rail[data-shelf="rail"] .set-nav{align-items:center; padding:4px 0}
+.dash-rail[data-shelf="rail"] .set-nav button{width:30px; height:30px; padding:0; justify-content:center}
+.dash-rail[data-shelf="rail"] .set-nav span{display:none}
+.dash .set-look{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:24px; align-items:start}
+.dash .set-rows{display:flex; flex-direction:column; gap:6px}
+.dash .set-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; padding:12px 14px; border-radius:10px; color:var(--dash-ink)}
+.dash .set-row:hover{background:var(--dash-desk-2)}
+.dash .set-lab{font-weight:500}
+.dash .set-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+.dash .set-seg{display:flex; gap:2px; padding:2px; border-radius:9px; background:var(--dash-desk-2)}
+.dash .set-seg button{display:grid; place-items:center; min-width:30px; height:28px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .set-seg button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-ink); box-shadow:var(--dash-sh-raise)}
+.dash .set-prev{margin:0}
+.dash .set-mini{--dash-t-paper:16.5px; margin:0; padding:18px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise); font-family:var(--serif); font-size:var(--dash-t-paper); line-height:2}
+.dash .set-mini[data-size="s"]{--dash-t-paper:14.5px}
+.dash .set-mini[data-size="l"]{--dash-t-paper:19px}
+.dash[data-narrow="true"] .dash-settings .set-nav{flex-direction:row; overflow-x:auto; padding:0 0 12px}
+.dash[data-narrow="true"] .dash-settings .set-nav .set-back{margin:0 8px 0 0}
+.dash[data-narrow="true"] .set-look{grid-template-columns:minmax(0,1fr)}
+.dash[data-narrow="true"] .set-prev{display:none}

@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, DashError, type RecentSession, type SessionDetail } from "./api";
 import Avatar from "./Avatar";
-import { errorMessage, localized, setLang, useLang, useT, type Lang } from "./i18n";
+import Icon, { type IconName } from "./Icon";
+import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
 import { selectTheme, setMode, useThemeState, type ModePref } from "./theme";
 import { useCharacters } from "./useCharacters";
 import { companionId, setCompanion } from "./useTalk";
 
-const MODES: { pref: ModePref; key: "set.mode.system" | "set.mode.light" | "set.mode.dark" }[] = [
-  { pref: "system", key: "set.mode.system" }, { pref: "light", key: "set.mode.light" }, { pref: "dark", key: "set.mode.dark" },
+const MODES: { pref: ModePref; key: MsgKey; icon: IconName }[] = [
+  { pref: "system", key: "set.mode.system", icon: "auto" }, { pref: "light", key: "set.mode.light", icon: "sun" },
+  { pref: "dark", key: "set.mode.dark", icon: "moon" },
 ];
 const SIZES: { size: PaperSize; key: "set.size.s" | "set.size.m" | "set.size.l" }[] = [
   { size: "s", key: "set.size.s" }, { size: "m", key: "set.size.m" }, { size: "l", key: "set.size.l" },
@@ -77,30 +80,59 @@ function Archive() {
   );
 }
 
-export default function Settings() {
+export type SettingsSection = "look" | "companions" | "archive";
+const SECTIONS: { id: SettingsSection; key: MsgKey; icon: IconName }[] = [
+  { id: "look", key: "set.look", icon: "look" }, { id: "companions", key: "set.companions", icon: "person" },
+  { id: "archive", key: "set.archive", icon: "box" },
+];
+
+/** 設定分區:回去鍵 + 三個分區。書架在設定頁時畫它;窄螢幕由 Settings 畫在內容上方(橫排)。 */
+export function SettingsNav({ section, onPick, back }: {
+  section: SettingsSection; onPick: (s: SettingsSection) => void; back: { label: string; to: string };
+}) {
+  const t = useT();
+  const nav = useNavigate();
+  return (
+    <div className="set-nav" role="group" aria-label={t("set.sections")}>
+      <button type="button" className="set-back" aria-label={back.label} title={back.label} onClick={() => nav(back.to)}>
+        <Icon name="back" /><span>{back.label}</span>
+      </button>
+      {SECTIONS.map(x => (
+        <button key={x.id} type="button" aria-label={t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
+          onClick={() => onPick(x.id)}>
+          <Icon name={x.icon} /><span>{t(x.key)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 一列:左標籤、右控制。 */
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="set-row"><span className="set-lab">{label}</span><div className="set-ctl">{children}</div></div>;
+}
+
+function Look() {
   const t = useT();
   const lang = useLang();
-  const chars = useCharacters();
   const { themes, theme, pref, mode } = useThemeState();
   const [size, setSize] = useState<PaperSize>(loadPaperSize);
-  const [who, setWho] = useState(() => companionId(chars));
   const pickSize = (s: PaperSize) => {
     try { localStorage.setItem(PAPER_SIZE_KEY, s); } catch { /* 存不了就只這次有效 */ }
     setSize(s);
   };
   return (
-    <section className="dash-settings" aria-label={t("rail.settings")}>
-      <h1 className="dash-h">{t("rail.settings")}</h1>
-
-      <section aria-labelledby="set-look">
-        <h2 id="set-look">{t("set.look")}</h2>
-        <div className="dash-set-row"><span>{t("set.mode")}</span>
-          {MODES.map(m => (
-            <button key={m.pref} type="button" className="dash-set-opt" aria-pressed={pref === m.pref}
-              onClick={() => setMode(m.pref)}>{t(m.key)}</button>
-          ))}
-        </div>
-        <div className="dash-set-row"><span>{t("set.palette")}</span>
+    <div className="set-look">
+      <div className="set-rows">
+        <Row label={t("set.mode")}>
+          <div className="set-seg" role="group" aria-label={t("set.mode")}>
+            {MODES.map(m => (
+              <button key={m.pref} type="button" aria-pressed={pref === m.pref} aria-label={t(m.key)} title={t(m.key)}
+                onClick={() => setMode(m.pref)}><Icon name={m.icon} /></button>
+            ))}
+          </div>
+        </Row>
+        <Row label={t("set.palette")}>
           {themes.map(th => (
             <button key={th.id} type="button" className="dash-set-opt" aria-pressed={theme?.id === th.id}
               onClick={() => selectTheme(th.id)}>
@@ -108,37 +140,59 @@ export default function Settings() {
               {localized(th.name, lang)}
             </button>
           ))}
-        </div>
-        <div className="dash-set-row"><span>{t("set.lang")}</span>
-          {LANGS.map(l => (
-            <button key={l.lang} type="button" className="dash-set-opt" aria-pressed={lang === l.lang}
-              onClick={() => setLang(l.lang)}>{l.label}</button>
-          ))}
-        </div>
-        <div className="dash-set-row"><span>{t("set.paper")}</span>
-          {SIZES.map(s => (
-            <button key={s.size} type="button" className="dash-set-opt" aria-pressed={size === s.size}
-              onClick={() => pickSize(s.size)}>{t(s.key)}</button>
-          ))}
-        </div>
-      </section>
+        </Row>
+        <Row label={t("set.lang")}>
+          <div className="set-seg" role="group" aria-label={t("set.lang")}>
+            {LANGS.map(l => (
+              <button key={l.lang} type="button" aria-pressed={lang === l.lang} onClick={() => setLang(l.lang)}>{l.label}</button>
+            ))}
+          </div>
+        </Row>
+        <Row label={t("set.paper")}>
+          <div className="set-seg" role="group" aria-label={t("set.paper")}>
+            {SIZES.map(s => (
+              <button key={s.size} type="button" aria-pressed={size === s.size} onClick={() => pickSize(s.size)}>{t(s.key)}</button>
+            ))}
+          </div>
+        </Row>
+      </div>
+      <figure className="set-prev" aria-label={t("set.preview")}>
+        <p className="set-mini" data-size={size}>{t("set.sample")}</p>
+      </figure>
+    </div>
+  );
+}
 
-      <section aria-labelledby="set-who">
-        <h2 id="set-who">{t("set.companions")}</h2>
-        {chars.list.map(c => (
-          <label key={c.id} className="dash-set-who">
-            <input type="radio" name="default-companion" checked={who === c.id}
-              onChange={() => { setCompanion(c.id); setWho(c.id); }} />
-            <Avatar character={c} size={28} />
-            <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
-          </label>
-        ))}
-      </section>
+function Companions() {
+  const t = useT();
+  const lang = useLang();
+  const chars = useCharacters();
+  const [who, setWho] = useState(() => companionId(chars));
+  return (
+    <div className="set-rows">
+      {chars.list.map(c => (
+        <label key={c.id} className="dash-set-who">
+          <input type="radio" name="default-companion" checked={who === c.id}
+            onChange={() => { setCompanion(c.id); setWho(c.id); }} />
+          <Avatar character={c} size={28} />
+          <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
 
-      <section aria-labelledby="set-data">
-        <h2 id="set-data">{t("set.data")}</h2>
-        <Archive />
-      </section>
+/** 設定內容:只畫目前分區。分區導覽在書架(窄螢幕時 nav 由外面給,畫在內容上方)。 */
+export default function Settings({ section, nav }: { section: SettingsSection; nav: ReactNode | null }) {
+  const t = useT();
+  const title = t(SECTIONS.find(x => x.id === section)!.key);
+  return (
+    <section className="dash-settings" aria-label={t("rail.settings")} data-section={section}>
+      {nav}
+      <h1 className="dash-h">{title}</h1>
+      {section === "look" && <Look />}
+      {section === "companions" && <Companions />}
+      {section === "archive" && <Archive />}
     </section>
   );
 }

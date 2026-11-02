@@ -53,7 +53,7 @@ function IB({ icon, label, children, ...rest }: { icon: IconName; label: string;
 }
 
 /** 書架。展開:作品(依更新新到舊)→ 目前這篇的局;窄條:工具在上、目前這篇(標題第一個字)在下。 */
-export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind }: {
+export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, settingsNav = null }: {
   mode: ShelfMode; onToggle: () => void;
   works: Work[]; current: string | null; talk: TalkState;
   view: "home" | "work" | "settings";
@@ -62,6 +62,8 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   onNew: () => void;
   /** 找作品(開 ⌘K 指令框)。 */
   onFind: () => void;
+  /** 在設定頁:書架換成設定分區(不列作品)。 */
+  settingsNav?: ReactNode;
 }) {
   const t = useT();
   const lang = useLang();
@@ -86,13 +88,14 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
         )}
         {!open && cur && <CurrentInitial work={cur} talk={talk} />}
       </div>
-      {open && works.length >= FILTER_FROM && (
+      {settingsNav}
+      {open && !settingsNav && works.length >= FILTER_FROM && (
         <label className="shelf-find">
           <Icon name="find" />
           <input type="search" aria-label={t("shelf.filter")} value={q} onChange={e => setQ(e.target.value)} />
         </label>
       )}
-      {open && (
+      {open && !settingsNav && (
         <ul className="shelf-works">
           {shown.map(w => {
             const s = dotState(w, seen(w.slug));
