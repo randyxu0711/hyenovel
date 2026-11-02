@@ -164,11 +164,11 @@
 .dash .paper-sheet[data-flow="v"] .paper-body{display:flex; flex-direction:column; align-items:center; gap:28px}
 .dash .paper-page{position:relative; box-sizing:border-box; width:min(600px, 100%); height:640px; padding:56px 52px 60px; flex:none;
   background:linear-gradient(180deg, var(--dash-sheen), transparent 30%), var(--dash-paper)}
-.dash .paper-cols{writing-mode:vertical-rl; height:100%; overflow:hidden; letter-spacing:.06em; line-height:2.1}
+.dash .paper-cols{writing-mode:vertical-rl; width:100%; height:100%; overflow:hidden; letter-spacing:.06em; line-height:2.1}
 /* 量測頁 = 一頁扣掉內距的內容框(與 .paper-page 的寬高、內距同步改) */
 .dash .paper-measure{position:absolute; visibility:hidden; pointer-events:none; left:0; top:0; width:calc(min(600px, 100%) - 104px); height:calc(640px - 116px)}
 .dash .paper-sheet[data-flow="v"] p{margin:0}
-.dash .paper-folio{position:absolute; left:0; right:0; bottom:20px; text-align:center; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2); font-variant-numeric:tabular-nums}
+.dash .paper-folio{position:absolute; user-select:none; left:0; right:0; bottom:20px; text-align:center; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2); font-variant-numeric:tabular-nums}
 .dash .paper-sheet p[data-cont]{text-indent:0}
 .dash .paper-tcy{text-combine-upright:all}
 .dash .paper-sheet.is-old .dash-paper, .dash .paper-sheet.is-old.dash-paper{background:color-mix(in srgb, var(--dash-paper) 86%, var(--dash-desk-2))}

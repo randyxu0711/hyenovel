@@ -220,3 +220,13 @@ describe("Paper 排法與分頁", () => {
     expect(marks().map(m => m.querySelector(".paper-ob")?.textContent).filter(Boolean)).toEqual(["很"]);
   });
 });
+
+describe("直排頁的 CSS", () => {
+  const css = readFileSync(join(__dirname, "../src/dash/dash.css"), "utf8");
+  it("直排欄框撐滿頁寬(不然沒滿的頁會擠在左邊,直排應從右起)", () => {
+    expect(css).toMatch(/\.dash \.paper-cols\{[^}]*width:100%/);
+  });
+  it("頁碼不能被選進引文", () => {
+    expect(css).toMatch(/\.dash \.paper-folio\{[^}]*user-select:none/);
+  });
+});
