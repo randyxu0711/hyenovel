@@ -97,9 +97,14 @@ def work_detail(conn, slug: str, v: int | None = None) -> dict:
     shown = row if v is None else repo.source_version_by_n(conn, st["id"], v)
     if shown is None:
         raise UnknownVersion(v)
+    svs = repo.source_versions(conn, st["id"])
+    analysed = repo.artifact_versions(conn, st["id"], "analysis")
+    noted = repo.artifact_versions(conn, st["id"], "notes")
     return {"slug": slug, "title": row["title"], "version": shown["version"] if v is None else shown["n"],
             "text": shown["latest_text"] if v is None else shown["text"],
-            "versions": [x["n"] for x in repo.source_versions(conn, st["id"])],
+            "versions": [x["n"] for x in svs],
+            "history": [{"n": x["n"], "at": x["created_at"], "analysed": x["n"] in analysed, "noted": x["n"] in noted}
+                        for x in svs],
             "state": row["state"], "job_id": row["job_id"],
             "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
 
