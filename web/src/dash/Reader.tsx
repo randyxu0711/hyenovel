@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, DashError, type WorkDetail } from "./api";
+import DropSheet from "./DropSheet";
 import Icon from "./Icon";
 import { errorMessage, useLang, useT, type MsgKey } from "./i18n";
 import Paper, { type Mark, type ObSpan } from "./Paper";
@@ -140,15 +141,12 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
     if (r.jobError) setResumeErr(r.jobError);   // 新版存下了但沒開成分析:回最新版,頂列有「分析這版」可重按
     onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same && !r.jobError });
   };
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f && !submit.busy) void submit.fromFile(f);
-  };
+
   const { draft } = submit;
   const est = draft?.estimate;
   return (
-    <div className="reader" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
+    <div className="reader">
+      <DropSheet next={latest + 1} onFile={f => { if (!submit.busy) void submit.fromFile(f); }} />
       <header className="paper-top">
         <h1 className="paper-h">{work.title}</h1>
         <div className="paper-vers" role="group" aria-label={t("paper.versions")}>

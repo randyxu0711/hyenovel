@@ -142,6 +142,12 @@
 @media (prefers-reduced-motion:reduce){ .dash .vdot[data-busy]{animation:none} }
 .dash .paper-oldpill{display:inline-flex; align-items:center; gap:4px; padding:2px 2px 2px 12px; border-radius:999px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .paper-flow{margin-left:auto}
+/* 拖檔:整個畫面蓋一層桌色,一張寫著下一版號的紙從右上斜著滑進來 */
+.dash .drop-sheet{position:fixed; inset:0; z-index:20; display:grid; place-items:center; pointer-events:none; background:color-mix(in srgb, var(--dash-desk) 70%, transparent)}
+.dash .drop-paper{display:grid; place-items:center; width:180px; height:230px; box-shadow:var(--dash-sh-float); transform:rotate(1deg); animation:drop-in .45s cubic-bezier(.3,.7,.2,1) both}
+.dash .drop-paper span{font-family:var(--serif); font-size:42px; /* t-ok: 拖檔紙上的版號是道具字,不是內文 */ color:var(--dash-ink-2)}
+@keyframes drop-in{from{transform:translate(30px,-30px) rotate(4deg); opacity:.6}}
+@media (prefers-reduced-motion:reduce){ .dash .drop-paper{animation:none} }
 .dash .paper-vers .paper-v{padding:1px 9px; border:0; border-radius:5px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-vers .paper-v[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}

@@ -389,9 +389,9 @@ describe("交新版", () => {
     fireEvent.click(await screen.findByRole("button", { name: "取消" }));
     expect(screen.queryByText("交成第 3 版")).toBeNull();
   });
-  it("拖檔進稿窗格 → 出現交稿條", async () => {
-    const { container } = await mountNew();
-    fireEvent.drop(container.querySelector(".reader")!, { dataTransfer: { files: [file()] } });
+  it("把檔拖到畫面任何地方 → 出現交稿條", async () => {
+    await mountNew();
+    fireEvent.drop(window, { dataTransfer: { types: ["Files"], files: [file()] } });
     expect(await screen.findByText("交成第 3 版")).toBeTruthy();
   });
   it("state=stale 的最新版有「分析這版」;按下 startJob(slug)、重抓並通知", async () => {
