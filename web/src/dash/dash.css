@@ -287,3 +287,16 @@
 .dash .dash-palette li{padding:7px 10px; border-radius:6px; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .dash-palette li[aria-selected="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .dash-palette-empty{margin:0; padding:7px 10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+/* ── 圖示與圖示鈕(第 2 輪 §6.1);細捲軸(§6.2) ── */
+.dash .ico{stroke:currentColor; fill:none; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; flex:none}
+.dash .ib{
+  position:relative; display:inline-grid; place-items:center; width:30px; height:30px; padding:0; flex:none; cursor:pointer;
+  border:0; border-radius:8px; background:transparent; color:var(--dash-ink-2);
+}
+.dash .ib:hover{background:var(--dash-line); color:var(--dash-ink)}
+.dash .ib[aria-pressed="true"], .dash .ib[aria-current]{background:var(--dash-paper); color:var(--dash-ink); box-shadow:var(--dash-sh-raise)}
+.dash, .dash *{scrollbar-width:thin; scrollbar-color:var(--dash-line) transparent}
+.dash ::-webkit-scrollbar{width:8px; height:8px}
+.dash ::-webkit-scrollbar-thumb{background:var(--dash-line); border-radius:8px}
+.dash ::-webkit-scrollbar-thumb:hover{background:var(--dash-accent)}
+.dash ::-webkit-scrollbar-track{background:transparent}
