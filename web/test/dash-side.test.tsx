@@ -41,6 +41,11 @@ describe("右欄分頁", () => {
     expect(screen.getByText("內文一行")).toBeTruthy();
     expect(container.querySelectorAll("button.dash-mcol")).toHaveLength(1);
   });
+  it("右欄頂沒有局選單(局搬到書架)", async () => {
+    mount();
+    await screen.findByText("內文一行");
+    expect(document.querySelector(".dash-side header")!.querySelectorAll("button:not([role=tab])")).toHaveLength(0);
+  });
   it("對位資料 500:筆記與結構圖都顯示錯誤,稿照常", async () => {
     mapFails = true;
     mount();
@@ -61,7 +66,7 @@ describe("右欄分頁", () => {
 });
 
 describe("分隔線", () => {
-  it("可用鍵盤拖;寬度存 hyenovel.split,右欄最少 380、稿最少 380(收起的左欄 56 不算)", async () => {
+  it("可用鍵盤拖;寬度存 hyenovel.split,右欄最少 380、稿最少 380(扣掉窄條書架 56)", async () => {
     const { unmount } = mount();
     const grip = await screen.findByRole("separator", { name: "拖曳調整寬度" });
     fireEvent.keyDown(grip, { key: "ArrowLeft" });

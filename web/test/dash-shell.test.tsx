@@ -52,13 +52,14 @@ describe("Dash 殼與路由", () => {
     expect(dash().dataset.view).toBe("home");
     expect(f.mock.calls.map(c => c[0])).not.toContain("/api/works/d2");
   });
-  it("/w/:slug 是 work:左欄收起、沒有作品標題,有作品/設定/切換晝夜三顆鍵", async () => {
+  it("/w/:slug 是 work;窄條沒有作品標題,有找作品/設定鍵", async () => {
+    localStorage.setItem("hyenovel.shelf", "rail");
     mount("/w/d2");
     expect(await screen.findByText("內文一行")).toBeTruthy();
     const rail = within(await nav());
     expect(dash().dataset.view).toBe("work");
-    expect(rail.queryByText("最近的")).toBeNull();
-    for (const n of ["作品", "設定", "切換晝夜"]) expect(rail.getByRole("button", { name: n })).toBeTruthy();
+    expect(rail.queryByText("舊的")).toBeNull();
+    for (const n of ["找作品", "設定"]) expect(rail.getByRole("button", { name: n })).toBeTruthy();
   });
   it("?v= 帶進去抓那一版", async () => {
     const f = mount("/w/d2?v=3");
@@ -92,18 +93,19 @@ describe("Dash 殼與路由", () => {
     expect(dash().dataset.shelf).toBe("open");
     expect(localStorage.getItem("hyenovel.shelf")).toBe("open");
   });
-  it("新對話鈕回到 /", async () => {
+  it("交新稿鈕回到 /", async () => {
     mount("/w/d2");
-    fireEvent.click(within(await nav()).getByRole("button", { name: "新對話" }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
     expect(screen.getByTestId("loc").textContent).toBe("/");
     expect(dash().dataset.view).toBe("home");
   });
-  it("切換晝夜:.dash 的 data-mode 變", async () => {
+  it("⌘K 切換晝夜:.dash 的 data-mode 變", async () => {
     mount("/");
-    const rail = within(await nav());
+    await nav();
     const before = dash().dataset.mode;
     expect(before === "light" || before === "dark").toBe(true);
-    fireEvent.click(rail.getByRole("button", { name: "切換晝夜" }));
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    fireEvent.click(await screen.findByRole("option", { name: "切換晝夜" }));
     expect(dash().dataset.mode).toBe(before === "dark" ? "light" : "dark");
   });
   it("沒有作品時 home 邀請把稿拖進來或貼上", async () => {
@@ -114,9 +116,8 @@ describe("Dash 殼與路由", () => {
 
 describe("Dash 交稿後", () => {
   const draft = async () => {
-    fireEvent.click(within(await nav()).getByRole("button", { name: "作品" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "交一篇新的" }));
-    await screen.findByRole("textbox", { name: "對話輸入" });   // 「交一篇新的」回到進門畫面
+    fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
+    await screen.findByRole("textbox", { name: "對話輸入" });   // 交新稿回到進門畫面
     fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [new File(["x"], "最近的.md")] } });
     fireEvent.click(await screen.findByRole("button", { name: /交稿並開始分析/ }));
   };
@@ -147,8 +148,8 @@ describe("Dash 交稿後", () => {
     await screen.findByText("內文一行");
     await draft();
     await screen.findByText("這篇已經在了,已切過去。");
-    fireEvent.click(within(await nav()).getByRole("button", { name: "作品" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /最近的/ }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: "展開書架" }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: /最近的/ }));
     expect(screen.queryByText("這篇已經在了,已切過去。")).toBeNull();
   });
 });

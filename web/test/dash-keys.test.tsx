@@ -102,13 +102,12 @@ describe("鍵盤", () => {
     expect(screen.getByText("沒有符合的")).toBeTruthy();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
-  it("Esc 關掉作品選單浮層", async () => {
+  it("窄條的找作品鍵開指令框", async () => {
+    localStorage.setItem("hyenovel.shelf", "rail");
     mount("/w/d1");
     await screen.findByLabelText("對話輸入");
-    fireEvent.click(screen.getByRole("button", { name: "作品" }));
-    expect(screen.getByRole("dialog", { name: "作品" })).toBeTruthy();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "作品" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "找作品" }));
+    expect(await screen.findByRole("dialog", { name: "指令框" })).toBeTruthy();
   });
   it("輸入法組字中:Enter / 方向鍵 / Esc 不執行、不移動、不關閉(isComposing 與 keyCode 229)", async () => {
     mount("/w/d1");

@@ -5,9 +5,10 @@ import Rail from "../src/dash/Rail";
 import WorksMenu from "../src/dash/WorksMenu";
 import { dotState, useSeen } from "../src/dash/useSeen";
 import { setLang } from "../src/dash/i18n";
-import { initThemes, getThemeState } from "../src/dash/theme";
+import { initThemes } from "../src/dash/theme";
 import { olive } from "./dash-fixtures";
 import type { Work } from "../src/dash/api";
+import type { Talk } from "../src/dash/useTalk";
 
 const w = (slug: string, title: string, extra: Partial<Work> = {}): Work =>
   ({ slug, title, version: 1, chars: 100, updated_at: 100, state: "ready", ...extra });
@@ -49,34 +50,45 @@ describe("useSeen", () => {
   });
 });
 
-describe("Rail", () => {
-  const mount = (collapsed: boolean, current: string | null = null, works = WORKS) => {
-    const p = { onOpen: vi.fn(), onNew: vi.fn() };
-    const r = render(<MemoryRouter><Where /><Rail collapsed={collapsed} works={works} current={current} {...p} /></MemoryRouter>);
-    return { ...p, ...r };
+type Sess = { session: string; preview: string; versions?: [number, number] | null };
+const fakeTalk = (sessions: Sess[] = [], extra: Record<string, unknown> = {}) => ({
+  sessions: sessions.map(x => ({ started_at: 1, last_at: 1, turns: 1, character: null, mode: null, version: null, legacy: false, ...x })),
+  session: null as string | null, streaming: null as string | null, open: vi.fn(), fresh: vi.fn(), ...extra,
+}) as unknown as Talk;
+
+describe("Rail(展開)", () => {
+  const mount = (o: { current?: string | null; works?: Work[]; talk?: Talk; view?: "home" | "work" | "settings" } = {}) => {
+    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onToggle: vi.fn() };
+    const talk = o.talk ?? fakeTalk();
+    const r = render(<MemoryRouter><Where /><Rail mode="open" works={o.works ?? WORKS} current={o.current ?? null}
+      talk={talk} view={o.view ?? "home"} {...p} /></MemoryRouter>);
+    return { ...p, ...r, talk };
   };
-  it("展開:列出作品標題,點了開那篇;新對話鈕", () => {
-    const { onOpen, onNew } = mount(false);
-    for (const t of ["海", "山", "湖"]) expect(screen.getByText(t)).toBeTruthy();
+  it("頂列:收合、交一篇新稿;底:設定;沒有晝夜鍵、沒有「交一篇新的」文字鈕", () => {
+    const { onToggle, onNew } = mount();
+    fireEvent.click(screen.getByRole("button", { name: "收合書架" }));
+    expect(onToggle).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
+    expect(onNew).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "切換晝夜" })).toBeNull();
+    expect(screen.queryByText("交一篇新的")).toBeNull();
+  });
+  it("列出作品標題,點了開那篇;目前那篇 aria-current;分析中那篇的點叫「分析中」", () => {
+    const { onOpen } = mount({ current: "d1" });
     fireEvent.click(screen.getByRole("button", { name: /山/ }));
     expect(onOpen).toHaveBeenCalledWith("d2");
-    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
-    expect(onNew).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /海/ }).getAttribute("aria-current")).toBe("true");
+    expect(within(screen.getByRole("button", { name: /山/ })).getByRole("img").getAttribute("aria-label")).toBe("分析中");
   });
-  it("展開:目前那篇標 aria-current;分析中那篇有點,可及名稱是狀態", () => {
-    mount(false, "d1");
-    expect(screen.getByRole("button", { name: "海" }).getAttribute("aria-current")).toBe("true");
-    expect(screen.getByRole("button", { name: /山/ }).querySelector('[role="img"]')!.getAttribute("aria-label")).toBe("分析中");
+  it("看過後有更新的作品亮 fresh 點;沒開過的不亮", () => {
+    localStorage.setItem("hyenovel.seen", JSON.stringify({ d3: 50 }));
+    mount();
+    expect(within(screen.getByRole("button", { name: /湖/ })).getByRole("img").getAttribute("aria-label")).toBe("有新東西");
+    expect(within(screen.getByRole("button", { name: /海/ })).queryByRole("img")).toBeNull();
   });
-  it("收起:不出現任何作品標題,只剩有名字的鍵(作品、設定、切換晝夜、新對話)", () => {
-    const { onNew } = mount(true, "d1");
-    for (const t of ["海", "山", "湖"]) expect(screen.queryByText(t)).toBeNull();
-    for (const n of ["作品", "設定", "切換晝夜"]) expect(screen.getByRole("button", { name: n })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
-    expect(onNew).toHaveBeenCalled();
-  });
-  it("左欄沒有說明性段落:文字只有作品標題與按鈕名稱", () => {
-    const { container } = mount(false);
+  it("書架沒有說明性段落:按鈕外的字只有品牌", () => {
+    const { container } = mount({ current: "d1", talk: fakeTalk([{ session: "a", preview: "第一句" }]) });
     expect(container.querySelector("p")).toBeNull();
     const texts: string[] = [];
     const walk = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -85,56 +97,122 @@ describe("Rail", () => {
     }
     expect(texts.filter(Boolean)).toEqual(["hyenovel"]);
   });
-  it("看過後有更新的作品亮 fresh 點;沒開過的不亮", () => {
-    localStorage.setItem("hyenovel.seen", JSON.stringify({ d3: 50 }));
-    mount(false);
-    expect(within(screen.getByRole("button", { name: /湖/ })).getByRole("img").getAttribute("aria-label")).toBe("有新東西");
-    expect(within(screen.getByRole("button", { name: /海/ })).queryByRole("img")).toBeNull();
-  });
-  it("收起時,別篇有新東西 → 作品鍵上亮點;只有目前這篇新就不亮", () => {
-    localStorage.setItem("hyenovel.seen", JSON.stringify({ d1: 50 }));
-    const { unmount } = mount(true, "d3");
-    expect(within(screen.getByRole("button", { name: "作品" })).getByRole("img").getAttribute("aria-label")).toBe("有新東西");
+  it("作品 ≤ 6 沒有篩選框;7 篇才有,輸入「山」只剩含「山」的", () => {
+    const { unmount } = mount({ works: WORKS.concat([w("d4", "a"), w("d5", "b"), w("d6", "c")]) });
+    expect(screen.queryByRole("searchbox")).toBeNull();
     unmount();
-    mount(true, "d1");
-    expect(within(screen.getByRole("button", { name: "作品" })).queryByRole("img")).toBeNull();
+    mount({ works: WORKS.concat([w("d4", "a"), w("d5", "b"), w("d6", "c"), w("d7", "山路")]) });
+    fireEvent.change(screen.getByRole("searchbox", { name: "篩選作品" }), { target: { value: "山" } });
+    expect(screen.getAllByRole("button", { name: /^山/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /海/ })).toBeNull();
   });
-  it("沒新東西的作品畫空心環(不給可及名稱);分析中、有新東西各有名字", () => {
-    localStorage.setItem("hyenovel.seen", JSON.stringify({ d3: 150 }));
-    mount(false);
-    expect(within(screen.getByRole("button", { name: /湖/ })).queryByRole("img")).toBeNull();
-    expect(document.querySelector('.rail-dot[data-state="none"]')).toBeTruthy();
+  it("每列有時間字;curve 有兩點以上才畫指紋", () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 10, 2, 12).getTime());
+    const today = new Date(2026, 10, 2, 8).getTime() / 1000;
+    mount({ works: [w("d1", "海", { updated_at: today, curve: [0.2, 0.9] }), w("d2", "山", { updated_at: today, curve: [] })] });
+    expect(within(screen.getByRole("button", { name: /海/ })).getByText("今天")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /海/ }).querySelector("svg.shelf-fp polyline")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /山/ }).querySelector("svg.shelf-fp")).toBeNull();
+    vi.restoreAllMocks();
   });
-  it("展開時底部是兩顆圖示鍵(晝夜、設定),沒有文字", () => {
-    mount(false);
-    for (const n of ["切換晝夜", "設定"]) expect(screen.getByRole("button", { name: n }).querySelector("[aria-hidden]")).toBeTruthy();   // 只有圖示
+  const SESS: Sess[] = [{ session: "a", preview: "一", versions: [4, 5] }, { session: "b", preview: "二", versions: [3, 3] },
+    { session: "c", preview: "三", versions: null }, { session: "d", preview: "四" }, { session: "e", preview: "五" }];
+  it("只有目前這篇展開局:最多 3 局 + 「還有 N 局」;點它全展開", () => {
+    mount({ current: "d1", talk: fakeTalk(SESS) });
+    const list = screen.getByRole("list", { name: "這篇的對話" });
+    expect(screen.getAllByRole("list", { name: "這篇的對話" })).toHaveLength(1);
+    expect(within(list).queryByRole("button", { name: /^四/ })).toBeNull();
+    fireEvent.click(within(list).getByRole("button", { name: "還有 2 局" }));
+    expect(within(list).getByRole("button", { name: /^五/ })).toBeTruthy();
+    expect(within(list).queryByRole("button", { name: /還有/ })).toBeNull();
   });
-  it("設定鍵導到 /settings(展開、收起都有)", () => {
-    mount(false);
+  it("局列顯示第一句與 v4–5;同版只寫 v3;versions null 不寫", () => {
+    mount({ current: "d1", talk: fakeTalk(SESS) });
+    expect(screen.getByRole("button", { name: /^一/ }).textContent).toBe("一v4–5");
+    expect(screen.getByRole("button", { name: /^二/ }).textContent).toBe("二v3");
+    expect(screen.getByRole("button", { name: /^三/ }).textContent).toBe("三");
+  });
+  it("點局 → talk.open(id);目前這局 aria-current;串流中點 → 不呼叫", () => {
+    const t = fakeTalk(SESS, { session: "b" });
+    const { unmount } = mount({ current: "d1", talk: t });
+    expect(screen.getByRole("button", { name: /^二/ }).getAttribute("aria-current")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /^一/ }));
+    expect(t.open).toHaveBeenCalledWith("a");
+    unmount();
+    const busy = fakeTalk(SESS, { streaming: "x" });
+    mount({ current: "d1", talk: busy });
+    fireEvent.click(screen.getByRole("button", { name: /^一/ }));
+    fireEvent.click(screen.getByRole("button", { name: "開一局" }));
+    expect(busy.open).not.toHaveBeenCalled();
+    expect(busy.fresh).not.toHaveBeenCalled();
+  });
+  it("「開一局」→ talk.fresh()", () => {
+    const t = fakeTalk(SESS);
+    mount({ current: "d1", talk: t });
+    fireEvent.click(screen.getByRole("button", { name: "開一局" }));
+    expect(t.fresh).toHaveBeenCalled();
+  });
+  it("設定鍵導到 /settings;在 /settings 時 aria-current=page", () => {
+    const { unmount } = mount();
+    expect(screen.getByRole("button", { name: "設定" }).getAttribute("aria-current")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     expect(screen.getByTestId("loc").textContent).toBe("/settings");
+    unmount();
+    mount({ view: "settings" });
+    expect(screen.getByRole("button", { name: "設定" }).getAttribute("aria-current")).toBe("page");
   });
-  it("晝夜鍵呼叫 toggleDayNight", () => {
-    mount(true);
-    const before = getThemeState().mode;
-    fireEvent.click(screen.getByRole("button", { name: "切換晝夜" }));
-    expect(getThemeState().mode).toBe(before === "dark" ? "light" : "dark");
+});
+
+describe("Rail(窄條)", () => {
+  const mount = (o: { current?: string | null; works?: Work[]; talk?: Talk } = {}) => {
+    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onToggle: vi.fn() };
+    const talk = o.talk ?? fakeTalk();
+    const r = render(<MemoryRouter><Where /><Rail mode="rail" works={o.works ?? WORKS} current={o.current ?? null}
+      talk={talk} view="work" {...p} /></MemoryRouter>);
+    return { ...p, ...r, talk };
+  };
+  it("由上而下:展開、交一篇新稿、找作品、目前這篇、設定;不列作品標題", () => {
+    mount({ current: "d1" });
+    const names = screen.getAllByRole("button").map(b => b.getAttribute("aria-label"));
+    expect(names).toEqual(["展開書架", "交一篇新稿", "找作品", "海", "設定"]);
+    for (const t of ["山", "湖"]) expect(screen.queryByText(t)).toBeNull();
   });
-  it("收起時點「作品」開浮層:列標題與狀態文字;Esc 關閉;選一篇開它並關閉", () => {
+  it("目前這篇顯示標題第一個字;沒有 current 就沒有這顆", () => {
+    const { unmount } = mount({ current: "d1", works: [w("d1", "海邊的人")] });
+    expect(screen.getByRole("button", { name: "海邊的人" }).textContent).toBe("海");
+    unmount();
+    mount();
+    expect(screen.getAllByRole("button")).toHaveLength(4);
+  });
+  it("目前這篇分析中 → 有跳動點", () => {
+    mount({ current: "d2" });
+    expect(within(screen.getByRole("button", { name: "山" })).getByRole("img").getAttribute("aria-label")).toBe("分析中");
+  });
+  it("點目前這篇 → 浮層列局;點局換局並關;Esc 關、焦點回鍵", () => {
+    const t = fakeTalk([{ session: "a", preview: "一" }]);
+    mount({ current: "d1", talk: t });
+    fireEvent.click(screen.getByRole("button", { name: "海" }));
+    const pop = screen.getByRole("dialog", { name: "海" });
+    fireEvent.keyDown(within(pop).getByRole("button", { name: /^一/ }), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "海" }));
+    fireEvent.click(screen.getByRole("button", { name: "海" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^一/ }));
+    expect(t.open).toHaveBeenCalledWith("a");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("別篇有新東西 → 找作品鍵上有點;只有目前這篇新 → 沒有", () => {
     localStorage.setItem("hyenovel.seen", JSON.stringify({ d1: 50 }));
-    const { onOpen } = mount(true, "d3");
-    fireEvent.click(screen.getByRole("button", { name: "作品" }));
-    const menu = screen.getByRole("dialog", { name: "作品" });
-    expect(within(menu).getByText("有新東西")).toBeTruthy();   // 海 updated 500 > seen 50
-    expect(within(menu).getByText("分析中")).toBeTruthy();
-    expect(within(menu).getByRole("button", { name: /湖/ }).getAttribute("aria-current")).toBe("true");
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "作品" }));
-    fireEvent.click(screen.getByRole("button", { name: "作品" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /山/ }));
-    expect(onOpen).toHaveBeenCalledWith("d2");
-    expect(screen.queryByRole("dialog")).toBeNull();
+    const { unmount } = mount({ current: "d3" });
+    expect(within(screen.getByRole("button", { name: "找作品" })).getByRole("img").getAttribute("aria-label")).toBe("有新東西");
+    unmount();
+    mount({ current: "d1" });
+    expect(within(screen.getByRole("button", { name: "找作品" })).queryByRole("img")).toBeNull();
+  });
+  it("找作品 → onFind", () => {
+    const { onFind } = mount();
+    fireEvent.click(screen.getByRole("button", { name: "找作品" }));
+    expect(onFind).toHaveBeenCalled();
   });
 });
 

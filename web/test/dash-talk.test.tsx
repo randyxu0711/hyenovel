@@ -223,20 +223,18 @@ describe("對話", () => {
   });
 });
 
-describe("局選單", () => {
-  it("列出時間、誰、第一句話;點「新的一局」→ 下次送出 session_id 是 null", async () => {
-    const at = new Date(2026, 9, 31, 21, 40).getTime() / 1000;
-    rows = [row("s1", { last_at: at, preview: "第一句話" })];
+describe("書架上的局", () => {
+  beforeEach(() => localStorage.setItem("hyenovel.shelf", "open"));
+  const sessList = async () => within(await screen.findByRole("list", { name: "這篇的對話" }));
+  it("列出第一句話,目前這局標出來;點「開一局」→ 下次送出 session_id 是 null", async () => {
+    rows = [row("s1", { preview: "第一句話" })];
     session("s1", [u("第一句話"), a("水牛說", "buffalo")]);
     mount();
     await (await findLog()).findByText("水牛說");
-    fireEvent.click(screen.getByRole("button", { name: /換一局/ }));
-    const list = within(screen.getByRole("group", { name: "這篇的對話" }));
+    const list = await sessList();
     const item = list.getByRole("button", { name: /第一句話/ });
-    expect(item.textContent).toContain("21:40");
-    expect(item.textContent).toContain("水牛");
     expect(item.getAttribute("aria-current")).toBe("true");
-    fireEvent.click(list.getByRole("button", { name: "新的一局" }));
+    fireEvent.click(list.getByRole("button", { name: "開一局" }));
     expect(log().queryByText("水牛說")).toBeNull();
     say("重來");
     await waitFor(() => expect(talkBodies[0].session_id).toBeNull());
@@ -247,8 +245,7 @@ describe("局選單", () => {
     session("s1", [u("舊的"), a("以前的話", "hyena")]);
     mount();
     await (await findLog()).findByText("後來的話");
-    fireEvent.click(screen.getByRole("button", { name: /換一局/ }));
-    fireEvent.click(within(screen.getByRole("group", { name: "這篇的對話" })).getByRole("button", { name: /舊的/ }));
+    fireEvent.click((await sessList()).getByRole("button", { name: /舊的/ }));
     expect(await (await findLog()).findByText("以前的話")).toBeTruthy();
     say("續");
     await waitFor(() => expect(talkBodies[0]).toMatchObject({ session_id: "s1", character: "hyena" }));
@@ -259,8 +256,7 @@ describe("局選單", () => {
     session("s1", [u("舊的"), a("以前的話", "hyena")]);
     const { unmount } = mount();
     await (await findLog()).findByText("後來的話");
-    fireEvent.click(screen.getByRole("button", { name: /換一局/ }));
-    fireEvent.click(within(screen.getByRole("group", { name: "這篇的對話" })).getByRole("button", { name: /舊的/ }));
+    fireEvent.click((await sessList()).getByRole("button", { name: /舊的/ }));
     await (await findLog()).findByText("以前的話");
     expect(loc()).toBe("/w/d1?s=s1");
     unmount();
@@ -277,8 +273,7 @@ describe("局選單", () => {
     talkReply = reply("嗯", "hyena", "s7");
     mount("/w/d1?s=s1");
     await (await findLog()).findByText("水牛說");
-    fireEvent.click(screen.getByRole("button", { name: /換一局/ }));
-    fireEvent.click(within(screen.getByRole("group", { name: "這篇的對話" })).getByRole("button", { name: "新的一局" }));
+    fireEvent.click((await sessList()).getByRole("button", { name: "開一局" }));
     expect(loc()).toBe("/w/d1");
     say("重來");
     await (await findLog()).findByText("嗯");

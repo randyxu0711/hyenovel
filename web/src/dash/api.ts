@@ -31,7 +31,10 @@ export type Theme = { id: string; name: LText; source: string; light: ThemeToken
 
 export type Span = { quote: string; start: number | null; end: number | null };
 export type Work = {
-  slug: string; title: string; version: number; chars: number; updated_at: number; state: string; [k: string]: unknown;
+  slug: string; title: string; version: number; chars: number; updated_at: number; state: string;
+  /** 目前分析的張力指紋(beat intensity 依文本順序);沒分析 = [] */
+  curve?: number[];
+  [k: string]: unknown;
 };
 export type WorkDetail = {
   slug: string; title: string; version: number; text: string; state: string;
@@ -40,6 +43,8 @@ export type WorkDetail = {
 export type SessionRow = {
   session: string; started_at: number; last_at: number; turns: number;
   character: string | null; mode: string | null; preview: string; version: number | null; legacy: boolean;
+  /** 這局發言當下的原文版本範圍 [lo, hi] */
+  versions?: [number, number] | null;
 };
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type Turn = {

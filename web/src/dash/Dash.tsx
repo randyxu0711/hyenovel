@@ -161,8 +161,8 @@ function Shell({ chars }: { chars: Characters }) {
           <button type="button" className="dash-bar-palette" aria-haspopup="dialog" onClick={() => setPalette(true)}>{t("palette.open")}</button>
         </div>
       )}
-      <Rail collapsed={shelf.mode === "rail"} works={works} current={slug} onOpen={open}
-        onNew={goHome} onSubmitNew={goHome} />
+      <Rail mode={shelf.mode} onToggle={shelf.toggle} works={works} current={slug} talk={talk} view={view}
+        onOpen={open} onNew={goHome} onFind={() => setPalette(true)} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
           map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}

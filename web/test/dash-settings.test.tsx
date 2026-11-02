@@ -51,7 +51,8 @@ describe("設定頁", () => {
     expect(getThemeState().pref).toBe("dark");
     expect(localStorage.getItem("hyenovel.mode")).toBe("dark");
     expect(p.getByRole("button", { name: "夜" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "切換晝夜" }));   // 左欄:夜 → 晝
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });   // ⌘K 的切換晝夜:夜 → 晝
+    fireEvent.click(await screen.findByRole("option", { name: "切換晝夜" }));
     expect(getThemeState().pref).toBe("light");
     expect(p.getByRole("button", { name: "晝" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(p.getByRole("button", { name: "跟系統" }));
@@ -98,7 +99,7 @@ describe("設定頁", () => {
     fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
     expect(localStorage.getItem("hyenovel.companion")).toBe("buffalo");
     expect((p.getByRole("radio", { name: /水牛/ }) as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
+    fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
     expect(await screen.findByRole("button", { name: "陪讀者" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "陪讀者" }).textContent).toContain("水牛");
   });

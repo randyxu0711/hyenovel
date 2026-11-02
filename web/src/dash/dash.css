@@ -37,34 +37,19 @@
 @media (prefers-reduced-motion:reduce){ .dash-key{transition:none} }
 .dash button, .dash select{font:inherit; color:inherit}
 .dash-note{display:grid; place-items:center}
-.dash-rail{display:flex; flex-direction:column; gap:12px; padding:20px 16px; background:var(--dash-desk-2); overflow:hidden; min-height:0}
-.dash-rail > *{flex:none}
-.dash-rail[data-collapsed="true"]{align-items:center; padding:16px 8px}
-.dash .rail-brand{font-size:var(--dash-t-lg)}
-.dash-rail[data-collapsed="true"] .rail-brand{display:none}
-.dash .rail-btn{
-  display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; cursor:pointer;
-  border:1px solid var(--dash-line); border-radius:8px; background:transparent; color:var(--dash-ink); font-size:var(--dash-t-sm);
-}
-.dash-rail[data-collapsed="true"] .rail-btn{width:40px; height:40px; padding:0}
-.dash-rail:not([data-collapsed="true"]) .rail-btn{justify-content:flex-start}
-.dash .rail-foot{margin-top:auto; display:flex; flex-direction:row; gap:8px}
 .dash-desk{padding:0; color:var(--dash-ink-2); overflow:auto; min-width:0}
 .dash-desk:not(:has(.reader)){padding:32px}
-/* 左欄本身不捲:品牌與按鈕固定,只有作品清單捲動(不然清單溢出會疊到設定上)。 */
-.dash .rail-lists{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; min-height:0; flex:1 1 auto; overflow:auto}
-.dash .rail-work, .dash .works-item{
+.dash .works-item{
   display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; text-align:left; padding:6px 8px; border:0; border-radius:6px;
   background:transparent; cursor:pointer; color:var(--dash-ink);
 }
-.dash .rail-work[aria-current="true"], .dash .works-item[aria-current="true"]{background:var(--dash-paper)}
+.dash .works-item[aria-current="true"]{background:var(--dash-paper)}
 .dash .rail-title{font-family:var(--serif); font-size:var(--dash-t-md)}
 .dash .rail-dot{flex:none; width:7px; height:7px; border-radius:50%}
 .dash .rail-dot[data-state="fresh"]{background:var(--dash-accent)}
 .dash .rail-dot[data-state="busy"]{background:var(--dash-accent); animation:rail-pulse 2.4s ease-in-out infinite}
 .dash .rail-dot[data-state="none"]{border:1.5px solid var(--dash-line)}
-.dash .rail-news{position:absolute; top:4px; right:4px}
-.dash .rail-btn{position:relative}
+.dash .rail-news{position:absolute; top:3px; right:3px}
 @keyframes rail-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){ .dash .rail-dot[data-state="busy"]{animation:none} }
 .dash .works-menu{position:fixed; z-index:8; min-width:220px; max-height:70vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px}
@@ -116,8 +101,6 @@
 /* ── 提示 ── */
 .dash-notice{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:6; margin:0; padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .dash-notice button{margin-left:10px; border:0; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-size:var(--dash-t-md)}
-.dash-rail:not([data-collapsed="true"]) .rail-foot .rail-btn{width:36px; height:36px; padding:0; justify-content:center}
-.dash-rail[data-collapsed="true"] .rail-foot{flex-direction:column}
 /* 進門 */
 .dash .home{min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px}
 .dash .home-inner{width:min(600px,100%); display:flex; flex-direction:column; gap:22px}
@@ -214,20 +197,6 @@
 .dash .side-note p:last-child{margin-bottom:0}
 .dash .side-quotes{display:flex; flex-wrap:wrap; gap:4px 8px; font-family:var(--serif)}
 .dash .side-question{color:var(--dash-ink-2)}
-.dash .side-rounds{position:relative}
-.dash .side-round{display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .side-round:hover, .dash .side-round[aria-expanded="true"]{background:var(--dash-desk-2)}
-.dash .side-round:disabled{cursor:not-allowed}
-.dash .side-round .dash-dm{color:var(--dash-ink)}
-.dash .side-faces{display:inline-flex}
-.dash .side-faces .avatar + .avatar{margin-left:-7px}
-.dash .side-sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
-.dash .side-rounds-menu{position:absolute; right:0; top:calc(100% + 6px); z-index:6; display:flex; flex-direction:column; gap:2px; width:min(340px, 80vw); max-height:60vh; overflow:auto; padding:6px}
-.dash .side-round-item{display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:6px; background:none; cursor:pointer; text-align:left; color:var(--dash-ink); font-size:var(--dash-t-sm)}
-.dash .side-round-item:first-child{margin-bottom:4px; padding-bottom:10px; border-radius:6px 6px 0 0; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) 0 100%/6px 2px repeat-x}
-.dash .side-round-item:hover, .dash .side-round-item[aria-current="true"]{background-color:var(--dash-desk-2)}
-.dash .side-round-item .dash-dm{flex:none; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
-.dash .side-preview{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dash-ink-2)}
 /* 引文:虛底線,滑過變實線;這一版對不到 → 灰虛線 */
 .dash .dash-iq{
   display:inline; padding:0; border:0; border-radius:2px; background:none; cursor:pointer; font:inherit; color:inherit; text-align:inherit;
@@ -302,3 +271,43 @@
 .dash ::-webkit-scrollbar-thumb{background:var(--dash-line); border-radius:8px}
 .dash ::-webkit-scrollbar-thumb:hover{background:var(--dash-accent)}
 .dash ::-webkit-scrollbar-track{background:transparent}
+
+/* ── 書架(第 2 輪 §4):展開 244px / 窄條 56px ── */
+.dash-rail{display:flex; flex-direction:column; min-height:0; overflow:hidden; background:var(--dash-desk-2)}
+.dash .shelf-top{display:flex; align-items:center; gap:2px; padding:14px 10px 8px 12px}
+.dash-rail[data-shelf="rail"] .shelf-top{flex-direction:column; padding:12px 0; gap:6px}
+.dash .shelf-brand{margin-right:auto; padding-left:6px; font-family:var(--serif); font-weight:600; font-size:var(--dash-t-lg)}
+.dash .shelf-find{display:flex; align-items:center; gap:6px; margin:0 10px 6px; padding:0 8px; border-radius:8px; color:var(--dash-ink-2)}
+.dash .shelf-find:focus-within{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
+.dash .shelf-find input{flex:1; min-width:0; border:0; background:none; padding:6px 0; font:inherit; font-size:var(--dash-t-sm); color:var(--dash-ink); outline:none}
+.dash .shelf-works{list-style:none; margin:0; padding:2px 8px 16px; overflow:auto; flex:1 1 auto; min-height:0}
+.dash .shelf-work > button{
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px; width:100%; padding:8px 8px 6px; cursor:pointer;
+  border:0; border-radius:8px; background:none; text-align:left; color:var(--dash-ink);
+}
+.dash .shelf-work > button:hover{background:var(--dash-line)}
+.dash .shelf-work[data-on] > button{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
+.dash .shelf-title{display:flex; align-items:center; gap:7px; min-width:0}
+.dash .shelf-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--serif); font-size:var(--dash-t-md)}
+.dash .shelf-when{align-self:center; font-size:var(--dash-t-xs); color:var(--dash-ink-2); font-variant-numeric:tabular-nums}
+.dash .shelf-fp{grid-column:1/-1; width:100%; height:14px; margin-top:2px; color:var(--dash-ink-2); opacity:.7; overflow:visible}
+.dash .shelf-fp polyline{fill:none; stroke:currentColor; stroke-width:1.2; stroke-linejoin:round; stroke-linecap:round; vector-effect:non-scaling-stroke}
+.dash .shelf-work[data-on] .shelf-fp{color:var(--dash-accent); opacity:1}
+.dash .shelf-sess{list-style:none; margin:4px 0 8px 10px; padding:0}
+.dash .shelf-sess button{
+  display:flex; align-items:center; gap:6px; width:100%; padding:4px 8px; cursor:pointer;
+  border:0; border-radius:6px; background:none; text-align:left; font-size:var(--dash-t-sm); color:var(--dash-ink-2);
+}
+.dash .shelf-sess button:hover{background:var(--dash-line); color:var(--dash-ink)}
+.dash .shelf-sess button[aria-current="true"]{background:var(--dash-line); color:var(--dash-ink)}
+.dash .shelf-sess button:disabled{cursor:not-allowed}
+.dash .shelf-sess .ico{width:14px; height:14px}
+.dash .shelf-st{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dash .shelf-vr{flex:none; font-size:var(--dash-t-xs); font-variant-numeric:tabular-nums; opacity:.75}
+.dash .shelf-cur{margin-top:10px}
+.dash .shelf-cur::before{content:""; position:absolute; top:-8px; left:7px; right:7px; height:1px; background:var(--dash-line)}
+.dash .shelf-ini{font-family:var(--serif); font-size:var(--dash-t-md); line-height:1; color:var(--dash-ink)}
+.dash .shelf-pop{position:fixed; z-index:8; width:240px; max-height:60vh; overflow:auto; padding:4px}
+.dash .shelf-pop .shelf-sess{margin:0}
+.dash .shelf-foot{margin-top:auto; display:flex; padding:8px 10px 12px 12px}
+.dash-rail[data-shelf="rail"] .shelf-foot{justify-content:center; padding:8px 0 12px}

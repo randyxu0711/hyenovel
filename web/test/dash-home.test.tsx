@@ -144,12 +144,12 @@ describe("進門畫面", () => {
     await new Promise(r => setTimeout(r, 30));
     expect(discuss()).toHaveLength(1);
   });
-  it("新對話:從作品頁回到 / 並把游標放進輸入框", async () => {
+  it("交新稿:從作品頁回到 / 並把游標放進輸入框", async () => {
     localStorage.setItem("hyenovel.shelf", "open");
     mount();
-    fireEvent.click(within(await screen.findByRole("navigation")).getByRole("button", { name: "海" }));   // 左欄開啟作品
+    fireEvent.click(within(await screen.findByRole("navigation")).getByRole("button", { name: /^海/ }));   // 書架開啟作品
     await screen.findByText("內文一行");
-    fireEvent.click(screen.getByRole("button", { name: "新對話" }));   // 收起的左欄也叫這個名字
+    fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
     const b = await box();
     await waitFor(() => expect(document.activeElement).toBe(b));
