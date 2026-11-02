@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import Paper from "../src/dash/Paper";
 import { loadPaperFlow, setPaperFlow } from "../src/dash/paperFlow";
+import { blobPath } from "../src/dash/Blob";
 import { setLang } from "../src/dash/i18n";
 import { getThemeState, setMode } from "../src/dash/theme";
 import { LinksProvider } from "../src/dash/links";
@@ -161,7 +162,7 @@ describe("設定頁", () => {
     expect(localStorage.getItem("hyenovel.companion")).toBe("buffalo");
     expect((p.getByRole("radio", { name: /水牛/ }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
-    expect(await screen.findByRole("button", { name: "陪讀者:水牛" })).toBeTruthy();
+    await waitFor(() => expect(document.querySelector(".home form.composer svg.blob path.body")!.getAttribute("d")).toBe(`${blobPath("buffalo")}Z`));
   });
 
   it("「預設」只標在選中的那位", async () => {

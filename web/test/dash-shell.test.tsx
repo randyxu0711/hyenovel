@@ -112,16 +112,17 @@ describe("Dash 殼與路由", () => {
     fireEvent.click(await screen.findByRole("option", { name: "切換晝夜" }));
     expect(dash().dataset.mode).toBe(before === "dark" ? "light" : "dark");
   });
-  it("沒有作品時 home 邀請把稿拖進來或貼上", async () => {
+  it("沒有作品時 home 邀請把稿拖進來", async () => {
     mount("/", []);
-    expect((await screen.findByRole("textbox", { name: "對話輸入" }) as HTMLTextAreaElement).placeholder).toBe("把稿拖進來,或貼上");
+    expect(await screen.findByText("拖一篇稿進來")).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "貼上或拖進一篇稿" }) as HTMLTextAreaElement).placeholder).toBe("貼上或拖進一篇稿");
   });
 });
 
 describe("Dash 交稿後", () => {
   const draft = async () => {
     fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
-    await screen.findByRole("textbox", { name: "對話輸入" });   // 交新稿回到進門畫面
+    await screen.findByRole("textbox", { name: "貼上或拖進一篇稿" });   // 交新稿回到進門畫面
     fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [new File(["x"], "最近的.md")] } });
     fireEvent.click(await screen.findByRole("button", { name: /交稿並開始分析/ }));
   };

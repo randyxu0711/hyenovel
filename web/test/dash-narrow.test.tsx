@@ -78,14 +78,6 @@ describe("窄螢幕單窗格", () => {
     expect(paper().hidden).toBe(false);
     expect(side().hidden).toBe(true);
   });
-  it("從進門畫面帶著第一句話打開作品 → 落在對話窗格,回覆在看得見的那邊", async () => {
-    narrow(true); mount("/");
-    fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "嗨" } });
-    fireEvent.click(await screen.findByRole("button", { name: "送出" }));
-    await waitFor(() => expect(within(side()).getByRole("log").textContent).toContain("好"));
-    expect(side().hidden).toBe(false);
-    expect(paper().hidden).toBe(true);
-  });
   it("在稿上「帶進對話」→ 切到對話窗格", async () => {
     narrow(true); mount();
     await screen.findByText("海水很藍");

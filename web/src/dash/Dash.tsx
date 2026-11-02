@@ -26,8 +26,7 @@ function Shell({ chars }: { chars: Characters }) {
   const { mode } = useThemeState();
   const nav = useNavigate();
   const { slug: routeSlug } = useParams();
-  const loc = useLocation();
-  const { pathname } = loc;
+  const { pathname } = useLocation();
   const [search, setSearch] = useSearchParams();
   const view: View = pathname === "/settings" ? "settings" : routeSlug ? "work" : "home";
   const slug = view === "work" ? routeSlug! : null;
@@ -109,11 +108,8 @@ function Shell({ chars }: { chars: Characters }) {
   useEffect(() => { if (view !== "work") setFocus(false); }, [view]);
   const hidePaper = narrow && view === "work" && pane !== "paper";
   const hideSide = narrow && pane !== "side";
-  // 窄螢幕打開一篇 → 先看稿;從進門帶著第一句話來的 → 看對話(回覆在那邊串流)。
-  // 兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方。
-  const firstMessage = !!(loc.state as { firstMessage?: string } | null)?.firstMessage;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (slug && narrow) setPane(firstMessage ? "side" : "paper"); }, [slug, narrow, setPane]);
+  // 窄螢幕打開一篇 → 先看稿。兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方。
+  useEffect(() => { if (slug && narrow) setPane("paper"); }, [slug, narrow, setPane]);
   // 鍵盤:Ctrl/⌘+K 開指令框(輸入框裡也算);「/」聚焦輸入框(焦點已在輸入元素時不攔)
   const toggleShelf = useRef(shelf.toggle);
   toggleShelf.current = shelf.toggle;
@@ -136,23 +132,6 @@ function Shell({ chars }: { chars: Characters }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [view, hideSide, setPane, focused, palette]);
   useEffect(() => applySignature(me, mode), [me, mode]);
-  // 進門畫面送出的第一句:作品頁掛載時以新局送出一次,並清掉 router state(重新整理不重送)。
-  // 延到下一個 tick 才送:StrictMode 的 effect 清理會取消第一次排程,且送出在 useTalk 重設之後。
-  const first = (loc.state as { firstMessage?: string; character?: string } | null) ?? null;
-  const talkRef = useRef(talk);
-  talkRef.current = talk;
-  const sentKey = useRef("");
-  useEffect(() => {
-    if (view !== "work" || !first?.firstMessage) return;
-    const h = setTimeout(() => {
-      if (sentKey.current === loc.key) return;
-      sentKey.current = loc.key;
-      nav(loc.pathname + loc.search, { replace: true, state: null });
-      void talkRef.current.send(first.firstMessage!, [], first.character);
-    }, 0);
-    return () => clearTimeout(h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, loc.key]);
   const goHome = () => nav("/", { state: { focus: true } });
   const submitted = (s: string, existing: boolean) => {
     nav(`/w/${encodeURIComponent(s)}`); bump(); setReload(n => n + 1);

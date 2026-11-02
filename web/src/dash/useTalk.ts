@@ -165,21 +165,21 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   }, [stopDrawing]);
 
   /** 回傳這一輪有沒有成功存下(呼叫端據此清掉帶著的引文)。 */
-  const send = useCallback(async (message: string, quotes: string[], character?: string): Promise<boolean> => {
+  const send = useCallback(async (message: string, quotes: string[]): Promise<boolean> => {
     if (!slug || streaming !== null || legacy) return false;
     touched.current = true;
     const mine = ++epoch.current;
     const live = () => epoch.current === mine;
     setError(null); setStreaming(""); setPending({ text: message, quotes });
     let acc = "", got = false, ok = false;
-    const who = chars.byId(character ?? whoId).id;
+    const who = chars.byId(whoId).id;
     // 看舊版時 source 是 null:串流中不畫(位置對不上這張稿)
     const src = now.current.version === undefined ? now.current.source : null;
     const lq = liveQuotes();
     const shown = new Set(marksFrom(now.current.turns, chars).map(m => m.id));   // 已在稿上的不重畫
     const fail = (e: DashError) => { if (live()) { setError(e); setDraft(d => d || message); } };
     try {
-      for await (const ev of api.talk(slug, { session, message, character: character ?? whoId, quotes })) {
+      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes })) {
         if (!live()) return false;
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") {

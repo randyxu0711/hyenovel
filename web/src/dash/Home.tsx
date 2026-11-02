@@ -1,25 +1,14 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { api, type SubmitResult, type Work } from "./api";
+import { useLocation } from "react-router-dom";
+import type { SubmitResult, Work } from "./api";
 import Blob from "./Blob";
-import { errorMessage, localized, useLang, useT } from "./i18n";
+import Icon from "./Icon";
+import { errorMessage, useT } from "./i18n";
 import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
 import { useCharacters } from "./useCharacters";
-import WhoPick from "./WhoPick";
-import { companionId, MAX_CHAT } from "./useTalk";
+import { companionId } from "./useTalk";
 
-const CHIPS = 5;
-const READ_STATES = ["ready", "notes-running", "notes-stopped"];
-
-/** 最近一篇讀完了、而且它的最新版還沒聊過 → 回它,否則 null。works 已依最近活動排序。 */
-export function waitingLine(works: Work[], talkedVersions: Record<string, number[]>): { slug: string; title: string } | null {
-  const w = works[0];
-  if (!w || !READ_STATES.includes(w.state)) return null;
-  if ((talkedVersions[w.slug] ?? []).includes(w.version)) return null;
-  return { slug: w.slug, title: w.title };
-}
-
-/** 進門:一句話、一個輸入框。送出不在這裡做,導到作品頁由那邊以新局送出。 */
+/** 進門:只有一張交稿的紙。貼長文、拖檔、交稿鈕開檔都進確認條。 */
 export default function Home({ works: loaded, error: listError = null, onSubmitted }: {
   /** null = 清單還沒到或抓不到(這時不說「沒有作品」)。 */
   works: Work[] | null;
@@ -29,44 +18,21 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
   onSubmitted: (slug: string, existing: boolean) => void;
 }) {
   const t = useT();
-  const lang = useLang();
-  const nav = useNavigate();
   const loc = useLocation();
   const chars = useCharacters();
-  const works = loaded ?? [];
   const area = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
-  const [picked, setPicked] = useState<string | null>(null);
-  const [talked, setTalked] = useState<Record<string, number[]>>({});
   const { draft, busy, error, fromFile, fromText, confirm, cancel } = useSubmitDraft();
-  const [who, setWho] = useState<string | null>(null);
-  const me = chars.byId(who ?? companionId(chars));
-  const latest = works[0];
-  const chosen = picked && works.slice(0, CHIPS).some(w => w.slug === picked) ? picked : latest?.slug;
+  const me = chars.byId(companionId(chars));
 
-  // 新對話 / 交一篇新的 回到這裡時,把游標放進輸入框。
   const wantsFocus = (loc.state as { focus?: boolean } | null)?.focus === true;
   useEffect(() => { if (wantsFocus) area.current?.focus(); }, [wantsFocus, loc.key, draft]);
 
-  // 只為最近那一篇查有沒有聊過它的最新版。
-  const slug = latest && READ_STATES.includes(latest.state) ? latest.slug : null;
-  useEffect(() => {
-    if (!slug) return;
-    let live = true;
-    api.sessions(slug).then(rows => {
-      if (live) setTalked(m => ({ ...m, [slug]: rows.flatMap(r => (r.version === null ? [] : [r.version])) }));
-    }, () => { /* 查不到就不顯示等候的那句 */ });
-    return () => { live = false; };
-  }, [slug, latest?.version]);
-  const waiting = slug && talked[slug] ? waitingLine(works, talked) : null;
-
-  const send = () => {
-    const message = text.trim();
-    if (!message || !chosen) return;
-    nav(`/w/${encodeURIComponent(chosen)}`, { state: { firstMessage: message, character: me.id } });
-  };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    if (text.trim().length > DRAFT_MIN_CHARS) fromText(text);
   };
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = e.clipboardData.getData("text");
@@ -87,18 +53,10 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
   return (
     <div className="home" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
       <div className="home-inner">
-        {waiting && (
-          <div className="home-waiting">
-            <Blob character={me} size={32} />
-            <div>
-              <p className="home-who">{localized(me.name, lang)}</p>
-              <p className="home-line">{t("home.waiting", { title: waiting.title })}</p>
-              <Link className="home-listen" to={`/w/${encodeURIComponent(waiting.slug)}`}>{t("home.listen")}</Link>
-            </div>
-          </div>
-        )}
+        {none && <p className="home-first"><Icon name="new" />{t("home.first")}</p>}
         {draft ? (
-          <div className="dash-float home-box home-draft" role="group" aria-label={t("feed.text")}>
+          <div className="composer home-draft" role="group" aria-label={t("feed.text")}>
+            <div className="who"><Blob character={me} size={92} /></div>
             {draft.title && <b className="home-draft-title">{draft.title}</b>}
             <p className="home-meta">
               <span>{t("feed.chars", { n: draft.chars })}</span>
@@ -113,42 +71,22 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
             </div>
           </div>
         ) : (
-          <form className="dash-float home-box" onSubmit={e => { e.preventDefault(); send(); }}>
-            <textarea ref={area} rows={2} value={text} maxLength={MAX_CHAT} aria-label={t("talk.input")}
-              placeholder={t(none ? "home.placeholderEmpty" : "home.placeholder")}
+          <form className="composer" onSubmit={e => e.preventDefault()}>
+            <div className="who"><Blob character={me} size={92} /></div>
+            <textarea ref={area} rows={3} value={text} aria-label={t("home.drop")} placeholder={t("home.drop")}
               onChange={e => setText(e.target.value)} onKeyDown={onKey} onPaste={onPaste} />
             {error && <p role="alert" className="home-msg">{t(errorMessage(error))}</p>}
-            {works.length > 0 && (
-              <div className="home-row">
-                <WhoPick me={me} onPick={setWho} />
-                <button type="submit" className="dash-key home-send" disabled={!text.trim()}>{t("talk.send")}</button>
-              </div>
-            )}
+            <div className="bar">
+              <button type="button" className="ib send" aria-label={t("home.pick")} title={t("home.pick")}
+                onClick={() => fileInput.current?.click()}><Icon name="new" /></button>
+              <input ref={fileInput} type="file" accept=".md,.txt" hidden
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !busy) void fromFile(f); }} />
+            </div>
           </form>
         )}
-        {loaded === null ? (
-          listError
-            ? <p role="alert" className="home-msg">{t(errorMessage(listError))}</p>
-            : <p className="home-msg" role="status">{t("loading")}</p>
-        ) : none ? (
-          <ul className="home-meet" aria-label={t("home.meet")}>
-            {chars.list.map(c => (
-              <li key={c.id}>
-                <Blob character={c} size={26} />
-                <b>{localized(c.name, lang)}</b>
-                <span>{localized(c.line, lang)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="home-recent" role="group" aria-label={t("home.which")}>
-            <span>{t("home.which")}</span>
-            {works.slice(0, CHIPS).map(w => (
-              <button key={w.slug} type="button" className="home-chip" aria-pressed={w.slug === chosen}
-                onClick={() => setPicked(w.slug)}>{w.title}</button>
-            ))}
-          </div>
-        )}
+        {loaded === null && (listError
+          ? <p role="alert" className="home-msg">{t(errorMessage(listError))}</p>
+          : <p className="home-msg" role="status">{t("loading")}</p>)}
       </div>
     </div>
   );

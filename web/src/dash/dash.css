@@ -105,26 +105,22 @@
 .dash .dash-notice button{margin-left:10px; border:0; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-size:var(--dash-t-md)}
 /* 進門 */
 .dash .home{min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px}
-.dash .home-inner{width:min(600px,100%); display:flex; flex-direction:column; gap:22px}
-.dash .home-waiting{display:flex; gap:12px; align-items:flex-start}
-.dash .home-waiting p{margin:0}
-.dash .home-who{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
-.dash .home-line{font-size:var(--dash-t-lg); color:var(--dash-ink)}
-.dash .home-listen{display:inline-block; margin-top:8px; font-weight:600; color:var(--dash-sig-t)}
+.dash .home-inner{width:min(560px,100%); display:flex; flex-direction:column; align-items:center; gap:56px}
+.dash .home .composer{width:min(560px,100%); margin:0}
+.dash .home .composer .who{width:92px; height:82px; margin-bottom:-14px; left:22px}
+.dash .home .composer textarea{min-height:104px; font-size:var(--dash-t-md); padding:16px 18px 4px}
+.dash .home .composer::before{inset:16px 18px 44px}
+.dash .home-draft{display:flex; flex-direction:column; gap:8px; padding:20px 18px 10px}
+.dash .home-first{display:flex; align-items:center; gap:10px; margin:0; font-family:var(--serif); font-size:var(--dash-t-lg); color:var(--dash-ink-2)}
+.dash .home-first .ico{width:22px; height:22px}
 .dash .home-box{display:flex; flex-direction:column; gap:8px; padding:10px 12px}
 .dash .home-box textarea{border:0; background:none; resize:none; font:inherit; color:var(--dash-ink); min-height:44px; outline:none}
 .dash .home-box textarea:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:4px}
-.dash .home-row, .dash .home-actions{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.dash .home-actions{display:flex; align-items:center; justify-content:space-between; gap:10px}
 .dash .home-actions{justify-content:flex-end}
-.dash .home-send:disabled, .dash .home-go:disabled{cursor:not-allowed; color:var(--dash-ink-2)}
+.dash .home-go:disabled{cursor:not-allowed; color:var(--dash-ink-2)}
 .dash .home-meta{display:flex; gap:14px; margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .home-msg{margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
-.dash .home-recent{display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .home-chip{padding:2px 10px; border:1px dashed var(--dash-line); border-radius:999px; background:none; cursor:pointer; color:var(--dash-ink)}
-.dash .home-chip[aria-pressed="true"]{border-style:solid; background:var(--dash-desk-2); font-weight:600}
-.dash .home-meet{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
-.dash .home-meet li{display:flex; align-items:center; gap:10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .home-meet b{color:var(--dash-ink)}
 .dash .dash-who{position:relative}
 .dash .dash-who-menu{position:absolute; left:0; bottom:calc(100% + 6px); z-index:5; display:flex; flex-direction:column; gap:2px; padding:6px; min-width:140px}
 .dash .dash-who-item{display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:6px; background:transparent; cursor:pointer; color:var(--dash-ink); text-align:left}
