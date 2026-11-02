@@ -3,6 +3,8 @@
 den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的形狀——翻成畫面要的樣子
 是 client 自己的事。
 """
+import bisect
+
 from den import spans, works
 from marrow import gate, repo, vizdata
 
@@ -220,6 +222,7 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
     if shown is None:
         raise UnknownVersion(v)
     us = repo.utterances(conn, d["id"])
+    made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     turns = []
     for u in us:
         if u["role"] == "assistant":
@@ -228,7 +231,8 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
             qs = u["quotes"] or []
         turns.append({"role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
                       "character": u["character"], "quotes": u["quotes"] or [],
-                      "spans": spans.locate_all(qs, shown["text"])})
+                      "spans": spans.locate_all(qs, shown["text"]),
+                      "v": max(bisect.bisect_right(made, u["ts"]), 1)})   # 說話當時的版本
     return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
             "legacy": not any(u["role"] == "assistant" and u["mode"] is not None for u in us),
             "version": shown["n"], "turns": turns}
