@@ -24,6 +24,15 @@ export default function ChartTab({ map, marks, error = null }: { map: WorkMap | 
   return (
     <div className="side-col">
       {map.analysis_version !== map.version && <p className="side-old">{t("chart.old", { n: map.analysis_version })}</p>}
+      {map.drift && (map.drift.lost > 0
+        ? <p className="side-old">{t("chart.drift", { lost: map.drift.lost, total: map.drift.total, n: map.version })}</p>
+        : <p className="side-old">{t("chart.driftNone")}</p>)}
+      {map.drift && map.drift.orphaned.length > 0 && (
+        <>
+          <p className="side-old">{t("chart.orphaned")}</p>
+          <ul className="side-old">{map.drift.orphaned.map(o => <li key={o.id}>{o.label}</li>)}</ul>
+        </>
+      )}
       <p className="side-lede">{t("chart.lede")}</p>
       <Matrix beats={map.beats} marks={marks} />
       {map.motifs.length > 0 && <p className="side-kind">{t("chart.motifs")}</p>}

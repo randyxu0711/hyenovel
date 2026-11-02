@@ -10,7 +10,7 @@ import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import { hyena } from "./dash-fixtures";
 
 const map = (n: number, o: Partial<WorkMap> = {}): WorkMap => ({
-  version: 1, analysis_version: 1, notes_version: null, motifs: [], notes: null,
+  version: 1, analysis_version: 1, notes_version: null, motifs: [], notes: null, drift: null,
   beats: Array.from({ length: n }, (_, i) => ({ id: `b${i}`, label: `節拍${i}`, intensity: 0.3 + i / 10, span: { quote: "q", start: i, end: i + 1 } })),
   ...o,
 });

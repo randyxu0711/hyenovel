@@ -57,6 +57,8 @@ export type WorkMap = {
   beats: { id: string; label: string; intensity: number | null; span: Span | null }[];
   motifs: { id: string; label: string; spans: Span[] }[];
   notes: { read: string; one_line: string; points: { kind: string; title: string; body: string; question: string | null; spans: Span[] }[] } | null;
+  /** 舊分析的引文在這版還剩幾句;沒分析或分析就是這版 → null */
+  drift: { total: number; lost: number; orphaned: { id: string; type: string; label: string }[] } | null;
 };
 
 /** 非 2xx 回應 → DashError(讀 den 的 {detail, code, params})。request 與串流共用。 */
