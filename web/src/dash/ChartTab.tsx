@@ -58,8 +58,8 @@ export default function ChartTab({ map, marks, error = null, ob = null, onOb }: 
 }
 
 /** 點陣張力:每欄一個節拍、10 顆點,點一欄稿捲到那個節拍。結構圖分頁與印字頭共用。
- *  print = 印字頭在印:欄一欄一欄出現(CSS 依 --dash-col 錯開)。 */
-export function Matrix({ beats, marks, print = false }: { beats: Beat[]; marks: Mark[]; print?: boolean }) {
+ */
+export function Matrix({ beats, marks }: { beats: Beat[]; marks: Mark[] }) {
   const t = useT();
   const chars = useCharacters();
   const { mode } = useThemeState();
@@ -67,7 +67,7 @@ export function Matrix({ beats, marks, print = false }: { beats: Beat[]; marks: 
   const lit = beats.map(b => Math.round((b.intensity ?? 0) * DOTS));
   const peak = Math.max(0, ...lit) > 0 ? lit.indexOf(Math.max(...lit)) : -1;
   return (
-    <div className={print ? "side-matrix is-print" : "side-matrix"} role="group" aria-label={t("chart.label")}
+    <div className="side-matrix" role="group" aria-label={t("chart.label")}
       style={{ gridTemplateColumns: `repeat(${beats.length}, minmax(0, 1fr))`, "--dash-cols": beats.length } as CSSProperties}>
       {beats.map((b, i) => {
         const span = b.span;

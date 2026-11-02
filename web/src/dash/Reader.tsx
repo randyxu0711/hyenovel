@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, DashError, type Work, type WorkDetail, type WorkMap } from "./api";
-import { errorMessage, useT, type MsgKey } from "./i18n";
+import { api, DashError, type WorkDetail } from "./api";
+import Icon from "./Icon";
+import { errorMessage, useLang, useT, type MsgKey } from "./i18n";
 import Paper, { type Mark, type ObSpan } from "./Paper";
-import PrintHead from "./PrintHead";
 import { useJob } from "./useJob";
 import { useSubmitDraft } from "./useSubmitDraft";
-import WorksMenu from "./WorksMenu";
+import { setPaperFlow, usePaperFlow } from "./paperFlow";
+import { whenLabel } from "./when";
 
 const ANALYZING = ["running", "notes-running"];
 const STOPPED = ["stopped", "notes-stopped"];
@@ -25,10 +26,27 @@ export function stateText(state: string, notesReady: boolean): MsgKey {
   }
 }
 
-/** 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。 */
-export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, map = null, marks = [], obs = [], drawing, reload = 0 }: {
-  slug: string; works: Work[];
-  onOpen: (slug: string) => void; onSubmitNew: () => void;
+/** 版本條露哪幾版:不超過 max 版就全露;否則最新 max 版,目前看的那版若不在其中 → [它, 最新兩版]。升冪。 */
+export function shownVersions(all: number[], cur: number, max = 3): { more: boolean; list: number[] } {
+  if (all.length <= max) return { more: false, list: all };
+  const tail = all.slice(-max);
+  return { more: true, list: tail.includes(cur) ? tail : [cur, ...all.slice(-(max - 1))] };
+}
+
+/** 版本點:空心 = 沒分析;半顆 = 有分析沒筆記;實心 = 都有。latestState 只給最新版:分析中跳動。 */
+export function dotOf(h: { analysed: boolean; noted: boolean }, latestState?: string): { dot: "empty" | "half" | "full"; busy: boolean } {
+  if (latestState === "running") return { dot: "empty", busy: true };
+  if (latestState === "notes-running") return { dot: "half", busy: true };
+  return { dot: h.analysed ? (h.noted ? "full" : "half") : "empty", busy: false };
+}
+
+function VDot({ d }: { d: ReturnType<typeof dotOf> }) {
+  return <span className="vdot" data-dot={d.dot} data-busy={d.busy ? "" : undefined} aria-hidden="true" />;
+}
+
+/** 稿窗格:頂列(標題、版本條、交新版、分析、排法)+ 紙。 */
+export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, marks = [], obs = [], drawing, reload = 0 }: {
+  slug: string;
   onQuote: (q: string) => void;
   /** 指定版本(?v=);沒給就是最新。 */
   version?: number;
@@ -44,8 +62,6 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   onAnalysed?: () => void;
   /** 稿上顯示的是哪篇、是不是最新版、原文(邊說邊畫線要在最新版原文裡找引文)。 */
   onPaper?: (p: { slug: string; latest: boolean; text: string }) => void;
-  /** 這一版的對位資料(印字頭印的點陣張力)。 */
-  map?: WorkMap | null;
   /** 交新版成功(same = 跟最新版一字不差、沒有新增版本;version = 交成/對到的那一版)。 */
   onNewVersion?: (r: { same: boolean; version: number; analyzing: boolean }) => void;
 }) {
@@ -54,7 +70,9 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const [work, setWork] = useState<WorkDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [resumeErr, setResumeErr] = useState<string | null>(null);
-  const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const [all, setAll] = useState(false);   // 「所有版本」浮層
+  const lang = useLang();
+  const flow = usePaperFlow();
   const [rev, setRev] = useState(0);
   const submit = useSubmitDraft(slug);
   const slugNow = useRef(slug);
@@ -77,7 +95,19 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   }, [job.done, job.error]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 換作品或換版本:先清掉舊的字,別讓新的痕跡落在上一篇/上一版上(續跑重抓過之後也一樣)。
-  useEffect(() => { setWork(null); setErr(null); }, [slug, version]);
+  useEffect(() => { setWork(null); setErr(null); setAll(false); }, [slug, version]);
+  // 所有版本浮層:開了聚焦第一列;點外面關
+  const listRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (!all) return;
+    listRef.current?.querySelector("button")?.focus();
+    const onDown = (e: MouseEvent) => {
+      const el = e.target as Element;
+      if (!listRef.current?.contains(el) && !el.closest?.(".paper-vers")) setAll(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [all]);
   useEffect(() => {
     let live = true;
     if (rev === 0) { setWork(null); setErr(null); }
@@ -90,6 +120,9 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   if (!work) return <div className="reader-note">{t("loading")}</div>;
 
   const latest = Math.max(work.version, ...work.versions);
+  const history = work.history ?? work.versions.map(n => ({ n, at: 0, analysed: false, noted: false }));
+  const dot = (n: number) => dotOf(history.find(h => h.n === n) ?? { analysed: false, noted: false }, n === latest ? work.state : undefined);
+  const shown = shownVersions(work.versions, work.version);
   const pickVersion = (n: number) => setSearch(prev => {   // 只動 ?v=,其他參數(?s= 目前這局)留著
     const p = new URLSearchParams(prev);
     if (n === latest) p.delete("v"); else p.set("v", String(n));
@@ -117,29 +150,53 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   return (
     <div className="reader" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
       <header className="paper-top">
-        <h1 className="paper-h">
-          <button type="button" className="paper-title" aria-haspopup="dialog" aria-expanded={!!menu}
-            onClick={e => { const el = e.currentTarget; setMenu(m => (m ? null : el)); }}>
-            {work.title}<span aria-hidden="true"> ▾</span>
-          </button>
-        </h1>
+        <h1 className="paper-h">{work.title}</h1>
         <div className="paper-vers" role="group" aria-label={t("paper.versions")}>
-          {work.versions.map(n => (
-            <button key={n} type="button" className="dash-dm" aria-pressed={n === work.version} onClick={() => pickVersion(n)}>v{n}</button>
+          {shown.more && (
+            <button type="button" className="ib" aria-label={t("paper.allVersions")} title={t("paper.allVersions")}
+              aria-expanded={all} onClick={() => setAll(a => !a)}><Icon name="dots" /></button>
+          )}
+          {shown.list.map(n => (
+            <button key={n} type="button" className="paper-v" aria-pressed={n === work.version} onClick={() => pickVersion(n)}>
+              <VDot d={dot(n)} />v{n}
+            </button>
           ))}
+          {all && (
+            <ul className="dash-float paper-vlist" role="dialog" aria-label={t("paper.allVersions")} ref={listRef}
+              onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setAll(false); } }}>
+              {history.map(h => (
+                <li key={h.n}><button type="button" onClick={() => { setAll(false); pickVersion(h.n); }}>
+                  <VDot d={dot(h.n)} /><span>v{h.n}</span><span className="vdot-when">{whenLabel(h.at, Date.now() / 1000, lang)}</span>
+                </button></li>
+              ))}
+            </ul>
+          )}
         </div>
+        <button type="button" className="ib" aria-label={t("newver.open")} title={t("newver.open")}
+          onClick={() => fileInput.current?.click()}><Icon name="stack" /></button>
+        <input ref={fileInput} type="file" accept=".md,.txt" hidden
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !submit.busy) void submit.fromFile(f); }} />
+        {work.version !== latest && (
+          <span className="paper-oldpill">{t("paper.old")}
+            <button type="button" className="ib" aria-label={t("paper.latest")} title={t("paper.latest")}
+              onClick={() => pickVersion(latest)}><Icon name="back" /></button>
+          </span>
+        )}
         <span className="paper-state" role="status">
           {t(stateText(work.state, work.notes_ready))}
           {analyzing && job.step && ` · ${t(`job.step.${job.step}` as MsgKey)}`}
         </span>
-        <button type="button" className="paper-newver" onClick={() => fileInput.current?.click()}>{t("newver.open")}</button>
-        <input ref={fileInput} type="file" accept=".md,.txt" hidden
-          onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !submit.busy) void submit.fromFile(f); }} />
         {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug, { resumeOnly: true }))}>{t("paper.resume")}</button>}
         {work.version === latest && UNANALYZED.includes(work.state) && (
           <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug))}>{t("newver.analyze")}</button>
         )}
         {resumeErr && <span className="paper-state" role="alert">{t(errorMessage(resumeErr))}</span>}
+        <div className="set-seg paper-flow" role="group" aria-label={t("set.flow")}>
+          {(["v", "h"] as const).map(f => (
+            <button key={f} type="button" aria-pressed={flow === f} aria-label={t(`flow.${f}`)} title={t(`flow.${f}`)}
+              onClick={() => setPaperFlow(f)}><Icon name={f === "v" ? "vert" : "hori"} /></button>
+          ))}
+        </div>
       </header>
       {(draft || submit.error) && (
         <div className="dash-float home-box paper-newbar" role="group" aria-label={t("newver.open")}>
@@ -164,20 +221,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
           </div>
         </div>
       )}
-      {work.version !== latest && (
-        <p className="paper-old">
-          {t("paper.oldVersion", { n: work.version })}
-          <button type="button" onClick={() => pickVersion(latest)}>{t("paper.latest")}</button>
-        </p>
-      )}
-      {work.version === latest && (
-        <PrintHead key={work.job_id ?? "none"} running={analyzing} map={map}
-          printed={job.analysed && !!map && map.analysis_version === map.version && map.beats.length > 0} />
-      )}
       <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote}
         old={work.version !== latest} obs={obs} />
-      {menu && <WorksMenu anchor={menu} below works={works} current={slug} onOpen={onOpen}
-        onSubmitNew={onSubmitNew} onClose={() => setMenu(null)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom";
-import Reader, { stateText } from "../src/dash/Reader";
+import Reader, { stateText, shownVersions, dotOf } from "../src/dash/Reader";
 import { api, DashError, type WorkDetail } from "../src/dash/api";
 import { setLang, translate } from "../src/dash/i18n";
 import { LinksProvider } from "../src/dash/links";
@@ -21,8 +21,7 @@ function Where() { const l = useLocation(); return <output data-testid="loc">{l.
 function Routed(props: { onQuote: (q: string) => void; reload?: number; onOpen?: (s: string) => void }) {
   const [search] = useSearchParams();
   const v = Number(search.get("v"));
-  return <Reader slug="d1" version={v > 0 ? v : undefined} works={[{ slug: "d1", title: "海", version: 2, chars: 9, updated_at: 1, state: "ready" }, { slug: "d2", title: "山", version: 1, chars: 3, updated_at: 0, state: "none" }]}
-    onOpen={props.onOpen ?? vi.fn()} onSubmitNew={vi.fn()} onQuote={props.onQuote} reload={props.reload} />;
+  return <Reader slug="d1" version={v > 0 ? v : undefined} onQuote={props.onQuote} reload={props.reload} />;
 }
 const tree = (onQuote: (q: string) => void, reload?: number, onOpen?: (s: string) => void) => (
   <MemoryRouter initialEntries={["/w/d1"]}>
@@ -54,25 +53,53 @@ describe("Reader(稿窗格)", () => {
     expect(v2.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByText(/這是第/)).toBeNull();
   });
-  it("點 v1 → 網址 ?v=1、出現「這是第 1 版」;回到最新版 → 拿掉 ?v=", async () => {
+  it("點 v1 → 網址 ?v=1、出現「舊版」膠囊;回到最新版 → 拿掉 ?v=", async () => {
     await mount(detail());
     fireEvent.click(screen.getByRole("button", { name: "v1" }));
     expect(loc()).toBe("/w/d1?v=1");
-    expect(await screen.findByText("這是第 1 版")).toBeTruthy();
+    expect(await screen.findByText("舊版")).toBeTruthy();
     expect(await screen.findByText("第 1 版的字。")).toBeTruthy();
     expect(screen.getByRole("button", { name: "v1" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "回到最新版" }));
     expect(loc()).toBe("/w/d1");
     expect(await screen.findByText("第一段。")).toBeTruthy();
-    expect(screen.queryByText(/這是第/)).toBeNull();
+    expect(screen.queryByText("舊版")).toBeNull();
   });
-  it("標題鍵打開作品浮層,選另一篇", async () => {
-    const onOpen = vi.fn();
-    await mount(detail(), vi.fn(), onOpen);
-    fireEvent.click(screen.getByRole("button", { name: "海" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /山/ }));
-    expect(onOpen).toHaveBeenCalledWith("d2");
+  it("標題是純文字:沒有 ▾、不是按鈕;也沒有印字頭", async () => {
+    const { container } = await mount(detail());
+    expect(screen.queryByRole("button", { name: /海/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: "海" }).textContent).toBe("海");
+    expect(container.querySelector(".dash-printhead, .dash-print")).toBeNull();
+  });
+  it("5 版:版本條露 3 版,「所有版本」浮層列 5 列各帶日期與點;點 v2 → ?v=2", async () => {
+    const day = 86400;
+    const history = [1, 2, 3, 4, 5].map(n => ({ n, at: Date.now() / 1000 - (6 - n) * day * 3, analysed: n !== 3, noted: n === 1 }));
+    await mount(detail({ version: 5, versions: [1, 2, 3, 4, 5], history }));
+    const bar = within(screen.getByRole("group", { name: "版本" }));
+    expect(bar.getAllByRole("button", { name: /^v\d$/ }).map(b => b.textContent)).toEqual(["v3", "v4", "v5"]);
+    fireEvent.click(bar.getByRole("button", { name: "所有版本" }));
+    const dlg = within(screen.getByRole("dialog", { name: "所有版本" }));
+    const rows = dlg.getAllByRole("button");
+    expect(rows).toHaveLength(5);
+    expect(rows[0].querySelector(".vdot")!.getAttribute("data-dot")).toBe("full");
+    expect(rows[1].querySelector(".vdot")!.getAttribute("data-dot")).toBe("half");
+    expect(rows[2].querySelector(".vdot")!.getAttribute("data-dot")).toBe("empty");
+    expect(rows.every(r => r.querySelector(".vdot-when")!.textContent!.length > 0)).toBe(true);
+    fireEvent.click(rows[1]);
+    expect(loc()).toBe("/w/d1?v=2");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("所有版本浮層按 Esc 關", async () => {
+    await mount(detail({ version: 4, versions: [1, 2, 3, 4] }));
+    fireEvent.click(screen.getByRole("button", { name: "所有版本" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("稿頂排法:按橫排 → 稿變 data-flow=h", async () => {
+    const { container } = await mount(detail());
+    setPaperFlow("v");
+    fireEvent.click(within(screen.getByRole("group", { name: "排法" })).getByRole("button", { name: "橫排" }));
+    expect(container.querySelector("article")!.dataset.flow).toBe("h");
   });
   it("原文第一行就是標題(含《》)時不重複顯示;不同的第一行照留", async () => {
     await mount(detail({ text: "《海》\n\n第一段。" }));
@@ -171,7 +198,7 @@ describe("分析進度", () => {
     setLang("zh-Hant");
     vi.spyOn(api, "work").mockResolvedValue(w as WorkDetail);
     render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
-      <Reader slug="d1" works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onFinished={onFinished} />
+      <Reader slug="d1" onQuote={vi.fn()} onFinished={onFinished} />
     </LinksProvider></CharactersProvider></MemoryRouter>);
     return onFinished;
   };
@@ -214,6 +241,23 @@ describe("分析進度", () => {
   });
 });
 
+describe("版本條規則", () => {
+  it("shownVersions", () => {
+    expect(shownVersions([1], 1)).toEqual({ more: false, list: [1] });
+    expect(shownVersions([1, 2, 3], 1)).toEqual({ more: false, list: [1, 2, 3] });
+    expect(shownVersions([1, 2, 3, 4, 5], 5)).toEqual({ more: true, list: [3, 4, 5] });
+    expect(shownVersions([1, 2, 3, 4, 5], 1)).toEqual({ more: true, list: [1, 4, 5] });
+    expect(shownVersions([1, 2, 3, 4, 5], 4)).toEqual({ more: true, list: [3, 4, 5] });
+  });
+  it("dotOf", () => {
+    expect(dotOf({ analysed: false, noted: false })).toEqual({ dot: "empty", busy: false });
+    expect(dotOf({ analysed: true, noted: false })).toEqual({ dot: "half", busy: false });
+    expect(dotOf({ analysed: true, noted: true })).toEqual({ dot: "full", busy: false });
+    expect(dotOf({ analysed: false, noted: false }, "running")).toEqual({ dot: "empty", busy: true });
+    expect(dotOf({ analysed: true, noted: false }, "notes-running")).toEqual({ dot: "half", busy: true });
+  });
+});
+
 describe("交新版", () => {
   const file = () => new File(["改過的稿"], "海2.md", { type: "text/markdown" });
   type R = { same: boolean; version: number; analyzing: boolean };
@@ -229,7 +273,7 @@ describe("交新版", () => {
     function R2() {
       const [search] = useSearchParams();
       const v = Number(search.get("v"));
-      return <Reader slug="d1" version={v > 0 ? v : undefined} works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()}
+      return <Reader slug="d1" version={v > 0 ? v : undefined} onQuote={vi.fn()}
         onNewVersion={onNewVersion} onFinished={onFinished} />;
     }
     const r = render(<MemoryRouter initialEntries={[path]}><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
@@ -297,7 +341,7 @@ describe("交新版", () => {
     vi.spyOn(api, "startJob").mockResolvedValue({ job_id: 9 });
     const onNewVersion = vi.fn();
     const el = (slug: string) => <MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
-      <Reader slug={slug} works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onNewVersion={onNewVersion} />
+      <Reader slug={slug} onQuote={vi.fn()} onNewVersion={onNewVersion} />
     </LinksProvider></CharactersProvider></MemoryRouter>;
     const { container, rerender } = render(el("d1"));
     await screen.findByRole("heading", { name: "海" });

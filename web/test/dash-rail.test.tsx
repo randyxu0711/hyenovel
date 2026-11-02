@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import Rail from "../src/dash/Rail";
-import WorksMenu from "../src/dash/WorksMenu";
 import { dotState, useSeen } from "../src/dash/useSeen";
 import { setLang } from "../src/dash/i18n";
 import { initThemes } from "../src/dash/theme";
@@ -213,27 +212,5 @@ describe("Rail(窄條)", () => {
     const { onFind } = mount();
     fireEvent.click(screen.getByRole("button", { name: "找作品" }));
     expect(onFind).toHaveBeenCalled();
-  });
-});
-
-describe("WorksMenu", () => {
-  const anchor = document.createElement("button");
-  const mount = () => {
-    const p = { onOpen: vi.fn(), onSubmitNew: vi.fn(), onClose: vi.fn() };
-    render(<WorksMenu anchor={anchor} works={WORKS} current={null} {...p} />);
-    return p;
-  };
-  it("點外面關閉;點錨本身不算外面(交給錨自己 toggle)", () => {
-    const p = mount();
-    fireEvent.mouseDown(anchor);
-    expect(p.onClose).not.toHaveBeenCalled();
-    fireEvent.mouseDown(document.body);
-    expect(p.onClose).toHaveBeenCalled();
-  });
-  it("「交一篇新的」呼叫 onSubmitNew 並關閉", () => {
-    const p = mount();
-    fireEvent.click(screen.getByRole("button", { name: "交一篇新的" }));
-    expect(p.onSubmitNew).toHaveBeenCalled();
-    expect(p.onClose).toHaveBeenCalled();
   });
 });

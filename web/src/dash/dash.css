@@ -39,11 +39,6 @@
 .dash-note{display:grid; place-items:center}
 .dash-desk{padding:0; color:var(--dash-ink-2); overflow:auto; min-width:0}
 .dash-desk:not(:has(.reader)){padding:32px}
-.dash .works-item{
-  display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; text-align:left; padding:6px 8px; border:0; border-radius:6px;
-  background:transparent; cursor:pointer; color:var(--dash-ink);
-}
-.dash .works-item[aria-current="true"]{background:var(--dash-paper)}
 .dash .rail-title{font-family:var(--serif); font-size:var(--dash-t-md)}
 .dash .rail-dot{flex:none; width:7px; height:7px; border-radius:50%}
 .dash .rail-dot[data-state="fresh"]{background:var(--dash-accent)}
@@ -52,8 +47,6 @@
 .dash .rail-news{position:absolute; top:3px; right:3px}
 @keyframes rail-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){ .dash .rail-dot[data-state="busy"]{animation:none} }
-.dash .works-menu{position:fixed; z-index:8; min-width:220px; max-height:70vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px}
-.dash .works-menu ul{list-style:none; margin:0; padding:0}
 .dash .works-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .works-new{padding:8px 10px; text-align:left; cursor:pointer; border:0; border-top:1px solid var(--dash-line); background:transparent; color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .reader{position:relative; min-height:100%}
@@ -133,13 +126,27 @@
 .dash .paper-h{margin:0; font-size:var(--dash-t-md); font-weight:600}
 .dash .paper-title{display:inline-flex; align-items:center; gap:4px; padding:3px 8px; margin-left:-8px; border:0; border-radius:7px; background:none; cursor:pointer; font-weight:600; color:var(--dash-ink)}
 .dash .paper-title:hover, .dash .paper-title[aria-expanded="true"]{background:var(--dash-desk-2)}
-.dash .paper-vers{display:flex; gap:2px; padding:2px; border-radius:7px; background:var(--dash-desk-2)}
-.dash .paper-vers button{padding:1px 9px; border:0; border-radius:5px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
-.dash .paper-vers button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .paper-vers{position:relative; display:flex; align-items:center; gap:2px}
+.dash .paper-v{display:inline-flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums}
+.dash .paper-v + .paper-v::before{content:""; width:10px; height:1.5px; margin:0 6px 0 -8px; background:var(--dash-ink-2); opacity:.35; border-radius:1px}
+.dash .paper-vlist{position:absolute; top:calc(100% + 6px); left:0; z-index:8; list-style:none; margin:0; padding:6px; min-width:190px; border-radius:10px}
+.dash .paper-vlist button{display:grid; grid-template-columns:auto auto 1fr; gap:8px; align-items:center; width:100%; padding:6px 10px; border:0; border-radius:7px; background:none; cursor:pointer; text-align:left; font-size:var(--dash-t-sm); font-variant-numeric:tabular-nums; color:var(--dash-ink)}
+.dash .paper-vlist button:hover{background:var(--dash-line)}
+.dash .vdot-when{justify-self:end; color:var(--dash-ink-2)}
+/* 版本點:空心 = 沒分析;半顆 = 有分析沒筆記;實心 = 都有;分析中跳動 */
+.dash .vdot{width:9px; height:9px; flex:none; border-radius:50%; border:1.5px solid currentColor; box-sizing:border-box}
+.dash .vdot[data-dot="full"]{background:currentColor}
+.dash .vdot[data-dot="half"]{background:linear-gradient(to top, currentColor 50%, transparent 50%)}
+.dash .vdot[data-busy]{animation:vdot-pulse 1.6s ease-in-out infinite}
+@keyframes vdot-pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--dash-sig) 50%, transparent)}50%{box-shadow:0 0 0 4px transparent}}
+@media (prefers-reduced-motion:reduce){ .dash .vdot[data-busy]{animation:none} }
+.dash .paper-oldpill{display:inline-flex; align-items:center; gap:4px; padding:2px 2px 2px 12px; border-radius:999px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .paper-flow{margin-left:auto}
+.dash .paper-vers .paper-v{padding:1px 9px; border:0; border-radius:5px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .paper-vers .paper-v[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
-.dash .paper-resume, .dash .paper-newver, .dash .paper-old button{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
+.dash .paper-resume{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
 .dash .paper-newbar{max-width:34em; margin:4px auto 10px}
-.dash .paper-old{display:flex; align-items:center; justify-content:center; gap:12px; max-width:34em; margin:4px auto 10px; padding:6px 12px; border-radius:8px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .paper-sheet{
   --dash-t-paper:16.5px;
   box-sizing:content-box; width:34em; margin:4px auto 80px; padding:44px 48px 56px; position:relative;
@@ -219,18 +226,11 @@
 .dash .dash-mcol i.is-on{box-shadow:none; background:color-mix(in srgb, var(--dash-accent) calc(45% + var(--dash-k) * 6%), var(--dash-desk-2))}
 .dash .dash-mcol.is-peak i.is-on{box-shadow:0 0 6px color-mix(in srgb, var(--dash-accent) 60%, transparent)}
 /* 印字頭:分析中在紙頂來回(只表示在跑,不畫點陣、不顯示進度);analyst 完成時把點陣張力一欄一欄印一次 */
-.dash .dash-printhead{position:relative; height:3px; margin:0 auto 12px; max-width:34em; border-radius:2px; background:var(--dash-line); overflow:hidden}
-.dash .dash-printhead i{position:absolute; top:0; left:0; width:28px; height:100%; border-radius:2px; background:var(--dash-accent); animation:dash-printhead 1.6s ease-in-out infinite alternate}
-@keyframes dash-printhead{to{left:calc(100% - 28px)}}
-.dash .dash-print{max-width:34em; margin:0 auto 12px; cursor:pointer}
 .dash .side-ob{display:grid; gap:2px; width:100%; margin:0 0 4px; padding:10px 12px; border:0; border-radius:10px; background:none; text-align:left; cursor:pointer; color:inherit; font:inherit}
 .dash .side-ob:hover{background:var(--dash-desk-2)}
 .dash .side-ob[aria-pressed="true"]{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .side-ob-name{font-family:var(--serif)}
 .dash .side-ob-sub{font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .side-matrix.is-print .dash-mcol{animation:dash-print-col .2s steps(5) both; animation-delay:calc(var(--dash-col) * 1s / var(--dash-cols))}
-@keyframes dash-print-col{from{clip-path:inset(100% 0 0 0)}}
-@media (prefers-reduced-motion:reduce){ .dash .dash-printhead i, .dash .side-matrix.is-print .dash-mcol{animation:none} }
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .side-who{width:6px; height:6px; border-radius:50%; margin-top:2px}
 

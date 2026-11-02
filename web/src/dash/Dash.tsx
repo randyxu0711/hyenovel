@@ -178,9 +178,8 @@ function Shell({ chars }: { chars: Characters }) {
         settingsNav={view === "settings" ? setNav : null} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
-          map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
+          onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
-          works={works} onOpen={open} onSubmitNew={goHome}
           onQuote={q => {
             setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
             if (narrow) setPane("side");
