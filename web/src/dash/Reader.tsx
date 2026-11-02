@@ -55,6 +55,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rev, setRev] = useState(0);
   const submit = useSubmitDraft(slug);
+  const slugNow = useRef(slug);
+  slugNow.current = slug;
   const [keeping, setKeeping] = useState(false);   // 送出中的是「只存版」那顆
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -99,7 +101,7 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const submitNew = async (analyze: boolean) => {
     setKeeping(!analyze);
     const r = await submit.confirm({ analyze });
-    if (!r) return;
+    if (!r || r.slug !== slugNow.current) return;   // 等確認的時候換了作品:別對別篇通知
     if (r.jobError) setResumeErr(r.jobError);   // 新版存下了但沒開成分析:回最新版,頂列有「分析這版」可重按
     onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same && !r.jobError });
   };

@@ -136,7 +136,7 @@ function Shell({ chars }: { chars: Characters }) {
   const open = (s: string) => { setNote(null); nav(`/w/${encodeURIComponent(s)}`); };
   // 交新版:回最新版(拿掉 ?v=,?s= 目前這局留著),重抓左欄與稿。
   const newVersion = (r: { same: boolean; version: number }) => {
-    setSearch(prev => { const p = new URLSearchParams(prev); p.delete("v"); return p; });
+    setSearch(prev => { const p = new URLSearchParams(prev); p.delete("v"); return p; }, { replace: true });
     bump(); setReload(n => n + 1);
     if (r.same) setNote({ slug: slug!, text: t("newver.same", { n: r.version }) });
     else { setNote(null); setTalkReload(n => n + 1); }

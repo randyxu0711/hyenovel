@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation, useNavigationType } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { DRAW_MS } from "../src/dash/Paper";
@@ -50,7 +50,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
   return render(<MemoryRouter initialEntries={[path]}><Where />
     <Routes><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
 }
-function Where() { const l = useLocation(); return <output data-testid="loc">{l.pathname}{l.search}</output>; }
+function Where() { const l = useLocation(); return <output data-testid="loc" data-nav={useNavigationType()}>{l.pathname}{l.search}</output>; }
 const loc = () => screen.getByTestId("loc").textContent;
 const whoKey = () => screen.getByRole("button", { name: "陪讀者" });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
@@ -545,6 +545,7 @@ describe("交新版之後", () => {
   it("在 /w/d1?v=1&s=abc 交新版成功 → 網址變 /w/d1?s=abc,且這局的逐字稿重抓一次", async () => {
     const before = await submitFrom("/w/d1?v=1&s=abc");
     await waitFor(() => expect(loc()).toBe("/w/d1?s=abc"));
+    expect(screen.getByTestId("loc").getAttribute("data-nav")).toBe("REPLACE");   // 不多推一筆歷史
     await waitFor(() => expect(sessionCalls()).toBe(before + 1));
     await new Promise(r => setTimeout(r, 30));
     expect(sessionCalls()).toBe(before + 1);

@@ -283,6 +283,28 @@ describe("交新版", () => {
     fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: true, version: 2, analyzing: false }));
   });
+  it("確認還在跑時換了作品 → 結果回來不再通知 onNewVersion", async () => {
+    setLang("zh-Hant");
+    vi.spyOn(api, "work").mockImplementation(async s => detail({ slug: s }) as WorkDetail);
+    vi.spyOn(api, "extract").mockResolvedValue({ filename: "海2.md", text: "改過的稿", chars: 4 });
+    vi.spyOn(api, "estimate").mockResolvedValue(null);
+    let done!: (r: Awaited<ReturnType<typeof api.submit>>) => void;
+    vi.spyOn(api, "submit").mockReturnValue(new Promise(res => { done = res; }));
+    vi.spyOn(api, "startJob").mockResolvedValue({ job_id: 9 });
+    const onNewVersion = vi.fn();
+    const el = (slug: string) => <MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
+      <Reader slug={slug} works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onNewVersion={onNewVersion} />
+    </LinksProvider></CharactersProvider></MemoryRouter>;
+    const { container, rerender } = render(el("d1"));
+    await screen.findByRole("heading", { name: "海" });
+    pick(container);
+    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    await waitFor(() => expect(api.submit).toHaveBeenCalled());
+    rerender(el("d2"));
+    done({ slug: "d1", title: "海", version: 3, new_version: true, reused: false });
+    await new Promise(r => setTimeout(r, 30));
+    expect(onNewVersion).not.toHaveBeenCalled();
+  });
   it("只有空白的檔 → 交稿條說稿子是空的,兩顆送出鍵 disabled", async () => {
     const { container } = await mountNew();
     vi.mocked(api.extract).mockResolvedValue({ filename: "a.md", text: "  \n ", chars: 3 });
