@@ -12,6 +12,7 @@ import Settings from "./Settings";
 import Side, { marksFrom } from "./Side";
 import { useSeen } from "./useSeen";
 import { useTalk } from "./useTalk";
+import { SHELF_W, useShelf } from "./useShelf";
 import { applySignature, initThemes, toggleDayNight, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
 import "./dash.css";
@@ -83,7 +84,8 @@ function Shell({ chars }: { chars: Characters }) {
   // 痕跡只在逐字稿的位置對的就是這一版時才畫(換版本重抓完之前不畫)。
   const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
-  const split = useSplit();
+  const shelf = useShelf();
+  const split = useSplit(SHELF_W[shelf.mode]);
   const narrow = useNarrow();
   const { pane, setPane } = useLinks();
   const [palette, setPalette] = useState(false);
@@ -95,10 +97,13 @@ function Shell({ chars }: { chars: Characters }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (slug && narrow) setPane(firstMessage ? "side" : "paper"); }, [slug, narrow, setPane]);
   // 鍵盤:Ctrl/⌘+K 開指令框(輸入框裡也算);「/」聚焦輸入框(焦點已在輸入元素時不攔)
+  const toggleShelf = useRef(shelf.toggle);
+  toggleShelf.current = shelf.toggle;
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); toggleShelf.current(); return; }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
@@ -143,7 +148,7 @@ function Shell({ chars }: { chars: Characters }) {
   };
 
   return (
-    <div className="dash" data-view={view} data-mode={mode} data-narrow={narrow ? "true" : "false"}
+    <div className="dash" data-view={view} data-mode={mode} data-shelf={shelf.mode} data-narrow={narrow ? "true" : "false"}
       style={split.width ? { "--dash-split": `${split.width}px` } as CSSProperties : undefined}>
       {narrow && (
         <div className="dash-bar">
@@ -156,7 +161,7 @@ function Shell({ chars }: { chars: Characters }) {
           <button type="button" className="dash-bar-palette" aria-haspopup="dialog" onClick={() => setPalette(true)}>{t("palette.open")}</button>
         </div>
       )}
-      <Rail collapsed={view === "work"} works={works} current={slug} onOpen={open}
+      <Rail collapsed={shelf.mode === "rail"} works={works} current={slug} onOpen={open}
         onNew={goHome} onSubmitNew={goHome} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
@@ -197,18 +202,19 @@ function Shell({ chars }: { chars: Characters }) {
 
 const SPLIT_KEY = "hyenovel.split";
 const MIN = 380;      // 稿窗格與右欄各自最少
-const RAIL = 56;      // 收起的左欄,不算在兩窗格裡
 const GRIP = 9;
 const STEP = 24;
-const clampSide = (w: number) => Math.round(Math.max(MIN, Math.min(w, window.innerWidth - RAIL - GRIP - MIN)));
+/** 右欄寬夾在 [MIN, 視窗 − 書架 − 分隔線 − 稿最少]。 */
+export const clampSide = (w: number, shelfW: number) =>
+  Math.round(Math.max(MIN, Math.min(w, window.innerWidth - shelfW - GRIP - MIN)));
 
 /** 中間分隔線:拖或用方向鍵調右欄寬,存 localStorage。沒存過 = 兩邊平分(CSS 決定)。 */
-function useSplit() {
+function useSplit(shelfW: number) {
   const [width, setWidth] = useState<number | null>(() => {
     try { const n = Number(localStorage.getItem(SPLIT_KEY)); return n > 0 ? n : null; } catch { return null; }
   });
   const set = (w: number) => {
-    const v = clampSide(w);
+    const v = clampSide(w, shelfW);
     setWidth(v);
     try { localStorage.setItem(SPLIT_KEY, String(v)); } catch { /* 存不了就只這次有效 */ }
   };

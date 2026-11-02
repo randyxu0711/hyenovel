@@ -145,6 +145,7 @@ describe("進門畫面", () => {
     expect(discuss()).toHaveLength(1);
   });
   it("新對話:從作品頁回到 / 並把游標放進輸入框", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
     mount();
     fireEvent.click(within(await screen.findByRole("navigation")).getByRole("button", { name: "海" }));   // 左欄開啟作品
     await screen.findByText("內文一行");

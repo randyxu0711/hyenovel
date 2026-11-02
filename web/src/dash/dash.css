@@ -10,7 +10,8 @@
   --dash-dot-font:"Doto", ui-monospace, monospace;
   --dash-sh-raise:0 1px 0 var(--dash-sheen) inset, 0 1px 2px color-mix(in srgb, var(--dash-ink) 14%, transparent);
   --dash-sh-float:0 1px 0 var(--dash-sheen) inset, 0 8px 24px color-mix(in srgb, var(--dash-ink) 16%, transparent);
-  position:fixed; inset:0; display:grid; grid-template-columns:260px 1fr;
+  --dash-shelf:56px;
+  position:fixed; inset:0; display:grid; grid-template-columns:var(--dash-shelf) 1fr;
   background-color:var(--dash-desk); background-image:var(--dash-spots,none); background-size:480px 480px;
   color:var(--dash-ink);
   font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
@@ -74,8 +75,9 @@
 .dash .reader-note{padding:32px; color:var(--dash-ink-2)}
 
 /* ── 作品頁:稿 | 分隔線 | 右欄。兩側各至少 380px;沒拖過就平分,拖過用 --dash-split(右欄寬)。 ── */
-.dash[data-view="work"]{grid-template-columns:56px minmax(380px,1fr) 9px minmax(380px,1fr)}
-.dash[data-view="work"][style*="--dash-split"]{grid-template-columns:56px minmax(380px,1fr) 9px max(380px, min(var(--dash-split), calc(100vw - 56px - 9px - 380px)))}
+.dash[data-shelf="open"]{--dash-shelf:244px}
+.dash[data-view="work"]{grid-template-columns:var(--dash-shelf) minmax(380px,1fr) 9px minmax(380px,1fr)}
+.dash[data-view="work"][style*="--dash-split"]{grid-template-columns:var(--dash-shelf) minmax(380px,1fr) 9px max(380px, min(var(--dash-split), calc(100vw - var(--dash-shelf) - 9px - 380px)))}
 .dash-grip{cursor:col-resize; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) center top/9px 6px repeat-y; touch-action:none}
 .dash-grip:hover, .dash-grip:focus-visible{background-image:radial-gradient(circle, var(--dash-accent) 1.4px, transparent 1.8px); outline:none}
 .dash-side{min-height:0; min-width:0; overflow:hidden; color:var(--dash-ink)}

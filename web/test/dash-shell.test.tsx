@@ -43,7 +43,8 @@ const dash = () => document.querySelector(".dash") as HTMLElement;
 const nav = () => screen.findByRole("navigation");
 
 describe("Dash 殼與路由", () => {
-  it("/ 是 home:左欄展開並列出作品標題,不自動開任何一篇", async () => {
+  it("/ 是 home:書架展開時列出作品標題,不自動開任何一篇", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
     const f = mount("/");
     const rail = within(await nav());
     expect(await rail.findByText("最近的")).toBeTruthy();
@@ -64,22 +65,32 @@ describe("Dash 殼與路由", () => {
     await screen.findByText("內文一行");
     expect(f.mock.calls.map(c => c[0])).toContain("/api/works/d2?v=3");
   });
-  it("/settings 是 settings:左欄展開並列出作品標題,有「設定」標題", async () => {
+  it("/settings 是 settings:有「設定」標題", async () => {
     mount("/settings");
-    const rail = within(await nav());
+    await nav();
     expect(dash().dataset.view).toBe("settings");
     expect(screen.getByRole("heading", { name: "設定" })).toBeTruthy();
-    expect(screen.getByRole("navigation").getAttribute("data-collapsed")).toBe("false");
-    expect(await rail.findByText("最近的")).toBeTruthy();
   });
-  it("點設定 → /settings(左欄展開);點左欄的一篇 → /w/<slug>(左欄收起)", async () => {
+  it("點設定 → /settings;點書架的一篇 → /w/<slug>;書架形態不隨畫面改變", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
     mount("/w/d2");
     const rail = within(await nav());
     fireEvent.click(rail.getByRole("button", { name: "設定" }));
     expect(screen.getByTestId("loc").textContent).toBe("/settings");
     fireEvent.click(await rail.findByRole("button", { name: /舊的/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
-    expect(screen.getByRole("navigation").getAttribute("data-collapsed")).toBe("true");
+    expect(dash().dataset.shelf).toBe("open");
+  });
+  it("⌘\\ 與 Ctrl+\\ 切換書架展開/窄條", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    mount("/");
+    await nav();
+    expect(dash().dataset.shelf).toBe("open");
+    fireEvent.keyDown(document, { key: "\\", metaKey: true });
+    expect(dash().dataset.shelf).toBe("rail");
+    fireEvent.keyDown(document, { key: "\\", ctrlKey: true });
+    expect(dash().dataset.shelf).toBe("open");
+    expect(localStorage.getItem("hyenovel.shelf")).toBe("open");
   });
   it("新對話鈕回到 /", async () => {
     mount("/w/d2");
