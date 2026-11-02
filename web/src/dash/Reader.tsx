@@ -47,7 +47,7 @@ function VDot({ d }: { d: ReturnType<typeof dotOf> }) {
 }
 
 /** 稿窗格:頂列(標題、版本條、交新版、分析、排法)+ 紙。 */
-export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, marks = [], obs = [], drawing, reload = 0 }: {
+export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, marks = [], obs = [], drawing, reload = 0, focus = false, onFocus }: {
   slug: string;
   onQuote: (q: string) => void;
   /** 指定版本(?v=);沒給就是最新。 */
@@ -60,6 +60,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   reload?: number;
   /** 分析跑完(重抓過這篇之後)通知,好讓左欄重抓。 */
   onFinished?: () => void;
+  focus?: boolean; onFocus?: (on: boolean) => void;
   /** analyst 那一步完成(結構資料有了):外面重抓 map。 */
   onAnalysed?: () => void;
   /** 稿上顯示的是哪篇、是不是最新版、原文(邊說邊畫線要在最新版原文裡找引文)。 */
@@ -195,6 +196,10 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
               onClick={() => setPaperFlow(f)}><Icon name={f === "v" ? "vert" : "hori"} /></button>
           ))}
         </div>
+        {onFocus && (
+          <button type="button" className="ib" aria-pressed={focus} aria-label={t("focus.on")} title={t("focus.on")}
+            onClick={() => onFocus(!focus)}><Icon name="focus" /></button>
+        )}
         {analyzing && <i className="paper-track" aria-hidden="true" />}
       </header>
       {(draft || submit.error) && (

@@ -134,3 +134,85 @@ describe("鍵盤", () => {
     expect(document.activeElement).not.toBe(box);
   });
 });
+
+describe("專注模式", () => {
+  const focusKey = () => screen.findByRole("button", { name: "只看稿" });
+  const isFocused = () => document.querySelector(".dash")!.getAttribute("data-focus") === "true";
+  const enter = async () => {
+    const k = await focusKey();
+    expect(k.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(k);
+    expect(k.getAttribute("aria-pressed")).toBe("true");
+  };
+  it("只看稿:書架與右欄藏起來、出現右下角角色;點它回來", async () => {
+    mount("/w/d1");
+    await enter();
+    expect(isFocused()).toBe(true);
+    expect((document.querySelector(".dash-rail") as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector(".dash-side") as HTMLElement).hidden).toBe(true);
+    const peek = screen.getByRole("button", { name: "回到對話" });
+    expect(peek.classList.contains("dash-peek")).toBe(true);
+    expect(peek.querySelector("svg.blob")).not.toBeNull();
+    fireEvent.click(peek);
+    expect(isFocused()).toBe(false);
+    expect((document.querySelector(".dash-side") as HTMLElement).hidden).toBe(false);
+    expect(screen.queryByRole("button", { name: "回到對話" })).toBeNull();
+  });
+  it("Esc 退出專注", async () => {
+    mount("/w/d1");
+    await enter();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(isFocused()).toBe(false);
+  });
+  it("版本清單開著:Esc 先關清單,再按一次才退", async () => {
+    mount("/w/d1");
+    const f = fetch as unknown as ReturnType<typeof vi.fn>;
+    f.mockImplementation(async (u: string) => {
+      const p = u.split("?")[0];
+      if (p === "/api/themes") return json({ themes: [olive], default: "olive" });
+      if (p === "/api/characters") return json({ characters: [hyena, buffalo], default: "hyena" });
+      if (p === "/api/works") return json({ works: WORKS });
+      if (p.endsWith("/map")) return json({ version: 5, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
+      if (p.startsWith("/api/works/") && !p.endsWith("/sessions")) return json({ slug: "d1", title: "海", version: 5, versions: [1, 2, 3, 4, 5], text: "內文一行", state: "ready", job_id: null, notes_ready: false });
+      return json({ sessions: [] });
+    });
+    await enter();
+    const more = await screen.findByRole("button", { name: "所有版本" });
+    fireEvent.click(more);
+    const list = screen.getByRole("dialog", { name: "所有版本" });
+    fireEvent.keyDown(list.querySelector("button")!, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "所有版本" })).toBeNull();
+    expect(isFocused()).toBe(true);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(isFocused()).toBe(false);
+  });
+  it("指令框開著:Esc 只關框", async () => {
+    mount("/w/d1");
+    await enter();
+    ctrlK();
+    const dlg = await screen.findByRole("dialog", { name: "指令框" });
+    fireEvent.keyDown(within(dlg).getByRole("combobox"), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "指令框" })).toBeNull();
+    expect(isFocused()).toBe(true);
+  });
+  it("專注中換作品仍專注;去設定頁就退", async () => {
+    mount("/w/d1");
+    await enter();
+    ctrlK();
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品:潮汐" }));
+    expect(where()).toBe("/w/d2");
+    expect(isFocused()).toBe(true);
+    ctrlK();
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: /設定/ }));
+    expect(where()).toBe("/settings");
+    expect(isFocused()).toBe(false);
+  });
+  it("窄螢幕沒有專注鍵", async () => {
+    window.matchMedia = ((q: string) => ({ matches: q === "(max-width:1100px)", media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      mount("/w/d1");
+      await screen.findAllByText("內文一行");
+      expect(screen.queryByRole("button", { name: "只看稿" })).toBeNull();
+    } finally { delete (window as { matchMedia?: unknown }).matchMedia; }
+  });
+});

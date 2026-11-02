@@ -53,7 +53,7 @@ function IB({ icon, label, children, ...rest }: { icon: IconName; label: string;
 }
 
 /** 書架。展開:作品(依更新新到舊)→ 目前這篇的局;窄條:工具在上、目前這篇(標題第一個字)在下。 */
-export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, settingsNav = null }: {
+export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, settingsNav = null, hidden = false }: {
   mode: ShelfMode; onToggle: () => void;
   works: Work[]; current: string | null; talk: TalkState;
   view: "home" | "work" | "settings";
@@ -64,6 +64,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   onFind: () => void;
   /** 在設定頁:書架換成設定分區(不列作品)。 */
   settingsNav?: ReactNode;
+  hidden?: boolean;
 }) {
   const t = useT();
   const lang = useLang();
@@ -76,7 +77,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   const news = works.some(w => w.slug !== current && dotState(w, seen(w.slug)) === "fresh");
   const shown = works.length >= FILTER_FROM && q.trim() ? works.filter(w => w.title.includes(q.trim())) : works;
   return (
-    <nav className="dash-rail" aria-label={t("rail.works")} data-shelf={mode}>
+    <nav className="dash-rail" aria-label={t("rail.works")} data-shelf={mode} hidden={hidden}>
       <div className="shelf-top">
         <IB icon="panel" label={t(open ? "shelf.collapse" : "shelf.expand")} aria-expanded={open} onClick={onToggle} />
         {open && <b className="shelf-brand">{t("brand")}</b>}
