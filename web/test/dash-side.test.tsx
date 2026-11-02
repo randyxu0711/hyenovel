@@ -9,13 +9,14 @@ import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
 const json = (b: unknown) => new Response(JSON.stringify(b));
 let mapFails = false;
+let workState = "ready";
 function mount() {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     const p = url.split("?")[0];
     if (p === "/api/themes") return json({ themes: [olive], default: "olive" });
     if (p === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
-    if (p === "/api/works") return json({ works: [{ slug: "d1", title: "海", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
-    if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "內文一行", state: "ready", job_id: null, notes_ready: false });
+    if (p === "/api/works") return json({ works: [{ slug: "d1", title: "海", version: 1, chars: 4, updated_at: 1, state: workState }] });
+    if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "內文一行", state: workState, job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map" && mapFails) return new Response("{}", { status: 500 });
     if (p === "/api/works/d1/map") return json({ version: 1, analysis_version: 1, notes_version: null, notes: null, motifs: [],
       beats: [{ id: "b1", label: "開頭", intensity: 0.5, span: { quote: "內文", start: 0, end: 2 } }] });
@@ -25,7 +26,7 @@ function mount() {
 }
 const tab = (name: string) => screen.getByRole("tab", { name });
 
-beforeEach(() => { setLang("zh-Hant"); localStorage.clear(); mapFails = false; });
+beforeEach(() => { setLang("zh-Hant"); localStorage.clear(); mapFails = false; workState = "ready"; });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("右欄分頁", () => {
@@ -40,6 +41,12 @@ describe("右欄分頁", () => {
     fireEvent.click(tab("結構圖"));
     expect(screen.getByText("內文一行")).toBeTruthy();
     expect(container.querySelectorAll("button.dash-mcol")).toHaveLength(1);
+  });
+  it("分析中:輸入紙上的角色在掃讀", async () => {
+    workState = "running";
+    const { container } = mount();
+    await screen.findByText("內文一行");
+    expect(container.querySelector("form.composer svg.blob")!.getAttribute("data-state")).toBe("scanning");
   });
   it("右欄頂沒有局選單(局搬到書架)", async () => {
     mount();

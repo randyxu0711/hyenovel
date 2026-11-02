@@ -6,7 +6,8 @@ import { MemoryRouter, Routes, Route, useLocation, useNavigationType } from "rea
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { DRAW_MS } from "../src/dash/Paper";
-import { versionBreaks } from "../src/dash/Talk";
+import { composerState, speakerChanges, versionBreaks } from "../src/dash/Talk";
+import { makeCharacters } from "../src/dash/useCharacters";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
@@ -52,7 +53,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
 }
 function Where() { const l = useLocation(); return <output data-testid="loc" data-nav={useNavigationType()}>{l.pathname}{l.search}</output>; }
 const loc = () => screen.getByTestId("loc").textContent;
-const whoKey = () => screen.getByRole("button", { name: "陪讀者" });
+const whoKey = () => screen.getByRole("button", { name: /^陪讀者:/ });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
   ["token", { text: t.slice(0, 1) }], ["token", { text: t.slice(1) }],
   ["message", { role: "assistant", text: t, session_id: sid, mode: "slow", character, spans }], ["done", { ok: true, session_id: sid }]);
@@ -74,7 +75,7 @@ describe("選人", () => {
   it("在輸入框的陪讀者選單選過的角色會被記住", async () => {
     const { unmount } = mount();
     const pick = async () => {
-      fireEvent.click(await screen.findByRole("button", { name: "陪讀者" }));
+      fireEvent.click(await screen.findByRole("button", { name: /^陪讀者:/ }));
       return within(screen.getByRole("group", { name: "陪讀者" })).getByRole("button", { name: "水牛" });
     };
     fireEvent.click(await pick());
@@ -104,10 +105,10 @@ describe("換預設陪讀者在作品頁立即生效", () => {
   it("作品頁 ⌘K 選「陪讀者:水牛」→ 輸入框旁換成水牛,下一輪送給水牛", async () => {
     mount();
     await screen.findByText("第一段。");
-    expect(whoKey().textContent).toContain("鬣狗");
+    expect(whoKey().getAttribute("aria-label")).toContain("鬣狗");
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "陪讀者:水牛" }));
-    await waitFor(() => expect(whoKey().textContent).toContain("水牛"));
+    await waitFor(() => expect(whoKey().getAttribute("aria-label")).toContain("水牛"));
     say("嗨");
     await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
   });
@@ -115,14 +116,14 @@ describe("換預設陪讀者在作品頁立即生效", () => {
     localStorage.setItem("hyenovel.companion", "buffalo");
     mount("/w/d1");
     await screen.findByText("第一段。");
-    expect(whoKey().textContent).toContain("水牛");
+    expect(whoKey().getAttribute("aria-label")).toContain("水牛");
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     fireEvent.click(await within(screen.getByRole("navigation")).findByRole("button", { name: "陪讀者" }));
     fireEvent.click(await screen.findByRole("radio", { name: /鹿/ }));
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品:海" }));
     await screen.findByText("第一段。");
-    expect(whoKey().textContent).toContain("鹿");
+    expect(whoKey().getAttribute("aria-label")).toContain("鹿");
     say("嗨");
     await waitFor(() => expect(talkBodies[0]?.character).toBe("deer"));
   });
@@ -185,14 +186,16 @@ describe("對話", () => {
     expect(log().getByText("水牛")).toBeTruthy();
     expect(vi.getTimerCount()).toBe(0);
   });
-  it("說話者換人時有分隔線;舊局沒有 character 時用同 mode 的角色標示", async () => {
+  it("換人那則前才露角色,同一人連續不重複;沒有分隔線;舊局沒有 character 時用同 mode 的角色", async () => {
     rows = [row("s1")];
-    session("s1", [u("一"), a("我先讀", null, [], "slow"), u("二"), a("換我", "buffalo")]);
-    mount();
+    session("s1", [u("一"), a("我先讀", null, [], "slow"), u("二"), a("再讀", "hyena"), u("三"), a("換我", "buffalo")]);
+    const { container } = mount();
     await (await findLog()).findByText("換我");
-    expect(log().getByText("鬣狗")).toBeTruthy();
-    const sep = log().getAllByRole("separator");
-    expect(sep.map(s => s.textContent)).toEqual(["換水牛來讀"]);
+    expect(log().queryAllByRole("separator")).toEqual([]);
+    expect(container.querySelector(".chat-switch")).toBeNull();
+    const whos = [...container.querySelectorAll(".chat-log .chat-who")];
+    expect(whos.map(w => w.textContent)).toEqual(["鬣狗", "水牛"]);
+    for (const w of whos) expect(w.querySelector("svg.blob")).not.toBeNull();
   });
   it("409 busy 顯示訊息且輸入框保留原字", async () => {
     talkReply = () => json({ detail: "busy", code: "busy" }, 409);
@@ -570,7 +573,10 @@ describe("交新版之後", () => {
     session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }, { ...u("二"), v: 2 }, { ...a("再讀", "hyena"), v: 2 }]);
     mount();
     await (await findLog()).findByText("再讀");
-    expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
+    expect(log().queryAllByRole("separator")).toEqual([]);
+    const vers = [...document.querySelectorAll(".chat-log .chat-ver")];
+    expect(vers.map(v => v.textContent)).toEqual(["v2"]);
+    expect(vers[0].querySelector("svg.ico")).not.toBeNull();
   });
   it("交新版後繼續聊:串流進來的問與答帶 den 給的 v,不用重新整理就出現分隔線", async () => {
     rows = [row("s1")];
@@ -582,13 +588,71 @@ describe("交新版之後", () => {
     await (await findLog()).findByText("我先讀");
     say("新稿呢");
     await (await findLog()).findByText("好");
-    expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
+    expect([...document.querySelectorAll(".chat-log .chat-ver")].map(v => v.textContent)).toEqual(["v2"]);
   });
   it("全是第 1 版 → 沒有版本分隔線", async () => {
     rows = [row("s1")];
     session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
     mount();
     await (await findLog()).findByText("我先讀");
-    expect(log().queryAllByRole("separator")).toEqual([]);
+    expect(document.querySelector(".chat-ver")).toBeNull();
+  });
+});
+
+describe("輸入紙與角色狀態", () => {
+  const chars = makeCharacters([hyena, buffalo, deer], "hyena");
+  const byId = (id: string | null, m?: string | null) => chars.byId(id, m);
+  it("speakerChanges:第一則 assistant 與換人那則", () => {
+    const ts = [u("q"), a("1", "hyena"), u("q"), a("2", "hyena"), a("3", "deer"), a("4", "deer")];
+    expect([...speakerChanges(ts as never, byId)]).toEqual([1, 4]);
+    expect(speakerChanges([], byId).size).toBe(0);
+  });
+  it("composerState:串流中說話、分析中掃讀、其他在讀", () => {
+    expect(composerState({ streaming: true, analyzing: true })).toBe("speaking");
+    expect(composerState({ streaming: false, analyzing: true })).toBe("scanning");
+    expect(composerState({ streaming: false, analyzing: false })).toBe("reading");
+  });
+  it("輸入是一張紙,角色坐在上緣在讀;送出是圖示鈕", async () => {
+    const { container } = mount();
+    await screen.findByText("第一段。");
+    const form = container.querySelector("form.composer")!;
+    expect(form.querySelector("svg.blob")!.getAttribute("data-state")).toBe("reading");
+    const send = within(form as HTMLElement).getByRole("button", { name: "送出" });
+    expect(send.querySelector("svg.ico")).not.toBeNull();
+    expect(send.textContent).toBe("");
+  });
+  it("串流回覆中角色在說話;等第一個字時只有「X 在讀你的稿」,沒有小筆", async () => {
+    talkReply = () => new Response(new ReadableStream({ start() {} }));
+    const { container } = mount();
+    await screen.findByText("第一段。");
+    say("嗨");
+    expect((await screen.findByText("鬣狗在讀你的稿")).closest("[role=status]")).toBeTruthy();
+    expect(container.querySelector("form.composer svg.blob")!.getAttribute("data-state")).toBe("speaking");
+    expect(container.querySelector(".chat-pen")).toBeNull();
+  });
+  it("陪讀者鈕只露角色,名字在 aria-label;清單照舊、Esc 關", async () => {
+    mount();
+    await screen.findByText("第一段。");
+    const key = whoKey();
+    expect(key.getAttribute("aria-label")).toBe("陪讀者:鬣狗");
+    expect(key.getAttribute("title")).toBe("陪讀者:鬣狗");
+    expect(key.querySelector("svg.blob")).not.toBeNull();
+    expect(key.textContent).toBe("");
+    fireEvent.click(key);
+    const g = screen.getByRole("group", { name: "陪讀者" });
+    fireEvent.keyDown(g, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "陪讀者" })).toBeNull();
+  });
+  it("帶進來的引文移除鈕是圖示", async () => {
+    mount();
+    await screen.findByText("第一段。");
+    const p = screen.getByText("第一段。").firstChild!;
+    const range = document.createRange(); range.setStart(p, 0); range.setEnd(p, 3);
+    document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
+    const drop = screen.getByRole("button", { name: "拿掉這段引文" });
+    expect(drop.querySelector("svg.ico")).not.toBeNull();
+    expect(drop.textContent).toBe("");
   });
 });

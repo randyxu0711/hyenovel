@@ -117,11 +117,11 @@ describe("進門畫面", () => {
   it("陪讀者選單:選別位 → 送出的 /api/discuss 帶那位;Esc 關閉", async () => {
     mount();
     await box();
-    fireEvent.click(screen.getByRole("button", { name: "陪讀者" }));
+    fireEvent.click(screen.getByRole("button", { name: /^陪讀者:/ }));
     const g = within(screen.getByRole("group", { name: "陪讀者" }));
     fireEvent.keyDown(g.getByRole("button", { name: "鬣狗" }), { key: "Escape" });
     expect(screen.queryByRole("group", { name: "陪讀者" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "陪讀者" }));
+    fireEvent.click(screen.getByRole("button", { name: /^陪讀者:/ }));
     fireEvent.click(within(screen.getByRole("group", { name: "陪讀者" })).getByRole("button", { name: "水牛" }));
     fireEvent.change(screen.getByRole("textbox", { name: "對話輸入" }), { target: { value: "嗨" } });
     fireEvent.click(screen.getByRole("button", { name: "送出" }));

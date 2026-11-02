@@ -24,6 +24,8 @@ const DETAIL = {
   turns: [
     { role: "user", text: "我問的那句", ts: 1, mode: null, character: null, quotes: [], spans: [] },
     { role: "assistant", text: "舊討論的回答", ts: 2, mode: "direct", character: "buffalo", quotes: [], spans: [] },
+    { role: "user", text: "再問", ts: 3, mode: null, character: null, quotes: [], spans: [] },
+    { role: "assistant", text: "同一位再答", ts: 4, mode: "direct", character: "buffalo", quotes: [], spans: [] },
   ],
 };
 
@@ -159,8 +161,7 @@ describe("設定頁", () => {
     expect(localStorage.getItem("hyenovel.companion")).toBe("buffalo");
     expect((p.getByRole("radio", { name: /水牛/ }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
-    expect(await screen.findByRole("button", { name: "陪讀者" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "陪讀者" }).textContent).toContain("水牛");
+    expect(await screen.findByRole("button", { name: "陪讀者:水牛" })).toBeTruthy();
   });
 
   it("「預設」只標在選中的那位", async () => {
@@ -187,6 +188,7 @@ describe("設定頁", () => {
     fireEvent.click(p.getByRole("button", { name: /預覽old1/ }));
     expect(await p.findByText("舊討論的回答")).toBeTruthy();
     expect(p.getByText("我問的那句")).toBeTruthy();
+    expect([...document.querySelectorAll(".dash-set-log .chat-who")].map(w => w.textContent)).toEqual(["水牛"]);
     expect(p.queryByRole("textbox")).toBeNull();
     fireEvent.click(p.getByRole("button", { name: "回清單" }));
     expect(p.getByText("預覽old2")).toBeTruthy();

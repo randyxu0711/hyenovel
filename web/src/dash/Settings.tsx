@@ -6,6 +6,7 @@ import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
+import { speakerChanges } from "./Talk";
 import { selectTheme, setMode, useThemeState, type ModePref } from "./theme";
 import { useCharacters } from "./useCharacters";
 import { companionId, setCompanion } from "./useTalk";
@@ -37,6 +38,7 @@ function Archive() {
     return () => { live = false; };
   }, []);
   const show = (id: string) => api.session(id).then(setDetail, e => setErr(e instanceof DashError ? e.code : "unknown"));
+  const who = speakerChanges(detail?.turns ?? [], chars.byId);
   return (
     <>
       {rows && <p>{t("set.legacy", { n: rows.length })}</p>}
@@ -70,7 +72,7 @@ function Archive() {
             const c = chars.byId(turn.character, turn.mode);
             return (
               <div key={i} className="chat-turn">
-                <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+                {who.has(i) && <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>}
                 <p className="chat-text">{turn.text}</p>
               </div>
             );

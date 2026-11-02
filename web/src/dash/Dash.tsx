@@ -201,7 +201,7 @@ function Shell({ chars }: { chars: Characters }) {
       {view === "work" && (
         <aside className="dash-side" hidden={hideSide}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
-            talk={talk} quotes={quotes} ob={ob} onOb={setOb}
+            talk={talk} quotes={quotes} ob={ob} onOb={setOb} analyzing={["running", "notes-running"].includes(String(work?.state))}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>

@@ -4,7 +4,7 @@ import Blob from "./Blob";
 import { localized, useLang, useT } from "./i18n";
 import { useCharacters } from "./useCharacters";
 
-/** 輸入框旁的陪讀者選擇 ▾:鍵帽 + 往上開的清單;Esc 關閉。 */
+/** 輸入框旁的陪讀者選擇:只露角色的小鈕 + 往上開的清單;Esc 關閉。 */
 export default function WhoPick({ me, onPick }: { me: Character; onPick: (id: string) => void }) {
   const t = useT();
   const lang = useLang();
@@ -13,9 +13,10 @@ export default function WhoPick({ me, onPick }: { me: Character; onPick: (id: st
   const toggle = useRef<HTMLButtonElement>(null);
   return (
     <div className="dash-who">
-      <button type="button" ref={toggle} className="dash-key" aria-haspopup="true" aria-expanded={open}
-        aria-label={t("talk.who")} onClick={() => setOpen(m => !m)}>
-        <Blob character={me} size={22} />{localized(me.name, lang)} <span aria-hidden="true">▾</span>
+      <button type="button" ref={toggle} className="ib dash-who-key" aria-haspopup="true" aria-expanded={open}
+        aria-label={t("talk.whoIs", { name: localized(me.name, lang) })} title={t("talk.whoIs", { name: localized(me.name, lang) })}
+        onClick={() => setOpen(m => !m)}>
+        <Blob character={me} size={22} />
       </button>
       {open && (
         <div className="dash-float dash-who-menu" role="group" aria-label={t("talk.who")}
