@@ -122,6 +122,20 @@ def _order_beats(beats: list[dict], edges: list[dict]) -> list[dict]:
     return sorted(beats, key=key)
 
 
+def _drift(nodes: list[dict], text: str) -> dict:
+    """舊分析的引文在 text 裡還站得住幾句:total/lost 為條數,orphaned = 有引文但全找不到的節點。"""
+    total = lost = 0
+    orphaned = []
+    for n in nodes:
+        sp = spans.locate_all([e["quote"] for e in n.get("evidence") or []], text)
+        miss = sum(1 for s in sp if s["start"] is None)
+        total += len(sp)
+        lost += miss
+        if sp and miss == len(sp):
+            orphaned.append({"id": n["id"], "type": n["type"], "label": n["label"]})
+    return {"total": total, "lost": lost, "orphaned": orphaned}
+
+
 def work_map(conn, slug: str, v: int | None = None) -> dict:
     """對位資料:分析的 beat/motif 與同版同 job 的筆記,引文一律定位到第 v 版(預設最新)原文。
     分析屬較舊版時照給(analysis_version 老實標),定位不到的 start/end 為 None。"""
@@ -134,12 +148,14 @@ def work_map(conn, slug: str, v: int | None = None) -> dict:
         raise UnknownVersion(v)
     text = shown["text"]
     out = {"version": shown["n"], "analysis_version": None, "notes_version": None,
-           "beats": [], "motifs": [], "notes": None}
+           "beats": [], "motifs": [], "notes": None, "drift": None}
     ana = repo.current_artifact(conn, st["id"], "analysis")
     if ana is None:
         return out
     out["analysis_version"] = repo.source_version(conn, ana["source_version_id"])["n"]
     nodes = ana["body"].get("nodes") or []
+    if out["analysis_version"] != shown["n"]:
+        out["drift"] = _drift(nodes, text)
 
     def spans_of(node):
         return spans.locate_all([e["quote"] for e in node.get("evidence") or []], text)

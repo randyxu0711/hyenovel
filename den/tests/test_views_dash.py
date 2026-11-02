@@ -258,7 +258,7 @@ def test_map_beats_without_edges_sort_by_span_unlocated_last(c):
 def test_map_no_analysis(c):
     _story(c)
     assert views.work_map(c, "x1") == {"version": 1, "analysis_version": None, "notes_version": None,
-                                       "beats": [], "motifs": [], "notes": None}
+                                       "beats": [], "motifs": [], "notes": None, "drift": None}
 
 
 def test_map_stale_analysis(c):
@@ -287,6 +287,34 @@ def test_map_notes_from_other_job_not_paired(c):
     _notes(c, sid, vid, job=1)
     m = views.work_map(c, "x1")
     assert m["notes"] is None and m["notes_version"] is None
+
+
+def _drift_nodes(t1_quote="她沒說話"):
+    return [
+        {"id": "m1", "type": "motif", "label": "雨", "evidence": [{"quote": "窗外下雨", "note": ""},
+                                                              {"quote": "雨停了", "note": ""}]},
+        {"id": "t1", "type": "theme", "label": "主題", "evidence": [{"quote": t1_quote, "note": ""}]}]
+
+
+def test_map_drift_null_when_analysis_matches_version(c):
+    sid, vid = _story(c, text=TEXT)
+    _ana(c, sid, vid)
+    assert views.work_map(c, "x1")["drift"] is None
+
+
+def test_map_drift_counts_lost_quotes_on_newer_version(c):
+    sid, vid = _story(c, text=TEXT)
+    _ana(c, sid, vid, nodes=_drift_nodes(), edges=[])
+    repo.add_source_version(c, sid, "他進了門。窗外下雨。", 3.0)    # 刪掉「她沒說話」「雨停了」
+    assert views.work_map(c, "x1")["drift"] == {
+        "total": 3, "lost": 2, "orphaned": [{"id": "t1", "type": "theme", "label": "主題"}]}
+
+
+def test_map_drift_ignores_punctuation_only_change(c):
+    sid, vid = _story(c, text="她說\uff0c好。窗外下雨。雨停了。")
+    _ana(c, sid, vid, nodes=_drift_nodes("她說\uff0c好"), edges=[])
+    repo.add_source_version(c, sid, "她說,好。窗外下雨。雨停了。", 3.0)    # 全形逗號 -> 半形
+    assert views.work_map(c, "x1")["drift"] == {"total": 3, "lost": 0, "orphaned": []}
 
 
 def test_map_unknown_version_and_work(c):
