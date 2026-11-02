@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, DashError, type Work, type WorkDetail, type WorkMap } from "./api";
 import { errorMessage, useT, type MsgKey } from "./i18n";
-import Paper, { type Mark } from "./Paper";
+import Paper, { type Mark, type ObSpan } from "./Paper";
 import PrintHead from "./PrintHead";
 import { useJob } from "./useJob";
 import { useSubmitDraft } from "./useSubmitDraft";
@@ -26,7 +26,7 @@ export function stateText(state: string, notesReady: boolean): MsgKey {
 }
 
 /** 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。 */
-export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, map = null, marks = [], drawing, reload = 0 }: {
+export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, map = null, marks = [], obs = [], drawing, reload = 0 }: {
   slug: string; works: Work[];
   onOpen: (slug: string) => void; onSubmitNew: () => void;
   onQuote: (q: string) => void;
@@ -34,6 +34,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   version?: number;
   /** 讀者痕跡與正在畫的那道。 */
   marks?: Mark[]; drawing?: string;
+  /** 結構圖選中的觀察在這版原文的位置(畫直線)。 */
+  obs?: ObSpan[];
   /** 外面遞增 = 這篇要重抓(例如重交了同一篇)。 */
   reload?: number;
   /** 分析跑完(重抓過這篇之後)通知,好讓左欄重抓。 */
@@ -172,7 +174,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
         <PrintHead key={work.job_id ?? "none"} running={analyzing} map={map}
           printed={job.analysed && !!map && map.analysis_version === map.version && map.beats.length > 0} />
       )}
-      <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote} />
+      <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote}
+        old={work.version !== latest} obs={obs} />
       {menu && <WorksMenu anchor={menu} below works={works} current={slug} onOpen={onOpen}
         onSubmitNew={onSubmitNew} onClose={() => setMenu(null)} />}
     </div>

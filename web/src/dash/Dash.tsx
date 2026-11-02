@@ -81,6 +81,11 @@ function Shell({ chars }: { chars: Characters }) {
       e => { if (live) setMapErr(e instanceof DashError ? e.code : "unknown"); });   // 稿與對話照用,分頁說錯誤
     return () => { live = false; };
   }, [slug, version, mapRev, reload]);
+  // 結構圖選中的觀察(意象 id):稿上它的引文畫直線;換篇、換版清掉。
+  const [ob, setOb] = useState<string | null>(null);
+  useEffect(() => { setOb(null); }, [slug, version]);
+  const obs = (map?.motifs?.find(m => m.id === ob)?.spans ?? [])
+    .flatMap(s => s.start !== null && s.end !== null ? [{ start: s.start, end: s.end }] : []);
   // 痕跡只在逐字稿的位置對的就是這一版時才畫(換版本重抓完之前不畫)。
   const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
@@ -172,7 +177,7 @@ function Shell({ chars }: { chars: Characters }) {
         onOpen={open} onNew={goHome} onFind={() => setPalette(true)}
         settingsNav={view === "settings" ? setNav : null} />
       <main className="dash-desk" hidden={hidePaper}>
-        {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
+        {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
           map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           works={works} onOpen={open} onSubmitNew={goHome}
@@ -197,7 +202,7 @@ function Shell({ chars }: { chars: Characters }) {
       {view === "work" && (
         <aside className="dash-side" hidden={hideSide}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
-            talk={talk} quotes={quotes}
+            talk={talk} quotes={quotes} ob={ob} onOb={setOb}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>

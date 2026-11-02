@@ -8,7 +8,7 @@ import { cpLength, cpSlice } from "../src/dash/cp";
 import { setLang } from "../src/dash/i18n";
 import { LinksProvider, useLinks, type Links } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
-import { getThemeState } from "../src/dash/theme";
+import { setPaperFlow } from "../src/dash/paperFlow";
 import type { Character } from "../src/dash/api";
 import { hyena, buffalo, deer, ch } from "./dash-fixtures";
 
@@ -16,14 +16,14 @@ const odd = { ...ch("fox", "slow", "狐", "Fox"), mark: "zigzag" as unknown as C
 let links: Links;
 function Probe() { const l = useLinks(); useEffect(() => { links = l; }); return null; }
 
-const mount = (text: string, marks: Mark[] = [], extra: { drawing?: string; title?: string } = {}) => {
+const mount = (text: string, marks: Mark[] = [], extra: { drawing?: string; title?: string; old?: boolean; obs?: { start: number; end: number }[] } = {}) => {
   setLang("zh-Hant");
   const onBring = vi.fn();
   const r = render(
     <CharactersProvider value={makeCharacters([hyena, buffalo, deer, odd], "hyena")}>
       <LinksProvider>
         <Probe />
-        <Paper text={text} title={extra.title ?? "海"} marks={marks} drawing={extra.drawing} onBring={onBring} />
+        <Paper text={text} title={extra.title ?? "海"} marks={marks} drawing={extra.drawing} onBring={onBring} old={extra.old} obs={extra.obs} />
       </LinksProvider>
     </CharactersProvider>);
   return { ...r, onBring };
@@ -38,7 +38,7 @@ const select = (node: Node, len: number) => {
   act(() => { document.dispatchEvent(new Event("selectionchange")); });
 };
 
-beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
+beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); act(() => setPaperFlow("v")); });
 afterEach(() => { vi.useRealTimers(); document.getSelection()?.removeAllRanges(); });
 
 describe("segments", () => {
@@ -59,18 +59,12 @@ describe("segments", () => {
 });
 
 describe("Paper", () => {
-  it("一個痕跡渲染成一個 .dash-mark,筆跡依角色,顏色是角色在目前明暗的 fill", () => {
-    mount("海很深。潮水回來。", [mk(0, 3)]);
-    expect(marks()).toHaveLength(1);
-    const m = marks()[0];
-    expect(m.textContent).toBe("海很深");
-    expect(m.dataset.mark).toBe("pencil");
-    expect(m.dataset.id).toBe("0-3-hyena");
-    expect(m.style.getPropertyValue("--dash-mark")).toBe(hyena.colors[getThemeState().mode].fill);
-  });
-  it.each([["buffalo", "highlighter"], ["deer", "circle"], ["fox", "pencil"]])("角色 %s → data-mark=%s", (who, kind) => {
-    mount("海很深。", [mk(0, 2, who)]);
-    expect(marks()[0].dataset.mark).toBe(kind);
+  it("一個痕跡渲染成一個 .dash-mark;不分角色同一種線,沒有 data-mark", () => {
+    mount("海很深。潮水回來。", [mk(0, 3), mk(4, 6, "buffalo")]);
+    expect(marks()).toHaveLength(2);
+    expect(marks()[0].textContent).toBe("海很深");
+    expect(marks()[0].dataset.id).toBe("0-3-hyena");
+    expect(marks().every(m => m.dataset.mark === undefined && !m.style.getPropertyValue("--dash-mark"))).toBe(true);
   });
   it("跨兩段的痕跡畫成兩截,同一個 data-id", () => {
     mount("第一段尾巴\n第二段頭", [mk(3, 8)]);
@@ -163,5 +157,66 @@ describe("筆畫長度", () => {
     const css = readFileSync(join(__dirname, "../src/dash/dash.css"), "utf8");
     expect(css).toMatch(/\.dash-mark\.is-drawing\{animation:dash-mark-draw var\(--dash-draw\)/);
     expect(DRAW_MS).toBeGreaterThanOrEqual(600);
+  });
+});
+
+describe("Paper 排法與分頁", () => {
+  // jsdom 沒版面:量測容器用「頁內字數 ≤ N」假裝
+  const fakePage = (n: number) => {
+    const sw = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("paper-measure") ? cpLength((this.textContent ?? "").replace(/\s/g, "")) : 0;
+    });
+    const cw = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("paper-measure") ? n : 0;
+    });
+    return () => { sw.mockRestore(); cw.mockRestore(); };
+  };
+  const pages = () => [...document.querySelectorAll<HTMLElement>(".paper-page")];
+
+  it("預設直排:data-flow=v,一頁,頁碼 1", () => {
+    const { container } = mount("海很深。");
+    expect(container.querySelector("article")!.dataset.flow).toBe("v");
+    expect(pages()).toHaveLength(1);
+    expect(pages()[0].querySelector(".paper-folio")!.textContent).toBe("1");
+  });
+  it("切橫排 → data-flow=h,沒有分頁", () => {
+    const { container } = mount("海很深。");
+    act(() => setPaperFlow("h"));
+    expect(container.querySelector("article")!.dataset.flow).toBe("h");
+    expect(pages()).toHaveLength(0);
+  });
+  it("直排時 40 直立,橫排不包", () => {
+    const { container } = mount("走了 40 年");
+    expect(container.querySelector(".paper-tcy")!.textContent).toBe("40");
+    act(() => setPaperFlow("h"));
+    expect(container.querySelector(".paper-tcy")).toBeNull();
+  });
+  it("長段跨頁:續段 data-start 往後推、data-cont;跨頁的痕跡兩頁都畫", () => {
+    const restore = fakePage(4);
+    mount("一二三四五六", [mk(2, 6)]);
+    restore();
+    expect(pages()).toHaveLength(2);
+    const ps = pages().map(pg => pg.querySelector("p")!);
+    expect(ps.map(p => p.dataset.start)).toEqual(["0", "4"]);
+    expect(ps[1].hasAttribute("data-cont")).toBe(true);
+    expect(marks().map(m => m.textContent)).toEqual(["三四", "五六"]);
+  });
+  it("jumpToPaper 跳到續段那一頁的段", () => {
+    const restore = fakePage(4);
+    mount("一二三四五六");
+    restore();
+    act(() => links.jumpToPaper({ quote: "五六", start: 4, end: 6 }));
+    expect(pages()[1].querySelector("p")!.classList.contains("is-flash")).toBe(true);
+  });
+  it("舊版:不畫陪讀者的線、紙有 is-old", () => {
+    const { container } = mount("海很深。", [mk(0, 3)], { old: true });
+    expect(marks()).toHaveLength(0);
+    expect(container.querySelector(".is-old")).not.toBeNull();
+  });
+  it("觀察直線:obs 的位置畫 .paper-ob;同處有痕跡時兩種都在", () => {
+    const { container } = mount("海很深。潮水。", [mk(0, 2)], { obs: [{ start: 1, end: 3 }, { start: 4, end: 6 }] });
+    const obs = [...container.querySelectorAll(".paper-ob")].map(e => e.textContent);
+    expect(obs.join("")).toBe("很深潮水");
+    expect(marks().map(m => m.querySelector(".paper-ob")?.textContent).filter(Boolean)).toEqual(["很"]);
   });
 });

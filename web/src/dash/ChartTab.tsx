@@ -13,7 +13,11 @@ const inside = (s: Span | null, at: number | null): boolean =>
   !!s && s.start !== null && s.end !== null && at !== null && s.start <= at && at < s.end;
 
 /** 結構圖分頁:點陣張力(每欄一個節拍、10 顆點)+ 意象出現在哪幾段。 */
-export default function ChartTab({ map, marks, error = null }: { map: WorkMap | null; marks: Mark[]; error?: string | null }) {
+export default function ChartTab({ map, marks, error = null, ob = null, onOb }: {
+  map: WorkMap | null; marks: Mark[]; error?: string | null;
+  /** 選中的觀察(意象 id):稿上它的引文畫鉛筆直線。 */
+  ob?: string | null; onOb?: (id: string | null) => void;
+}) {
   const t = useT();
   const lang = useLang();
   if (!map && error) return <p className="side-lede" role="alert">{t(errorMessage(error))}</p>;
@@ -42,10 +46,11 @@ export default function ChartTab({ map, marks, error = null }: { map: WorkMap | 
           return i < 0 ? [] : [i + 1];
         }))].sort((x, y) => x - y);
         return (
-          <section key={mo.id} className="side-note">
-            <h3>{mo.label}</h3>
-            <p>{at.length ? t("chart.motifIn", { list: at.join(sep) }) : t("chart.motifNowhere")}</p>
-          </section>
+          <button key={mo.id} type="button" className="side-ob" aria-pressed={ob === mo.id}
+            onClick={() => onOb?.(ob === mo.id ? null : mo.id)}>
+            <span className="side-ob-name">{mo.label}</span>
+            <span className="side-ob-sub">{at.length ? t("chart.motifIn", { list: at.join(sep) }) : t("chart.motifNowhere")}</span>
+          </button>
         );
       })}
     </div>

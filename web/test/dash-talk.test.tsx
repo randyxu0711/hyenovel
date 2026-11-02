@@ -489,7 +489,7 @@ describe("邊說邊畫線", () => {
     await (await findLog()).findByRole("button", { name: "「海很藍」" });
     expect(container.querySelector(".is-drawing")).toBeNull();
   });
-  it("看舊版:串流中不畫;message 後以 ?v= 重抓這局,依回來的 spans 直接畫上(不播動畫)", async () => {
+  it("看舊版:串流中不畫;message 後以 ?v= 重抓這局,但舊版稿上不畫陪讀者的線(spec §11.5)", async () => {
     versions = [1, 2];
     rows = [row("s1")];
     session("s1", [u("先前"), a("嗯", "buffalo")]);
@@ -504,9 +504,8 @@ describe("邊說邊畫線", () => {
     expect(markEls(container)).toHaveLength(0);
     release();
     await waitFor(() => expect(calls().filter(c => c === "/api/sessions/s1?v=1").length).toBeGreaterThan(before));
-    await waitFor(() => expect(markEls(container)).toHaveLength(1));
-    expect(markEls(container)[0].textContent).toBe("海很藍");
-    expect(markEls(container)[0].classList.contains("is-drawing")).toBe(false);
+    expect(markEls(container)).toHaveLength(0);
+    expect(container.querySelector(".paper-sheet.is-old")).not.toBeNull();
   });
 });
 

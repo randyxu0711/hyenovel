@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom";
 import Reader, { stateText } from "../src/dash/Reader";
@@ -7,6 +7,10 @@ import { setLang, translate } from "../src/dash/i18n";
 import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import { hyena, buffalo, deer } from "./dash-fixtures";
+import { setPaperFlow } from "../src/dash/paperFlow";
+
+// 稿文含數字;直排會把短數字包成縱中橫、拆開文字節點。這檔的文字比對一律在橫排做。
+beforeEach(() => setPaperFlow("h"));
 
 afterEach(() => vi.unstubAllGlobals());
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });

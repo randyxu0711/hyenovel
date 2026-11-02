@@ -19,9 +19,9 @@ const beats = INT.map((intensity, i) => ({ id: `b${i}`, label: `節拍${i}`, int
 const map = (o: Partial<WorkMap> = {}): WorkMap => ({
   version: 2, analysis_version: 2, notes_version: null, beats, motifs: [], notes: null, drift: null, ...o,
 });
-function mount(m: WorkMap | null, marks: Mark[] = [], on = vi.fn(), error: string | null = null) {
+function mount(m: WorkMap | null, marks: Mark[] = [], on = vi.fn(), error: string | null = null, ob: string | null = null, onOb = vi.fn()) {
   const r = render(<CharactersProvider value={makeCharacters([hyena, buffalo], "hyena")}><LinksProvider>
-    <PaperSpy on={on} /><ChartTab map={m} marks={marks} error={error} />
+    <PaperSpy on={on} /><ChartTab map={m} marks={marks} error={error} ob={ob} onOb={onOb} />
   </LinksProvider></CharactersProvider>);
   return { ...r, on };
 }
@@ -75,8 +75,22 @@ describe("結構圖分頁", () => {
   });
   it("意象列出標題與出現在哪幾段", () => {
     mount(map({ motifs: [{ id: "m1", label: "鞋", spans: [{ quote: "a", start: 41, end: 42 }, { quote: "b", start: 2, end: 3 }, { quote: "c", start: null, end: null }] }] }));
-    expect(screen.getByRole("heading", { name: "鞋" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /鞋/ })).toBeTruthy();
     expect(screen.getByText("第 1、5 段")).toBeTruthy();
+  });
+  it("意象是切換鈕:按了選它、選中的再按 → 取消", () => {
+    const shoe = { id: "m1", label: "鞋", spans: [{ quote: "a", start: 2, end: 3 }] };
+    const onOb = vi.fn();
+    const r = mount(map({ motifs: [shoe] }), [], vi.fn(), null, null, onOb);
+    const b = () => screen.getByRole("button", { name: /鞋/ });
+    expect(b().getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(b());
+    expect(onOb).toHaveBeenLastCalledWith("m1");
+    r.unmount();
+    mount(map({ motifs: [shoe] }), [], vi.fn(), null, "m1", onOb);
+    expect(b().getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(b());
+    expect(onOb).toHaveBeenLastCalledWith(null);
   });
   it("沒分析 → 說還沒分析,沒有欄", () => {
     const { container } = mount(map({ analysis_version: null, beats: [] }));

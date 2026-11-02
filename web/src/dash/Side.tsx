@@ -28,7 +28,7 @@ export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
 }
 
 /** 右欄:對話 | 筆記 | 結構圖。對話一直掛著(切走也不丟草稿、稿上痕跡點得回來),另兩頁切到才畫。 */
-export default function Side({ version, map, mapError, state, marks, talk, quotes, onDropQuote, onSent }: {
+export default function Side({ version, map, mapError, state, marks, talk, quotes, onDropQuote, onSent, ob = null, onOb }: {
   /** 正在看的版本號。 */
   version: number;
   map: WorkMap | null;
@@ -39,6 +39,8 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
   marks: Mark[];
   talk: TalkState; quotes: string[];
   onDropQuote: (i: number) => void; onSent: () => void;
+  /** 結構圖選中的觀察。 */
+  ob?: string | null; onOb?: (id: string | null) => void;
 }) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("talk");
@@ -58,7 +60,7 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
       </div>
       {tab !== "talk" && (
         <div className="side-panel side-scroll" role="tabpanel" id={`side-panel-${tab}`} aria-labelledby={`side-tab-${tab}`}>
-          {tab === "notes" ? <NotesTab map={map} state={state} error={mapError} /> : <ChartTab map={map} marks={marks} error={mapError} />}
+          {tab === "notes" ? <NotesTab map={map} state={state} error={mapError} /> : <ChartTab map={map} marks={marks} error={mapError} ob={ob} onOb={onOb} />}
         </div>
       )}
     </div>
