@@ -44,6 +44,8 @@ export type SessionRow = {
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type Turn = {
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
+  /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有 */
+  v?: number;
 };
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {

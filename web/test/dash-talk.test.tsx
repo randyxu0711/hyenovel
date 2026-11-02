@@ -6,6 +6,7 @@ import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { DRAW_MS } from "../src/dash/Paper";
+import { versionBreaks } from "../src/dash/Talk";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
@@ -560,5 +561,26 @@ describe("交新版之後", () => {
     const before = await submitFrom("/w/d1?s=abc", false);
     expect(await screen.findByText("跟第 2 版一字不差,沒有新增版本")).toBeTruthy();
     expect(sessionCalls()).toBe(before);
+  });
+  it("versionBreaks:v 與前一個有值的 v 不同才斷,第一則不畫,沒 v 的沿用前一則", () => {
+    const t = (...vs: (number | undefined)[]) => vs.map(v => ({ ...u("x"), v }));
+    expect([...versionBreaks(t(1, 1, 2, 2, 3))]).toEqual([2, 4]);
+    expect(versionBreaks(t(1, 1)).size).toBe(0);
+    expect([...versionBreaks(t(1, undefined, 2))]).toEqual([2]);
+    expect(versionBreaks([]).size).toBe(0);
+  });
+  it("換版處畫「第 n 版」分隔線;全同版沒有", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }, { ...u("二"), v: 2 }, { ...a("再讀", "hyena"), v: 2 }]);
+    mount();
+    await (await findLog()).findByText("再讀");
+    expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
+  });
+  it("全是第 1 版 → 沒有版本分隔線", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
+    mount();
+    await (await findLog()).findByText("我先讀");
+    expect(log().queryAllByRole("separator")).toEqual([]);
   });
 });

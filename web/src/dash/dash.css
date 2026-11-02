@@ -93,6 +93,7 @@
 .dash .chat-quote{margin:0 0 6px; padding-left:10px; border-left:3px solid var(--dash-sig); font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .chat-switch{display:flex; align-items:center; gap:10px; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-switch::before, .dash .chat-switch::after{content:""; flex:1; height:2px; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) 0 0/6px 2px repeat-x}
+.dash .chat-ver{text-align:center; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-turn{border-radius:8px}
 .dash .chat-turn.is-flash{animation:dash-flash 1.4s ease-out forwards}
 .dash .chat-wait{display:flex; align-items:center; gap:10px}
