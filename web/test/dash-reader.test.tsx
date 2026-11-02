@@ -283,6 +283,36 @@ describe("交新版", () => {
     fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: true, version: 2, analyzing: false }));
   });
+  it("只有空白的檔 → 交稿條說稿子是空的,兩顆送出鍵 disabled", async () => {
+    const { container } = await mountNew();
+    vi.mocked(api.extract).mockResolvedValue({ filename: "a.md", text: "  \n ", chars: 3 });
+    pick(container);
+    expect((await screen.findByRole("alert")).textContent).toBe("稿子是空的。");
+    expect(screen.getByRole("button", { name: "只存版,先不分析" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" })).toHaveProperty("disabled", true);
+  });
+  it("新版存下了但開分析失敗 → 照樣回最新版(analyzing:false),頂列顯示錯誤", async () => {
+    const { container, onNewVersion } = await mountNew();
+    vi.mocked(api.startJob).mockRejectedValue(new DashError(503, "den-down"));
+    pick(container);
+    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByText("交成第 3 版")).toBeNull();
+  });
+  it("送出中:取消 disabled、按的那顆說送出中、選檔不換稿", async () => {
+    const { container, onNewVersion } = await mountNew();
+    let done!: (v: never) => void;
+    vi.mocked(api.submit).mockImplementation(() => new Promise(r => { done = r as never; }));
+    pick(container);
+    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    expect(await screen.findByRole("button", { name: "送出中……" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "取消" })).toHaveProperty("disabled", true);
+    pick(container);
+    expect(api.extract).toHaveBeenCalledTimes(1);
+    done({ slug: "d1", title: "海", version: 3, new_version: true, reused: false } as never);
+    await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
+  });
   it("取消 → 交稿條消失", async () => {
     const { container } = await mountNew();
     pick(container);

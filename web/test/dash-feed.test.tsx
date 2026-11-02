@@ -121,6 +121,31 @@ describe("useSubmitDraft", () => {
     expect(result.current.error).toBe("extract-failed");
     expect(result.current.draft).toBeNull();
   });
+  it("只有空白的檔:error empty-story,confirm 不交稿", async () => {
+    const { result } = mount(null, "d1");
+    vi.spyOn(api, "extract").mockResolvedValue({ filename: "a.md", text: " \n\t ", chars: 4 });
+    const s = sub();
+    await act(() => result.current.fromFile(new File(["x"], "a.md")));
+    expect(result.current.error).toBe("empty-story");
+    expect(result.current.draft?.chars).toBe(0);
+    let r: unknown = 1;
+    await act(async () => { r = await result.current.confirm(); });
+    expect(r).toBeNull();
+    expect(s).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("empty-story");
+  });
+  it("帶 slug:新版存下了但 startJob 失敗 → 照樣回結果(jobError),稿清掉", async () => {
+    const { result } = mount(null, "d1");
+    sub({ slug: "d1", version: 3, new_version: true });
+    vi.spyOn(api, "startJob").mockRejectedValue(new DashError(503, "den-down"));
+    act(() => result.current.fromText("新稿"));
+    let r: any;
+    await act(async () => { r = await result.current.confirm(); });
+    expect(r).toMatchObject({ slug: "d1", version: 3, same: false, jobError: "den-down" });
+    expect(result.current.draft).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(result.current.busy).toBe(false);
+  });
   it("cancel 丟掉稿與錯誤", () => {
     const { result } = mount();
     act(() => result.current.fromText("稿"));

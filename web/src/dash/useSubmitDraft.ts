@@ -30,14 +30,16 @@ export function useSubmitDraft(slug?: string) {
     try {
       const r = await api.extract(file);
       setRaw({ text: r.text, title: r.filename.replace(/\.(md|txt)$/i, "") });
+      if (!r.text.trim()) setError("empty-story");   // 只有空白的檔:別讓交稿鍵按了沒反應
     } catch (e) { fail(e); }
   }, []);
   const cancel = useCallback(() => { setRaw(null); setEst(null); setError(null); setBusy(false); }, []);
 
   /** 成功回交稿結果(reused = 已有同稿、沒開新 job;same = 帶 slug 時與最新版一字不差);失敗設 error 並回 null。
-   *  帶 slug 時 analyze=false 只存版不開 job。 */
-  const confirm = useCallback(async (opts: { analyze?: boolean } = {}): Promise<(SubmitResult & { same: boolean }) | null> => {
-    if (!raw || !chars || busy) return null;
+   *  帶 slug 時 analyze=false 只存版不開 job;新版已存下但開 job 失敗 → 照樣回結果,錯誤碼在 jobError。 */
+  const confirm = useCallback(async (opts: { analyze?: boolean } = {}): Promise<(SubmitResult & { same: boolean; jobError?: string }) | null> => {
+    if (!raw || busy) return null;
+    if (!chars) { setError("empty-story"); return null; }
     setBusy(true); setError(null);
     try {
       const r = slug ? await api.submit(raw.text, undefined, slug) : await api.submit(raw.text, raw.title);
@@ -49,7 +51,14 @@ export function useSubmitDraft(slug?: string) {
           if (slug) await api.startJob(r.slug, { resumeOnly: true }).catch(e => { if (!(e instanceof DashError && e.status === 409)) throw e; });
           else await api.startJob(r.slug);
         }
-      } else if (!slug || opts.analyze !== false) await api.startJob(r.slug);
+      } else if (!slug) await api.startJob(r.slug);
+      else if (opts.analyze !== false) {
+        try { await api.startJob(r.slug); } catch (e) {
+          // 新版已經存下:稿不留(重交會變成「一字不差」),交給呼叫端回最新版並顯示錯誤
+          setRaw(null); setEst(null); setBusy(false);
+          return { ...r, same, jobError: e instanceof DashError ? e.code : "unknown" };
+        }
+      }
       setRaw(null); setEst(null); setBusy(false);
       return { ...r, same };
     } catch (e) { fail(e); setBusy(false); return null; }

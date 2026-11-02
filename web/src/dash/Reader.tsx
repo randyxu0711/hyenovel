@@ -55,6 +55,7 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rev, setRev] = useState(0);
   const submit = useSubmitDraft(slug);
+  const [keeping, setKeeping] = useState(false);   // 送出中的是「只存版」那顆
   const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
@@ -96,8 +97,11 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
       e => setResumeErr(e instanceof DashError ? e.code : "unknown"));
   };
   const submitNew = async (analyze: boolean) => {
+    setKeeping(!analyze);
     const r = await submit.confirm({ analyze });
-    if (r) onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same });
+    if (!r) return;
+    if (r.jobError) setResumeErr(r.jobError);   // 新版存下了但沒開成分析:回最新版,頂列有「分析這版」可重按
+    onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same && !r.jobError });
   };
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -126,7 +130,7 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
         </span>
         <button type="button" className="paper-newver" onClick={() => fileInput.current?.click()}>{t("newver.open")}</button>
         <input ref={fileInput} type="file" accept=".md,.txt" hidden
-          onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void submit.fromFile(f); }} />
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !submit.busy) void submit.fromFile(f); }} />
         {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug, { resumeOnly: true }))}>{t("paper.resume")}</button>}
         {work.version === latest && UNANALYZED.includes(work.state) && (
           <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug))}>{t("newver.analyze")}</button>
@@ -144,11 +148,13 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
           )}
           {submit.error && <p role="alert" className="home-msg">{t(errorMessage(submit.error))}</p>}
           <div className="home-actions">
-            <button type="button" className="dash-key" onClick={submit.cancel}>{t("feed.cancel")}</button>
+            <button type="button" className="dash-key" disabled={submit.busy} onClick={submit.cancel}>{t("feed.cancel")}</button>
             {draft && <>
-              <button type="button" className="dash-key home-go" disabled={submit.busy} onClick={() => void submitNew(false)}>{t("newver.keep")}</button>
-              <button type="button" className="dash-key home-go" disabled={submit.busy} onClick={() => void submitNew(true)}>
-                {submit.busy ? t("feed.sending") : t("feed.go")}
+              <button type="button" className="dash-key home-go" disabled={submit.busy || !draft.chars} onClick={() => void submitNew(false)}>
+                {submit.busy && keeping ? t("feed.sending") : t("newver.keep")}
+              </button>
+              <button type="button" className="dash-key home-go" disabled={submit.busy || !draft.chars} onClick={() => void submitNew(true)}>
+                {submit.busy && !keeping ? t("feed.sending") : t("feed.go")}
               </button>
             </>}
           </div>
