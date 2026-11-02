@@ -162,6 +162,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
                                usage=usage, mode=character["mode"], character=character["id"])
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
+            v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
     except Exception:
         log.exception("event=discuss-turn-failed slug=%s stage=commit", slug)
         yield {"event": "error", "data": {"where": "discuss", "message": "存檔失敗,這輪沒有存下",
@@ -170,7 +171,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
                                         "session_id": sid, "mode": character["mode"],
-                                        "character": character["id"],
+                                        "character": character["id"], "v": v,
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)
                                              if gate.locate(q, turn["ctx"]["source"])],

@@ -8,6 +8,7 @@ import json
 import logging
 import shutil
 import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -113,6 +114,13 @@ def _session_rows(conn, sid, slug="mini"):
 
 # ── 成功路徑 ──
 
+def test_message_event_carries_latest_source_version(c):
+    def add_v2(conn):
+        repo.add_source_version(conn, repo.story_by_slug(conn, "mini")["id"], "新的稿。", time.time())
+    in_loop(c, add_v2)
+    assert post_discuss(c, "mini", None, "x", [])[2]["data"]["v"] == 2
+
+
 def test_first_turn_creates_session_and_persists_both(c):
     evs = post_discuss(c, "mini", None, "結尾太快?", ["b3"])
     assert [e["event"] for e in evs] == ["token", "token", "message", "done"]
@@ -120,7 +128,7 @@ def test_first_turn_creates_session_and_persists_both(c):
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
     assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow",
-                               "character": "hyena", "spans": []}
+                               "character": "hyena", "spans": [], "v": 1}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
     assert [(t["role"], t["text"], t["session"]) for t in ts] == \

@@ -50,6 +50,8 @@ export type Turn = {
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {
   role: "assistant"; text: string; session_id: string; mode: string; character: string; spans: Span[];
+  /** 這輪存下當時的最新版(問與答都算這一版) */
+  v?: number;
 };
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };

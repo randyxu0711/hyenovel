@@ -576,6 +576,18 @@ describe("交新版之後", () => {
     await (await findLog()).findByText("再讀");
     expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
   });
+  it("交新版後繼續聊:串流進來的問與答帶 den 給的 v,不用重新整理就出現分隔線", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
+    talkReply = () => sse(["token", { text: "好" }],
+      ["message", { role: "assistant", text: "好", session_id: "s1", mode: "slow", character: "hyena", spans: [], v: 2 }],
+      ["done", { ok: true, session_id: "s1" }]);
+    mount();
+    await (await findLog()).findByText("我先讀");
+    say("新稿呢");
+    await (await findLog()).findByText("好");
+    expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
+  });
   it("全是第 1 版 → 沒有版本分隔線", async () => {
     rows = [row("s1")];
     session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
