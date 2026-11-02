@@ -61,7 +61,8 @@ function Shell({ chars }: { chars: Characters }) {
     if (id) p.set("s", id); else p.delete("s");
     return p;
   }, { replace: true }), []);
-  const talk = useTalk(slug, version, source, search.get("s"), onSession);
+  const [talkReload, setTalkReload] = useState(0);   // 交了新版:目前這局的逐字稿重抓(畫線位置對到新稿)
+  const talk = useTalk(slug, version, source, search.get("s"), onSession, talkReload);
   const me = chars.byId(talk.whoId);
   const { markSeen } = useSeen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,6 +134,13 @@ function Shell({ chars }: { chars: Characters }) {
     setNote(existing ? { slug: s, text: t("feed.already") } : null);
   };
   const open = (s: string) => { setNote(null); nav(`/w/${encodeURIComponent(s)}`); };
+  // 交新版:回最新版(拿掉 ?v=,?s= 目前這局留著),重抓左欄與稿。
+  const newVersion = (r: { same: boolean; version: number }) => {
+    setSearch(prev => { const p = new URLSearchParams(prev); p.delete("v"); return p; }, { replace: true });
+    bump(); setReload(n => n + 1);
+    if (r.same) setNote({ slug: slug!, text: t("newver.same", { n: r.version }) });
+    else { setNote(null); setTalkReload(n => n + 1); }
+  };
 
   return (
     <div className="dash" data-view={view} data-mode={mode} data-narrow={narrow ? "true" : "false"}
@@ -152,7 +160,7 @@ function Shell({ chars }: { chars: Characters }) {
         onNew={goHome} onSubmitNew={goHome} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
-          map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper}
+          map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           works={works} onOpen={open} onSubmitNew={goHome}
           onQuote={q => {

@@ -12,6 +12,18 @@ import WhoPick from "./WhoPick";
 
 const FLASH_MS = 1400;
 
+/** 要在其前畫「第 n 版」分隔的 index:v 與前一個有值的 v 不同;沒 v 的(剛串流進來)沿用前一則。 */
+export function versionBreaks(turns: Turn[]): Set<number> {
+  const out = new Set<number>();
+  let prev: number | undefined;
+  turns.forEach((turn, i) => {
+    if (turn.v === undefined) return;
+    if (prev !== undefined && turn.v !== prev) out.add(i);
+    prev = turn.v;
+  });
+  return out;
+}
+
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
  *  稿上的痕跡被點時,捲到說那句的訊息並閃一下(onReveal 讓右欄切回對話)。 */
 export default function Talk({ talk, version, quotes, onDropQuote, onSent, onReveal }: {
@@ -72,28 +84,30 @@ export default function Talk({ talk, version, quotes, onDropQuote, onSent, onRev
 
   // 逐則標說話者;與上一位 assistant 不同人時,前面插一條「換 X 來讀」。
   let last: string | null = null;
+  const breaks = versionBreaks(turns);
   const rows = turns.map((turn: Turn, i) => {
+    const brk = breaks.has(i) && <div key={`v${i}`} className="chat-ver" role="separator">{t("talk.versionBreak", { n: turn.v! })}</div>;
     if (turn.role !== "assistant") {
-      return (
+      return [brk,
         <div key={i} className="chat-me">
           {turn.quotes.map((q, j) => <blockquote key={j} className="chat-quote">{q}</blockquote>)}
           <p>{turn.text}</p>
-        </div>
-      );
+        </div>,
+      ];
     }
     const c = chars.byId(turn.character, turn.mode);
     const divider = last !== null && last !== c.id;
     last = c.id;
     const lit = flash?.i === i;
-    return (
+    return [brk,
       <div key={lit ? `${i}-${flash!.n}` : i}>
         {divider && <div className="chat-switch" role="separator">{t("talk.switched", { name: localized(c.name, lang) })}</div>}
         <div className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
           <p className="chat-who"><Avatar character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
           <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
         </div>
-      </div>
-    );
+      </div>,
+    ];
   });
 
   return (

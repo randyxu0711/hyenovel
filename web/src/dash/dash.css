@@ -93,6 +93,7 @@
 .dash .chat-quote{margin:0 0 6px; padding-left:10px; border-left:3px solid var(--dash-sig); font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .chat-switch{display:flex; align-items:center; gap:10px; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-switch::before, .dash .chat-switch::after{content:""; flex:1; height:2px; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) 0 0/6px 2px repeat-x}
+.dash .chat-ver{text-align:center; margin:2px 0 12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-turn{border-radius:8px}
 .dash .chat-turn.is-flash{animation:dash-flash 1.4s ease-out forwards}
 .dash .chat-wait{display:flex; align-items:center; gap:10px}
@@ -151,7 +152,8 @@
 .dash .paper-vers button{padding:1px 9px; border:0; border-radius:5px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-vers button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
-.dash .paper-resume, .dash .paper-old button{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
+.dash .paper-resume, .dash .paper-newver, .dash .paper-old button{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
+.dash .paper-newbar{max-width:34em; margin:4px auto 10px}
 .dash .paper-old{display:flex; align-items:center; justify-content:center; gap:12px; max-width:34em; margin:4px auto 10px; padding:6px 12px; border-radius:8px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .paper-sheet{
   --dash-t-paper:16.5px;

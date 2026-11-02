@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, DashError, type Work, type WorkDetail, type WorkMap } from "./api";
 import { errorMessage, useT, type MsgKey } from "./i18n";
 import Paper, { type Mark } from "./Paper";
 import PrintHead from "./PrintHead";
 import { useJob } from "./useJob";
+import { useSubmitDraft } from "./useSubmitDraft";
 import WorksMenu from "./WorksMenu";
 
 const ANALYZING = ["running", "notes-running"];
 const STOPPED = ["stopped", "notes-stopped"];
+const UNANALYZED = ["stale", "none"];
 
 /** 作品狀態(den 的 state + notes_ready,都是最新版的)→ 頂列那句話。 */
 export function stateText(state: string, notesReady: boolean): MsgKey {
@@ -24,7 +26,7 @@ export function stateText(state: string, notesReady: boolean): MsgKey {
 }
 
 /** 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。 */
-export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, map = null, marks = [], drawing, reload = 0 }: {
+export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, map = null, marks = [], drawing, reload = 0 }: {
   slug: string; works: Work[];
   onOpen: (slug: string) => void; onSubmitNew: () => void;
   onQuote: (q: string) => void;
@@ -42,6 +44,8 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   onPaper?: (p: { slug: string; latest: boolean; text: string }) => void;
   /** 這一版的對位資料(印字頭印的點陣張力)。 */
   map?: WorkMap | null;
+  /** 交新版成功(same = 跟最新版一字不差、沒有新增版本;version = 交成/對到的那一版)。 */
+  onNewVersion?: (r: { same: boolean; version: number; analyzing: boolean }) => void;
 }) {
   const t = useT();
   const [, setSearch] = useSearchParams();
@@ -50,11 +54,17 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
   const [resumeErr, setResumeErr] = useState<string | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rev, setRev] = useState(0);
+  const submit = useSubmitDraft(slug);
+  const slugNow = useRef(slug);
+  slugNow.current = slug;
+  const [keeping, setKeeping] = useState(false);   // 送出中的是「只存版」那顆
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
   const job = useJob(analyzing ? work!.job_id : null);
 
-  useEffect(() => { setResumeErr(null); }, [slug]);
+  const { cancel: dropDraft } = submit;
+  useEffect(() => { setResumeErr(null); dropDraft(); }, [slug, dropDraft]);   // 換篇:交稿條不跟過去(會交到別篇)
   useEffect(() => { if (job.analysed) onAnalysed?.(); }, [job.analysed]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (work) onPaper?.({ slug: work.slug, latest: work.version === Math.max(work.version, ...work.versions), text: work.text });
@@ -83,13 +93,27 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
     if (n === latest) p.delete("v"); else p.set("v", String(n));
     return p;
   });
-  const resume = () => {
+  const start = (go: () => Promise<unknown>) => {   // 續跑 / 分析這版:開了就重抓這篇並通知左欄
     setResumeErr(null);
-    api.startJob(slug, { resumeOnly: true }).then(() => { setRev(r => r + 1); onFinished?.(); },
+    go().then(() => { setRev(r => r + 1); onFinished?.(); },
       e => setResumeErr(e instanceof DashError ? e.code : "unknown"));
   };
+  const submitNew = async (analyze: boolean) => {
+    setKeeping(!analyze);
+    const r = await submit.confirm({ analyze });
+    if (!r || r.slug !== slugNow.current) return;   // 等確認的時候換了作品:別對別篇通知
+    if (r.jobError) setResumeErr(r.jobError);   // 新版存下了但沒開成分析:回最新版,頂列有「分析這版」可重按
+    onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same && !r.jobError });
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f && !submit.busy) void submit.fromFile(f);
+  };
+  const { draft } = submit;
+  const est = draft?.estimate;
   return (
-    <div className="reader">
+    <div className="reader" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
       <header className="paper-top">
         <h1 className="paper-h">
           <button type="button" className="paper-title" aria-haspopup="dialog" aria-expanded={!!menu}
@@ -106,9 +130,38 @@ export default function Reader({ slug, version, works, onOpen, onSubmitNew, onQu
           {t(stateText(work.state, work.notes_ready))}
           {analyzing && job.step && ` · ${t(`job.step.${job.step}` as MsgKey)}`}
         </span>
-        {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={resume}>{t("paper.resume")}</button>}
+        <button type="button" className="paper-newver" onClick={() => fileInput.current?.click()}>{t("newver.open")}</button>
+        <input ref={fileInput} type="file" accept=".md,.txt" hidden
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !submit.busy) void submit.fromFile(f); }} />
+        {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug, { resumeOnly: true }))}>{t("paper.resume")}</button>}
+        {work.version === latest && UNANALYZED.includes(work.state) && (
+          <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug))}>{t("newver.analyze")}</button>
+        )}
         {resumeErr && <span className="paper-state" role="alert">{t(errorMessage(resumeErr))}</span>}
       </header>
+      {(draft || submit.error) && (
+        <div className="dash-float home-box paper-newbar" role="group" aria-label={t("newver.open")}>
+          {draft && <b>{t("newver.title", { n: latest + 1 })}</b>}
+          {draft && (
+            <p className="home-meta">
+              <span>{t("feed.chars", { n: draft.chars })}</span>
+              {est && <span>{est.v ? t("feed.estimate", { min: Math.max(1, Math.round(est.v.seconds / 60)) }) : t("feed.noEstimate")}</span>}
+            </p>
+          )}
+          {submit.error && <p role="alert" className="home-msg">{t(errorMessage(submit.error))}</p>}
+          <div className="home-actions">
+            <button type="button" className="dash-key" disabled={submit.busy} onClick={submit.cancel}>{t("feed.cancel")}</button>
+            {draft && <>
+              <button type="button" className="dash-key home-go" disabled={submit.busy || !draft.chars} onClick={() => void submitNew(false)}>
+                {submit.busy && keeping ? t("feed.sending") : t("newver.keep")}
+              </button>
+              <button type="button" className="dash-key home-go" disabled={submit.busy || !draft.chars} onClick={() => void submitNew(true)}>
+                {submit.busy && !keeping ? t("feed.sending") : t("feed.go")}
+              </button>
+            </>}
+          </div>
+        </div>
+      )}
       {work.version !== latest && (
         <p className="paper-old">
           {t("paper.oldVersion", { n: work.version })}

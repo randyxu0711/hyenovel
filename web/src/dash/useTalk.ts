@@ -44,9 +44,10 @@ const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "
  *  version = 正在看的版本(undefined = 最新);逐字稿裡的引文位置(spans)都對這一版。
  *  source = 最新版原文(稿上正顯示最新版時才給):串流中的引文在這裡逐字找位置。
  *  wanted = 換作品時要打開的局(網址的 ?s=;不在這篇的清單裡就照常開最近那局)。
- *  onSession = 使用者選局、開新局、新局第一輪存下時通知(呼叫端寫回網址)。 */
+ *  onSession = 使用者選局、開新局、新局第一輪存下時通知(呼叫端寫回網址)。
+ *  reloadKey = 外面遞增 → 目前這局照目前版本重抓(交了新版,位置要對到新稿)。 */
 export function useTalk(slug: string | null, version?: number, source: string | null = null,
-  wanted: string | null = null, onSession?: (id: string | null) => void) {
+  wanted: string | null = null, onSession?: (id: string | null) => void, reloadKey = 0) {
   const chars = useCharacters();
   const { markSeen } = useSeen();
   // 記住的 id 要對照清單:找不到就當作沒選過、用預設。
@@ -141,16 +142,18 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     });
   }, [slug, load, refreshSessions, stopDrawing]);
 
-  // 換版本:目前這局照新版本重抓位置(串流中先不動,串流結束再抓)。
+  // 換版本或 reloadKey 變了:目前這局照新版本重抓位置(串流中先不動,串流結束再抓)。兩者同時變只抓一次。
   // 在 spansV 追上之前,呼叫端不該把 spans 畫到稿上。
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const busy = streaming !== null;
+  const loadedKey = useRef(reloadKey);
   useEffect(() => {
-    if (busy || spansV === version) return;
+    if (busy || (spansV === version && loadedKey.current === reloadKey)) return;
+    loadedKey.current = reloadKey;
     if (sessionRef.current) load(sessionRef.current);
     else setSpansV(version);
-  }, [version, busy, spansV, load]);
+  }, [version, busy, spansV, load, reloadKey]);
 
   const open = useCallback((id: string) => { touched.current = true; load(id); now.current.onSession?.(id); }, [load]);
   const fresh = useCallback(() => {
@@ -200,8 +203,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           setSession(d.session_id);
           if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
-            { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [] },
-            { role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans }]);
+            { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [], v: d.v },
+            { role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           markSeen(slug);
           ok = true;
           // 串流中的痕跡交給逐字稿;spans 裡先前沒找到的(如只差標點)此時補畫

@@ -44,10 +44,14 @@ export type SessionRow = {
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type Turn = {
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
+  /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有 */
+  v?: number;
 };
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {
   role: "assistant"; text: string; session_id: string; mode: string; character: string; spans: Span[];
+  /** 這輪存下當時的最新版(問與答都算這一版) */
+  v?: number;
 };
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
@@ -57,6 +61,8 @@ export type WorkMap = {
   beats: { id: string; label: string; intensity: number | null; span: Span | null }[];
   motifs: { id: string; label: string; spans: Span[] }[];
   notes: { read: string; one_line: string; points: { kind: string; title: string; body: string; question: string | null; spans: Span[] }[] } | null;
+  /** 舊分析的引文在這版還剩幾句;沒分析或分析就是這版 → null */
+  drift: { total: number; lost: number; orphaned: { id: string; type: string; label: string }[] } | null;
 };
 
 /** 非 2xx 回應 → DashError(讀 den 的 {detail, code, params})。request 與串流共用。 */
@@ -113,8 +119,8 @@ export const api = {
     fd.append("file", file);
     return request<{ filename: string; text: string; chars: number }>("/api/extract", { method: "POST", body: fd });
   },
-  submit: (text: string, title?: string) =>
-    request<SubmitResult>("/api/stories", post({ text, title })),
+  submit: (text: string, title?: string, slug?: string) =>
+    request<SubmitResult>("/api/stories", post({ text, title, ...(slug ? { slug } : {}) })),
   /** resumeOnly:只接續停住的那次分析,沒有可續的就 409 nothing-to-resume(不開新的一次)。 */
   startJob: (slug: string, opts: { resumeOnly?: boolean } = {}) =>
     request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug, ...(opts.resumeOnly ? { resume_only: true } : {}) })),

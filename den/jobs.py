@@ -131,6 +131,9 @@ class JobManager:
             reason = "done" if done else "never"
             log.info("event=submit-rejected reason=nothing-to-resume detail=%s", reason)
             raise NothingToResume(reason)
+        for old in repo.active_jobs_of_story(self.conn, st["id"]):
+            if old["source_version_id"] != sv["id"] and self.cancel(old["id"]):   # 開新版分析 = 舊版排隊 / 在跑的不用再花錢
+                log.info("event=job-superseded job=%s by-version=%s", old["id"], sv["n"])
         with self.conn:
             jid = repo.create_job(self.conn, "critique", st["id"], sv["id"],
                                   {"client": client, "runner": runner}, self._now())

@@ -14,7 +14,7 @@ function PaperSpy({ on }: { on: (s: Span) => void }) {
 function HoverSpy() { const l = useLinks(); return <output data-testid="hover" data-at={l.hoverAt ?? ""}>{l.hover ?? ""}</output>; }
 
 const map = (o: Partial<WorkMap> = {}): WorkMap => ({
-  version: 2, analysis_version: 2, notes_version: 2, beats: [], motifs: [], notes: null, ...o,
+  version: 2, analysis_version: 2, notes_version: 2, beats: [], motifs: [], notes: null, drift: null, ...o,
 });
 const notes: WorkMap["notes"] = {
   read: "讀到的", one_line: "一件事",

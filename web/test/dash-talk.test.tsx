@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation, useNavigationType } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { DRAW_MS } from "../src/dash/Paper";
+import { versionBreaks } from "../src/dash/Talk";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
@@ -49,7 +50,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
   return render(<MemoryRouter initialEntries={[path]}><Where />
     <Routes><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
 }
-function Where() { const l = useLocation(); return <output data-testid="loc">{l.pathname}{l.search}</output>; }
+function Where() { const l = useLocation(); return <output data-testid="loc" data-nav={useNavigationType()}>{l.pathname}{l.search}</output>; }
 const loc = () => screen.getByTestId("loc").textContent;
 const whoKey = () => screen.getByRole("button", { name: "陪讀者" });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
@@ -510,5 +511,89 @@ describe("邊說邊畫線", () => {
     await waitFor(() => expect(markEls(container)).toHaveLength(1));
     expect(markEls(container)[0].textContent).toBe("海很藍");
     expect(markEls(container)[0].classList.contains("is-drawing")).toBe(false);
+  });
+});
+
+describe("交新版之後", () => {
+  const submitFrom = async (path: string, newVersion = true) => {
+    versions = [1, 2];
+    rows = [row("abc")];
+    session("abc", [u("q1"), a("水牛說", "buffalo")]);
+    const r = mount(path);
+    await (await findLog()).findByText("水牛說");
+    const f = fetch as unknown as ReturnType<typeof vi.fn>;
+    const inner = f.getMockImplementation()!;
+    f.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/extract") return json({ filename: "海.md", text: "新的稿", chars: 3 });
+      if (url.startsWith("/api/estimate")) return json({ estimate: null });
+      if (url === "/api/stories") {
+        if (newVersion) versions = [1, 2, 3];
+        return json({ slug: "d1", title: "海", version: newVersion ? 3 : 2, new_version: newVersion, reused: !newVersion });
+      }
+      if (url === "/api/jobs") return json({ job_id: 9 }, 202);
+      return inner(url, init);
+    });
+    await screen.findByRole("button", { name: "交新版" });
+    fireEvent.change(r.container.querySelector('input[type="file"]')!, { target: { files: [new File(["新的稿"], "海.md")] } });
+    const before = calls().filter(c => c.startsWith("/api/sessions/abc")).length;
+    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    await waitFor(() => expect(calls()).toContain("/api/stories"));
+    return before;
+  };
+  const sessionCalls = () => calls().filter(c => c.startsWith("/api/sessions/abc")).length;
+
+  it("在 /w/d1?v=1&s=abc 交新版成功 → 網址變 /w/d1?s=abc,且這局的逐字稿重抓一次", async () => {
+    const before = await submitFrom("/w/d1?v=1&s=abc");
+    await waitFor(() => expect(loc()).toBe("/w/d1?s=abc"));
+    expect(screen.getByTestId("loc").getAttribute("data-nav")).toBe("REPLACE");   // 不多推一筆歷史
+    await waitFor(() => expect(sessionCalls()).toBe(before + 1));
+    await new Promise(r => setTimeout(r, 30));
+    expect(sessionCalls()).toBe(before + 1);
+    expect(calls().filter(c => c.startsWith("/api/sessions/abc")).pop()).toBe("/api/sessions/abc");   // 重抓的是最新版的位置
+  });
+  it("在最新版交新版成功 → 這局的逐字稿也重抓一次", async () => {
+    const before = await submitFrom("/w/d1?s=abc");
+    await waitFor(() => expect(sessionCalls()).toBe(before + 1));
+    await new Promise(r => setTimeout(r, 30));
+    expect(sessionCalls()).toBe(before + 1);
+    expect(loc()).toBe("/w/d1?s=abc");
+  });
+  it("跟最新版一字不差 → 提示「跟第 2 版一字不差」,逐字稿不重抓", async () => {
+    const before = await submitFrom("/w/d1?s=abc", false);
+    expect(await screen.findByText("跟第 2 版一字不差,沒有新增版本")).toBeTruthy();
+    expect(sessionCalls()).toBe(before);
+  });
+  it("versionBreaks:v 與前一個有值的 v 不同才斷,第一則不畫,沒 v 的沿用前一則", () => {
+    const t = (...vs: (number | undefined)[]) => vs.map(v => ({ ...u("x"), v }));
+    expect([...versionBreaks(t(1, 1, 2, 2, 3))]).toEqual([2, 4]);
+    expect(versionBreaks(t(1, 1)).size).toBe(0);
+    expect([...versionBreaks(t(1, undefined, 2))]).toEqual([2]);
+    expect(versionBreaks([]).size).toBe(0);
+  });
+  it("換版處畫「第 n 版」分隔線;全同版沒有", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }, { ...u("二"), v: 2 }, { ...a("再讀", "hyena"), v: 2 }]);
+    mount();
+    await (await findLog()).findByText("再讀");
+    expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
+  });
+  it("交新版後繼續聊:串流進來的問與答帶 den 給的 v,不用重新整理就出現分隔線", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
+    talkReply = () => sse(["token", { text: "好" }],
+      ["message", { role: "assistant", text: "好", session_id: "s1", mode: "slow", character: "hyena", spans: [], v: 2 }],
+      ["done", { ok: true, session_id: "s1" }]);
+    mount();
+    await (await findLog()).findByText("我先讀");
+    say("新稿呢");
+    await (await findLog()).findByText("好");
+    expect(log().getAllByRole("separator").map(s => s.textContent)).toEqual(["— 第 2 版 —"]);
+  });
+  it("全是第 1 版 → 沒有版本分隔線", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
+    mount();
+    await (await findLog()).findByText("我先讀");
+    expect(log().queryAllByRole("separator")).toEqual([]);
   });
 });

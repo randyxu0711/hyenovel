@@ -546,3 +546,54 @@ def test_resume_only_returns_active(conn):
     first = m.submit("mini")
     out = m.submit("mini", resume_only=True)
     assert out["job_id"] == first["job_id"] and out["existing"] and _jobs_count(conn) == 1
+
+
+def _add_v2(conn):
+    st = repo.story_by_slug(conn, "mini")
+    with conn:
+        repo.add_source_version(conn, st["id"], "新版的稿", 5.0)
+
+
+def test_submit_new_version_cancels_queued_old_version_job(conn, caplog):
+    m = _mgr(conn, GatedRun())
+    old = m.submit("mini")["job_id"]
+    _add_v2(conn)
+    with caplog.at_level(logging.INFO, logger="hyenovel"):
+        out = m.submit("mini")
+    assert out["existing"] is False and out["job_id"] != old
+    assert _state(conn, old) == "cancelled"
+    assert _state(conn, out["job_id"]) == "queued"
+    assert f"event=job-superseded job={old} by-version=2" in caplog.text
+
+
+def test_submit_new_version_cancels_running_old_version_job(conn):
+    async def main():
+        run = GatedRun()
+        m = _mgr(conn, run)
+        old = m.submit("mini")["job_id"]
+        w = asyncio.create_task(m.worker())
+        await asyncio.wait_for(run.started.wait(), 5)
+        _add_v2(conn)
+        new = m.submit("mini")
+        assert new["existing"] is False
+        await _until(lambda: _state(conn, old) == "cancelled", "舊版取消落地")
+        run.gate.set()
+        await _stop(w)
+    asyncio.run(main())
+
+
+def test_submit_same_version_does_not_cancel(conn):
+    m = _mgr(conn, GatedRun())
+    first = m.submit("mini")["job_id"]
+    again = m.submit("mini")
+    assert again["existing"] is True and again["job_id"] == first
+    assert _state(conn, first) == "queued"
+
+
+def test_resume_only_does_not_cancel_old_version_job(conn):
+    m = _mgr(conn, GatedRun())
+    old = m.submit("mini")["job_id"]
+    _add_v2(conn)
+    with pytest.raises(jobs.NothingToResume):
+        m.submit("mini", resume_only=True)
+    assert _state(conn, old) == "queued"

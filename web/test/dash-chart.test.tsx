@@ -17,7 +17,7 @@ function PaperSpy({ on }: { on: (s: Span) => void }) {
 const INT = [0.2, 0.7, 0.4, null, 0.9, 0.1, 0.5, 0.3];
 const beats = INT.map((intensity, i) => ({ id: `b${i}`, label: `節拍${i}`, intensity, span: { quote: `q${i}`, start: i * 10, end: i * 10 + 5 } }));
 const map = (o: Partial<WorkMap> = {}): WorkMap => ({
-  version: 2, analysis_version: 2, notes_version: null, beats, motifs: [], notes: null, ...o,
+  version: 2, analysis_version: 2, notes_version: null, beats, motifs: [], notes: null, drift: null, ...o,
 });
 function mount(m: WorkMap | null, marks: Mark[] = [], on = vi.fn(), error: string | null = null) {
   const r = render(<CharactersProvider value={makeCharacters([hyena, buffalo], "hyena")}><LinksProvider>
@@ -30,6 +30,20 @@ const cols = (c: HTMLElement) => [...c.querySelectorAll<HTMLButtonElement>("butt
 beforeEach(() => setLang("zh-Hant"));
 
 describe("結構圖分頁", () => {
+  it("drift null → 不顯示失根資訊", () => {
+    const { container } = mount(map());
+    expect(container.textContent).not.toMatch(/找不到了|都還找得到/);
+  });
+  it("有失根 → 顯示 2/3 並列出失根觀察", () => {
+    const { container } = mount(map({ drift: { total: 3, lost: 2, orphaned: [{ id: "m1", type: "motif", label: "海" }] } }));
+    expect(container.textContent).toContain("2/3");
+    expect(container.textContent).toContain("這些觀察已經沒有根據");
+    expect(screen.getByText("海")).toBeTruthy();
+  });
+  it("lost 為 0 → 引文都還找得到", () => {
+    mount(map({ drift: { total: 3, lost: 0, orphaned: [] } }));
+    expect(screen.getByText("引文在這版都還找得到")).toBeTruthy();
+  });
   it("每個 beat 一欄、每欄 10 顆點,亮的 = round(intensity×10);最高那欄 is-peak;段號用點陣字", () => {
     const { container } = mount(map());
     const cs = cols(container);
