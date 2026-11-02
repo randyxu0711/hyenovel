@@ -381,3 +381,12 @@
 @keyframes dash-blink{0%,94%,100%{transform:scaleY(1)} 96%{transform:scaleY(.1)}}
 @keyframes dash-scan{0%{transform:translate(-6px,-1px)} 45%{transform:translate(-6px,4px)} 50%{transform:translate(-3px,-1px)} 95%{transform:translate(-3px,4px)} 100%{transform:translate(-6px,-1px)}}
 @media (prefers-reduced-motion:reduce){ .dash .blob .lid, .dash .blob[data-state] .shape, .dash .blob[data-state] .eyes{animation:none; transition:none} }
+/* 分析中:步驟、已跑時間、停下;稿頂一條鉛筆線來回 */
+.dash .running{display:flex; align-items:center; gap:8px; font-size:var(--dash-t-sm); color:var(--dash-ink); padding:3px 4px 3px 12px; border-radius:999px; background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
+.dash .running .t{font-variant-numeric:tabular-nums; color:var(--dash-ink-2)}
+.dash .running .ib{width:24px; height:24px}
+.dash .running .ib .ico{width:14px; height:14px}
+.dash .paper-track{position:absolute; left:0; right:0; bottom:0; height:2px; overflow:hidden; pointer-events:none}
+.dash .paper-track::before{content:""; position:absolute; top:0; bottom:0; left:0; width:22%; border-radius:2px; background:color-mix(in srgb, var(--dash-paper-ink-2) 70%, transparent); animation:dash-sweep 2.4s cubic-bezier(.45,0,.55,1) infinite alternate}
+@keyframes dash-sweep{from{left:0} to{left:78%}}
+@media (prefers-reduced-motion:reduce){ .dash .paper-track::before{animation:none} }

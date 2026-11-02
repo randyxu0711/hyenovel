@@ -132,6 +132,8 @@ export const api = {
   startJob: (slug: string, opts: { resumeOnly?: boolean } = {}) =>
     request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug, ...(opts.resumeOnly ? { resume_only: true } : {}) })),
   jobEvents: (jobId: number) => stream(`/api/jobs/${jobId}/events`),
+  job: (id: number) => request<{ id: number; state: string; step: string | null; created_at: number }>(`/api/jobs/${id}`),
+  cancelJob: (id: number) => request<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */
   talk: (slug: string, body: { session: string | null; message: string; character: string; quotes: string[] }) =>
     stream(`/api/discuss/${encodeURIComponent(slug)}`, post({

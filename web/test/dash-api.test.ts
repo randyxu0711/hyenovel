@@ -28,6 +28,16 @@ describe("dash api", () => {
     expect(f.mock.calls.map(c => c[0])).toEqual([
       "/api/works", "/api/works/d01/sessions", "/api/sessions?limit=5", "/api/estimate?chars=100"]);
   });
+  it("job 打 GET /api/jobs/{id};cancelJob 打 POST /api/jobs/{id}/cancel", async () => {
+    const f = vi.fn(async (_u: string, _i?: RequestInit) => json({ id: 7, state: "running", step: null, created_at: 1, ok: true }));
+    vi.stubGlobal("fetch", f);
+    expect((await api.job(7)).created_at).toBe(1);
+    await api.cancelJob(7);
+    expect(f.mock.calls[0][0]).toBe("/api/jobs/7");
+    expect(f.mock.calls[0][1]?.method ?? "GET").toBe("GET");
+    expect(f.mock.calls[1][0]).toBe("/api/jobs/7/cancel");
+    expect(f.mock.calls[1][1]?.method).toBe("POST");
+  });
   it("talk 送 POST 並解析 SSE;網路斷 → den-down", async () => {
     const body = new ReadableStream({ start(c) {
       c.enqueue(new TextEncoder().encode('data: {"event":"token","data":{"t":"嗨"}}\n\n')); c.close(); } });

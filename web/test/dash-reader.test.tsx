@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom";
 import Reader, { stateText, shownVersions, dotOf } from "../src/dash/Reader";
 import { api, DashError, type WorkDetail } from "../src/dash/api";
@@ -197,6 +197,7 @@ describe("分析進度", () => {
   const mountSpy = (w: object, onFinished = vi.fn()) => {
     setLang("zh-Hant");
     vi.spyOn(api, "work").mockResolvedValue(w as WorkDetail);
+    if (!vi.isMockFunction(api.job)) vi.spyOn(api, "job").mockReturnValue(new Promise(() => {}));
     render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
       <Reader slug="d1" onQuote={vi.fn()} onFinished={onFinished} />
     </LinksProvider></CharactersProvider></MemoryRouter>);
@@ -212,14 +213,13 @@ describe("分析進度", () => {
     await waitFor(() => expect(onFinished).toHaveBeenCalled());
     await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
   });
-  it("分析中時頂列說「分析中」與目前步驟", async () => {
+  it("SSE 送來的步驟蓋過作品 state", async () => {
     vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
       yield { event: "phase", data: { name: "reviewer", status: "start" } };
       await new Promise(() => {});
     });
     mountSpy(work({ state: "running", job_id: 5 }));
-    expect((await screen.findByRole("status")).textContent).toContain("分析中");
-    await screen.findByText(/寫備課筆記/);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("寫筆記"));
   });
   it("只收到終態 state 事件(已結束的 job)也算結束,重抓並通知", async () => {
     vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
@@ -238,6 +238,85 @@ describe("分析進度", () => {
     mountSpy(work({}));
     await screen.findByText("內文");
     expect(screen.queryByRole("button", { name: /筆記/ })).toBeNull();
+  });
+});
+
+describe("稿頂分析進度", () => {
+  const T0 = 1_800_000_000;
+  const work = (o: object) => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "running", job_id: 7, notes_ready: false, versions: [2], ...o });
+  const hang = () => vi.spyOn(api, "jobEvents").mockImplementation(async function* () { await new Promise(() => {}); });
+  const jobIs = (o: object = {}) => vi.spyOn(api, "job").mockResolvedValue({ id: 7, state: "running", step: null, created_at: T0 - 65, ...o });
+  const mount = (w: object, onFinished = vi.fn()) => {
+    setLang("zh-Hant");
+    vi.spyOn(api, "work").mockResolvedValue(w as WorkDetail);
+    render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
+      <Reader slug="d1" onQuote={vi.fn()} onFinished={onFinished} />
+    </LinksProvider></CharactersProvider></MemoryRouter>);
+    return onFinished;
+  };
+  const running = () => document.querySelector(".paper-top .running");
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] }); vi.setSystemTime(T0 * 1000); });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it("觀察中、從 job 的 created_at 接著算、每秒走;不再說「分析中」", async () => {
+    hang(); jobIs();
+    mount(work({}));
+    await screen.findByText("1:05");
+    expect(running()!.textContent).toContain("觀察中");
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(screen.getByText("1:06")).toBeTruthy();
+    expect(screen.queryByText("分析中")).toBeNull();
+    expect(document.querySelector(".paper-top .paper-track")).not.toBeNull();
+  });
+  it("重新整理後 SSE 還沒送步驟:notes-running → 寫筆記", async () => {
+    hang(); jobIs();
+    mount(work({ state: "notes-running" }));
+    await screen.findByText("1:05");
+    expect(running()!.textContent).toContain("寫筆記");
+  });
+  it("job 還在排隊:有步驟字、沒有計時", async () => {
+    hang(); jobIs({ state: "queued" });
+    mount(work({}));
+    await waitFor(() => expect(api.job).toHaveBeenCalledWith(7));
+    await act(async () => { await Promise.resolve(); });
+    expect(running()!.textContent).toContain("觀察中");
+    expect(running()!.querySelector(".t")).toBeNull();
+  });
+  it("停下:打 cancel,之後重抓這篇", async () => {
+    vi.useRealTimers();
+    hang(); jobIs();
+    const cancel = vi.spyOn(api, "cancelJob").mockResolvedValue({ ok: true });
+    const onFinished = mount(work({}));
+    const stop = await screen.findByRole("button", { name: "停下" });
+    expect(stop.querySelector("svg.ico")).not.toBeNull();
+    fireEvent.click(stop);
+    expect(cancel).toHaveBeenCalledWith(7);
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+    expect(onFinished).toHaveBeenCalled();
+  });
+  it("停下時 job 剛好跑完(409):不報錯,照樣重抓", async () => {
+    vi.useRealTimers();
+    hang(); jobIs();
+    vi.spyOn(api, "cancelJob").mockRejectedValue(new DashError(409, "unknown"));
+    mount(work({}));
+    fireEvent.click(await screen.findByRole("button", { name: "停下" }));
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+  it("抓 job 失敗:只顯示步驟字", async () => {
+    hang(); vi.spyOn(api, "job").mockRejectedValue(new DashError(0, "den-down"));
+    mount(work({}));
+    await waitFor(() => expect(running()).not.toBeNull());
+    await act(async () => { await Promise.resolve(); });
+    expect(running()!.textContent).toContain("觀察中");
+    expect(running()!.querySelector(".t")).toBeNull();
+  });
+  it.each(["ready", "stopped", "stale"])("%s:照舊狀態字,沒有進度與鉛筆線", async state => {
+    mount(work({ state, job_id: null }));
+    await screen.findByText("內文");
+    expect(running()).toBeNull();
+    expect(document.querySelector(".paper-top .paper-track")).toBeNull();
+    expect(screen.getByRole("status").textContent).not.toBe("");
   });
 });
 

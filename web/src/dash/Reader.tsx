@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, DashError, type WorkDetail } from "./api";
+import { clock, stepOf } from "./clock";
 import DropSheet from "./DropSheet";
 import Icon from "./Icon";
 import { errorMessage, useLang, useT, type MsgKey } from "./i18n";
@@ -180,10 +181,9 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
               onClick={() => pickVersion(latest)}><Icon name="back" /></button>
           </span>
         )}
-        <span className="paper-state" role="status">
-          {t(stateText(work.state, work.notes_ready))}
-          {analyzing && job.step && ` · ${t(`job.step.${job.step}` as MsgKey)}`}
-        </span>
+        {analyzing
+          ? <Running jobId={work.job_id!} state={work.state} sseStep={job.step} onStopped={() => { setRev(r => r + 1); onFinished?.(); }} />
+          : <span className="paper-state" role="status">{t(stateText(work.state, work.notes_ready))}</span>}
         {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug, { resumeOnly: true }))}>{t("paper.resume")}</button>}
         {work.version === latest && UNANALYZED.includes(work.state) && (
           <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug))}>{t("newver.analyze")}</button>
@@ -195,6 +195,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
               onClick={() => setPaperFlow(f)}><Icon name={f === "v" ? "vert" : "hori"} /></button>
           ))}
         </div>
+        {analyzing && <i className="paper-track" aria-hidden="true" />}
       </header>
       {(draft || submit.error) && (
         <div className="dash-float home-box paper-newbar" role="group" aria-label={t("newver.open")}>
@@ -222,5 +223,33 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
       <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote}
         old={work.version !== latest} obs={obs} />
     </div>
+  );
+}
+
+function Running({ jobId, state, sseStep, onStopped }: {
+  jobId: number; state: string; sseStep: string | null; onStopped: () => void;
+}) {
+  const t = useT();
+  const [since, setSince] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    let live = true;
+    setSince(null);
+    api.job(jobId).then(j => { if (live && j.state === "running") setSince(j.created_at); }, () => {});
+    return () => { live = false; };
+  }, [jobId]);
+  useEffect(() => {
+    if (since === null) return;
+    setNow(Date.now() / 1000);
+    const id = setInterval(() => setNow(Date.now() / 1000), 1000);
+    return () => clearInterval(id);
+  }, [since]);
+  const stop = () => { api.cancelJob(jobId).catch(() => {}).finally(onStopped); };
+  return (
+    <span className="running">
+      <span role="status">{t(stepOf(sseStep, state) === "notes" ? "run.notes" : "run.observe")}</span>
+      {since !== null && <span className="t">{clock(now - since)}</span>}
+      <button type="button" className="ib" aria-label={t("run.stop")} title={t("run.stop")} onClick={stop}><Icon name="stop" /></button>
+    </span>
   );
 }
