@@ -82,10 +82,11 @@ def test_sessions_preview_mode_and_turns(c):
     assert [s["session"] for s in views.sessions(c, "x1")] == ["mid", "new", "old", "early"]
     assert got["new"] == {"session": "new", "started_at": 11.0, "last_at": 13.0, "turns": 1,
                           "character": "hyena", "mode": "slow", "preview": "問" * 60, "version": 2,
-                          "legacy": False}
+                          "legacy": False, "versions": [2, 2]}
     assert got["old"]["version"] == 1 and got["old"]["character"] == "buffalo"
     assert got["mid"]["version"] == 1
     assert got["early"]["version"] is None
+    assert got["mid"]["versions"] == [1, 2] and got["old"]["versions"] == [1, 1]   # 發言當下的原文版本範圍
     with pytest.raises(LookupError):
         views.sessions(c, "nope")
 

@@ -52,6 +52,34 @@ def _opening(text: str) -> str:
     return flat[:_SHOWN] + ("…" if len(flat) > _SHOWN else "")
 
 
+def order_beats(beats: list[dict], edges: list[dict]) -> list[dict]:
+    """沿 precedes 邊排成一條鏈;沒邊、斷鏈、分岔、有環 → 退回依 span.start(找不到位置的放最後,同位置保持原序)。"""
+    ids = {b["id"] for b in beats}
+    nxt = {e["from"]: e["to"] for e in edges
+           if e["type"] == "precedes" and e["from"] in ids and e["to"] in ids}
+    heads = [b for b in beats if b["id"] not in nxt.values()]
+    if len(heads) == 1:
+        by_id = {b["id"]: b for b in beats}
+        chain, cur = [], heads[0]["id"]
+        while cur in by_id and by_id[cur] not in chain:
+            chain.append(by_id[cur])
+            cur = nxt.get(cur)
+        if len(chain) == len(beats):
+            return chain
+    def key(b):
+        start = (b["span"] or {}).get("start")
+        return (start is None, start or 0)
+    return sorted(beats, key=key)
+
+
+def _curve(analysis: dict | None) -> list[float]:
+    """張力指紋:beat 依文本順序的 intensity,null 略過;沒分析 → []。"""
+    body = (analysis or {}).get("body") or {}
+    beats = [{"id": n["id"], "intensity": n.get("intensity"), "span": None}
+             for n in body.get("nodes") or [] if n.get("type") == "beat"]
+    return [b["intensity"] for b in order_beats(beats, body.get("edges") or []) if b["intensity"] is not None]
+
+
 def rows(conn) -> list[dict]:
     """每篇一列(含最新版全文與 latest_sv_id)。固定 5 次查詢。"""
     cur: dict[int, dict] = {}
@@ -71,7 +99,7 @@ def rows(conn) -> list[dict]:
                     "version": r["latest_n"], "chars": len(r["latest_text"]),
                     "opening": _opening(r["latest_text"]), "submitted_at": r["submitted_at"],
                     "talked_at": r["talked_at"], "state": st,
-                    "updated_at": active.get(r["id"], r["submitted_at"]),
+                    "updated_at": active.get(r["id"], r["submitted_at"]), "curve": _curve(ana),
                     "job_id": job["id"] if live else None,
                     "error_class": job["error_class"] if live else None})
     return out

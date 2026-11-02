@@ -225,3 +225,22 @@ def test_listing_updated_at(c):
     assert works.listing(c, None)[0]["updated_at"] == 7.0
     nid, _ = repo.add_artifact(c, sid, vid, "notes", 1, {"n": 1}, {}, 8.0)
     assert works.listing(c, None)[0]["updated_at"] == 8.0
+
+
+def test_listing_curve_follows_beat_order_and_skips_null(c):
+    sid, vid = _story(c, "d01", "t", "x", 1.0)
+    body = {"title": "t", "nodes": [   # 陣列順序故意打亂,文本順序由 precedes 決定
+        {"id": "b3", "type": "beat", "label": "三", "intensity": 0.9},
+        {"id": "t1", "type": "theme", "label": "主題"},
+        {"id": "b1", "type": "beat", "label": "一", "intensity": 0.2},
+        {"id": "b2", "type": "beat", "label": "二", "intensity": None}],
+        "edges": [{"from": "b1", "to": "b2", "type": "precedes"},
+                  {"from": "b2", "to": "b3", "type": "precedes"}]}
+    aid, _ = repo.add_artifact(c, sid, vid, "analysis", 1, body, {}, 2.0)
+    repo.set_current(c, sid, "analysis", aid)
+    assert works.listing(c, None)[0]["curve"] == [0.2, 0.9]
+
+
+def test_listing_curve_empty_without_analysis(c):
+    _story(c, "d01", "t", "x", 1.0)
+    assert works.listing(c, None)[0]["curve"] == []

@@ -104,26 +104,6 @@ def work_detail(conn, slug: str, v: int | None = None) -> dict:
             "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
 
 
-def _order_beats(beats: list[dict], edges: list[dict]) -> list[dict]:
-    """沿 precedes 邊排成一條鏈;沒邊、斷鏈、分岔、有環 → 退回依 span.start(找不到位置的放最後,同位置保持原序)。"""
-    ids = {b["id"] for b in beats}
-    nxt = {e["from"]: e["to"] for e in edges
-           if e["type"] == "precedes" and e["from"] in ids and e["to"] in ids}
-    heads = [b for b in beats if b["id"] not in nxt.values()]
-    if len(heads) == 1:
-        by_id = {b["id"]: b for b in beats}
-        chain, cur = [], heads[0]["id"]
-        while cur in by_id and by_id[cur] not in chain:
-            chain.append(by_id[cur])
-            cur = nxt.get(cur)
-        if len(chain) == len(beats):
-            return chain
-    def key(b):
-        start = (b["span"] or {}).get("start")
-        return (start is None, start or 0)
-    return sorted(beats, key=key)
-
-
 def _drift(nodes: list[dict], text: str) -> dict:
     """舊分析的引文在 text 裡還站得住幾句:total/lost 為條數,orphaned = 有引文但全找不到的節點。"""
     total = lost = 0
@@ -168,7 +148,7 @@ def work_map(conn, slug: str, v: int | None = None) -> dict:
             sp = spans_of(n)
             beats.append({"id": n["id"], "label": n["label"], "intensity": n.get("intensity"),
                           "span": sp[0] if sp else None})
-    out["beats"] = _order_beats(beats, ana["body"].get("edges") or [])
+    out["beats"] = works.order_beats(beats, ana["body"].get("edges") or [])
     out["motifs"] = [{"id": n["id"], "label": n["label"], "spans": spans_of(n)}
                      for n in nodes if n["type"] == "motif"]
     picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"), None)
@@ -190,6 +170,7 @@ def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:
     by: dict[str, list[dict]] = {}
     for u in repo.discussions_with_utterances(conn, st["id"]):
         by.setdefault(u["external_id"], []).append(u)
+    made = [sv["created_at"] for sv in repo.source_versions(conn, st["id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     out = []
     for sid, us in by.items():
         asst = [u for u in us if u["role"] == "assistant"]
@@ -202,9 +183,20 @@ def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:
                     "mode": asst[-1]["mode"] if asst else None,
                     "preview": us[0]["text"][:60],   # 這局的第一句話(us 依 ts, seq 排)
                     "version": versions.get(asst[-1]["analysis_fp"]) if asst else None,
-                    "legacy": is_legacy})
+                    "legacy": is_legacy, "versions": _span(made, us)})
     out.sort(key=lambda s: s["last_at"], reverse=True)
     return out
+
+
+def _at(made: list[float], ts: float) -> int:
+    """ts 當下的原文版本(made = 各版建立時間,依 n 升序)。"""
+    return max(bisect.bisect_right(made, ts), 1)
+
+
+def _span(made: list[float], us: list[dict]) -> list[int]:
+    """這局發言(含作者)當下的原文版本範圍 [lo, hi]。局由發言組成,us 不會空。"""
+    vs = [_at(made, u["ts"]) for u in us]
+    return [min(vs), max(vs)]
 
 
 def session_turns(conn, session: str, v: int | None = None) -> dict:
@@ -232,7 +224,7 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
         turns.append({"role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
                       "character": u["character"], "quotes": u["quotes"] or [],
                       "spans": spans.locate_all(qs, shown["text"]),
-                      "v": max(bisect.bisect_right(made, u["ts"]), 1)})   # 說話當時的版本
+                      "v": _at(made, u["ts"])})   # 說話當時的版本
     return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
             "legacy": not any(u["role"] == "assistant" and u["mode"] is not None for u in us),
             "version": shown["n"], "turns": turns}
