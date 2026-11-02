@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Turn } from "./api";
-import Avatar from "./Avatar";
+import type { Character } from "./api";
+import Blob, { type BlobState } from "./Blob";
+import Icon from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
 import { useLinks } from "./links";
@@ -24,10 +26,26 @@ export function versionBreaks(turns: Turn[]): Set<number> {
   return out;
 }
 
+export function speakerChanges(turns: Turn[], byId: (id: string | null, m?: string | null) => Character): Set<number> {
+  const out = new Set<number>();
+  let prev: string | null = null;
+  turns.forEach((turn, i) => {
+    if (turn.role !== "assistant") return;
+    const id = byId(turn.character, turn.mode).id;
+    if (id !== prev) out.add(i);
+    prev = id;
+  });
+  return out;
+}
+
+export function composerState(o: { streaming: boolean; analyzing: boolean }): BlobState {
+  return o.streaming ? "speaking" : o.analyzing ? "scanning" : "reading";
+}
+
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
  *  稿上的痕跡被點時,捲到說那句的訊息並閃一下(onReveal 讓右欄切回對話)。 */
-export default function Talk({ talk, version, quotes, onDropQuote, onSent, onReveal }: {
-  talk: TalkState; quotes: string[];
+export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal }: {
+  talk: TalkState; quotes: string[]; analyzing: boolean;
   /** 正在看的版本號(引文對不到時的說明用)。 */
   version: number;
   onDropQuote: (i: number) => void; onSent: () => void; onReveal: () => void;
@@ -82,11 +100,14 @@ export default function Talk({ talk, version, quotes, onDropQuote, onSent, onRev
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(); }
   };
 
-  // 逐則標說話者;與上一位 assistant 不同人時,前面插一條「換 X 來讀」。
-  let last: string | null = null;
   const breaks = versionBreaks(turns);
+  const who = speakerChanges(turns, chars.byId);
+  const whoLine = (c: Character) => (
+    <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+  );
+  let lastId: string | null = null;
   const rows = turns.map((turn: Turn, i) => {
-    const brk = breaks.has(i) && <div key={`v${i}`} className="chat-ver" role="separator">{t("talk.versionBreak", { n: turn.v! })}</div>;
+    const brk = breaks.has(i) && <div key={`v${i}`} className="chat-ver"><Icon name="sheet2" /><span>{t("talk.versionBreak", { n: turn.v! })}</span></div>;
     if (turn.role !== "assistant") {
       return [brk,
         <div key={i} className="chat-me">
@@ -96,16 +117,12 @@ export default function Talk({ talk, version, quotes, onDropQuote, onSent, onRev
       ];
     }
     const c = chars.byId(turn.character, turn.mode);
-    const divider = last !== null && last !== c.id;
-    last = c.id;
+    lastId = c.id;
     const lit = flash?.i === i;
     return [brk,
-      <div key={lit ? `${i}-${flash!.n}` : i}>
-        {divider && <div className="chat-switch" role="separator">{t("talk.switched", { name: localized(c.name, lang) })}</div>}
-        <div className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
-          <p className="chat-who"><Avatar character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
-          <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
-        </div>
+      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
+        {who.has(i) && whoLine(c)}
+        <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
       </div>,
     ];
   });
@@ -123,27 +140,33 @@ export default function Talk({ talk, version, quotes, onDropQuote, onSent, onRev
         )}
         {streaming !== null && (
           <div className="chat-turn">
-            <p className="chat-who"><Avatar character={me} size={22} /><b style={{ color: me.colors[mode].text }}>{nameOf(whoId)}</b></p>
+            {lastId !== me.id && whoLine(me)}
             {streaming ? <p className="chat-text">{streaming}</p>
-              : <p className="chat-wait" role="status"><span>{t("talk.waiting", { name: nameOf(whoId) })}</span><i className="chat-pen" aria-hidden="true" /></p>}
+              : <p className="chat-wait" role="status">{t("talk.waiting", { name: nameOf(whoId) })}</p>}
           </div>
         )}
       </div>
       {error && <p className="chat-error" role="alert">{t(errorMessage(error.code))}</p>}
       {legacy && <p className="chat-error">{t("err.legacy-session")}</p>}
-      <form className="dash-float chat-form" onSubmit={e => { e.preventDefault(); void submit(); }}>
-        {quotes.map((q, i) => (
-          <div key={i} className="chat-carry">
-            <blockquote className="chat-quote">{q}</blockquote>
-            <button type="button" aria-label={t("talk.dropQuote")} onClick={() => onDropQuote(i)}>×</button>
-          </div>
-        ))}
+      {quotes.length > 0 && (
+        <div className="chat-carries">
+          {quotes.map((q, i) => (
+            <div key={i} className="chat-carry">
+              <blockquote className="chat-quote">{q}</blockquote>
+              <button type="button" className="ib" aria-label={t("talk.dropQuote")} title={t("talk.dropQuote")} onClick={() => onDropQuote(i)}><Icon name="close" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <form className="composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
+        <div className="who"><Blob character={me} size={54} state={composerState({ streaming: streaming !== null, analyzing })} /></div>
         <textarea value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
           placeholder={t("talk.placeholder", { name: nameOf(whoId) })}
           onChange={e => setDraft(e.target.value)} onKeyDown={onKey} />
-        <div className="chat-row">
+        <div className="bar">
           <WhoPick me={me} onPick={talk.setWho} />
-          <button type="submit" className="dash-key chat-send" disabled={legacy || !draft.trim() || streaming !== null}>{t("talk.send")}</button>
+          <button type="submit" className="ib send" aria-label={t("talk.send")} title={t("talk.send")}
+            disabled={legacy || !draft.trim() || streaming !== null}><Icon name="send" /></button>
         </div>
       </form>
     </div>

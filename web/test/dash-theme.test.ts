@@ -39,7 +39,7 @@ describe("theme", () => {
     expect(getThemeState().mode).toBe("dark");
     expect(v("desk")).toBe(olive.dark.desk);
   });
-  it("toggleDayNight:系統暗+pref=system → light,再 → dark", () => {
+  it("toggleDayNight:系統暗+pref=system → light;再翻回暗 = 系統那邊 → pref 回「跟系統」", () => {
     const mm = window.matchMedia;
     window.matchMedia = ((q: string) => ({ matches: q.includes("dark"), addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
     try {
@@ -51,6 +51,8 @@ describe("theme", () => {
       expect(localStorage.getItem("hyenovel.mode")).toBe("light");
       toggleDayNight();
       expect(getThemeState().mode).toBe("dark");
+      expect(getThemeState().pref).toBe("system");
+      expect(localStorage.getItem("hyenovel.mode")).toBe("system");
     } finally { window.matchMedia = mm; }
   });
   it("dash.css 不含色碼", () => {

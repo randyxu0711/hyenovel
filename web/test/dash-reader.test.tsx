@@ -1,12 +1,16 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { MemoryRouter, useLocation, useSearchParams } from "react-router-dom";
-import Reader, { stateText } from "../src/dash/Reader";
+import Reader, { stateText, shownVersions, dotOf } from "../src/dash/Reader";
 import { api, DashError, type WorkDetail } from "../src/dash/api";
 import { setLang, translate } from "../src/dash/i18n";
 import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import { hyena, buffalo, deer } from "./dash-fixtures";
+import { setPaperFlow } from "../src/dash/paperFlow";
+
+// 稿文含數字;直排會把短數字包成縱中橫、拆開文字節點。這檔的文字比對一律在橫排做。
+beforeEach(() => setPaperFlow("h"));
 
 afterEach(() => vi.unstubAllGlobals());
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
@@ -17,8 +21,7 @@ function Where() { const l = useLocation(); return <output data-testid="loc">{l.
 function Routed(props: { onQuote: (q: string) => void; reload?: number; onOpen?: (s: string) => void }) {
   const [search] = useSearchParams();
   const v = Number(search.get("v"));
-  return <Reader slug="d1" version={v > 0 ? v : undefined} works={[{ slug: "d1", title: "海", version: 2, chars: 9, updated_at: 1, state: "ready" }, { slug: "d2", title: "山", version: 1, chars: 3, updated_at: 0, state: "none" }]}
-    onOpen={props.onOpen ?? vi.fn()} onSubmitNew={vi.fn()} onQuote={props.onQuote} reload={props.reload} />;
+  return <Reader slug="d1" version={v > 0 ? v : undefined} onQuote={props.onQuote} reload={props.reload} />;
 }
 const tree = (onQuote: (q: string) => void, reload?: number, onOpen?: (s: string) => void) => (
   <MemoryRouter initialEntries={["/w/d1"]}>
@@ -50,25 +53,53 @@ describe("Reader(稿窗格)", () => {
     expect(v2.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByText(/這是第/)).toBeNull();
   });
-  it("點 v1 → 網址 ?v=1、出現「這是第 1 版」;回到最新版 → 拿掉 ?v=", async () => {
+  it("點 v1 → 網址 ?v=1、出現「舊版」膠囊;回到最新版 → 拿掉 ?v=", async () => {
     await mount(detail());
     fireEvent.click(screen.getByRole("button", { name: "v1" }));
     expect(loc()).toBe("/w/d1?v=1");
-    expect(await screen.findByText("這是第 1 版")).toBeTruthy();
+    expect(await screen.findByText("舊版")).toBeTruthy();
     expect(await screen.findByText("第 1 版的字。")).toBeTruthy();
     expect(screen.getByRole("button", { name: "v1" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "回到最新版" }));
     expect(loc()).toBe("/w/d1");
     expect(await screen.findByText("第一段。")).toBeTruthy();
-    expect(screen.queryByText(/這是第/)).toBeNull();
+    expect(screen.queryByText("舊版")).toBeNull();
   });
-  it("標題鍵打開作品浮層,選另一篇", async () => {
-    const onOpen = vi.fn();
-    await mount(detail(), vi.fn(), onOpen);
-    fireEvent.click(screen.getByRole("button", { name: "海" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /山/ }));
-    expect(onOpen).toHaveBeenCalledWith("d2");
+  it("標題是純文字:沒有 ▾、不是按鈕;也沒有印字頭", async () => {
+    const { container } = await mount(detail());
+    expect(screen.queryByRole("button", { name: /海/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: "海" }).textContent).toBe("海");
+    expect(container.querySelector(".dash-printhead, .dash-print")).toBeNull();
+  });
+  it("5 版:版本條露 3 版,「所有版本」浮層列 5 列各帶日期與點;點 v2 → ?v=2", async () => {
+    const day = 86400;
+    const history = [1, 2, 3, 4, 5].map(n => ({ n, at: Date.now() / 1000 - (6 - n) * day * 3, analysed: n !== 3, noted: n === 1 }));
+    await mount(detail({ version: 5, versions: [1, 2, 3, 4, 5], history }));
+    const bar = within(screen.getByRole("group", { name: "版本" }));
+    expect(bar.getAllByRole("button", { name: /^v\d$/ }).map(b => b.textContent)).toEqual(["v3", "v4", "v5"]);
+    fireEvent.click(bar.getByRole("button", { name: "所有版本" }));
+    const dlg = within(screen.getByRole("dialog", { name: "所有版本" }));
+    const rows = dlg.getAllByRole("button");
+    expect(rows).toHaveLength(5);
+    expect(rows[0].querySelector(".vdot")!.getAttribute("data-dot")).toBe("full");
+    expect(rows[1].querySelector(".vdot")!.getAttribute("data-dot")).toBe("half");
+    expect(rows[2].querySelector(".vdot")!.getAttribute("data-dot")).toBe("empty");
+    expect(rows.every(r => r.querySelector(".vdot-when")!.textContent!.length > 0)).toBe(true);
+    fireEvent.click(rows[1]);
+    expect(loc()).toBe("/w/d1?v=2");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("所有版本浮層按 Esc 關", async () => {
+    await mount(detail({ version: 4, versions: [1, 2, 3, 4] }));
+    fireEvent.click(screen.getByRole("button", { name: "所有版本" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("稿頂排法:按橫排 → 稿變 data-flow=h", async () => {
+    const { container } = await mount(detail());
+    setPaperFlow("v");
+    fireEvent.click(within(screen.getByRole("group", { name: "排法" })).getByRole("button", { name: "橫排" }));
+    expect(container.querySelector("article")!.dataset.flow).toBe("h");
   });
   it("原文第一行就是標題(含《》)時不重複顯示;不同的第一行照留", async () => {
     await mount(detail({ text: "《海》\n\n第一段。" }));
@@ -166,8 +197,9 @@ describe("分析進度", () => {
   const mountSpy = (w: object, onFinished = vi.fn()) => {
     setLang("zh-Hant");
     vi.spyOn(api, "work").mockResolvedValue(w as WorkDetail);
+    if (!vi.isMockFunction(api.job)) vi.spyOn(api, "job").mockReturnValue(new Promise(() => {}));
     render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
-      <Reader slug="d1" works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onFinished={onFinished} />
+      <Reader slug="d1" onQuote={vi.fn()} onFinished={onFinished} />
     </LinksProvider></CharactersProvider></MemoryRouter>);
     return onFinished;
   };
@@ -181,14 +213,13 @@ describe("分析進度", () => {
     await waitFor(() => expect(onFinished).toHaveBeenCalled());
     await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
   });
-  it("分析中時頂列說「分析中」與目前步驟", async () => {
+  it("SSE 送來的步驟蓋過作品 state", async () => {
     vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
       yield { event: "phase", data: { name: "reviewer", status: "start" } };
       await new Promise(() => {});
     });
     mountSpy(work({ state: "running", job_id: 5 }));
-    expect((await screen.findByRole("status")).textContent).toContain("分析中");
-    await screen.findByText(/寫備課筆記/);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("寫筆記"));
   });
   it("只收到終態 state 事件(已結束的 job)也算結束,重抓並通知", async () => {
     vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
@@ -210,6 +241,120 @@ describe("分析進度", () => {
   });
 });
 
+describe("稿頂分析進度", () => {
+  const T0 = 1_800_000_000;
+  const work = (o: object) => ({ slug: "d1", title: "海", version: 2, text: "內文", state: "running", job_id: 7, notes_ready: false, versions: [2], ...o });
+  const hang = () => vi.spyOn(api, "jobEvents").mockImplementation(async function* () { await new Promise(() => {}); });
+  const jobIs = (o: object = {}) => vi.spyOn(api, "job").mockResolvedValue({ id: 7, state: "running", step: null, created_at: T0 - 65, ...o });
+  const mount = (w: object, onFinished = vi.fn()) => {
+    setLang("zh-Hant");
+    vi.spyOn(api, "work").mockResolvedValue(w as WorkDetail);
+    render(<MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
+      <Reader slug="d1" onQuote={vi.fn()} onFinished={onFinished} />
+    </LinksProvider></CharactersProvider></MemoryRouter>);
+    return onFinished;
+  };
+  const running = () => document.querySelector(".paper-top .running");
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] }); vi.setSystemTime(T0 * 1000); });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it("觀察中、從 job 的 created_at 接著算、每秒走;不再說「分析中」", async () => {
+    hang(); jobIs();
+    mount(work({}));
+    await screen.findByText("1:05");
+    expect(running()!.textContent).toContain("觀察中");
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(screen.getByText("1:06")).toBeTruthy();
+    expect(screen.queryByText("分析中")).toBeNull();
+    expect(document.querySelector(".paper-top .paper-track")).not.toBeNull();
+  });
+  it("重新整理後 SSE 還沒送步驟:notes-running → 寫筆記", async () => {
+    hang(); jobIs();
+    mount(work({ state: "notes-running" }));
+    await screen.findByText("1:05");
+    expect(running()!.textContent).toContain("寫筆記");
+  });
+  it("job 還在排隊:有步驟字、沒有計時", async () => {
+    hang(); jobIs({ state: "queued" });
+    mount(work({}));
+    await waitFor(() => expect(api.job).toHaveBeenCalledWith(7));
+    await act(async () => { await Promise.resolve(); });
+    expect(running()!.textContent).toContain("觀察中");
+    expect(running()!.querySelector(".t")).toBeNull();
+  });
+  it("掛上時還在排隊、之後 SSE 送來步驟 → 重抓 job,計時出現", async () => {
+    vi.useRealTimers();
+    let push!: () => void;
+    const started = new Promise<void>(r => { push = r; });
+    vi.spyOn(api, "jobEvents").mockImplementation(async function* () {
+      await started;
+      yield { event: "phase", data: { name: "analyst", status: "start" } };
+      await new Promise(() => {});
+    });
+    const job = vi.spyOn(api, "job").mockResolvedValueOnce({ id: 7, state: "queued", step: null, created_at: 1 })
+      .mockResolvedValue({ id: 7, state: "running", step: "analyst", created_at: Date.now() / 1000 - 3 });
+    mount(work({}));
+    await waitFor(() => expect(job).toHaveBeenCalledTimes(1));
+    expect(running()!.querySelector(".t")).toBeNull();
+    push();
+    await waitFor(() => expect(running()!.querySelector(".t")).not.toBeNull());
+    expect(job).toHaveBeenCalledTimes(2);
+  });
+  it("停下:打 cancel,之後重抓這篇", async () => {
+    vi.useRealTimers();
+    hang(); jobIs();
+    const cancel = vi.spyOn(api, "cancelJob").mockResolvedValue({ ok: true });
+    const onFinished = mount(work({}));
+    const stop = await screen.findByRole("button", { name: "停下" });
+    expect(stop.querySelector("svg.ico")).not.toBeNull();
+    fireEvent.click(stop);
+    expect(cancel).toHaveBeenCalledWith(7);
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+    expect(onFinished).toHaveBeenCalled();
+  });
+  it("停下時 job 剛好跑完(409):不報錯,照樣重抓", async () => {
+    vi.useRealTimers();
+    hang(); jobIs();
+    vi.spyOn(api, "cancelJob").mockRejectedValue(new DashError(409, "unknown"));
+    mount(work({}));
+    fireEvent.click(await screen.findByRole("button", { name: "停下" }));
+    await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+  it("抓 job 失敗:只顯示步驟字", async () => {
+    hang(); vi.spyOn(api, "job").mockRejectedValue(new DashError(0, "den-down"));
+    mount(work({}));
+    await waitFor(() => expect(running()).not.toBeNull());
+    await act(async () => { await Promise.resolve(); });
+    expect(running()!.textContent).toContain("觀察中");
+    expect(running()!.querySelector(".t")).toBeNull();
+  });
+  it.each(["ready", "stopped", "stale"])("%s:照舊狀態字,沒有進度與鉛筆線", async state => {
+    mount(work({ state, job_id: null }));
+    await screen.findByText("內文");
+    expect(running()).toBeNull();
+    expect(document.querySelector(".paper-top .paper-track")).toBeNull();
+    expect(screen.getByRole("status").textContent).not.toBe("");
+  });
+});
+
+describe("版本條規則", () => {
+  it("shownVersions", () => {
+    expect(shownVersions([1], 1)).toEqual({ more: false, list: [1] });
+    expect(shownVersions([1, 2, 3], 1)).toEqual({ more: false, list: [1, 2, 3] });
+    expect(shownVersions([1, 2, 3, 4, 5], 5)).toEqual({ more: true, list: [3, 4, 5] });
+    expect(shownVersions([1, 2, 3, 4, 5], 1)).toEqual({ more: true, list: [1, 4, 5] });
+    expect(shownVersions([1, 2, 3, 4, 5], 4)).toEqual({ more: true, list: [3, 4, 5] });
+  });
+  it("dotOf", () => {
+    expect(dotOf({ analysed: false, noted: false })).toEqual({ dot: "empty", busy: false });
+    expect(dotOf({ analysed: true, noted: false })).toEqual({ dot: "half", busy: false });
+    expect(dotOf({ analysed: true, noted: true })).toEqual({ dot: "full", busy: false });
+    expect(dotOf({ analysed: false, noted: false }, "running")).toEqual({ dot: "empty", busy: true });
+    expect(dotOf({ analysed: true, noted: false }, "notes-running")).toEqual({ dot: "half", busy: true });
+  });
+});
+
 describe("交新版", () => {
   const file = () => new File(["改過的稿"], "海2.md", { type: "text/markdown" });
   type R = { same: boolean; version: number; analyzing: boolean };
@@ -225,7 +370,7 @@ describe("交新版", () => {
     function R2() {
       const [search] = useSearchParams();
       const v = Number(search.get("v"));
-      return <Reader slug="d1" version={v > 0 ? v : undefined} works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()}
+      return <Reader slug="d1" version={v > 0 ? v : undefined} onQuote={vi.fn()}
         onNewVersion={onNewVersion} onFinished={onFinished} />;
     }
     const r = render(<MemoryRouter initialEntries={[path]}><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
@@ -293,7 +438,7 @@ describe("交新版", () => {
     vi.spyOn(api, "startJob").mockResolvedValue({ job_id: 9 });
     const onNewVersion = vi.fn();
     const el = (slug: string) => <MemoryRouter><CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
-      <Reader slug={slug} works={[]} onOpen={vi.fn()} onSubmitNew={vi.fn()} onQuote={vi.fn()} onNewVersion={onNewVersion} />
+      <Reader slug={slug} onQuote={vi.fn()} onNewVersion={onNewVersion} />
     </LinksProvider></CharactersProvider></MemoryRouter>;
     const { container, rerender } = render(el("d1"));
     await screen.findByRole("heading", { name: "海" });
@@ -341,9 +486,9 @@ describe("交新版", () => {
     fireEvent.click(await screen.findByRole("button", { name: "取消" }));
     expect(screen.queryByText("交成第 3 版")).toBeNull();
   });
-  it("拖檔進稿窗格 → 出現交稿條", async () => {
-    const { container } = await mountNew();
-    fireEvent.drop(container.querySelector(".reader")!, { dataTransfer: { files: [file()] } });
+  it("把檔拖到畫面任何地方 → 出現交稿條", async () => {
+    await mountNew();
+    fireEvent.drop(window, { dataTransfer: { types: ["Files"], files: [file()] } });
     expect(await screen.findByText("交成第 3 版")).toBeTruthy();
   });
   it("state=stale 的最新版有「分析這版」;按下 startJob(slug)、重抓並通知", async () => {

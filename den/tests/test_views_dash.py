@@ -27,7 +27,9 @@ def test_work_detail_notes_ready_only_for_latest_version(c):
     repo.add_source_version(c, sid, "新版原文", 3.0)
     d = views.work_detail(c, "x1")
     assert d == {"slug": "x1", "title": "標", "version": 2, "text": "新版原文", "state": "none",
-                 "job_id": None, "notes_ready": False, "versions": [1, 2]}
+                 "job_id": None, "notes_ready": False, "versions": [1, 2],
+                 "history": [{"n": 1, "at": 1.0, "analysed": False, "noted": True},
+                             {"n": 2, "at": 3.0, "analysed": False, "noted": False}]}
 
 
 def test_work_detail_without_notes_and_unknown(c):
@@ -45,6 +47,16 @@ def test_work_detail_versions(c):
     old = views.work_detail(c, "x1", v=1)
     assert old["version"] == 1 and old["text"] == "原文" and old["versions"] == [1, 2]
     assert old["state"] == d["state"] and old["notes_ready"] == d["notes_ready"]
+
+
+def test_work_detail_history(c):
+    sid, v1 = _story(c)
+    repo.add_artifact(c, sid, v1, "analysis", 1, {"n": 1}, {}, 2.0)
+    repo.add_source_version(c, sid, "新版原文", 3.0)
+    want = [{"n": 1, "at": 1.0, "analysed": True, "noted": False},
+            {"n": 2, "at": 3.0, "analysed": False, "noted": False}]
+    assert views.work_detail(c, "x1")["history"] == want
+    assert views.work_detail(c, "x1", v=1)["history"] == want
 
 
 def test_work_detail_unknown_version(c):
@@ -82,10 +94,11 @@ def test_sessions_preview_mode_and_turns(c):
     assert [s["session"] for s in views.sessions(c, "x1")] == ["mid", "new", "old", "early"]
     assert got["new"] == {"session": "new", "started_at": 11.0, "last_at": 13.0, "turns": 1,
                           "character": "hyena", "mode": "slow", "preview": "問" * 60, "version": 2,
-                          "legacy": False}
+                          "legacy": False, "versions": [2, 2]}
     assert got["old"]["version"] == 1 and got["old"]["character"] == "buffalo"
     assert got["mid"]["version"] == 1
     assert got["early"]["version"] is None
+    assert got["mid"]["versions"] == [1, 2] and got["old"]["versions"] == [1, 1]   # 發言當下的原文版本範圍
     with pytest.raises(LookupError):
         views.sessions(c, "nope")
 

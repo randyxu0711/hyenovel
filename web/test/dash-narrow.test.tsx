@@ -32,7 +32,7 @@ function mount(path = "/w/d1") {
       ["done", { ok: true, session_id: "s1" }]);
     return json({ sessions: [] });
   }));
-  render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/" element={<Dash />} /><Route path="/w/:slug" element={<Dash />} /></Routes></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/" element={<Dash />} /><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
 }
 const paper = () => document.querySelector(".dash-desk") as HTMLElement;
 const side = () => document.querySelector(".dash-side") as HTMLElement;
@@ -51,6 +51,15 @@ describe("窄螢幕單窗格", () => {
     fireEvent.click(screen.getByRole("button", { name: "稿" }));
     expect(side().hidden).toBe(true);
   });
+  it("在 /settings:書架隱藏,分區(含回去鍵)在內容上方", async () => {
+    narrow(true); mount("/settings");
+    const region = await screen.findByRole("region", { name: "設定" });
+    const nav = within(region).getByRole("group", { name: "設定分區" });
+    expect(region.firstElementChild).toBe(nav);
+    expect(within(nav).getByRole("button", { name: "回到進門" })).toBeTruthy();
+    fireEvent.click(within(nav).getByRole("button", { name: "陪讀者" }));
+    expect(within(region).getByRole("heading", { level: 1, name: "陪讀者" })).toBeTruthy();
+  });
   it("寬螢幕:兩邊都見、沒有「稿|對話」切換", async () => {
     narrow(false); mount();
     await screen.findByText("海水很藍");
@@ -68,14 +77,6 @@ describe("窄螢幕單窗格", () => {
     fireEvent.click(await screen.findByRole("button", { name: "「海」" }));
     expect(paper().hidden).toBe(false);
     expect(side().hidden).toBe(true);
-  });
-  it("從進門畫面帶著第一句話打開作品 → 落在對話窗格,回覆在看得見的那邊", async () => {
-    narrow(true); mount("/");
-    fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "嗨" } });
-    fireEvent.click(await screen.findByRole("button", { name: "送出" }));
-    await waitFor(() => expect(within(side()).getByRole("log").textContent).toContain("好"));
-    expect(side().hidden).toBe(false);
-    expect(paper().hidden).toBe(true);
   });
   it("在稿上「帶進對話」→ 切到對話窗格", async () => {
     narrow(true); mount();

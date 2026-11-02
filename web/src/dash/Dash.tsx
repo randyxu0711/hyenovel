@@ -8,10 +8,13 @@ import Palette from "./Palette";
 import Home from "./Home";
 import Rail from "./Rail";
 import Reader from "./Reader";
-import Settings from "./Settings";
+import Settings, { SettingsNav, type SettingsSection } from "./Settings";
 import Side, { marksFrom } from "./Side";
+import Blob from "./Blob";
+import { composerState } from "./Talk";
 import { useSeen } from "./useSeen";
 import { useTalk } from "./useTalk";
+import { SHELF_W, useShelf } from "./useShelf";
 import { applySignature, initThemes, toggleDayNight, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
 import "./dash.css";
@@ -23,8 +26,7 @@ function Shell({ chars }: { chars: Characters }) {
   const { mode } = useThemeState();
   const nav = useNavigate();
   const { slug: routeSlug } = useParams();
-  const loc = useLocation();
-  const { pathname } = loc;
+  const { pathname } = useLocation();
   const [search, setSearch] = useSearchParams();
   const view: View = pathname === "/settings" ? "settings" : routeSlug ? "work" : "home";
   const slug = view === "work" ? routeSlug! : null;
@@ -80,25 +82,43 @@ function Shell({ chars }: { chars: Characters }) {
       e => { if (live) setMapErr(e instanceof DashError ? e.code : "unknown"); });   // 稿與對話照用,分頁說錯誤
     return () => { live = false; };
   }, [slug, version, mapRev, reload]);
+  // 結構圖選中的觀察(意象 id):稿上它的引文畫直線;換篇、換版清掉。
+  const [ob, setOb] = useState<string | null>(null);
+  useEffect(() => { setOb(null); }, [slug, version]);
+  const obs = (map?.motifs?.find(m => m.id === ob)?.spans ?? [])
+    .flatMap(s => s.start !== null && s.end !== null ? [{ start: s.start, end: s.end }] : []);
   // 痕跡只在逐字稿的位置對的就是這一版時才畫(換版本重抓完之前不畫)。
   const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
-  const split = useSplit();
+  const analyzing = ["running", "notes-running"].includes(String(work?.state));
+  // 設定頁的回去鍵:回到進設定前開著的那篇;沒開過 → 進門。分區只記在這裡,不進網址。
+  const [last, setLast] = useState<string | null>(null);
+  useEffect(() => { if (slug) setLast(slug); }, [slug]);
+  const [section, setSection] = useState<SettingsSection>("look");
+  const lastTitle = last ? works.find(w => w.slug === last)?.title ?? last : null;
+  const setNav = <SettingsNav section={section} onPick={setSection}
+    back={last ? { label: t("set.backTo", { title: lastTitle! }), to: `/w/${encodeURIComponent(last)}` } : { label: t("set.backHome"), to: "/" }} />;
+  const shelf = useShelf();
+  const split = useSplit(SHELF_W[shelf.mode]);
   const narrow = useNarrow();
   const { pane, setPane } = useLinks();
   const [palette, setPalette] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const focused = focus && view === "work" && !narrow;
+  useEffect(() => { if (view !== "work") setFocus(false); }, [view]);
   const hidePaper = narrow && view === "work" && pane !== "paper";
   const hideSide = narrow && pane !== "side";
-  // 窄螢幕打開一篇 → 先看稿;從進門帶著第一句話來的 → 看對話(回覆在那邊串流)。
-  // 兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方。
-  const firstMessage = !!(loc.state as { firstMessage?: string } | null)?.firstMessage;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (slug && narrow) setPane(firstMessage ? "side" : "paper"); }, [slug, narrow, setPane]);
+  // 窄螢幕打開一篇 → 先看稿。兩個窗格都留著掛載,只藏一邊,跳轉才找得到對方。
+  useEffect(() => { if (slug && narrow) setPane("paper"); }, [slug, narrow, setPane]);
   // 鍵盤:Ctrl/⌘+K 開指令框(輸入框裡也算);「/」聚焦輸入框(焦點已在輸入元素時不攔)
+  const toggleShelf = useRef(shelf.toggle);
+  toggleShelf.current = shelf.toggle;
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); toggleShelf.current(); return; }
+      if (e.key === "Escape" && focused && !palette) { setFocus(false); return; }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
@@ -109,25 +129,8 @@ function Shell({ chars }: { chars: Characters }) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [view, hideSide, setPane]);
+  }, [view, hideSide, setPane, focused, palette]);
   useEffect(() => applySignature(me, mode), [me, mode]);
-  // 進門畫面送出的第一句:作品頁掛載時以新局送出一次,並清掉 router state(重新整理不重送)。
-  // 延到下一個 tick 才送:StrictMode 的 effect 清理會取消第一次排程,且送出在 useTalk 重設之後。
-  const first = (loc.state as { firstMessage?: string; character?: string } | null) ?? null;
-  const talkRef = useRef(talk);
-  talkRef.current = talk;
-  const sentKey = useRef("");
-  useEffect(() => {
-    if (view !== "work" || !first?.firstMessage) return;
-    const h = setTimeout(() => {
-      if (sentKey.current === loc.key) return;
-      sentKey.current = loc.key;
-      nav(loc.pathname + loc.search, { replace: true, state: null });
-      void talkRef.current.send(first.firstMessage!, [], first.character);
-    }, 0);
-    return () => clearTimeout(h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, loc.key]);
   const goHome = () => nav("/", { state: { focus: true } });
   const submitted = (s: string, existing: boolean) => {
     nav(`/w/${encodeURIComponent(s)}`); bump(); setReload(n => n + 1);
@@ -143,7 +146,7 @@ function Shell({ chars }: { chars: Characters }) {
   };
 
   return (
-    <div className="dash" data-view={view} data-mode={mode} data-narrow={narrow ? "true" : "false"}
+    <div className="dash" data-view={view} data-mode={mode} data-shelf={shelf.mode} data-narrow={narrow ? "true" : "false"} data-focus={focused ? "true" : "false"}
       style={split.width ? { "--dash-split": `${split.width}px` } as CSSProperties : undefined}>
       {narrow && (
         <div className="dash-bar">
@@ -156,19 +159,20 @@ function Shell({ chars }: { chars: Characters }) {
           <button type="button" className="dash-bar-palette" aria-haspopup="dialog" onClick={() => setPalette(true)}>{t("palette.open")}</button>
         </div>
       )}
-      <Rail collapsed={view === "work"} works={works} current={slug} onOpen={open}
-        onNew={goHome} onSubmitNew={goHome} />
+      <Rail mode={shelf.mode} onToggle={shelf.toggle} works={works} current={slug} talk={talk} view={view}
+        onOpen={open} onNew={goHome} onFind={() => setPalette(true)}
+        settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>
-        {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} drawing={talk.drawing ?? undefined}
-          map={map} onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
+        {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
+          onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
+          focus={focused} onFocus={narrow ? undefined : setFocus}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
-          works={works} onOpen={open} onSubmitNew={goHome}
           onQuote={q => {
             setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
             if (narrow) setPane("side");
           }} />}
         {view === "home" && <Home works={loaded} error={worksErr} onSubmitted={submitted} />}
-        {view === "settings" && <Settings />}
+        {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
       </main>
       {notice && (
         <p className="dash-notice" role="status">
@@ -177,17 +181,22 @@ function Shell({ chars }: { chars: Characters }) {
         </p>
       )}
       {view === "work" && !narrow && (
-        <div className="dash-grip" role="separator" aria-orientation="vertical" aria-label={t("split.label")} tabIndex={0}
+        <div className="dash-grip" hidden={focused} role="separator" aria-orientation="vertical" aria-label={t("split.label")} tabIndex={0}
           aria-valuemin={MIN} aria-valuenow={split.width ?? undefined}
           onPointerDown={split.onPointerDown} onKeyDown={split.onKeyDown} />
       )}
       {view === "work" && (
-        <aside className="dash-side" hidden={hideSide}>
+        <aside className="dash-side" hidden={hideSide || focused}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
-            talk={talk} quotes={quotes}
+            talk={talk} quotes={quotes} ob={ob} onOb={setOb} analyzing={analyzing}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>
+      )}
+      {focused && (
+        <button type="button" className="dash-peek" aria-label={t("focus.back")} title={t("focus.back")} onClick={() => setFocus(false)}>
+          <Blob character={me} size={58} state={composerState({ streaming: talk.streaming !== null, analyzing })} />
+        </button>
       )}
       {palette && <Palette works={works} chars={chars} onOpen={open} onSettings={() => nav("/settings")}
         onToggle={toggleDayNight} onClose={() => setPalette(false)} />}
@@ -197,18 +206,19 @@ function Shell({ chars }: { chars: Characters }) {
 
 const SPLIT_KEY = "hyenovel.split";
 const MIN = 380;      // 稿窗格與右欄各自最少
-const RAIL = 56;      // 收起的左欄,不算在兩窗格裡
 const GRIP = 9;
 const STEP = 24;
-const clampSide = (w: number) => Math.round(Math.max(MIN, Math.min(w, window.innerWidth - RAIL - GRIP - MIN)));
+/** 右欄寬夾在 [MIN, 視窗 − 書架 − 分隔線 − 稿最少]。 */
+export const clampSide = (w: number, shelfW: number) =>
+  Math.round(Math.max(MIN, Math.min(w, window.innerWidth - shelfW - GRIP - MIN)));
 
 /** 中間分隔線:拖或用方向鍵調右欄寬,存 localStorage。沒存過 = 兩邊平分(CSS 決定)。 */
-function useSplit() {
+function useSplit(shelfW: number) {
   const [width, setWidth] = useState<number | null>(() => {
     try { const n = Number(localStorage.getItem(SPLIT_KEY)); return n > 0 ? n : null; } catch { return null; }
   });
   const set = (w: number) => {
-    const v = clampSide(w);
+    const v = clampSide(w, shelfW);
     setWidth(v);
     try { localStorage.setItem(SPLIT_KEY, String(v)); } catch { /* 存不了就只這次有效 */ }
   };

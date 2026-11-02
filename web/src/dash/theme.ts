@@ -81,9 +81,10 @@ export function setMode(pref: ModePref): void {
   write(MODE_KEY, pref);
   commit({ pref });
 }
-/** 一鍵晝夜:現在實際是夜 → light,否則 → dark(把「跟系統」換成明確選擇)。 */
+/** 一鍵晝夜:翻到另一邊;結果剛好等於系統目前的明暗就存成「跟系統」(不讓一鍵切換永久蓋掉設定頁的選擇)。 */
 export function toggleDayNight(): void {
-  setMode(state.mode === "dark" ? "light" : "dark");
+  const next: Mode = state.mode === "dark" ? "light" : "dark";
+  setMode(next === resolveMode("system") ? "system" : next);
 }
 export const getThemeState = () => state;
 

@@ -210,6 +210,13 @@ def analysis_versions(conn, story_id: int) -> dict[str, int]:
         "ON sv.id = a.source_version_id WHERE a.story_id = ? AND a.kind = 'analysis'", (story_id,))}
 
 
+def artifact_versions(conn, story_id: int, kind: str) -> set[int]:
+    """一篇所有 kind artifact 對的原文版本 n(不論 current)。"""
+    return {r["n"] for r in conn.execute(
+        "SELECT DISTINCT sv.n AS n FROM artifact a JOIN source_version sv ON sv.id = a.source_version_id "
+        "WHERE a.story_id = ? AND a.kind = ?", (story_id, kind))}
+
+
 def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
     """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
     turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。

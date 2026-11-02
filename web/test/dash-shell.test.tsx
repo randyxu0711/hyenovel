@@ -43,7 +43,8 @@ const dash = () => document.querySelector(".dash") as HTMLElement;
 const nav = () => screen.findByRole("navigation");
 
 describe("Dash 殼與路由", () => {
-  it("/ 是 home:左欄展開並列出作品標題,不自動開任何一篇", async () => {
+  it("/ 是 home:書架展開時列出作品標題,不自動開任何一篇", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
     const f = mount("/");
     const rail = within(await nav());
     expect(await rail.findByText("最近的")).toBeTruthy();
@@ -51,61 +52,77 @@ describe("Dash 殼與路由", () => {
     expect(dash().dataset.view).toBe("home");
     expect(f.mock.calls.map(c => c[0])).not.toContain("/api/works/d2");
   });
-  it("/w/:slug 是 work:左欄收起、沒有作品標題,有作品/設定/切換晝夜三顆鍵", async () => {
+  it("/w/:slug 是 work;窄條沒有作品標題,有找作品/設定鍵", async () => {
+    localStorage.setItem("hyenovel.shelf", "rail");
     mount("/w/d2");
     expect(await screen.findByText("內文一行")).toBeTruthy();
     const rail = within(await nav());
     expect(dash().dataset.view).toBe("work");
-    expect(rail.queryByText("最近的")).toBeNull();
-    for (const n of ["作品", "設定", "切換晝夜"]) expect(rail.getByRole("button", { name: n })).toBeTruthy();
+    expect(rail.queryByText("舊的")).toBeNull();
+    for (const n of ["找作品", "設定"]) expect(rail.getByRole("button", { name: n })).toBeTruthy();
   });
   it("?v= 帶進去抓那一版", async () => {
     const f = mount("/w/d2?v=3");
     await screen.findByText("內文一行");
     expect(f.mock.calls.map(c => c[0])).toContain("/api/works/d2?v=3");
   });
-  it("/settings 是 settings:左欄展開並列出作品標題,有「設定」標題", async () => {
+  it("/settings 是 settings:設定區開在外觀", async () => {
     mount("/settings");
-    const rail = within(await nav());
+    await nav();
     expect(dash().dataset.view).toBe("settings");
-    expect(screen.getByRole("heading", { name: "設定" })).toBeTruthy();
-    expect(screen.getByRole("navigation").getAttribute("data-collapsed")).toBe("false");
-    expect(await rail.findByText("最近的")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "設定" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "外觀" })).toBeTruthy();
   });
-  it("點設定 → /settings(左欄展開);點左欄的一篇 → /w/<slug>(左欄收起)", async () => {
+  it("點設定 → /settings;回去鍵回到那篇;點書架的一篇 → /w/<slug>;書架形態不隨畫面改變", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
     mount("/w/d2");
     const rail = within(await nav());
-    fireEvent.click(rail.getByRole("button", { name: "設定" }));
+    fireEvent.click(await rail.findByRole("button", { name: "設定" }));
     expect(screen.getByTestId("loc").textContent).toBe("/settings");
-    fireEvent.click(await rail.findByRole("button", { name: /舊的/ }));
+    expect(dash().dataset.shelf).toBe("open");
+    fireEvent.click(await rail.findByRole("button", { name: "回到〈最近的〉" }));
+    expect(screen.getByTestId("loc").textContent).toBe("/w/d2");
+    fireEvent.click(await rail.findByRole("button", { name: /^舊的/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
-    expect(screen.getByRole("navigation").getAttribute("data-collapsed")).toBe("true");
+    expect(dash().dataset.shelf).toBe("open");
   });
-  it("新對話鈕回到 /", async () => {
+  it("⌘\\ 與 Ctrl+\\ 切換書架展開/窄條", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    mount("/");
+    await nav();
+    expect(dash().dataset.shelf).toBe("open");
+    fireEvent.keyDown(document, { key: "\\", metaKey: true });
+    expect(dash().dataset.shelf).toBe("rail");
+    fireEvent.keyDown(document, { key: "\\", ctrlKey: true });
+    expect(dash().dataset.shelf).toBe("open");
+    expect(localStorage.getItem("hyenovel.shelf")).toBe("open");
+  });
+  it("交新稿鈕回到 /", async () => {
     mount("/w/d2");
-    fireEvent.click(within(await nav()).getByRole("button", { name: "新對話" }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
     expect(screen.getByTestId("loc").textContent).toBe("/");
     expect(dash().dataset.view).toBe("home");
   });
-  it("切換晝夜:.dash 的 data-mode 變", async () => {
+  it("⌘K 切換晝夜:.dash 的 data-mode 變", async () => {
     mount("/");
-    const rail = within(await nav());
+    await nav();
     const before = dash().dataset.mode;
     expect(before === "light" || before === "dark").toBe(true);
-    fireEvent.click(rail.getByRole("button", { name: "切換晝夜" }));
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    fireEvent.click(await screen.findByRole("option", { name: "切換晝夜" }));
     expect(dash().dataset.mode).toBe(before === "dark" ? "light" : "dark");
   });
-  it("沒有作品時 home 邀請把稿拖進來或貼上", async () => {
+  it("沒有作品時 home 邀請把稿拖進來", async () => {
     mount("/", []);
-    expect((await screen.findByRole("textbox", { name: "對話輸入" }) as HTMLTextAreaElement).placeholder).toBe("把稿拖進來,或貼上");
+    expect(await screen.findByText("拖一篇稿進來")).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "貼上或拖進一篇稿" }) as HTMLTextAreaElement).placeholder).toBe("貼上或拖進一篇稿");
   });
 });
 
 describe("Dash 交稿後", () => {
   const draft = async () => {
-    fireEvent.click(within(await nav()).getByRole("button", { name: "作品" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "交一篇新的" }));
-    await screen.findByRole("textbox", { name: "對話輸入" });   // 「交一篇新的」回到進門畫面
+    fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
+    await screen.findByRole("textbox", { name: "貼上或拖進一篇稿" });   // 交新稿回到進門畫面
     fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [new File(["x"], "最近的.md")] } });
     fireEvent.click(await screen.findByRole("button", { name: /交稿並開始分析/ }));
   };
@@ -136,8 +153,8 @@ describe("Dash 交稿後", () => {
     await screen.findByText("內文一行");
     await draft();
     await screen.findByText("這篇已經在了,已切過去。");
-    fireEvent.click(within(await nav()).getByRole("button", { name: "作品" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /最近的/ }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: "展開書架" }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: /最近的/ }));
     expect(screen.queryByText("這篇已經在了,已切過去。")).toBeNull();
   });
 });

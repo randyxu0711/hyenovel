@@ -40,8 +40,8 @@ MCP submit_work(檔案路徑) ─▶ den(背景 daemon)─ analyst ▶ reviewer 
   **MCP shim 會自動把 den 脫離拉起**(`den.json` 探索檔記 port/pid/指紋);den 閒置 3 小時無 job 自己結束。
   版本指紋不符才重啟,**忙碌中的 den 不重啟**(新版等跑完);`git pull` 後在 agent 內跑 `/mcp` 重載 shim。
   MCP 建立的故事 slug 是 `dNN`。
-- dashboard(主入口):`cd web && npm run build` 後 `python -m den.open`(確保 den 在跑、換一次性啟動碼、開瀏覽器;開不了就點印出的 url)。den 同源出 `web/dist`,API 全在 `/api`;舊 web 在 `/journey`。作品頁可交新版(按鈕或把檔拖到稿上;可「只存版,先不分析」,最新版沒分析時有「分析這版」;開新版分析時 den 會停掉舊版的 job)。
-  路由三畫面:進門(`/`,對話為主)/ 作品(稿左、右欄對話·筆記·結構圖分頁)/ `/settings`(獨立設定頁);窄螢幕單窗格切換、⌘K 指令框。
+- dashboard(主入口):`cd web && npm run build` 後 `python -m den.open`(確保 den 在跑、換一次性啟動碼、開瀏覽器;開不了就點印出的 url)。den 同源出 `web/dist`,API 全在 `/api`;舊 web 在 `/journey`。作品頁的稿預設直排(一頁頁往下疊,稿頂或設定可切橫排);稿上只有兩種鉛筆線(波浪 = 陪讀者提到、直線 = 結構圖選中的意象);作品頁可交新版(按鈕或把檔拖到畫面任何地方;可「只存版,先不分析」,最新版沒分析時有「分析這版」;開新版分析時 den 會停掉舊版的 job)。分析中稿頂顯示步驟+已跑時間+停下;稿頂專注鍵 = 只看稿(Esc 或右下角色回來)。陪讀者是佔位 blob(換角色只換 `web/src/dash/Blob.tsx`)。
+  路由三畫面:進門(`/`,只有一張交稿的紙,不聊天)/ 作品(稿左、右欄對話·筆記·結構圖分頁)/ `/settings`(書架換成設定分區);左欄=書架(作品→局,展開/窄條 ⌘\);窄螢幕單窗格切換、⌘K 指令框。
   開發:`./dev.sh` 或 `cd web && npm run dev`(vite 代理 `/api` 到 den 並帶 token)。用量面板關閉。
 - 註冊 MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`。五個 tool:
   `submit_work`(交稿,**只收 .md/.txt 路徑**;不給 path = 只續跑,絕不重跑)/ `talk_to_companion`(跟 companion 說話)/

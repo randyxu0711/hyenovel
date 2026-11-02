@@ -31,15 +31,22 @@ export type Theme = { id: string; name: LText; source: string; light: ThemeToken
 
 export type Span = { quote: string; start: number | null; end: number | null };
 export type Work = {
-  slug: string; title: string; version: number; chars: number; updated_at: number; state: string; [k: string]: unknown;
+  slug: string; title: string; version: number; chars: number; updated_at: number; state: string;
+  /** 目前分析的張力指紋(beat intensity 依文本順序);沒分析 = [] */
+  curve?: number[];
+  [k: string]: unknown;
 };
 export type WorkDetail = {
   slug: string; title: string; version: number; text: string; state: string;
   job_id: number | null; notes_ready: boolean; versions: number[];
+  /** 每一版:建立時間(秒)、那版有沒有分析 / 筆記(不論 current) */
+  history?: { n: number; at: number; analysed: boolean; noted: boolean }[];
 };
 export type SessionRow = {
   session: string; started_at: number; last_at: number; turns: number;
   character: string | null; mode: string | null; preview: string; version: number | null; legacy: boolean;
+  /** 這局發言當下的原文版本範圍 [lo, hi] */
+  versions?: [number, number] | null;
 };
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type Turn = {
@@ -125,6 +132,8 @@ export const api = {
   startJob: (slug: string, opts: { resumeOnly?: boolean } = {}) =>
     request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug, ...(opts.resumeOnly ? { resume_only: true } : {}) })),
   jobEvents: (jobId: number) => stream(`/api/jobs/${jobId}/events`),
+  job: (id: number) => request<{ id: number; state: string; step: string | null; created_at: number }>(`/api/jobs/${id}`),
+  cancelJob: (id: number) => request<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */
   talk: (slug: string, body: { session: string | null; message: string; character: string; quotes: string[] }) =>
     stream(`/api/discuss/${encodeURIComponent(slug)}`, post({

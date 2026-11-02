@@ -317,6 +317,17 @@ def test_analysis_versions_maps_fp_to_source_version_n(conn):
     assert got == {repo.artifact(conn, a1)["sha256"]: 1, repo.artifact(conn, a2)["sha256"]: 2}
 
 
+def test_artifact_versions_by_kind(conn):
+    s, v1 = _story(conn)
+    v2, _ = repo.add_source_version(conn, s, "乙", 7.0)
+    repo.add_artifact(conn, s, v1, "analysis", 1, {"t": 1}, {}, 1.0)
+    repo.add_artifact(conn, s, v1, "notes", 1, {"t": 2}, {}, 1.0)
+    repo.add_artifact(conn, s, v2, "analysis", 1, {"t": 3}, {}, 8.0)
+    assert repo.artifact_versions(conn, s, "analysis") == {1, 2}
+    assert repo.artifact_versions(conn, s, "notes") == {1}
+    assert repo.artifact_versions(conn, s, "feedback") == set()
+
+
 
 def test_add_utterance_stores_usage_json(conn):
     s, d = _disc(conn)
