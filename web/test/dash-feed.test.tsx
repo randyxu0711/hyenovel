@@ -5,9 +5,9 @@ import { useSubmitDraft } from "../src/dash/useSubmitDraft";
 
 afterEach(() => vi.restoreAllMocks());
 
-function mount(est: object | null = null) {
+function mount(est: object | null = null, slug?: string) {
   vi.spyOn(api, "estimate").mockResolvedValue(est as never);
-  return renderHook(() => useSubmitDraft());
+  return renderHook(() => useSubmitDraft(slug));
 }
 const sub = (o: object = {}) => vi.spyOn(api, "submit").mockResolvedValue({ slug: "d3", title: "t", version: 1, new_version: true, reused: false, ...o });
 
@@ -57,6 +57,51 @@ describe("useSubmitDraft", () => {
     act(() => result.current.fromText("稿"));
     await act(async () => { await result.current.confirm(); });
     expect(start).not.toHaveBeenCalled();
+  });
+  const wk = (state: string) => vi.spyOn(api, "work").mockResolvedValue({ slug: "d3", title: "t", version: 2, text: "", state, job_id: null, notes_ready: false, versions: [1, 2] } as never);
+  it("帶 slug 交新版並分析", async () => {
+    const { result } = mount(null, "d3");
+    const s = sub({ version: 2 });
+    const start = vi.spyOn(api, "startJob").mockResolvedValue({ job_id: 5 });
+    act(() => result.current.fromText("稿"));
+    let r: any;
+    await act(async () => { r = await result.current.confirm(); });
+    expect(s).toHaveBeenCalledWith("稿", undefined, "d3");
+    expect(start).toHaveBeenCalledWith("d3");
+    expect(r.same).toBe(false);
+  });
+  it("帶 slug 只存版:不開 job", async () => {
+    const { result } = mount(null, "d3");
+    sub({ version: 2 });
+    const start = vi.spyOn(api, "startJob");
+    act(() => result.current.fromText("稿"));
+    let r: any;
+    await act(async () => { r = await result.current.confirm({ analyze: false }); });
+    expect(start).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ new_version: true, same: false });
+  });
+  it("帶 slug 但一字不差:不開 job、same", async () => {
+    const { result } = mount(null, "d3");
+    sub({ new_version: false });
+    wk("ready");
+    const start = vi.spyOn(api, "startJob");
+    act(() => result.current.fromText("稿"));
+    let r: any;
+    await act(async () => { r = await result.current.confirm(); });
+    expect(start).not.toHaveBeenCalled();
+    expect(r.same).toBe(true);
+  });
+  it("一字不差、最新版停在半路:只續跑(409 吞掉)", async () => {
+    const { result } = mount(null, "d3");
+    sub({ new_version: false });
+    wk("stopped");
+    const start = vi.spyOn(api, "startJob").mockRejectedValue(new DashError(409, "nothing-to-resume"));
+    act(() => result.current.fromText("稿"));
+    let r: any;
+    await act(async () => { r = await result.current.confirm(); });
+    expect(start).toHaveBeenCalledWith("d3", { resumeOnly: true });
+    expect(r.same).toBe(true);
+    expect(result.current.error).toBeNull();
   });
   it("失敗:error 帶 den 的代碼、稿還在、回 null,可再試", async () => {
     const { result } = mount();

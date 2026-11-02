@@ -113,8 +113,8 @@ export const api = {
     fd.append("file", file);
     return request<{ filename: string; text: string; chars: number }>("/api/extract", { method: "POST", body: fd });
   },
-  submit: (text: string, title?: string) =>
-    request<SubmitResult>("/api/stories", post({ text, title })),
+  submit: (text: string, title?: string, slug?: string) =>
+    request<SubmitResult>("/api/stories", post({ text, title, ...(slug ? { slug } : {}) })),
   /** resumeOnly:只接續停住的那次分析,沒有可續的就 409 nothing-to-resume(不開新的一次)。 */
   startJob: (slug: string, opts: { resumeOnly?: boolean } = {}) =>
     request<{ job_id: number }>("/api/jobs", post({ kind: "critique", slug, ...(opts.resumeOnly ? { resume_only: true } : {}) })),
