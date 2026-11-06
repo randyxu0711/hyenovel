@@ -54,10 +54,20 @@ export type SessionRow = {
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
 export type ReactionMark = "stopped" | "misread";
 export type TurnReaction = { mark: ReactionMark; comment: string | null };
+export type MemoryScope = "author" | "work";
+export type TurnMemory = { id: number; scope: MemoryScope };
+export type Memory = {
+  id: number; root: number; scope: MemoryScope; slug: string | null; title: string | null; text: string;
+  quote: string | null; session: string | null; seq: number | null;
+  valid_from: number; learned_at: number; invalidated_at: number | null;
+};
+export type MemoryList = { memories: Memory[]; caps: { author: number; work: number } };
+export type RememberBody = { scope: MemoryScope; text: string; slug?: string; session?: string; seq?: number; quote?: string };
 export type Turn = {
-  /** 這一局裡的序號;剛串流進來的 user 那則沒有 */
+  /** 這一局裡的序號;陪讀者先開口那輪的 user 那則沒有 */
   seq?: number;
   reaction?: TurnReaction | null;
+  memories?: TurnMemory[];
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
   /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有 */
   v?: number;
@@ -151,6 +161,11 @@ export const api = {
     }),
   clearReaction: (slug: string, session: string, seq: number) =>
     request<void>(reactionUrl(slug, session, seq), { method: "DELETE" }),
+  memories: () => request<MemoryList>("/api/memory"),
+  remember: (body: RememberBody) => request<Memory>("/api/memory", post(body)),
+  editMemory: (id: number, text: string) => request<Memory>(`/api/memory/${id}`, { ...post({ text }), method: "PATCH" }),
+  archiveMemory: (id: number) => request<void>(`/api/memory/${id}/archive`, { method: "POST" }),
+  revertMemory: (id: number) => request<Memory>(`/api/memory/${id}/revert`, { method: "POST" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */
   talk: (slug: string, body: { session: string | null; message: string; character: string; quotes: string[] }) =>
     stream(`/api/discuss/${encodeURIComponent(slug)}`, post({

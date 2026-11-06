@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, DashError, type SessionRow, type Turn, type TurnReaction, type TalkMessage } from "./api";
+import { api, DashError, type SessionRow, type Turn, type TurnMemory, type TurnReaction, type TalkMessage } from "./api";
 import { cpLength } from "./cp";
 import { liveQuotes } from "./liveQuotes";
 import { DRAW_MS, markId, type Mark } from "./Paper";
@@ -35,6 +35,9 @@ export function companionId(chars: { list: { id: string }[]; defaultId: string }
 
 /** 與 den/config.py 的 MAX_CHAT_CHARS 一致(den/tests/test_app_errors.py 比對)。 */
 export const MAX_CHAT = 8000;
+
+/** 串流剛結束的作者發言:den 先存作者、再存回覆,所以是回覆的前一號;陪讀者先開口的那輪沒有作者發言。 */
+export const userSeq = (message: string, replySeq: number): number | undefined => (message ? replySeq - 1 : undefined);
 
 export type Pending = { text: string; quotes: string[] };
 const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -205,7 +208,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           setSession(d.session_id);
           if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
-            { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [], v: d.v },
+            { seq: userSeq(message, d.seq), role: "user", text: message, ts, mode: null, character: null, quotes, spans: [], v: d.v },
             { seq: d.seq, role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           markSeen(slug);
           ok = true;
@@ -248,8 +251,13 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, reaction } : x)));
   }, []);
 
+  const markMemories = useCallback((forSession: string, seq: number, memories: TurnMemory[]) => {
+    if (forSession !== shownSession.current) return;
+    setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, memories } : x)));
+  }, []);
+
   return {
-    markTurn, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
+    markTurn, markMemories, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
   };
 }
