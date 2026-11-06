@@ -3,7 +3,8 @@ import json
 from functools import cache
 from pathlib import Path
 
-from den import cards, companion, themes
+from den import cards, companion
+from den.cards import MARKS, check_colors  # noqa: F401
 from marrow import repo
 
 _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characters"
@@ -11,7 +12,6 @@ _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characte
 DEFAULT_CHARACTER = "hyena"
 _DEFAULT_KEY = "default_character"
 _FIELDS = {"id", "name", "line", "avatar", "colors", "voice"}
-MARKS = ("pencil", "highlighter", "circle")
 
 
 class UnknownCharacter(Exception):
@@ -85,18 +85,6 @@ def resolve(conn, character: str | None, last: str | None) -> dict:
             raise UnknownCharacter(character)
         return found
     return (last and get(conn, last)) or get(conn, default_id(conn))
-
-
-def check_colors(colors: dict) -> list[str]:
-    """名字色(text)在每一套內建主題的晝夜、對話欄與桌面上都要 ≥ 4.5:1。fill 是毛色(頭像有墨色輪廓),不驗。"""
-    bad = []
-    for theme in themes.builtins():
-        for scheme in ("light", "dark"):
-            for bg in ("desk-2", "desk"):
-                r = themes.contrast(colors[scheme]["text"], theme[scheme][bg])
-                if r < 4.5:
-                    bad.append(f"{theme['id']} {scheme} text/{bg} = {r:.2f}")
-    return bad
 
 
 def persona(character: dict) -> str:
