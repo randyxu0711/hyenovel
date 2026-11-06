@@ -14,6 +14,7 @@ from typing import Awaitable, Callable
 
 from den import config
 from den.runner import RunResult
+from marrow import prompt as prompts
 from marrow import repo, workpacks
 from marrow.schema import version_of
 
@@ -74,7 +75,8 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
             conn, jid, step, n, runner=runner_name, model=r and r.model, cli_version=cli_version,
             outcome=outcome, raw_output=r and r.raw, parsed=r and r.parsed,
             gate_verdict=gate_verdict, tokens=r and r.tokens, duration_ms=r and r.duration_ms,
-            artifact_id=artifact_id, now=now(), prompt_sha=prompt_sha)
+            artifact_id=artifact_id, now=now(), prompt_sha=prompt_sha,
+            recipe=prompts.recipe(pack.prompt, pack.run.as_dict()))
 
     def stop(outcome: StepOutcome) -> StepOutcome:
         emit(_phase(step, "fail", n))
@@ -98,7 +100,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
             if not errs:
                 prov = {"tier": "A", "runner": runner_name, "model": r.model,
                         "cli_version": cli_version, "job": jid, "attempt": n,
-                        "run": pack.run.as_dict()}
+                        "run": pack.run.as_dict(), "prompt": pack.prompt.fingerprint()}
                 with conn:
                     aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"],
                                                pack.kind, version_of(pack.kind), r.parsed, prov, now())

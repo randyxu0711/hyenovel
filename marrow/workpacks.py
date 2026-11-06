@@ -12,6 +12,7 @@ from typing import Literal
 
 from marrow import gate as _gate
 from marrow import schema
+from marrow.prompt import Layer, Prompt
 from marrow.repo import canonical_json
 
 _PROMPTS = Path(__file__).resolve().parent / "prompts"
@@ -33,11 +34,15 @@ class RunConfig:
 class WorkPack:
     name: str
     kind: Literal["analysis", "notes"]
-    system_prompt: str
+    prompt: Prompt
     schema: dict
     needs: tuple[str, ...]
     gate: Callable[[dict, str, Inputs], list[str]]
     run: RunConfig = RunConfig()
+
+    @property
+    def system_prompt(self) -> str:
+        return self.prompt.text
 
 
 # 修補時夾回去的原始輸出上限(解析不出的文字可能是一大段失控輸出)
@@ -49,13 +54,14 @@ def _prompt(name: str) -> str:
     return (_PROMPTS / f"{name}.md").read_text(encoding="utf-8")
 
 
-def _system_prompt(name: str, sch: dict) -> str:
+def _assemble(name: str, sch: dict) -> Prompt:
     shown = {k: v for k, v in sch.items() if k != "$schema"}
-    return (_prompt(name).rstrip()
-            + "\n\n## 輸出格式\n"
-            + "只輸出單一 JSON 物件：不要用程式碼框（```）包住，也不要任何前後說明文字。"
-            + "這個物件必須符合下列 JSON Schema：\n"
-            + canonical_json(shown) + "\n")
+    return Prompt((
+        Layer("task", _prompt(name).rstrip()),
+        Layer("output_format", "\n\n## 輸出格式\n"
+              + "只輸出單一 JSON 物件：不要用程式碼框（```）包住，也不要任何前後說明文字。"
+              + "這個物件必須符合下列 JSON Schema：\n"
+              + canonical_json(shown) + "\n")))
 
 
 def _gate_analyst(body: dict, source: str, inputs: Inputs) -> list[str]:
@@ -67,7 +73,7 @@ def _gate_reviewer(body: dict, source: str, inputs: Inputs) -> list[str]:
 
 
 WORKPACKS: dict[str, WorkPack] = {
-    name: WorkPack(name, kind, _system_prompt(name, schema.load_schema(kind)),
+    name: WorkPack(name, kind, _assemble(name, schema.load_schema(kind)),
                    schema.load_schema(kind), needs, check)
     for name, kind, needs, check in (("analyst", "analysis", (), _gate_analyst),
                                      ("reviewer", "notes", ("analysis",), _gate_reviewer))

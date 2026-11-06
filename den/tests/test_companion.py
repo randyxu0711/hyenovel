@@ -1,8 +1,8 @@
 """companion 人格:底層 + 角色讀法(spec §6)。"""
 import pytest
 
-from den import characters
-from den.companion import persona, render_companion
+from den import characters, companion
+from den.companion import _read, persona, render_companion
 
 READS = {"hyena": "照閱讀的順序", "buffalo": "最強的感覺", "deer": "世界撐開"}
 
@@ -73,3 +73,63 @@ def test_running_hint_only_without_analysis():
     for prog in ("queued", "running"):
         assert "還在背景跑" not in render_companion(_ctx(analysis=a, progress=prog), _c("hyena"))
         assert "還在背景跑" in render_companion(_ctx(progress=prog), _c("hyena"))
+
+
+def _legacy_render(ctx, character):
+    persona_text = _read("companion/base.md").rstrip() + "\n\n" + _read(f"characters/{character['id']}.md").rstrip() + "\n"
+    if character["voice"].strip():
+        persona_text += "\n" + character["voice"].rstrip() + "\n"
+    out = [persona_text.rstrip(), "", "---", f"# 《{ctx['title'] or ctx['slug']}》",
+           "## 原文", "<source>", ctx["source"].rstrip(), "</source>"]
+    a = ctx["analysis"]
+    if a is not None:
+        out += ["", "## 你讀的時候注意到的結構(私下筆記,不要原樣念給作者)"]
+        if a.get("synopsis"):
+            out.append(f"梗概:{a['synopsis']}")
+        out += [f"- {n['type']} {n['label']}" + (f":{n['note']}" if n.get("note") else "")
+                for n in a.get("nodes") or ()]
+    if a is None and ctx["progress"] in ("queued", "running"):
+        out += ["", "## 現在的狀況", companion._RUNNING]
+    elif a is None:
+        out += ["", "## 現在的狀況", companion._IDLE]
+    return "\n".join(out) + "\n"
+
+
+_FULL = {"synopsis": "梗", "nodes": [{"type": "theme", "label": "海", "note": "鹹"},
+                                    {"type": "motif", "label": "鹽", "note": None}]}
+
+
+@pytest.mark.parametrize("analysis,progress,voice", [
+    (_FULL, "done", ""),
+    ({"synopsis": None, "nodes": []}, "done", ""),
+    (None, "running", ""),
+    (None, "idle", ""),
+    (None, "queued", "角色層一句"),
+    (_FULL, "running", "角色層一句\n"),
+])
+def test_assembled_prompt_keeps_every_byte(analysis, progress, voice):
+    ctx = {"title": "海", "slug": "s", "source": "原文\n", "analysis": analysis, "progress": progress}
+    c = _c("hyena", voice)
+    assert render_companion(ctx, c) == _legacy_render(ctx, c)
+
+
+def test_persona_keeps_every_byte():
+    want = _read("companion/base.md").rstrip() + "\n\n" + _read("characters/deer.md").rstrip() + "\n"
+    assert persona("deer") == want
+    assert persona("deer", "一句\n") == want + "\n一句\n"
+    assert persona("deer", "   ") == want
+
+
+def test_same_prompt_on_different_works_shares_instruction_fingerprint():
+    a = companion.assemble({"title": "甲", "slug": "a", "source": "甲文", "analysis": None, "progress": "idle"}, _c("hyena"))
+    b = companion.assemble({"title": "乙", "slug": "b", "source": "乙文", "analysis": None, "progress": "idle"}, _c("hyena"))
+    assert a.fingerprint()["instructions"] == b.fingerprint()["instructions"]
+    assert a.fingerprint()["material"] != b.fingerprint()["material"]
+
+
+def test_analysis_header_and_status_count_as_instructions():
+    ctx = {"title": "海", "slug": "s", "source": "原文", "progress": "done"}
+    fp = companion.assemble({**ctx, "analysis": _FULL}, _c("hyena")).fingerprint()
+    assert "analysis_header" in fp["layers"] and "analysis" in fp["material"]
+    fp = companion.assemble({**ctx, "analysis": None, "progress": "running"}, _c("hyena")).fingerprint()
+    assert "status" in fp["layers"]

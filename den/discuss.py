@@ -10,7 +10,7 @@ from contextlib import aclosing
 
 from den import characters, companion, spans, stories
 from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
-from marrow import gate, repo
+from marrow import gate, prompt, repo
 
 log = logging.getLogger("hyenovel")
 
@@ -121,8 +121,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     result = None
     slug = turn["slug"]
     failed = False
+    system = companion.assemble(turn["ctx"], character)
     try:
-        async with aclosing(chat(companion.render_companion(turn["ctx"], character),
+        async with aclosing(chat(system.text,
                                  render_turn(history, message or (CONTINUE if history else OPENER), quotes),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
@@ -162,7 +163,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
                 seq += 1
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
-                               usage=usage, mode=character["mode"], character=character["id"])
+                               usage=usage, mode=character["mode"], character=character["id"],
+                               recipe=prompt.recipe(system, companion.CHAT_RUN.as_dict()))
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
     except Exception:

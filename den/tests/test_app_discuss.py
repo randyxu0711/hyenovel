@@ -629,3 +629,14 @@ def test_discuss_legacy_rejected(c, fake_chat, caplog):
 def test_turn_passes_chat_run_config(c, fake_chat):
     first_turn(c)
     assert fake_chat.configs == [companion.CHAT_RUN]
+
+
+def test_assistant_turn_records_recipe_user_turn_does_not(c, fake_chat):
+    sid = first_turn(c)
+    rows = in_loop(c, lambda conn: repo.utterances(conn, repo.discussion_by_external(
+        conn, repo.story_by_slug(conn, "mini")["id"], sid)["id"]))
+    user, asst = rows
+    assert user["recipe"] is None
+    assert asst["recipe"]["run"] == {"model": "sonnet", "effort": "medium"}
+    assert {"base", "character"} <= set(asst["recipe"]["prompt"]["layers"])
+    assert "work" in asst["recipe"]["prompt"]["material"]
