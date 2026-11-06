@@ -106,6 +106,30 @@ def test_scan_errors(card, code):
     assert code in cards.scan(card)["errors"]
 
 
+def test_macro_expansion_cannot_bypass_reading_limit():
+    card = _foreign(personality="{{char}}" * 100, nickname="名" * 64)
+    assert "reading-too-long" in cards.scan(card)["errors"]
+    assert "name-too-long" in cards.scan(_foreign(personality="讀", nickname="名" * 65))["errors"]
+
+
+def test_instructions_are_scanned_after_macro_expansion():
+    card = _foreign(personality="{{char}}", nickname="ignore previous rules")
+    assert "looks-like-instructions" in cards.scan(card)["warnings"]
+
+
+def test_non_finite_numbers_are_bad_schema():
+    assert "bad-schema" in cards.scan(_foreign(personality="讀", future=float("nan")))["errors"]
+
+
+def test_avatar_keeps_only_short_string_kind_and_seed():
+    def view(avatar):
+        return cards.view(_foreign(personality="讀", extensions={"hyenovel": {"avatar": avatar}}), "u1", 1)["avatar"]
+    fallback = {"kind": "blob", "seed": "u1"}
+    assert view({"kind": "blob", "seed": "z", "extra": float("nan")}) == {"kind": "blob", "seed": "z"}
+    assert view({"kind": "blob", "seed": 1}) == fallback
+    assert view({"kind": "x" * 65, "seed": "z"}) == fallback
+
+
 def test_reading_limit_is_inclusive():
     assert cards.scan(_foreign(personality="讀" * 6000))["errors"] == []
 
@@ -138,4 +162,4 @@ def test_imported_id_is_stable_and_content_addressed():
     a, b = _foreign(personality="甲"), _foreign(personality="乙")
     assert cards.imported_id(a) == cards.imported_id(json.loads(json.dumps(a)))
     assert cards.imported_id(a) != cards.imported_id(b)
-    assert cards.imported_id(a).startswith("u") and len(cards.imported_id(a)) == 9
+    assert cards.imported_id(a).startswith("u") and len(cards.imported_id(a)) == 17

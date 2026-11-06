@@ -39,8 +39,8 @@ export async function setCompanion(id: string): Promise<void> {
 }
 
 /** 全域預設陪讀者(要在清單裡),沒有就用清單的預設。進門畫面與新局用它。 */
-export function companionId(chars: { list: { id: string }[]; defaultId: string }): string {
-  return defaultWho && chars.list.some(c => c.id === defaultWho) ? defaultWho : chars.defaultId;
+export function companionId(chars: { active: { id: string }[]; defaultId: string }): string {
+  return defaultWho && chars.active.some(c => c.id === defaultWho) ? defaultWho : chars.defaultId;
 }
 
 /** 與 den/config.py 的 MAX_CHAT_CHARS 一致(den/tests/test_app_errors.py 比對)。 */
@@ -110,8 +110,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
 
   // 這局沒換過人時,由最後說話的那位接著陪讀。
   const last = [...turns].reverse().find(t => t.role === "assistant");
-  const inherited = last ? chars.byId(last.character).id : null;
-  const whoId = picked ?? inherited ?? companionId(chars);
+  const usable = (id: string | null | undefined) => (id && chars.active.some(c => c.id === id) ? id : null);
+  const whoId = usable(picked) ?? usable(last?.character) ?? companionId(chars);
 
   const setDraft = useCallback((v: string | ((d: string) => string)) => {
     const s = now.current.slug;

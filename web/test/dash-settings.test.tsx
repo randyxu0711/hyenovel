@@ -5,10 +5,11 @@ import Dash from "../src/dash/Dash";
 import Paper from "../src/dash/Paper";
 import { loadPaperFlow, setPaperFlow } from "../src/dash/paperFlow";
 import { blobPath } from "../src/dash/Blob";
-import { setLang } from "../src/dash/i18n";
+import { en, setLang, zhHant } from "../src/dash/i18n";
 import { getThemeState, setMode } from "../src/dash/theme";
 import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
+import type { Character } from "../src/dash/api";
 import { olive, grass, hyena, buffalo, deer } from "./dash-fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -223,7 +224,8 @@ describe("設定頁", () => {
     mount();
     const p = await page();
     const snap = () => JSON.stringify(Object.entries(localStorage)) + document.querySelector(".dash-settings")!.innerHTML;
-    const controls = () => [...document.querySelectorAll<HTMLElement>(".dash-settings button, .dash-settings input")];
+    const controls = () => [...document.querySelectorAll<HTMLElement>(".dash-settings button, .dash-settings input")]
+      .filter(el => el.getAttribute("aria-label") !== "匯入角色卡");   // 開的是系統檔案視窗,不改狀態
     let n = 0;
     for (const sec of ["陪讀者", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
       await go(sec);
@@ -272,5 +274,102 @@ describe("記憶頁跳回來源", () => {
     fireEvent.click(await screen.findByRole("link", { name: "那句" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d1"));
     expect(await within(await screen.findByRole("log")).findByText("那句我說的話")).toBeTruthy();
+  });
+});
+
+describe("設定頁:角色卡", () => {
+  let list: Character[];
+  let posts: { card: unknown; confirm: boolean }[];
+  let reply: (confirm: boolean) => Response;
+  const imported = { ...deer, id: "u1", origin: "imported" as const, name: { "zh-Hant": "老讀", en: "Old" } };
+  const mountCards = () => {
+    const f = vi.fn(async (u: string, init?: RequestInit) => {
+      if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
+      if (u === "/api/characters") return json({ characters: list, default: "hyena" });
+      if (u === "/api/characters/import") {
+        const b = JSON.parse(String(init?.body));
+        posts.push(b);
+        return reply(b.confirm);
+      }
+      if (u === "/api/characters/u1" && init?.method === "DELETE") {
+        list = list.map(c => c.id === "u1" ? { ...c, archived: true } : c);
+        return json({ archived: "u1" });
+      }
+      if (u === "/api/works") return json({ works: [] });
+      return json({ sessions: [] });
+    });
+    vi.stubGlobal("fetch", f);
+    render(<MemoryRouter initialEntries={["/settings"]}><Routes><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
+  };
+  const upload = async (content: string) => {
+    const input = (await screen.findByLabelText("匯入角色卡", { selector: "input" })) as HTMLInputElement;
+    const file = new File([content], "card.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => content });
+    fireEvent.change(input, { target: { files: [file] } });
+  };
+  const open = async () => { setLang("zh-Hant"); await go("陪讀者"); return page(); };
+  beforeEach(() => { list = [hyena, imported]; posts = []; reply = () => json({ imported: true, character: imported, warnings: [] }); });
+
+  it("內建角色沒有封存鈕,匯入的角色有;每位都能匯出", async () => {
+    mountCards();
+    const p = await open();
+    expect(p.queryByRole("button", { name: "封存鬣狗" })).toBeNull();
+    expect(p.getByRole("button", { name: "封存老讀" })).toBeTruthy();
+    expect(p.getByRole("link", { name: "匯出鬣狗" }).getAttribute("href")).toBe("/api/characters/hyena/card");
+  });
+  it("匯入有警告時先列出,確認才送第二次", async () => {
+    list = [hyena];
+    reply = confirm => confirm ? json({ imported: true, character: imported, warnings: ["ignored-fields"] })
+      : json({ imported: false, warnings: ["ignored-fields"] });
+    mountCards();
+    const p = await open();
+    await upload(JSON.stringify({ spec: "chara_card_v3" }));
+    expect(await p.findByText(zhHant["card.warn.ignored-fields"])).toBeTruthy();
+    expect(posts).toEqual([{ card: { spec: "chara_card_v3" }, confirm: false }]);
+    list = [hyena, imported];
+    fireEvent.click(p.getByRole("button", { name: "仍要匯入" }));
+    expect(await p.findByRole("radio", { name: /老讀/ })).toBeTruthy();
+    expect(posts[1].confirm).toBe(true);
+    expect(p.queryByText(zhHant["card.warn.ignored-fields"])).toBeNull();
+  });
+  it("警告可以取消,不送第二次", async () => {
+    reply = () => json({ imported: false, warnings: ["newer-spec"] });
+    mountCards();
+    const p = await open();
+    await upload("{}");
+    fireEvent.click(await p.findByRole("button", { name: "取消" }));
+    await waitFor(() => expect(p.queryByText(zhHant["card.warn.newer-spec"])).toBeNull());
+    expect(posts).toHaveLength(1);
+  });
+  it("檔案不是 JSON 時顯示錯誤,不送請求", async () => {
+    mountCards();
+    const p = await open();
+    await upload("not json");
+    expect(await p.findByText(zhHant["card.err.not-json"])).toBeTruthy();
+    expect(posts).toHaveLength(0);
+  });
+  it("den 擋下的卡逐條顯示原因", async () => {
+    reply = () => new Response(JSON.stringify({ detail: "x", code: "bad-card", params: { errors: ["no-reading"] } }), { status: 422 });
+    mountCards();
+    const p = await open();
+    await upload("{}");
+    expect(await p.findByText(zhHant["card.err.no-reading"])).toBeTruthy();
+  });
+  it("封存後從選單消失", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(p.getByRole("button", { name: "封存老讀" }));
+    await waitFor(() => expect(p.queryByRole("radio", { name: /老讀/ })).toBeNull());
+    expect(p.getByRole("radio", { name: /鬣狗/ })).toBeTruthy();
+  });
+  it("每個代碼都有中英文案", () => {
+    for (const code of ["bad-schema", "too-large", "name-too-long", "reading-too-long", "no-reading", "not-json"]) {
+      expect(zhHant[`card.err.${code}` as keyof typeof zhHant]).toBeTruthy();
+      expect(en[`card.err.${code}` as keyof typeof en]).toBeTruthy();
+    }
+    for (const code of ["newer-spec", "looks-like-instructions", "ignored-fields", "bad-colors"]) {
+      expect(zhHant[`card.warn.${code}` as keyof typeof zhHant]).toBeTruthy();
+      expect(en[`card.warn.${code}` as keyof typeof en]).toBeTruthy();
+    }
   });
 });
