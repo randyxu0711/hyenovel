@@ -312,6 +312,24 @@ def test_set_archived_character_is_rejected(cden):
     assert r.is_error and "沒有這隻角色" in _text(r) and "u1" not in _text(r)
 
 
+def test_talk_drops_picked_character_once_archived(cden):
+    _archived_character(cden)
+    conn = db.connect(cden.url)
+    with conn:
+        repo.unarchive_character(conn, "u1")
+    conn.close()
+
+    def archive(i):
+        if i == 0:
+            c = db.connect(cden.url)
+            with c:
+                repo.archive_character(c, "u1", 3.0)
+            c.close()
+    rs = _session(cden.client(), [("set_character", {"character": "u1", "work": "mini"}),
+                                  ("talk_to_companion", {"message": "嗨", "work": "mini"})], archive)
+    assert not rs[-1].is_error
+
+
 def test_list_characters_current_falls_back_when_last_speaker_archived(cden):
     _archived_character(cden)
     conn = db.connect(cden.url)

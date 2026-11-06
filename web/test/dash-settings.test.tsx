@@ -10,6 +10,7 @@ import { getThemeState, setMode } from "../src/dash/theme";
 import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import type { Character } from "../src/dash/api";
+import { companionId } from "../src/dash/useTalk";
 import { olive, grass, hyena, buffalo, deer } from "./dash-fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -164,6 +165,22 @@ describe("設定頁", () => {
     expect(mini()).toBe("s");
   });
 
+  it("陪讀者:den 存好預設才讓開著的對話跟著換", async () => {
+    const f = mount();
+    const base = f.getMockImplementation()!;
+    let release = () => {};
+    const gate = new Promise<void>(r => { release = r; });
+    f.mockImplementation(async (u: string, ...rest: unknown[]) => {
+      if (u === "/api/characters/default") await gate;
+      return (base as (...a: unknown[]) => Promise<Response>)(u, ...rest);
+    });
+    const p = await page();
+    await go("陪讀者");
+    fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
+    expect(companionId(makeCharacters([hyena, buffalo, deer], "hyena"))).toBe("hyena");
+    release();
+    await waitFor(() => expect(companionId(makeCharacters([hyena, buffalo, deer], "hyena"))).toBe("buffalo"));
+  });
   it("陪讀者:den 存不下預設時,選取退回原角色並顯示錯誤", async () => {
     const f = mount();
     const base = f.getMockImplementation()!;

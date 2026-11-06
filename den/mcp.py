@@ -316,6 +316,10 @@ def build_server(den: DenClient) -> MCPServer:
             in_flight.discard(slug)
 
     async def _talk_once(slug: str, message: str, client) -> str:
+        if slug in picked:
+            cs = (await call("GET", "/api/characters"))["characters"]
+            if not any(c["id"] == picked[slug] and not c["archived"] for c in cs):
+                picked.pop(slug, None)
         body = {"session_id": sessions.get(slug), "message": message, "anchors": [],
                 "character": picked.get(slug), "home": "mcp", "client": client}
         try:

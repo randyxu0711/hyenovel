@@ -26,16 +26,10 @@ const writeDraft = (slug: string, text: string) => {
 /** den 給的全域預設陪讀者:載入角色時設一次。 */
 export const initCompanion = (id: string | null) => { defaultWho = id; };
 
-/** 設定頁、指令框換全域預設:先生效,den 存不下就還原並把錯誤丟給呼叫者。 */
+/** 設定頁、指令框換全域預設:den 存好才生效,存不下就把錯誤丟給呼叫者。 */
 export async function setCompanion(id: string): Promise<void> {
-  const before = defaultWho;
+  await api.setDefaultCharacter(id);
   announce(id);
-  try {
-    await api.setDefaultCharacter(id);
-  } catch (e) {
-    if (before !== null) announce(before);
-    throw e;
-  }
 }
 
 /** 全域預設陪讀者(要在清單裡),沒有就用清單的預設。進門畫面與新局用它。 */

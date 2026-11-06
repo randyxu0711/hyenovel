@@ -19,6 +19,7 @@ FALLBACK_COLORS = {"light": {"fill": "#8a8378", "text": "#5f5a52"}, "dark": {"fi
 
 _SCHEMA = Path(__file__).resolve().parent.parent / "marrow" / "schemas" / "card.v3.schema.json"
 _HEX = re.compile(r"#[0-9a-fA-F]{6}")
+_SPEC_VERSION = re.compile(r"(\d+)\.(\d+)")
 _MACRO = re.compile(r"\{\{(char|user)\}\}", re.IGNORECASE)
 _INSTRUCTIONS = re.compile(r"ignore (all |any )?(previous|prior)|system prompt|忽略.{0,8}(指示|指令|規則)"
                            r"|無視.{0,8}(指示|指令|規則)|不要遵守|you are now", re.IGNORECASE)
@@ -59,6 +60,10 @@ def _ltext_ok(value, limit: int) -> bool:
             and all(isinstance(value.get(k), str) and len(value[k]) <= limit for k in ("zh-Hant", "en")))
 
 
+def _name_ok(value) -> bool:
+    return _ltext_ok(value, MAX_NAME) and all(value[k].strip() for k in ("zh-Hant", "en"))
+
+
 def _ext(data: dict) -> dict:
     ext = data.get("extensions", {}).get("hyenovel")
     return ext if isinstance(ext, dict) else {}
@@ -85,10 +90,13 @@ def _avatar(value, character_id: str) -> dict:
     return {"kind": "blob", "seed": character_id}
 
 
-def _reading(data: dict) -> str:
+def _expand(text: str, data: dict) -> str:
     who = {"char": data.get("nickname") or data["name"], "user": "作者"}
-    text = "\n\n".join(x for x in (data.get("personality"), data.get("description")) if x and x.strip())
     return _MACRO.sub(lambda m: who[m[1].lower()], text)
+
+
+def _reading(data: dict) -> str:
+    return _expand("\n\n".join(x for x in (data.get("personality"), data.get("description")) if x and x.strip()), data)
 
 
 def view(card: dict, character_id: str, version: int) -> dict:
@@ -97,21 +105,19 @@ def view(card: dict, character_id: str, version: int) -> dict:
     name, notes = data["name"], data.get("creator_notes", "")[:_FOREIGN_LINE]
     return {
         "id": character_id, "version": version,
-        "name": ext["name"] if _ltext_ok(ext.get("name"), MAX_NAME) else {"zh-Hant": name, "en": name},
+        "name": ext["name"] if _name_ok(ext.get("name")) else {"zh-Hant": name, "en": name},
         "line": ext["line"] if _ltext_ok(ext.get("line"), MAX_LINE) else {"zh-Hant": notes, "en": notes},
         "avatar": _avatar(ext.get("avatar"), character_id),
         "colors": ext["colors"] if _colors_ok(ext.get("colors")) else FALLBACK_COLORS,
-        "voice": _voice(ext),
+        "voice": _expand(_voice(ext), data),
         "mark": ext.get("mark") if ext.get("mark") in MARKS else "pencil",
         "reading": _reading(data),
     }
 
 
 def _newer_spec(spec_version: str) -> bool:
-    try:
-        return float(spec_version) > 3.0
-    except ValueError:
-        return False
+    m = _SPEC_VERSION.match(spec_version)
+    return bool(m) and (int(m[1]), int(m[2])) > (3, 0)
 
 
 def scan(card) -> dict:
@@ -125,22 +131,26 @@ def scan(card) -> dict:
         return {"errors": ["bad-schema"], "warnings": []}
     data = card["data"]
     ext = _ext(data)
-    personality, description, voice = data.get("personality", ""), data.get("description", ""), _voice(ext)
+    personality, description = data.get("personality", ""), data.get("description", "")
+    shown = view(card, "", 0)
+    reading, voice = shown["reading"], shown["voice"]
     errors = []
     if size > MAX_CARD_BYTES:
         errors.append("too-large")
     ext_name = ext.get("name")
-    if max(len(data["name"]), len(data.get("nickname", ""))) > MAX_NAME or (isinstance(ext_name, dict) and not _ltext_ok(ext_name, MAX_NAME)):
+    ext_names = ext_name.values() if isinstance(ext_name, dict) else ()
+    if any(len(x) > MAX_NAME for x in (data["name"], data.get("nickname", ""), *ext_names) if isinstance(x, str)):
         errors.append("name-too-long")
     if not (personality.strip() or description.strip()):
         errors.append("no-reading")
-    reading = _reading(data)
     if len(reading) + len(voice) > MAX_READING:
         errors.append("reading-too-long")
     warnings = []
     if _newer_spec(card["spec_version"]):
         warnings.append("newer-spec")
-    if any(_INSTRUCTIONS.search(x) for x in (reading, voice)):
+    host_sees = (reading, voice, data["name"], data.get("nickname", ""), data.get("creator_notes", ""),
+                 *shown["name"].values(), *shown["line"].values())
+    if any(_INSTRUCTIONS.search(x) for x in host_sees):
         warnings.append("looks-like-instructions")
     if any(data.get(k) for k in _IGNORED):
         warnings.append("ignored-fields")
