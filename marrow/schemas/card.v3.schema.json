@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["spec", "spec_version", "data"],
+  "properties": {
+    "spec": {"const": "chara_card_v3"},
+    "spec_version": {"type": "string"},
+    "data": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "pattern": "\\S"},
+        "nickname": {"type": "string"},
+        "personality": {"type": "string"},
+        "description": {"type": "string"},
+        "creator_notes": {"type": "string"},
+        "extensions": {"type": "object"}
+      }
+    }
+  }
+}
