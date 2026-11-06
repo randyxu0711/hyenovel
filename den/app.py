@@ -62,38 +62,28 @@ import os
 import re
 import secrets
 import time
-from contextlib import aclosing, asynccontextmanager, contextmanager, nullcontext
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Callable, Literal
+from typing import Callable
 
 import filelock
-from fastapi import APIRouter, FastAPI, HTTPException, Path as PathParam, Query, Request, UploadFile
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
-from den import characters, discuss, memory, pipeline, stories, themes, version, views, works
-from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
-                        MAX_CHAT_CHARS, MAX_QUOTES, MAX_REACTION_CHARS, REACTION_MARKS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
-                        valid_slug)
-from den.estimate import estimate
-from den.jobs import JobManager, NothingToResume
-from den.runner import (ClaudePreset, cli_version, find_claude, pick_runner, run_job,
-                        stream_chat)
-from marrow import db, ingest, repo, vizdata
+from den import discuss, version  # noqa: F401
+from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, PHASE_TIMEOUT, PORT,
+                        SESSION_MAX_AGE)
+from den.jobs import JobManager
+from den.routes import catalog, jobs, memory, talk, works
+from den.routes.common import ApiError
+from den.routes.talk import _chat_stream  # noqa: F401
+from den.runner import ClaudePreset, cli_version, find_claude, run_job, stream_chat
+from marrow import db, repo
 
 log = logging.getLogger("hyenovel")
 
-_TERMINAL = ("done", "paused", "failed", "cancelled")
-_SSE_POLL = 15.0        # SSE 多久沒事件就回頭看 DB(兼 keep-alive)
 _RESTART_DELAY = 1.0    # worker 死掉後隔多久重起(別讓壞 DB 變成熱迴圈)
 _TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞檔
-_ATTEMPT_KEYS = ("step", "n", "outcome", "model", "duration_ms", "tokens")
-_LIST_KEYS = ("id", "slug", "title", "state", "step", "error_class", "updated_at",
-              "is_latest_version")
-_LIST_MAX = 100
-_WORKS_MAX = 50
-_JOB_KEYS = ("id", "kind", "story_id", "source_version_id", "state", "step",
-             "error_class", "detail", "params", "created_at", "updated_at")
 
 
 # dashboard 前端依 code 對照人話;detail 維持原字串(MCP shim 靠它),code 另附。
@@ -110,18 +100,6 @@ ERROR_CODES: tuple[str, ...] = (
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
-
-_STORY_ERRORS = {"空白故事": "empty-story", "原文過長": "story-too-long", "bad slug": "bad-slug",
-                 "unknown slug": "unknown-slug-ref"}
-
-
-class ApiError(HTTPException):
-    """帶機器可讀 code 的錯誤;回應 {"detail","code","params"}。"""
-
-    def __init__(self, status: int, code: str, detail: str, params: dict | None = None):
-        super().__init__(status, detail)
-        self.code = code
-        self.params = params or {}
 
 
 async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
@@ -168,56 +146,6 @@ def _is_api(path: str) -> bool:
 def _reject(status: int, code: str, detail: str, where: str) -> JSONResponse:
     log.info("event=reject where=%s", where)
     return JSONResponse({"detail": detail, "code": code, "params": {}}, status_code=status)
-
-
-class ClientIn(BaseModel):
-    # 外部自報字串,進 DB 與 log:限長
-    name: str = Field(max_length=64)
-    version: str | None = Field(default=None, max_length=64)
-
-
-class JobIn(BaseModel):
-    kind: Literal["critique"]
-    slug: str
-    client: ClientIn | None = None
-    resume_only: bool = False   # 不帶稿的交稿:只續跑,不開新的一次分析
-
-
-class StoryIn(BaseModel):
-    text: str
-    title: str | None = None
-    slug: str | None = None
-
-
-_Seq = Annotated[int, PathParam(ge=0, le=2**63 - 1)]
-
-
-class ReactionIn(BaseModel):
-    mark: str = Field(max_length=32)
-    comment: str | None = Field(default=None, max_length=MAX_REACTION_CHARS * 8)
-
-
-class MemoryIn(BaseModel):
-    scope: str = Field(max_length=32)
-    text: str = Field(max_length=MAX_CHAT_CHARS)
-    slug: str | None = Field(default=None, max_length=64)
-    session: str | None = Field(default=None, max_length=64)
-    seq: int | None = Field(default=None, ge=0, le=2**63 - 1)
-    quote: str | None = Field(default=None, max_length=MAX_CHAT_CHARS)
-
-
-class MemoryEditIn(BaseModel):
-    text: str = Field(max_length=MAX_CHAT_CHARS)
-
-
-class DiscussIn(BaseModel):
-    session_id: str | None = Field(default=None, max_length=64)
-    message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
-    anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
-    quotes: list[str] = Field(default_factory=list, max_length=MAX_QUOTES * 8)   # 「帶這段」:原文逐字引文;段數上限由 prepare_turn 回 too-many-quotes,這裡只擋超大 body
-    character: str | None = Field(default=None, max_length=32)
-    home: Literal["web", "mcp"] = "web"
-    client: ClientIn | None = None
 
 
 def load_token(data_dir: Path) -> str:
@@ -302,36 +230,6 @@ def _default_factory():
     def chat_factory():
         return functools.partial(stream_chat, preset, timeout=CHAT_TIMEOUT)
     return factory, chat_factory, cli_version(exe)
-
-
-def _sse_line(ev: dict) -> str:
-    return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-
-
-_BUSY = {"event": "error", "data": {"where": "discuss", "message": "這一局還有一輪在跑",
-                                   "recoverable": True, "code": "busy"}}
-
-
-async def _chat_stream(state, lock: asyncio.Lock | None, events):
-    """一輪討論的 SSE 本體:算進開著的串流(閒置退場不砍)、整輪持該局的鎖。
-
-    鎖在這裡拿而非端點:回應若沒開始送,generator 從沒進來,鎖也就不會漏放。
-    被斷線關掉時 aclosing 一路關到 chat,工人隨之被殺。
-    """
-    state.streams += 1
-    try:
-        if lock is not None and lock.locked():   # 端點判過後、開始前被別人搶先(極窄)
-            yield _sse_line(_BUSY)
-            return
-        async with lock or nullcontext(), aclosing(events):
-            async for ev in events:
-                yield _sse_line(ev)
-    finally:
-        state.streams -= 1
-
-
-def _state_event(job: dict) -> dict:
-    return {"event": "state", "data": {k: job[k] for k in ("state", "step", "error_class", "detail")}}
 
 
 def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=None,
@@ -439,12 +337,6 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                         httponly=True, samesite="strict", path="/", max_age=SESSION_MAX_AGE)
         return resp
 
-    def _job(request: Request, job_id: int) -> dict:
-        job = repo.get_job(request.app.state.mgr.conn, job_id)
-        if job is None:
-            raise HTTPException(404, "job 不存在")
-        return job
-
     @api.post("/launch")
     async def post_launch(request: Request):   # guard 保證只有 Bearer 到得了這裡
         codes = request.app.state.launch_codes
@@ -455,423 +347,13 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         codes[code] = now + LAUNCH_TTL
         return {"url": f"http://{HOST}:{port}/login?code={code}"}
 
-    @api.post("/jobs", status_code=202)
-    async def post_job(body: JobIn, request: Request):
-        if not valid_slug(body.slug):
-            log.info("event=reject where=slug slug=%r", body.slug[:64])
-            raise ApiError(422, "bad-slug", "bad slug")
-        client = body.client.model_dump() if body.client else None
-        runner = pick_runner(client["name"] if client else None, request.app.state.available)
-        if runner is None:
-            log.info("event=reject where=runner client=%r", client and client["name"][:64])
-            raise ApiError(503, "no-runner", "沒有可用的 runner：目前只支援 Claude CLI")
-        try:
-            out = request.app.state.mgr.submit(body.slug, client, runner, resume_only=body.resume_only)
-        except LookupError:
-            raise ApiError(404, "unknown-work", "這篇不在 DB:先執行 python -m marrow.importer") from None
-        except NothingToResume as e:
-            raise ApiError(409, "nothing-to-resume", e.reason) from None
-        return {**out, "runner": runner, "note": "會用你同一份訂閱額度"}
-
     @api.get("/health")
     async def health(request: Request):
         return {"version": request.app.state.version, "pid": os.getpid(),
                 "busy": repo.has_pending_jobs(request.app.state.mgr.conn)}
 
-    @api.post("/stories", status_code=201)
-    async def post_story(body: StoryIn, request: Request):
-        conn = request.app.state.mgr.conn
-        try:
-            with conn:
-                return stories.ingest(conn, body.text, body.title, body.slug, time.time())
-        except ValueError as e:
-            log.info("event=reject where=stories reason=%s", e)
-            raise ApiError(422, _STORY_ERRORS.get(str(e), "bad-slug"), str(e)) from None
-
-    def _slug_ok(slug: str, where: str) -> None:
-        if not valid_slug(slug):
-            log.info("event=reject where=%s reason=bad-slug slug=%r", where, slug[:64])
-            raise ApiError(400, "bad-slug", "bad slug")
-
-    def _unknown(where: str) -> ApiError:
-        log.info("event=reject where=%s reason=unknown-slug", where)
-        return ApiError(404, "unknown-work", "這篇不在 DB")
-
-    @api.get("/stories")
-    async def list_stories(request: Request):
-        return {"stories": views.stories(request.app.state.mgr.conn)}
-
-    @api.get("/characters")
-    async def list_characters():
-        return {"characters": characters.builtins(), "default": characters.DEFAULT_CHARACTER}
-
-    @api.get("/themes")
-    async def list_themes():
-        return {"themes": themes.builtins(), "default": themes.DEFAULT_THEME}
-
-    @api.get("/works")
-    async def list_works(request: Request, q: str | None = None, limit: int = 20):
-        if not 1 <= limit <= _WORKS_MAX:
-            log.info("event=reject where=list-works limit=%s", limit)
-            raise HTTPException(422, f"limit 要在 1–{_WORKS_MAX}")
-        return {"works": works.listing(request.app.state.mgr.conn, q, limit)}
-
-    @api.get("/works/{slug}")
-    async def work_detail(slug: str, request: Request, v: int | None = Query(None, ge=1)):
-        _slug_ok(slug, "work-detail")
-        try:
-            return views.work_detail(request.app.state.mgr.conn, slug, v)
-        except LookupError:
-            raise _unknown("work-detail") from None
-        except views.UnknownVersion:
-            log.info("event=reject where=work-detail reason=unknown-version v=%s", v)
-            raise ApiError(404, "unknown-version", "沒有這個版本") from None
-
-    @api.get("/works/{slug}/map")
-    async def work_map(slug: str, request: Request, v: int | None = Query(None, ge=1)):
-        _slug_ok(slug, "work-map")
-        try:
-            return views.work_map(request.app.state.mgr.conn, slug, v)
-        except LookupError:
-            raise _unknown("work-map") from None
-        except views.UnknownVersion:
-            log.info("event=reject where=work-map reason=unknown-version v=%s", v)
-            raise ApiError(404, "unknown-version", "沒有這個版本") from None
-
-    @api.get("/works/{slug}/sessions")
-    async def work_sessions(slug: str, request: Request, legacy: bool = False):
-        _slug_ok(slug, "work-sessions")
-        try:
-            return {"sessions": views.sessions(request.app.state.mgr.conn, slug, legacy)}
-        except LookupError:
-            raise _unknown("work-sessions") from None
-
-    @api.get("/sessions")
-    async def recent_sessions(request: Request, limit: int = 20, legacy: bool = False):
-        if not 1 <= limit <= 100:
-            log.info("event=reject where=recent-sessions limit=%s", limit)
-            raise HTTPException(422, "limit 要在 1–100")
-        return {"sessions": views.recent_sessions(request.app.state.mgr.conn, limit, legacy)}
-
-    @api.get("/sessions/{session}")
-    async def session_turns(session: str, request: Request, v: int | None = Query(None, ge=1)):
-        try:
-            return views.session_turns(request.app.state.mgr.conn, session, v)
-        except LookupError:
-            log.info("event=reject where=session-turns reason=unknown-session-id")
-            raise ApiError(404, "unknown-session-id", "沒有這一局") from None
-        except views.AmbiguousSession:
-            log.info("event=reject where=session-turns reason=ambiguous-session")
-            raise ApiError(409, "ambiguous-session", "這個局 id 在不只一篇出現") from None
-        except views.UnknownVersion:
-            log.info("event=reject where=session-turns reason=unknown-version v=%s", v)
-            raise ApiError(404, "unknown-version", "沒有這個版本") from None
-
-    @api.get("/estimate")
-    async def get_estimate(request: Request, chars: int = Query(ge=0)):
-        conn = request.app.state.mgr.conn
-        return {"estimate": estimate({s: repo.attempt_history(conn, s) for s in pipeline.CRITIQUE},
-                                     chars)}
-
-    @api.get("/works/{slug}/{part}")
-    async def read_work(slug: str, part: str, request: Request):
-        _slug_ok(slug, "read-work")
-        if part not in works.PARTS:
-            log.info("event=reject where=read-work reason=bad-part part=%r", part[:32])
-            raise ApiError(422, "bad-part", f"part 只能是 {'/'.join(works.PARTS)}")
-        try:
-            return {"text": works.read_part(request.app.state.mgr.conn, slug, part)}
-        except LookupError:
-            raise _unknown("read-work") from None
-        except works.Missing as e:
-            log.info("event=reject where=read-work reason=%s", e.reason)
-            raise ApiError(409, e.reason, e.reason) from None
-
-    @api.post("/works/{slug}/cancel")
-    async def cancel_work(slug: str, request: Request):
-        _slug_ok(slug, "cancel-work")
-        mgr = request.app.state.mgr
-        st = repo.story_by_slug(mgr.conn, slug)
-        if st is None:
-            raise _unknown("cancel-work")
-        done = [j["id"] for j in repo.active_jobs_of_story(mgr.conn, st["id"]) if mgr.cancel(j["id"])]
-        if not done:
-            log.info("event=reject where=cancel-work reason=nothing-running")
-            raise ApiError(409, "nothing-running", "nothing-running")
-        return {"cancelled": done}
-
-    @api.get("/stories/{slug}/viz")
-    async def get_viz(slug: str, request: Request):
-        _slug_ok(slug, "viz")
-        conn = request.app.state.mgr.conn
-        st = repo.story_by_slug(conn, slug)
-        if st is None:
-            raise _unknown("viz")
-        ana = repo.current_artifact(conn, st["id"], "analysis")
-        if ana is None:
-            log.info("event=reject where=viz reason=not-analyzed")
-            raise ApiError(404, "not-analyzed", "這篇還沒分析完成")
-        picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"),
-                                       repo.current_artifact(conn, st["id"], "feedback"))
-        src = repo.source_version(conn, ana["source_version_id"])["text"]
-        return vizdata.viz_payload(slug, ana["body"], vizdata.judgment_for_viz(picked), src)
-
-    @api.get("/stories/{slug}/source")
-    async def get_source(slug: str, request: Request):
-        _slug_ok(slug, "source")
-        conn = request.app.state.mgr.conn
-        st = repo.story_by_slug(conn, slug)
-        if st is None:
-            raise _unknown("source")
-        ana = repo.current_artifact(conn, st["id"], "analysis")
-        sv = (repo.source_version(conn, ana["source_version_id"]) if ana
-              else repo.latest_source_version(conn, st["id"]))
-        return PlainTextResponse(sv["text"], media_type="text/plain; charset=utf-8")
-
-    @api.get("/stories/{slug}/conclusions")
-    async def get_conclusions(slug: str, request: Request):
-        _slug_ok(slug, "conclusions")
-        try:
-            return {"conclusions": views.conclusions(request.app.state.mgr.conn, slug)}
-        except LookupError:
-            raise _unknown("conclusions") from None
-
-    @api.get("/stories/{slug}/transcript")
-    async def get_transcript(slug: str, request: Request):
-        _slug_ok(slug, "transcript")
-        try:
-            return {"turns": views.transcript(request.app.state.mgr.conn, slug)}
-        except LookupError:
-            raise _unknown("transcript") from None
-
-    @api.post("/extract")
-    async def extract(file: UploadFile):
-        data = await file.read(MAX_SOURCE_BYTES + 1)
-        if len(data) > MAX_SOURCE_BYTES:
-            log.info("event=reject where=upload bytes=%s", len(data))
-            raise ApiError(413, "file-too-large", "檔案太大")
-        try:
-            text = ingest.extract_text(file.filename or "", data)
-        except ValueError as e:   # extract_text 內已記 event=extract-fail
-            raise ApiError(400, "extract-failed", str(e)) from None
-        return {"filename": file.filename, "text": text, "chars": len(text)}
-
-    def _reaction_target(request: Request, slug: str, session: str, seq: int) -> int:
-        def reject(status: int, code: str, detail: str) -> ApiError:
-            log.info("event=reject where=reaction reason=%s", code)
-            return ApiError(status, code, detail)
-        _slug_ok(slug, "reaction")
-        try:
-            return discuss.reaction_target(request.app.state.mgr.conn, slug, session, seq)
-        except LookupError:
-            raise _unknown("reaction") from None
-        except discuss.UnknownSession:
-            raise reject(404, "unknown-session", "這篇沒有這一局") from None
-        except discuss.UnknownTurn:
-            raise reject(404, "unknown-turn", "這一局沒有這則發言") from None
-        except discuss.NotAssistantTurn:
-            raise reject(422, "not-assistant-turn", "只能標陪讀者的回覆") from None
-
-    @api.put("/works/{slug}/sessions/{session}/turns/{seq}/reaction")
-    async def put_reaction(slug: str, session: str, seq: _Seq, body: ReactionIn, request: Request):
-        d = _reaction_target(request, slug, session, seq)
-        if body.mark not in REACTION_MARKS:
-            log.info("event=reject where=reaction reason=bad-mark")
-            raise ApiError(422, "bad-mark", "沒有這種記號")
-        comment = (body.comment or "").strip() or None
-        if comment and len(comment) > MAX_REACTION_CHARS:
-            log.info("event=reject where=reaction reason=comment-too-long")
-            raise ApiError(422, "comment-too-long", "短評太長")
-        conn = request.app.state.mgr.conn
-        with conn:
-            repo.set_reaction(conn, d, seq, body.mark, comment, time.time())
-        return {"mark": body.mark, "comment": comment}
-
-    @api.delete("/works/{slug}/sessions/{session}/turns/{seq}/reaction", status_code=204)
-    async def delete_reaction(slug: str, session: str, seq: _Seq, request: Request):
-        d = _reaction_target(request, slug, session, seq)
-        conn = request.app.state.mgr.conn
-        with conn:
-            repo.clear_reaction(conn, d, seq)
-
-    def _memory_reject(status: int, code: str, detail: str) -> ApiError:
-        log.info("event=reject where=memory reason=%s", code)
-        return ApiError(status, code, detail)
-
-    def _memory_text(text: str) -> str:
-        text = text.strip()
-        if not text:
-            raise _memory_reject(422, "blank-memory", "記憶不能是空白")
-        return text
-
-    @contextmanager
-    def _memory_errors():
-        try:
-            yield
-        except LookupError:
-            raise _memory_reject(404, "unknown-memory", "沒有這條記憶") from None
-        except memory.BadSource as e:
-            status = 422 if e.code == "quote-not-in-turn" else 404
-            raise _memory_reject(status, e.code, "來源對不上") from None
-        except memory.MemoryFull:
-            raise _memory_reject(422, "memory-full", "超過這層的字數上限") from None
-        except memory.NotCurrent:
-            raise _memory_reject(409, "memory-not-current", "這條已不是生效中的版本") from None
-        except memory.AlreadyCurrent:
-            raise _memory_reject(409, "memory-is-current", "這條已經是生效中的版本") from None
-
-    @api.get("/memory")
-    async def list_memory(request: Request):
-        return views.memories(request.app.state.mgr.conn)
-
-    @api.post("/memory", status_code=201)
-    async def add_memory(body: MemoryIn, request: Request):
-        if body.scope not in ("author", "work"):
-            raise _memory_reject(422, "bad-scope", "沒有這一層")
-        text = _memory_text(body.text)
-        given = [x is not None for x in (body.session, body.seq, body.quote)]
-        if any(given) and not all(given):
-            raise _memory_reject(422, "bad-source", "來源要給齊")
-        if body.slug is None and (body.scope == "work" or any(given)):
-            raise _memory_reject(422, "slug-required", "要指定作品")
-        conn = request.app.state.mgr.conn
-        story_id = None
-        if body.slug is not None:
-            _slug_ok(body.slug, "memory")
-            st = repo.story_by_slug(conn, body.slug)
-            if st is None:
-                raise _memory_reject(404, "unknown-work", "這篇不在 DB")
-            story_id = st["id"]
-        source = {"session": body.session, "seq": body.seq, "quote": body.quote} if all(given) else None
-        with _memory_errors():
-            mid = memory.remember(conn, body.scope, text, time.time(), story_id=story_id, source=source)
-        return views.memory_row(conn, repo.memory(conn, mid))
-
-    @api.patch("/memory/{memory_id}")
-    async def edit_memory(memory_id: _Seq, body: MemoryEditIn, request: Request):
-        text = _memory_text(body.text)
-        conn = request.app.state.mgr.conn
-        with _memory_errors():
-            mid = memory.edit(conn, memory_id, text, time.time())
-        return views.memory_row(conn, repo.memory(conn, mid))
-
-    @api.post("/memory/{memory_id}/archive", status_code=204)
-    async def archive_memory(memory_id: _Seq, request: Request):
-        with _memory_errors():
-            memory.archive(request.app.state.mgr.conn, memory_id, time.time())
-
-    @api.post("/memory/{memory_id}/revert")
-    async def revert_memory(memory_id: _Seq, request: Request):
-        conn = request.app.state.mgr.conn
-        with _memory_errors():
-            mid = memory.revert(conn, memory_id, time.time())
-        return views.memory_row(conn, repo.memory(conn, mid))
-
-    @api.post("/discuss/{slug}")
-    async def discuss_turn(slug: str, body: DiscussIn, request: Request):
-        def reject(status: int, reason: str, detail: str) -> ApiError:
-            log.info("event=reject where=discuss reason=%s", reason)
-            return ApiError(status, "unknown-work" if reason == "unknown-slug" else reason, detail)
-        if not valid_slug(slug):
-            raise reject(422, "bad-slug", "bad slug")
-        state = request.app.state
-        try:
-            turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes, body.message)
-        except LookupError:
-            raise reject(404, "unknown-slug", "這篇不在 DB") from None
-        except discuss.UnknownSession:
-            raise reject(404, "unknown-session", "這篇沒有這一局") from None
-        except discuss.LegacySession:
-            raise reject(409, "legacy-session", "這是改版前的舊討論,只能看不能續聊") from None
-        except discuss.TooManyQuotes:
-            raise reject(422, "too-many-quotes", "一輪帶的引文太多段") from None
-        except discuss.QuoteNeedsMessage:
-            raise reject(422, "quote-needs-message", "帶引文要同時說點什麼") from None
-        except discuss.QuoteTooLong:
-            raise reject(422, "quote-too-long", "引文太長") from None
-        except discuss.QuoteNotInSource:
-            raise reject(422, "quote-not-in-source", "引文不在原文裡") from None
-        lock = None
-        if body.session_id is not None:   # 新局不會撞:id 這輪才發
-            lock = state.chat_locks.setdefault(f"{slug}/{body.session_id}", asyncio.Lock())
-            if lock.locked():
-                raise reject(409, "busy", "這一局還有一輪在跑")
-        client = body.client.model_dump() if body.client else None
-        try:
-            discuss.pick_character(state.mgr.conn, turn, body.character)
-        except characters.UnknownCharacter:
-            raise reject(422, "unknown-character", "沒有這隻角色") from None
-        events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors,
-                                  body.home, client, quotes=body.quotes)
-        return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-    @api.get("/jobs")
-    async def list_jobs(request: Request, limit: int = 20):
-        if not 1 <= limit <= _LIST_MAX:
-            log.info("event=reject where=list-jobs limit=%s", limit)
-            raise HTTPException(422, f"limit 要在 1–{_LIST_MAX}")
-        rows = repo.list_jobs(request.app.state.mgr.conn, limit)
-        return {"jobs": [{k: r[k] for k in _LIST_KEYS} for r in rows]}
-
-    @api.get("/jobs/{job_id}")
-    async def get_job(job_id: int, request: Request):
-        job = _job(request, job_id)
-        conn = request.app.state.mgr.conn
-        atts = repo.attempts(conn, job_id)
-        return {**{k: job[k] for k in _JOB_KEYS}, "slug": repo.story(conn, job["story_id"])["slug"],
-                "attempts": [{k: a[k] for k in _ATTEMPT_KEYS} for a in atts]}
-
-    async def _act(request: Request, job_id: int, verb: str):
-        _job(request, job_id)
-        if not getattr(request.app.state.mgr, verb)(job_id):
-            log.info("event=reject where=%s job=%s", verb, job_id)
-            raise HTTPException(409, f"目前狀態不能 {verb}")
-        return {"ok": True}
-
-    @api.post("/jobs/{job_id}/cancel")
-    async def cancel(job_id: int, request: Request):
-        return await _act(request, job_id, "cancel")
-
-    @api.post("/jobs/{job_id}/resume")
-    async def resume(job_id: int, request: Request):
-        return await _act(request, job_id, "resume")
-
-    @api.get("/jobs/{job_id}/events")
-    async def events(job_id: int, request: Request):
-        _job(request, job_id)
-        mgr = request.app.state.mgr
-
-        async def stream():
-            q = mgr.bus.subscribe(job_id)
-            request.app.state.streams += 1
-            try:
-                if q.empty():   # 沒得補播:已結束(TTL 過了 / 上個行程跑的)就送現況收尾
-                    job = repo.get_job(mgr.conn, job_id)
-                    if job["state"] in _TERMINAL:
-                        yield _sse_line(_state_event(job))
-                        return
-                while True:
-                    try:
-                        ev = await asyncio.wait_for(q.get(), _SSE_POLL)
-                    except asyncio.TimeoutError:
-                        # bus 不保證發收尾(worker 死在半路之類):DB 已結束就據實收尾
-                        job = repo.get_job(mgr.conn, job_id)
-                        if job["state"] in _TERMINAL and q.empty():
-                            yield _sse_line(_state_event(job))
-                            return
-                        yield ": ping\n\n"
-                        continue
-                    yield _sse_line(ev)
-                    if ev.get("event") in ("done", "error"):
-                        return
-            finally:
-                request.app.state.streams -= 1
-                mgr.bus.unsubscribe(job_id, q)
-
-        return StreamingResponse(stream(), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
+    for module in (catalog, memory, jobs, talk, works):
+        api.include_router(module.router)
     app.include_router(api)
 
     @app.api_route("/api/{rest:path}", include_in_schema=False)
