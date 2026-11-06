@@ -86,7 +86,9 @@ cd web && npm run build && cd ..   # 第一次與每次拉新版後
 
 > 只跑 localhost、單人使用;訂閱認證綁本機憑證,**別部署到雲端**。
 
-### 在 agent 裡(任何目錄的 Claude Code session,需先註冊 hyenovel MCP,見 CLAUDE.md)
+### 在 agent 裡(任何目錄的 Claude Code session)
+
+先註冊 hyenovel MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`
 
 1. `/hyenovel:companion` —— 給一個 .md/.txt 路徑交稿(分析在背景跑),companion 先開口,接著來回聊。
 2. `/hyenovel:continue` —— 接著聊最近那篇。找作品、看分析、停下分析直接用說的(「我有哪些作品」「給我看海那篇的分析」)。
