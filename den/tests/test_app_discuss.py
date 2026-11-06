@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
+from den import companion
 from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from den.runner import RunResult
 from den.tests.conftest import FIXTURES
@@ -34,14 +35,16 @@ class FakeChat:
         self.hang = False
         self.started = threading.Event()   # 卡住的那次已吐出第一個 delta
         self.release = threading.Event()
+        self.configs = []
         self.override = None               # 換掉整個 chat(測例外 / 無 result)
         self.closed = threading.Event()    # 卡住的那次 generator 的 finally 跑過
 
     def __call__(self):
         return self.chat
 
-    async def chat(self, system_prompt, user_prompt):
+    async def chat(self, system_prompt, user_prompt, *, config):
         self.calls.append((system_prompt, user_prompt))
+        self.configs.append(config)
         if self.override:
             async for ev in self.override():
                 yield ev
@@ -165,7 +168,8 @@ def test_assistant_utterance_records_usage(c):
     sid = first_turn(c)
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert user["usage"] is None
-    assert asst["usage"] == {"output": 7, "cost_usd": 0.01, "duration_ms": 42, "model": "claude-x"}
+    assert asst["usage"] == {"output": 7, "cost_usd": 0.01, "duration_ms": 42, "model": "claude-x",
+                            "effort": "medium"}
 
 
 def test_turn_logged_without_text(c, caplog):
@@ -620,3 +624,8 @@ def test_discuss_legacy_rejected(c, fake_chat, caplog):
     assert r.status_code == 409 and r.json()["code"] == "legacy-session"
     assert "where=discuss reason=legacy-session" in caplog.text
     assert fake_chat.calls == []
+
+
+def test_turn_passes_chat_run_config(c, fake_chat):
+    first_turn(c)
+    assert fake_chat.configs == [companion.CHAT_RUN]

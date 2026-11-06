@@ -5,6 +5,9 @@
 from functools import cache
 from pathlib import Path
 
+from marrow.workpacks import RunConfig
+
+CHAT_RUN = RunConfig()
 _PROMPTS = Path(__file__).resolve().parent.parent / "marrow" / "prompts"
 
 

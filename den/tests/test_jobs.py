@@ -30,7 +30,7 @@ class GatedRun:
         if self.exc:
             raise self.exc
 
-        async def run(system_prompt, user_prompt, schema):
+        async def run(system_prompt, user_prompt, schema, *, config):
             self.calls += 1
             self.started.set()
             await self.gate.wait()
@@ -308,7 +308,7 @@ class ScriptRun:
         self.calls = {"analyst": 0, "reviewer": 0}
 
     def __call__(self, on_proc):
-        async def run(system_prompt, user_prompt, schema):
+        async def run(system_prompt, user_prompt, schema, *, config):
             if schema is WORKPACKS["analyst"].schema:
                 self.calls["analyst"] += 1
                 return ok(_analysis())

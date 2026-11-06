@@ -59,7 +59,7 @@ class FakeRun:
         self.script = list(script)
         self.calls = []
 
-    async def __call__(self, system_prompt, user_prompt, schema_):
+    async def __call__(self, system_prompt, user_prompt, schema_, *, config):
         self.calls.append((system_prompt, user_prompt, schema_))
         item = self.script.pop(0)
         if isinstance(item, BaseException):
@@ -104,7 +104,8 @@ def test_happy_path_commits_and_swaps_current(conn):
     assert a["body"] == _analysis() and f["body"] == _notes()
     for art, n in ((a, 0), (f, 0)):
         assert art["provenance"] == {"tier": "A", "runner": "claude-cli", "model": "claude-sonnet",
-                                     "cli_version": "9.9.9", "job": job["id"], "attempt": n}
+                                     "cli_version": "9.9.9", "job": job["id"], "attempt": n,
+                                     "run": {"model": "sonnet", "effort": "medium"}}
     atts = repo.attempts(conn, job["id"])
     assert [(x["step"], x["n"], x["outcome"]) for x in atts] == [
         ("analyst", 0, "ok"), ("reviewer", 0, "ok")]
@@ -203,10 +204,10 @@ def test_analysis_current_before_reviewer_runs(conn):
     seen = {}
 
     class Peek(FakeRun):
-        async def __call__(self, system_prompt, user_prompt, schema_):
+        async def __call__(self, system_prompt, user_prompt, schema_, *, config):
             if system_prompt == WORKPACKS["reviewer"].system_prompt:
                 seen["analysis"] = _current(conn, job, "analysis")["body"]
-            return await super().__call__(system_prompt, user_prompt, schema_)
+            return await super().__call__(system_prompt, user_prompt, schema_, config=config)
 
     _drive(conn, job, Peek(ok(_analysis("本 job")), ok(_notes())))
     assert seen["analysis"] == _analysis("本 job")

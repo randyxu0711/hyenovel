@@ -5,7 +5,7 @@ prompt 是 marrow 內唯一正本(無工具版:原文直接放在使用者訊息
 """
 import graphlib
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import cache
 from pathlib import Path
 from typing import Literal
@@ -21,6 +21,15 @@ Inputs = Mapping[str, dict]
 
 
 @dataclass(frozen=True)
+class RunConfig:
+    model: str = "sonnet"
+    effort: str = "medium"
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class WorkPack:
     name: str
     kind: Literal["analysis", "notes"]
@@ -28,6 +37,7 @@ class WorkPack:
     schema: dict
     needs: tuple[str, ...]
     gate: Callable[[dict, str, Inputs], list[str]]
+    run: RunConfig = RunConfig()
 
 
 # 修補時夾回去的原始輸出上限(解析不出的文字可能是一大段失控輸出)

@@ -21,8 +21,8 @@ log = logging.getLogger("hyenovel")
 
 CRITIQUE: tuple[str, ...] = workpacks.order()
 
-# (system_prompt, user_prompt, schema) -> RunResult;由 worker 注入(綁好 preset、timeout、on_proc)
-RunFn = Callable[[str, str, dict], Awaitable[RunResult]]
+# (system_prompt, user_prompt, schema, *, config) -> RunResult;由 worker 注入(綁好 preset、timeout、on_proc)
+RunFn = Callable[..., Awaitable[RunResult]]
 
 _USAGE_MSG = "撞到訂閱用量上限，稍後再續（與你在 Claude Code 的對話共用同一份額度）"
 _OVERLOAD_MSG = "Anthropic 服務過載，退避重試後仍失敗，稍後再續"
@@ -83,7 +83,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
     while True:
         emit(_phase(step, "start", n))
         try:
-            r = await run(pack.system_prompt, prompt, pack.schema)
+            r = await run(pack.system_prompt, prompt, pack.schema, config=pack.run)
         except asyncio.CancelledError:
             with conn:
                 record("cancelled", None)
@@ -97,7 +97,8 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
                     else workpacks.gate(step, r.parsed, source, inputs))
             if not errs:
                 prov = {"tier": "A", "runner": runner_name, "model": r.model,
-                        "cli_version": cli_version, "job": jid, "attempt": n}
+                        "cli_version": cli_version, "job": jid, "attempt": n,
+                        "run": pack.run.as_dict()}
                 with conn:
                     aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"],
                                                pack.kind, SCHEMA_VERSION, r.parsed, prov, now())

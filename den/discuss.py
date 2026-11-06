@@ -123,7 +123,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     failed = False
     try:
         async with aclosing(chat(companion.render_companion(turn["ctx"], character),
-                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes))) as stream:
+                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes),
+                                 config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
                     yield {"event": "token", "data": {"text": val}}
@@ -149,7 +150,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                           "code": "usage-limit" if result.outcome == "usage-limit" else "chat-failed"}}
         return
     end = now()
-    usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
+    usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model,
+             "effort": companion.CHAT_RUN.effort}
     fp = turn["analysis_fp"]
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫

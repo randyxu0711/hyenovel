@@ -17,6 +17,7 @@ from typing import AsyncIterator, Callable, Mapping
 
 from den import config
 from marrow.jsonout import extract_json
+from marrow.workpacks import RunConfig
 
 log = logging.getLogger("hyenovel")
 
@@ -26,7 +27,6 @@ _AUTH_MSG = "Claude CLI 未登入：在終端機執行 claude 並 /login"
 @dataclass(frozen=True)
 class ClaudePreset:
     exe: str
-    model: str = "sonnet"
     runner_name = "claude-cli"
 
 
@@ -43,29 +43,27 @@ class RunResult:
     text: str | None = None  # 模型的原始文字輸出(CLI 的 result);parsed 抽不出時拿它當修補的 previous
 
 
-def build_argv(preset: ClaudePreset, system_prompt_file: Path, schema: dict) -> list[str]:
+def build_argv(preset: ClaudePreset, config: RunConfig, system_prompt_file: Path, schema: dict) -> list[str]:
     # 不帶 --json-schema:CLI 會在內部自己驗格式、自己重試(smoke:一次 num_turns=4、13 萬
     # output tokens),那段我們的閘門與 log 都看不到。schema 已附在 system prompt,JSON 由我們
     # 解析(marrow.jsonout)、閘門驗,格式錯誤也成為一筆看得見的 attempt。schema 參數保留不用。
     return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
             "--no-session-persistence", "--output-format", "json",
-            "--model", preset.model,
+            "--model", config.model, "--effort", config.effort,
             "--system-prompt-file", str(system_prompt_file)]
 
 
-def build_chat_argv(preset: ClaudePreset, system_prompt_file: Path) -> list[str]:
+def build_chat_argv(preset: ClaudePreset, config: RunConfig, system_prompt_file: Path) -> list[str]:
     # 同 build_argv 的隔離配方,只換成 stream-json 逐字串流
     return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
             "--no-session-persistence", "--output-format", "stream-json",
             "--include-partial-messages", "--verbose",
-            "--model", preset.model,
+            "--model", config.model, "--effort", config.effort,
             "--system-prompt-file", str(system_prompt_file)]
 
 
 def worker_env(env: Mapping[str, str]) -> dict[str, str]:
-    out = {k: env[k] for k in config.ENV_WHITELIST if k in env}
-    out["MAX_THINKING_TOKENS"] = "0"
-    return out
+    return {k: env[k] for k in config.ENV_WHITELIST if k in env}
 
 
 def classify(rc: int, stdout: str) -> tuple[str, dict | None, str | None]:
@@ -138,7 +136,7 @@ def kill_tree(proc) -> None:
 
 
 async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, schema: dict,
-                  *, timeout: float,
+                  *, config: RunConfig, timeout: float,
                   on_proc: Callable[[asyncio.subprocess.Process | None], None] | None = None
                   ) -> RunResult:
     """schema 不傳給 CLI(見 build_argv);保留在簽名上是因 RunFn 介面不變,非 CLI runner 與測試假體會用。
@@ -154,7 +152,7 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
         sp = Path(tmp) / "system.md"
         sp.write_text(system_prompt, encoding="utf-8")
         proc = await asyncio.create_subprocess_exec(
-            *build_argv(preset, sp, schema),
+            *build_argv(preset, config, sp, schema),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, cwd=tmp, env=worker_env(os.environ),
             start_new_session=True)
@@ -184,7 +182,7 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
 
 
 async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str,
-                      *, timeout: float) -> AsyncIterator[tuple[str, str | RunResult]]:
+                      *, config: RunConfig, timeout: float) -> AsyncIterator[tuple[str, str | RunResult]]:
     """逐個 yield ("delta", 文字),最後恰好一次 ("result", RunResult)。
 
     只認 text_delta(見 #13)。消費端中途 aclose / 取消 / 逾時,finally 一律殺整個行程群組。
@@ -198,7 +196,7 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
         sp = Path(tmp) / "system.md"
         sp.write_text(system_prompt, encoding="utf-8")
         proc = await asyncio.create_subprocess_exec(
-            *build_chat_argv(preset, sp),
+            *build_chat_argv(preset, config, sp),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, cwd=tmp, env=worker_env(os.environ),
             start_new_session=True, limit=1 << 24)
