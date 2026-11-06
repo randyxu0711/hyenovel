@@ -8,6 +8,7 @@ export const DEN_ERROR_CODES = [
   "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
   "unknown-character", "unknown-session-id", "ambiguous-session",
   "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session", "usage-limit", "no-response", "commit-failed", "chat-failed",
+  "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
   "den-down",
 ];
 
@@ -49,14 +50,19 @@ export type SessionRow = {
   versions?: [number, number] | null;
 };
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
+export type ReactionMark = "stopped" | "misread";
+export type TurnReaction = { mark: ReactionMark; comment: string | null };
 export type Turn = {
+  /** 這一局裡的序號;剛串流進來的 user 那則沒有 */
+  seq?: number;
+  reaction?: TurnReaction | null;
   role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
   /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有 */
   v?: number;
 };
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {
-  role: "assistant"; text: string; session_id: string; mode: string; character: string; spans: Span[];
+  role: "assistant"; text: string; session_id: string; seq: number; mode: string; character: string; spans: Span[];
   /** 這輪存下當時的最新版(問與答都算這一版) */
   v?: number;
 };
@@ -87,6 +93,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw new DashError(0, "den-down");
   }
   if (!res.ok) await throwDashError(res);
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -105,6 +112,8 @@ async function* stream(url: string, init?: RequestInit): AsyncGenerator<SSEEvent
   }
 }
 
+const reactionUrl = (slug: string, session: string, seq: number) =>
+  `/api/works/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(session)}/turns/${seq}/reaction`;
 const vq = (v?: number) => (v === undefined ? "" : `?v=${v}`);
 
 export const api = {
@@ -134,6 +143,12 @@ export const api = {
   jobEvents: (jobId: number) => stream(`/api/jobs/${jobId}/events`),
   job: (id: number) => request<{ id: number; state: string; step: string | null; created_at: number }>(`/api/jobs/${id}`),
   cancelJob: (id: number) => request<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  setReaction: (slug: string, session: string, seq: number, mark: ReactionMark, comment?: string) =>
+    request<TurnReaction>(reactionUrl(slug, session, seq), {
+      ...post({ mark, comment }), method: "PUT",
+    }),
+  clearReaction: (slug: string, session: string, seq: number) =>
+    request<void>(reactionUrl(slug, session, seq), { method: "DELETE" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */
   talk: (slug: string, body: { session: string | null; message: string; character: string; quotes: string[] }) =>
     stream(`/api/discuss/${encodeURIComponent(slug)}`, post({

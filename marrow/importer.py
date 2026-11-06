@@ -96,7 +96,7 @@ def import_story(conn, story_dir: Path, now: float) -> dict:
             if body is None:
                 continue
             aid, created = repo.add_artifact(
-                conn, sid, vid, kind, schema.SCHEMA_VERSION, body,
+                conn, sid, vid, kind, schema.version_of(kind), body,
                 {"tier": "A", "runner": "legacy-sdk", "imported_from": f"{kind}.json"}, now)
             rep["artifacts_added"] += created
             aids[kind] = aid

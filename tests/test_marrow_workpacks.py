@@ -1,6 +1,8 @@
 """marrow.workpacks:登錄表、無工具 prompt、輸入組裝、閘門分派。"""
 import copy
+import graphlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -91,8 +93,8 @@ def test_prompt_files_have_no_code_fence(name):
 
 
 def test_first_input_wraps_source(source, analysis):
-    assert workpacks.first_input("analyst", "mini", source, None) == f"slug: mini\n<source>\n{source}\n</source>"
-    got = workpacks.first_input("reviewer", "mini", source, analysis)
+    assert workpacks.first_input("analyst", "mini", source, {}) == f"slug: mini\n<source>\n{source}\n</source>"
+    got = workpacks.first_input("reviewer", "mini", source, {"analysis": analysis})
     assert got == (f"slug: mini\n<source>\n{source}\n</source>"
                    f"\n<analysis>\n{canonical_json(analysis)}\n</analysis>")
 
@@ -100,8 +102,8 @@ def test_first_input_wraps_source(source, analysis):
 def test_repair_input_lists_errors_without_answers(source, analysis):
     prev = {"slug": "mini", "title": "x"}
     errors = ["引文找不到:甲", "node id 重複:乙"]
-    out = workpacks.repair_input("analyst", "mini", source, None, prev, errors)
-    assert out.startswith(workpacks.first_input("analyst", "mini", source, None))
+    out = workpacks.repair_input("analyst", "mini", source, {}, prev, errors)
+    assert out.startswith(workpacks.first_input("analyst", "mini", source, {}))
     assert f"<previous_output>\n{canonical_json(prev)}\n</previous_output>" in out
     assert "- 引文找不到:甲\n- node id 重複:乙" in out
     assert "無法解析" not in out
@@ -116,7 +118,7 @@ def test_repair_input_lists_errors_without_answers(source, analysis):
 
 def test_repair_input_with_unparsable_text_truncates(source):
     raw = "前言" + "字" * 25_000
-    out = workpacks.repair_input("analyst", "mini", source, None, raw, ["輸出不是單一 JSON 物件"])
+    out = workpacks.repair_input("analyst", "mini", source, {}, raw, ["輸出不是單一 JSON 物件"])
     assert f"<previous_output>\n{raw[:20_000]}\n</previous_output>" in out
     assert raw[:20_001] not in out
     assert "- 輸出不是單一 JSON 物件" in out
@@ -125,10 +127,10 @@ def test_repair_input_with_unparsable_text_truncates(source):
 
 
 def test_gate_dispatch(source, analysis):
-    assert workpacks.gate("analyst", analysis, source, None) == []
+    assert workpacks.gate("analyst", analysis, source, {}) == []
     bad = copy.deepcopy(analysis)
     bad["nodes"][0]["evidence"][0]["quote"] = "原文裡不存在的句子"
-    assert workpacks.gate("analyst", bad, source, None) != []
+    assert workpacks.gate("analyst", bad, source, {}) != []
 
 
 def test_reviewer_registered():
@@ -140,16 +142,37 @@ def test_reviewer_registered():
 
 def test_reviewer_first_input_needs_analysis(source, analysis):
     with pytest.raises(ValueError):
-        workpacks.first_input("reviewer", "mini", source, None)
+        workpacks.first_input("reviewer", "mini", source, {})
 
 
 def test_gate_dispatch_reviewer(source, analysis):
     notes = {"slug": "mini", "read": "r", "one_line": "o", "points": [
         {"kind": "opinion", "title": "t", "quotes": ["像在等誰"], "refs": ["t99"], "body": "b",
          "question": None}]}
-    assert workpacks.gate("reviewer", notes, source, analysis) == ["筆記「t」: refs t99 不是存在的 node id"]
+    assert workpacks.gate("reviewer", notes, source, {"analysis": analysis}) == ["筆記「t」: refs t99 不是存在的 node id"]
 
 
 def test_criticizer_retired():
     assert "criticizer" not in workpacks.WORKPACKS
     assert not (Path(workpacks.__file__).parent / "prompts" / "criticizer.md").exists()
+
+
+def test_order_follows_needs():
+    assert workpacks.order() == ("analyst", "reviewer")
+
+
+def test_order_rejects_cycle():
+    a = replace(workpacks.WORKPACKS["analyst"], needs=("notes",))
+    with pytest.raises(graphlib.CycleError):
+        workpacks.order({"analyst": a, "reviewer": workpacks.WORKPACKS["reviewer"]})
+
+
+def test_order_rejects_need_without_producer():
+    a = replace(workpacks.WORKPACKS["analyst"], needs=("nope",))
+    with pytest.raises(ValueError, match="nope"):
+        workpacks.order({"analyst": a})
+
+
+def test_first_input_names_missing_need(source):
+    with pytest.raises(ValueError, match="reviewer 需要 analysis"):
+        workpacks.first_input("reviewer", "mini", source, {})

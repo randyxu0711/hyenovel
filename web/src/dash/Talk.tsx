@@ -5,6 +5,7 @@ import Blob, { type BlobState } from "./Blob";
 import Icon from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
+import Reaction from "./Reaction";
 import { useLinks } from "./links";
 import { bare } from "./Paper";
 import { useThemeState } from "./theme";
@@ -57,7 +58,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const { registerTalk } = useLinks();
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
-  const { turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
+  const { markTurn, slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
   const me = chars.byId(whoId);
   const nameOf = (id: string | null, m?: string | null) => localized(chars.byId(id, m).name, lang);
 
@@ -123,6 +124,10 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
       <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
         {who.has(i) && whoLine(c)}
         <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
+        {slug && session && turn.seq !== undefined && (
+          <Reaction key={`${session}-${turn.seq}`} slug={slug} session={session} seq={turn.seq} initial={turn.reaction ?? null}
+            onChange={r => markTurn(session, turn.seq!, r)} />
+        )}
       </div>,
     ];
   });

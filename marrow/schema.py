@@ -11,7 +11,7 @@ from typing import Literal
 
 from jsonschema import Draft202012Validator
 
-SCHEMA_VERSION = 1
+VERSIONS: dict[str, int] = {"analysis": 1, "feedback": 1, "notes": 1}
 _DIR = Path(__file__).resolve().parent / "schemas"
 
 Kind = Literal["analysis", "feedback", "notes"]
@@ -19,7 +19,11 @@ Kind = Literal["analysis", "feedback", "notes"]
 
 @cache
 def _schema(kind: str) -> dict:
-    return json.loads((_DIR / f"{kind}.v1.schema.json").read_text(encoding="utf-8"))
+    return json.loads((_DIR / f"{kind}.v{VERSIONS[kind]}.schema.json").read_text(encoding="utf-8"))
+
+
+def version_of(kind: Kind) -> int:
+    return VERSIONS[kind]
 
 
 def load_schema(kind: Kind) -> dict:

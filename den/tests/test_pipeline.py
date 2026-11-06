@@ -12,8 +12,11 @@ from den import pipeline
 from den.runner import RunResult
 from den.tests.conftest import FIXTURES
 from marrow import repo, schema
+from marrow.prompt import Layer, Prompt
 from marrow.repo import canonical_json
 from marrow.workpacks import WORKPACKS
+
+STEP = {"analysis": "analyst", "notes": "reviewer"}
 
 MINI = FIXTURES / "mini"
 
@@ -59,7 +62,7 @@ class FakeRun:
         self.script = list(script)
         self.calls = []
 
-    async def __call__(self, system_prompt, user_prompt, schema_):
+    async def __call__(self, system_prompt, user_prompt, schema_, *, config):
         self.calls.append((system_prompt, user_prompt, schema_))
         item = self.script.pop(0)
         if isinstance(item, BaseException):
@@ -104,8 +107,16 @@ def test_happy_path_commits_and_swaps_current(conn):
     assert a["body"] == _analysis() and f["body"] == _notes()
     for art, n in ((a, 0), (f, 0)):
         assert art["provenance"] == {"tier": "A", "runner": "claude-cli", "model": "claude-sonnet",
-                                     "cli_version": "9.9.9", "job": job["id"], "attempt": n}
+                                     "cli_version": "9.9.9", "job": job["id"], "attempt": n,
+                                     "run": {"model": "sonnet", "effort": "medium"},
+                                     "prompt": WORKPACKS[STEP[art["kind"]]].prompt.fingerprint()}
+        assert art["schema_version"] == schema.version_of(art["kind"])
     atts = repo.attempts(conn, job["id"])
+    for x in atts:
+        pack = WORKPACKS[x["step"]]
+        assert x["prompt_sha"] == repo.sha256_text(pack.system_prompt)[:12]
+        assert x["recipe"] == {"prompt": pack.prompt.fingerprint(),
+                               "run": {"model": "sonnet", "effort": "medium"}}
     assert [(x["step"], x["n"], x["outcome"]) for x in atts] == [
         ("analyst", 0, "ok"), ("reviewer", 0, "ok")]
     assert atts[0]["artifact_id"] == a["id"] and atts[1]["artifact_id"] == f["id"]
@@ -203,10 +214,10 @@ def test_analysis_current_before_reviewer_runs(conn):
     seen = {}
 
     class Peek(FakeRun):
-        async def __call__(self, system_prompt, user_prompt, schema_):
+        async def __call__(self, system_prompt, user_prompt, schema_, *, config):
             if system_prompt == WORKPACKS["reviewer"].system_prompt:
                 seen["analysis"] = _current(conn, job, "analysis")["body"]
-            return await super().__call__(system_prompt, user_prompt, schema_)
+            return await super().__call__(system_prompt, user_prompt, schema_, config=config)
 
     _drive(conn, job, Peek(ok(_analysis("本 job")), ok(_notes())))
     assert seen["analysis"] == _analysis("本 job")
@@ -439,8 +450,22 @@ def test_prompt_change_changes_sha(conn, monkeypatch):
     import dataclasses
     old = WORKPACKS["analyst"]
     monkeypatch.setitem(WORKPACKS, "analyst",
-                        dataclasses.replace(old, system_prompt=old.system_prompt + "改一個字"))
+                        dataclasses.replace(old, prompt=Prompt((*old.prompt.layers, Layer("extra", "改一個字")))))
     job = _job(conn)
     _drive(conn, job, FakeRun(ok(_analysis()), ok(_notes())))
     got = repo.attempts(conn, job["id"])[0]["prompt_sha"]
     assert got == _sha(old.system_prompt + "改一個字") and got != _sha(old.system_prompt)
+
+
+def test_resume_skips_old_attempt_without_recipe(conn):
+    job = _job(conn)
+    aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"], "analysis", 1,
+                               _analysis(), {"tier": "A"}, 1.0)
+    with conn:
+        repo.add_attempt(conn, job["id"], "analyst", 0, runner="claude-cli", model="m", cli_version=None,
+                         outcome="ok", raw_output=None, parsed=None, gate_verdict=None, tokens=None,
+                         duration_ms=1, artifact_id=aid, now=1.0)
+    run = FakeRun(ok(_notes()))
+    out, _, _ = _drive(conn, job, run)
+    assert out.state == "done" and len(run.calls) == 1
+    assert run.calls[0][0] == WORKPACKS["reviewer"].system_prompt

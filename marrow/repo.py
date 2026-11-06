@@ -13,7 +13,7 @@ import json
 import re
 import sqlite3
 
-_JSON_COLS = {"body", "provenance", "anchors", "refs", "quotes",
+_JSON_COLS = {"recipe", "body", "provenance", "anchors", "refs", "quotes",
               "params", "detail", "parsed", "gate_verdict", "tokens", "usage"}
 
 
@@ -158,13 +158,15 @@ def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
                   origin: str, anchors: list[str], analysis_fp: str | None,
                   usage: dict | None = None, mode: str | None = None,
-                  character: str | None = None, quotes: list[str] | None = None) -> bool:
+                  character: str | None = None, quotes: list[str] | None = None,
+                  recipe: dict | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage, mode, character, quotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, mode, character, quotes, recipe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
          None if usage is None else canonical_json(usage), mode, character,
-         canonical_json(quotes) if quotes else None))
+         canonical_json(quotes) if quotes else None,
+         None if recipe is None else canonical_json(recipe)))
     return cur.rowcount == 1
 
 
@@ -180,6 +182,27 @@ def last_character(conn, discussion_id: int) -> str | None:
     r = conn.execute("SELECT character FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
                      "AND character IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
     return r[0] if r else None
+
+
+def utterance(conn, discussion_id: int, seq: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM utterance WHERE discussion_id = ? AND seq = ?",
+                             (discussion_id, seq)).fetchone())
+
+
+def set_reaction(conn, discussion_id: int, seq: int, mark: str, comment: str | None, now: float) -> None:
+    conn.execute("INSERT INTO reaction (discussion_id, seq, mark, comment, updated_at) VALUES (?, ?, ?, ?, ?) "
+                 "ON CONFLICT (discussion_id, seq) DO UPDATE SET mark = excluded.mark, "
+                 "comment = excluded.comment, updated_at = excluded.updated_at",
+                 (discussion_id, seq, mark, comment, now))
+
+
+def clear_reaction(conn, discussion_id: int, seq: int) -> None:
+    conn.execute("DELETE FROM reaction WHERE discussion_id = ? AND seq = ?", (discussion_id, seq))
+
+
+def reactions(conn, discussion_id: int) -> dict[int, dict]:
+    return {r["seq"]: {"mark": r["mark"], "comment": r["comment"]} for r in conn.execute(
+        "SELECT seq, mark, comment FROM reaction WHERE discussion_id = ?", (discussion_id,))}
 
 
 def utterances(conn, discussion_id: int) -> list[dict]:
@@ -390,15 +413,15 @@ def add_attempt(conn, job_id: int, step: str, n: int, *, runner: str, model: str
                 cli_version: str | None, outcome: str, raw_output: str | None,
                 parsed: dict | None, gate_verdict: dict | None, tokens: dict | None,
                 duration_ms: int | None, artifact_id: int | None, now: float,
-                prompt_sha: str | None = None) -> int:
+                prompt_sha: str | None = None, recipe: dict | None = None) -> int:
     def j(o):
         return None if o is None else canonical_json(o)
     cur = conn.execute(
         "INSERT INTO attempt (job_id, step, n, runner, model, cli_version, outcome, raw_output, "
-        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at, prompt_sha) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "parsed, gate_verdict, tokens, duration_ms, artifact_id, created_at, prompt_sha, recipe) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (job_id, step, n, runner, model, cli_version, outcome, raw_output, j(parsed),
-         j(gate_verdict), j(tokens), duration_ms, artifact_id, now, prompt_sha))
+         j(gate_verdict), j(tokens), duration_ms, artifact_id, now, prompt_sha, j(recipe)))
     return cur.lastrowid
 
 

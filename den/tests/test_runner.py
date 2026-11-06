@@ -10,6 +10,7 @@ import pytest
 
 from den import runner
 from den.runner import ClaudePreset
+from marrow.workpacks import RunConfig
 
 FIX = Path(__file__).resolve().parent / "fixtures"
 OK = json.loads((FIX / "claude_ok.json").read_text())
@@ -33,10 +34,10 @@ def fake(tmp_path):
 
 
 def test_argv_recipe_locked():
-    argv = runner.build_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"), {"a": "中"})
+    argv = runner.build_argv(ClaudePreset("/x/claude"), RunConfig(), Path("/t/sys.md"), {"a": "中"})
     assert argv == ["/x/claude", "-p", "--safe-mode", "--tools", "",
                     "--strict-mcp-config", "--no-session-persistence",
-                    "--output-format", "json", "--model", "sonnet",
+                    "--output-format", "json", "--model", "sonnet", "--effort", "medium",
                     "--system-prompt-file", "/t/sys.md"]
     assert "--bare" not in argv
     # CLI 的 --json-schema 會在內部自己驗、自己重試(我們的閘門與 log 看不到),Task 9 拿掉
@@ -50,7 +51,7 @@ def test_worker_env_whitelist():
     assert not [k for k in env if k.startswith("CLAUDE")]
     assert "ANTHROPIC_API_KEY" not in env and "FOO" not in env
     assert env["PATH"] == "/bin" and env["HOME"] == "/h"
-    assert env["MAX_THINKING_TOKENS"] == "0"
+    assert "MAX_THINKING_TOKENS" not in env
 
 
 def test_classify_ok_fixture():
@@ -110,7 +111,7 @@ def test_make_result_without_usage():
 def test_run_job_ok_stdin_and_isolated_cwd(fake, tmp_path):
     exe = fake("ok")
     seen_procs = []
-    res = asyncio.run(runner.run_job(ClaudePreset(exe), "SYS", "用戶提示", SCHEMA,
+    res = asyncio.run(runner.run_job(ClaudePreset(exe), "SYS", "用戶提示", SCHEMA, config=RunConfig(),
                                      timeout=20, on_proc=seen_procs.append))
     assert res.outcome == "ok" and res.parsed == {"answer": 2}
     assert seen_procs[0] is not None and seen_procs[-1] is None
@@ -123,7 +124,7 @@ def test_run_job_ok_stdin_and_isolated_cwd(fake, tmp_path):
 
 
 def test_run_job_garbage_is_crash(fake):
-    res = asyncio.run(runner.run_job(ClaudePreset(fake("garbage")), "S", "U", SCHEMA, timeout=20))
+    res = asyncio.run(runner.run_job(ClaudePreset(fake("garbage")), "S", "U", SCHEMA, config=RunConfig(), timeout=20))
     assert res.outcome == "crash" and res.raw.strip() == "not json"
 
 
@@ -159,7 +160,7 @@ def test_timeout_kills_and_reports(fake, tmp_path, monkeypatch):
         return await real_wait_for(aw, timeout)
 
     monkeypatch.setattr(runner.asyncio, "wait_for", wait_ready_then_wait_for)
-    res = asyncio.run(runner.run_job(ClaudePreset(fake("sleep")), "S", "U", SCHEMA, timeout=0.3))
+    res = asyncio.run(runner.run_job(ClaudePreset(fake("sleep")), "S", "U", SCHEMA, config=RunConfig(), timeout=0.3))
     assert res.outcome == "timeout"
     pid = _child_pid(tmp_path)
     assert pid and _dead(pid)
@@ -169,7 +170,7 @@ def test_cancel_kills_process_group(fake, tmp_path):
     exe = fake("sleep")
 
     async def drive():
-        task = asyncio.create_task(runner.run_job(ClaudePreset(exe), "S", "U", SCHEMA, timeout=30))
+        task = asyncio.create_task(runner.run_job(ClaudePreset(exe), "S", "U", SCHEMA, config=RunConfig(), timeout=30))
         for _ in range(100):
             if _child_pid(tmp_path):
                 break
@@ -189,16 +190,16 @@ def test_cancel_kills_process_group(fake, tmp_path):
 
 def _chat(exe, timeout=10, prompt="hi"):
     async def go():
-        return [e async for e in runner.stream_chat(ClaudePreset(exe), "sys", prompt, timeout=timeout)]
+        return [e async for e in runner.stream_chat(ClaudePreset(exe), "sys", prompt, config=RunConfig(), timeout=timeout)]
     return asyncio.run(go())
 
 
 def test_chat_argv_recipe_locked():
-    argv = runner.build_chat_argv(ClaudePreset("/x/claude"), Path("/t/sys.md"))
+    argv = runner.build_chat_argv(ClaudePreset("/x/claude"), RunConfig(effort="low"), Path("/t/sys.md"))
     assert argv == ["/x/claude", "-p", "--safe-mode", "--tools", "",
                     "--strict-mcp-config", "--no-session-persistence",
                     "--output-format", "stream-json", "--include-partial-messages", "--verbose",
-                    "--model", "sonnet", "--system-prompt-file", "/t/sys.md"]
+                    "--model", "sonnet", "--effort", "low", "--system-prompt-file", "/t/sys.md"]
 
 
 def test_stream_chat_yields_deltas_then_one_result(fake):
@@ -247,7 +248,7 @@ def test_stream_chat_aclose_kills_worker(fake, tmp_path):
     exe = fake("stream-slow")
 
     async def drive():
-        gen = runner.stream_chat(ClaudePreset(exe), "s", "u", timeout=10)
+        gen = runner.stream_chat(ClaudePreset(exe), "s", "u", config=RunConfig(), timeout=10)
         assert (await gen.__anext__())[0] == "delta"
         for _ in range(100):
             if _child_pid(tmp_path):
@@ -309,7 +310,7 @@ def test_run_job_crash_message_carries_stderr(tmp_path):
     exe = tmp_path / "claude"
     exe.write_text("#!/bin/sh\necho 'kaboom: bad flag' >&2\necho garbage\nexit 1\n")
     exe.chmod(0o755)
-    res = asyncio.run(runner.run_job(ClaudePreset(str(exe)), "s", "u", SCHEMA, timeout=10))
+    res = asyncio.run(runner.run_job(ClaudePreset(str(exe)), "s", "u", SCHEMA, config=RunConfig(), timeout=10))
     assert res.outcome == "crash" and "kaboom: bad flag" in res.message
 
 

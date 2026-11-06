@@ -24,6 +24,9 @@
   GET  /works/{slug}/sessions → {"sessions": [...]}(這篇的局,新到舊)
   GET  /sessions?limit=N    → {"sessions": [...]}(跨作品最近的局;1–100)
   GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id | 409 ambiguous-session
+  PUT  /works/{slug}/sessions/{id}/turns/{seq}/reaction {"mark","comment"?} → {mark, comment}
+  DELETE 同路徑              → 204(404 unknown-work / unknown-session / unknown-turn;
+                            422 not-assistant-turn / bad-mark / comment-too-long)
   GET  /estimate?chars=N    → {"estimate": {...} | null}(開跑前預估)
   GET  /works/{slug}/{part} → {"text"}(part = source/analysis/notes/feedback;422 part 不對、404 無此篇、
                             409 not-analyzed / no-notes / no-feedback)
@@ -54,16 +57,16 @@ import secrets
 import time
 from contextlib import aclosing, asynccontextmanager, nullcontext
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Annotated, Callable, Literal
 
 import filelock
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Path as PathParam, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from den import characters, discuss, pipeline, stories, themes, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
-                        MAX_CHAT_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
+                        MAX_CHAT_CHARS, MAX_QUOTES, MAX_REACTION_CHARS, REACTION_MARKS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
                         valid_slug)
 from den.estimate import estimate
 from den.jobs import JobManager, NothingToResume
@@ -94,6 +97,7 @@ ERROR_CODES: tuple[str, ...] = (
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
     "unknown-character", "unknown-session-id", "ambiguous-session",
     "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",
+    "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
@@ -174,6 +178,14 @@ class StoryIn(BaseModel):
     text: str
     title: str | None = None
     slug: str | None = None
+
+
+_Seq = Annotated[int, PathParam(ge=0, le=2**63 - 1)]
+
+
+class ReactionIn(BaseModel):
+    mark: str = Field(max_length=32)
+    comment: str | None = Field(default=None, max_length=MAX_REACTION_CHARS * 8)
 
 
 class DiscussIn(BaseModel):
@@ -621,6 +633,44 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         except ValueError as e:   # extract_text 內已記 event=extract-fail
             raise ApiError(400, "extract-failed", str(e)) from None
         return {"filename": file.filename, "text": text, "chars": len(text)}
+
+    def _reaction_target(request: Request, slug: str, session: str, seq: int) -> int:
+        def reject(status: int, code: str, detail: str) -> ApiError:
+            log.info("event=reject where=reaction reason=%s", code)
+            return ApiError(status, code, detail)
+        _slug_ok(slug, "reaction")
+        try:
+            return discuss.reaction_target(request.app.state.mgr.conn, slug, session, seq)
+        except LookupError:
+            raise _unknown("reaction") from None
+        except discuss.UnknownSession:
+            raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        except discuss.UnknownTurn:
+            raise reject(404, "unknown-turn", "這一局沒有這則發言") from None
+        except discuss.NotAssistantTurn:
+            raise reject(422, "not-assistant-turn", "只能標陪讀者的回覆") from None
+
+    @api.put("/works/{slug}/sessions/{session}/turns/{seq}/reaction")
+    async def put_reaction(slug: str, session: str, seq: _Seq, body: ReactionIn, request: Request):
+        d = _reaction_target(request, slug, session, seq)
+        if body.mark not in REACTION_MARKS:
+            log.info("event=reject where=reaction reason=bad-mark")
+            raise ApiError(422, "bad-mark", "沒有這種記號")
+        comment = (body.comment or "").strip() or None
+        if comment and len(comment) > MAX_REACTION_CHARS:
+            log.info("event=reject where=reaction reason=comment-too-long")
+            raise ApiError(422, "comment-too-long", "短評太長")
+        conn = request.app.state.mgr.conn
+        with conn:
+            repo.set_reaction(conn, d, seq, body.mark, comment, time.time())
+        return {"mark": body.mark, "comment": comment}
+
+    @api.delete("/works/{slug}/sessions/{session}/turns/{seq}/reaction", status_code=204)
+    async def delete_reaction(slug: str, session: str, seq: _Seq, request: Request):
+        d = _reaction_target(request, slug, session, seq)
+        conn = request.app.state.mgr.conn
+        with conn:
+            repo.clear_reaction(conn, d, seq)
 
     @api.post("/discuss/{slug}")
     async def discuss_turn(slug: str, body: DiscussIn, request: Request):

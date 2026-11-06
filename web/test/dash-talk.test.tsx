@@ -655,4 +655,33 @@ describe("輸入紙與角色狀態", () => {
     expect(drop.querySelector("svg.ico")).not.toBeNull();
     expect(drop.textContent).toBe("");
   });
+
+  it("串流完的回覆當場可標記;沒有 seq 的舊資料沒有記號", async () => {
+    talkReply = () => sse(
+      ["message", { role: "assistant", text: "嗯", session_id: "s1", seq: 1, mode: "direct", character: "buffalo", spans: [] }],
+      ["done", { ok: true, session_id: "s1" }]);
+    mount();
+    await screen.findByText("第一段。");
+    fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "你好" } });
+    fireEvent.click(screen.getByRole("button", { name: "送出" }));
+    fireEvent.click(await screen.findByRole("button", { name: "讀錯了" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]: any) =>
+      u === "/api/works/d1/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
+  });
+
+  it("記號在切分頁和閃一下之後都還在", async () => {
+    text = "海很藍。";
+    rows = [row("s1")];
+    session("s1", [{ ...u("看看"), seq: 0 },
+      { ...a("我讀到「海很藍」。", "buffalo", [{ quote: "海很藍", start: 0, end: 3 }]), seq: 1 }]);
+    const { container } = mount();
+    const mark = await (await findLog()).findByRole("button", { name: "讀錯了" });
+    fireEvent.click(mark);
+    const pressed = () => screen.getByRole("button", { name: "讀錯了" }).getAttribute("aria-pressed");
+    expect(pressed()).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "筆記" }));
+    fireEvent.click(container.querySelector(".dash-mark")!);
+    expect(container.querySelector(".chat-turn.is-flash")).toBeTruthy();
+    expect(pressed()).toBe("true");
+  });
 });

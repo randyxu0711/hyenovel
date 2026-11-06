@@ -10,7 +10,7 @@ from contextlib import aclosing
 
 from den import characters, companion, spans, stories
 from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
-from marrow import gate, repo
+from marrow import gate, prompt, repo
 
 log = logging.getLogger("hyenovel")
 
@@ -41,6 +41,30 @@ class UnknownSession(Exception):
 
 class LegacySession(Exception):
     """改版前的舊局(沒有記 mode 的 assistant 發言):只能看,不能續聊。"""
+
+
+class UnknownTurn(Exception):
+    """這一局沒有這則發言。"""
+
+
+class NotAssistantTurn(Exception):
+    """回饋記號只標在 assistant 的回覆上。"""
+
+
+def reaction_target(conn, slug: str, session: str, seq: int) -> int:
+    """回 discussion id。LookupError 無此篇 / UnknownSession / UnknownTurn / NotAssistantTurn。"""
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise LookupError(slug)
+    d = repo.discussion_by_external(conn, st["id"], session)
+    if d is None:
+        raise UnknownSession(session)
+    u = repo.utterance(conn, d["id"], seq)
+    if u is None:
+        raise UnknownTurn(seq)
+    if u["role"] != "assistant":
+        raise NotAssistantTurn(seq)
+    return d["id"]
 
 
 class QuoteNotInSource(Exception):
@@ -121,9 +145,11 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     result = None
     slug = turn["slug"]
     failed = False
+    system = companion.assemble(turn["ctx"], character)
     try:
-        async with aclosing(chat(companion.render_companion(turn["ctx"], character),
-                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes))) as stream:
+        async with aclosing(chat(system.text,
+                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes),
+                                 config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
                     yield {"event": "token", "data": {"text": val}}
@@ -160,7 +186,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
                 seq += 1
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
-                               usage=usage, mode=character["mode"], character=character["id"])
+                               usage=usage, mode=character["mode"], character=character["id"],
+                               recipe=prompt.recipe(system, companion.CHAT_RUN.as_dict()))
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
     except Exception:
@@ -170,7 +197,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
         return
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
-                                        "session_id": sid, "mode": character["mode"],
+                                        "session_id": sid, "seq": seq, "mode": character["mode"],
                                         "character": character["id"], "v": v,
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)
