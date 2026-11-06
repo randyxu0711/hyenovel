@@ -35,10 +35,10 @@ def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> 
 
 
 def companion_context(conn, slug: str) -> dict:
-    """companion 素材:最新版原文、只在對應最新版時才給的分析、最新版的進度。
+    """companion 素材:最新版原文、只在對應最新版時才給的分析與話題種子、最新版的進度。
 
-    刻意不帶 feedback / 結論(spec §7.4:判斷層的產物進 companion 會被當成自己的閱讀照念)。
-    分析對應舊版時不給:引文會對不上新稿。
+    判斷層只給種子的種類和引文,不帶內文、opinion、feedback、結論(spec §7.4:判斷層的產物進 companion 會被當成自己的閱讀照念)。
+    分析與筆記對應舊版時不給:引文會對不上新稿。
     """
     st = repo.story_by_slug(conn, slug)
     if st is None:
@@ -46,7 +46,10 @@ def companion_context(conn, slug: str) -> dict:
     latest = repo.latest_source_version(conn, st["id"])
     analysis = repo.current_artifact(conn, st["id"], "analysis")
     job = repo.latest_job(conn, st["id"], latest["id"])
+    notes = repo.current_artifact(conn, st["id"], "notes")
+    points = notes["body"]["points"] if notes and notes["source_version_id"] == latest["id"] else ()
     return {
+        "seeds": [{"kind": p["kind"], "quotes": p["quotes"]} for p in points if p["kind"] != "opinion"],
         "slug": slug, "title": st["title"], "source": latest["text"],
         "analysis": analysis["body"] if analysis and analysis["source_version_id"] == latest["id"] else None,
         "progress": job["state"] if job else "none",

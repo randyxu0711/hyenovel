@@ -641,6 +641,41 @@ def test_assistant_turn_records_recipe_user_turn_does_not(c, fake_chat):
     assert "work" in asst["recipe"]["prompt"]["material"]
 
 
+def test_anchored_turn_injects_details_and_records_ids(c, fake_chat):
+    conn_nodes = in_loop(c, lambda conn: repo.current_artifact(
+        conn, repo.story_by_slug(conn, "mini")["id"], "analysis")["body"]["nodes"])
+    n = next(x for x in conn_nodes if x.get("evidence"))
+    q = n["evidence"][0]["quote"]
+    evs = post_discuss(c, "mini", None, f"「{q}」這句呢")
+    sid = evs[-1]["data"]["session_id"]
+    system, user = fake_chat.calls[-1]
+    assert f"「{q}」" in user and n["label"] in user and "私下筆記" in user
+    if n.get("note"):
+        assert n["note"] in user and n["note"] not in system
+    rows = in_loop(c, lambda conn: repo.utterances(conn, repo.discussion_by_external(
+        conn, repo.story_by_slug(conn, "mini")["id"], sid)["id"]))
+    assert n["id"] in rows[1]["recipe"]["retrieved"]
+    assert "私下筆記" not in rows[0]["text"]
+
+
+def test_followup_without_anchor_keeps_previous_turn_details(c, fake_chat):
+    nodes = in_loop(c, lambda conn: repo.current_artifact(
+        conn, repo.story_by_slug(conn, "mini")["id"], "analysis")["body"]["nodes"])
+    n = next(x for x in nodes if x.get("evidence"))
+    sid = post_discuss(c, "mini", None, f"「{n['evidence'][0]['quote']}」這句呢")[-1]["data"]["session_id"]
+    post_discuss(c, "mini", sid, "為什麼?")
+    assert "私下筆記" in fake_chat.calls[-1][1].split("</history>")[-1]
+    assert n["evidence"][0]["quote"] in fake_chat.calls[-1][1].split("</history>")[-1]
+
+
+def test_unanchored_turn_records_empty_retrieved(c, fake_chat):
+    sid = first_turn(c)
+    rows = in_loop(c, lambda conn: repo.utterances(conn, repo.discussion_by_external(
+        conn, repo.story_by_slug(conn, "mini")["id"], sid)["id"]))
+    assert rows[1]["recipe"]["retrieved"] == []
+    assert "這輪可能用得上" not in fake_chat.calls[-1][1]
+
+
 def _reaction_url(sid, seq, slug="mini"):
     return f"/api/works/{slug}/sessions/{sid}/turns/{seq}/reaction"
 

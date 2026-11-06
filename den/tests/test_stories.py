@@ -69,8 +69,37 @@ def test_ingest_rejects_bad_slug(conn):
 
 def test_companion_context_keys_have_no_judgment_layer(conn):
     out = stories.companion_context(conn, "mini")
-    assert set(out) == {"slug", "title", "source", "analysis", "progress"}
+    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds"}
     assert isinstance(out["analysis"], dict) and out["progress"] == "none"
+
+
+def _add_notes(conn, story_id, version_id):
+    body = {"slug": "x", "read": "讀到", "one_line": "一句", "points": [
+        {"kind": k, "title": "標題", "quotes": [f"{k}句"], "refs": None, "body": "內文", "question": "問"}
+        for k in ("moved", "confused", "wondering", "opinion")]}
+    with conn:
+        a, _ = repo.add_artifact(conn, story_id, version_id, "notes", 1, body, {}, 5.0)
+        repo.set_current(conn, story_id, "notes", a)
+
+
+def test_companion_context_seeds_carry_only_kind_and_quotes_and_never_opinion(conn):
+    st = repo.story_by_slug(conn, "mini")
+    _add_notes(conn, st["id"], repo.latest_source_version(conn, st["id"])["id"])
+    assert stories.companion_context(conn, "mini")["seeds"] == [
+        {"kind": "moved", "quotes": ["moved句"]},
+        {"kind": "confused", "quotes": ["confused句"]},
+        {"kind": "wondering", "quotes": ["wondering句"]}]
+
+
+def test_companion_context_hides_seeds_of_older_version(conn):
+    st = repo.story_by_slug(conn, "mini")
+    _add_notes(conn, st["id"], repo.latest_source_version(conn, st["id"])["id"])
+    _ingest(conn, "改過的新稿。", slug="mini")
+    assert stories.companion_context(conn, "mini")["seeds"] == []
+
+
+def test_companion_context_no_notes_no_seeds(conn):
+    assert stories.companion_context(conn, "mini")["seeds"] == []
 
 
 def test_companion_context_unanalyzed_story_has_source_only(conn):

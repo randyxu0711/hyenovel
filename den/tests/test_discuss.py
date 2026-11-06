@@ -25,3 +25,13 @@ def test_render_turn_restores_past_quotes_in_history():
                        {"role": "assistant", "text": "B", "quotes": None}], "C")
     assert out.index("作者指著原文的這幾段:") < out.index("「引一」") < out.index("作者:A") < out.index("你:B")
     assert out.count("作者指著原文的這幾段:") == 1
+
+
+def test_render_turn_puts_notes_before_the_message_on_first_turn():
+    out = render_turn([], "這句?", notes="筆記一\n筆記二")
+    assert out == "筆記一\n筆記二\n\n作者這一輪說:\n這句?"
+
+
+def test_render_turn_puts_notes_after_history_and_before_quotes():
+    out = render_turn([{"role": "user", "text": "A"}], "B", ["引"], notes="筆記")
+    assert out.index("</history>") < out.index("筆記") < out.index("作者指著原文") < out.index("作者這一輪說:")

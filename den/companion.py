@@ -32,10 +32,11 @@ def persona(character_id: str, voice: str = "") -> str:
 
 _RUNNING = "這篇的結構分析還在背景跑,你現在是先憑原文讀。作者問進度,就用你自己的話說還在跑。"
 _IDLE = "這篇目前沒有在跑結構分析,你憑原文讀。"
+_SEED_KIND = {"confused": "讀到卡住:", "wondering": "看不出作用:", "moved": ""}
 
 
 def assemble(ctx: dict, character: dict) -> Prompt:
-    """companion 的 system prompt:人格、原文、精簡分析(不送 edges)、進度。"""
+    """companion 的 system prompt:人格、原文、分析地圖(梗概與標籤)、進度、話題種子。"""
     layers = list(_persona_layers(character["id"], character["voice"]))
     layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
                                 f"{ctx['source'].rstrip()}\n</source>\n", material=True))
@@ -43,10 +44,14 @@ def assemble(ctx: dict, character: dict) -> Prompt:
     if a is not None:
         layers.append(Layer("analysis_header", "\n## 你讀的時候注意到的結構(私下筆記,不要原樣念給作者)\n"))
         lines = [f"梗概:{a['synopsis']}"] if a.get("synopsis") else []
-        lines += [f"- {n['type']} {n['label']}" + (f":{n['note']}" if n.get("note") else "")
-                  for n in a.get("nodes") or ()]
+        lines += [f"- {n['type']} {n['label']}" for n in a.get("nodes") or ()]
         layers.append(Layer("analysis", "".join(x + "\n" for x in lines), material=True))
     else:   # 有分析時在跑的是 reviewer
         status = _RUNNING if ctx["progress"] in ("queued", "running") else _IDLE
         layers.append(Layer("status", f"\n## 現在的狀況\n{status}\n"))
+    if ctx["seeds"]:
+        layers.append(Layer("seeds_header", "\n## 可以聊的地方(私下筆記,不要原樣念給作者)\n"))
+        layers.append(Layer("seeds", "".join(
+            f"- {_SEED_KIND[s['kind']]}" + "".join(f"「{q}」" for q in s["quotes"]) + "\n"
+            for s in ctx["seeds"]), material=True))
     return Prompt(tuple(layers))
