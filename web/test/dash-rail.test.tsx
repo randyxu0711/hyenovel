@@ -51,7 +51,7 @@ describe("useSeen", () => {
 
 type Sess = { session: string; preview: string; versions?: [number, number] | null };
 const fakeTalk = (sessions: Sess[] = [], extra: Record<string, unknown> = {}) => ({
-  sessions: sessions.map(x => ({ started_at: 1, last_at: 1, turns: 1, character: null, mode: null, version: null, legacy: false, ...x })),
+  sessions: sessions.map(x => ({ started_at: 1, last_at: 1, turns: 1, character: null, version: null, legacy: false, ...x })),
   session: null as string | null, streaming: null as string | null, open: vi.fn(), fresh: vi.fn(), ...extra,
 }) as unknown as Talk;
 

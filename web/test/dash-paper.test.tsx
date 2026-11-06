@@ -12,7 +12,7 @@ import { setPaperFlow } from "../src/dash/paperFlow";
 import type { Character } from "../src/dash/api";
 import { hyena, buffalo, deer, ch } from "./dash-fixtures";
 
-const odd = { ...ch("fox", "slow", "狐", "Fox"), mark: "zigzag" as unknown as Character["mark"] };
+const odd = { ...ch("fox", "狐", "Fox"), mark: "zigzag" as unknown as Character["mark"] };
 let links: Links;
 function Probe() { const l = useLinks(); useEffect(() => { links = l; }); return null; }
 

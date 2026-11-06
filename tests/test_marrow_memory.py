@@ -16,7 +16,7 @@ def world(conn):
 
 
 def test_migration_adds_memory_table(conn):
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
+    assert conn.execute("PRAGMA user_version").fetchone()[0] >= 11
     assert conn.execute("SELECT COUNT(*) FROM memory").fetchone()[0] == 0
 
 

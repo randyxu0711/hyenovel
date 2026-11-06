@@ -27,11 +27,11 @@ let rows: object[];
 let text: string;
 let versions: number[];
 
-const a = (t: string, character: string | null, spans: Span[] = [], mode: string | null = null) =>
-  ({ role: "assistant", text: t, ts: 1, mode, character, quotes: [], spans });
-const u = (t: string, quotes: string[] = []) => ({ role: "user", text: t, ts: 1, mode: null, character: null, quotes, spans: [] });
+const a = (t: string, character: string | null, spans: Span[] = []) =>
+  ({ role: "assistant", text: t, ts: 1, character, quotes: [], spans });
+const u = (t: string, quotes: string[] = []) => ({ role: "user", text: t, ts: 1, character: null, quotes, spans: [] });
 const session = (id: string, turns: object[], over: object = {}) => { sessions[id] = { session: id, slug: "d1", title: "海", turns, legacy: false, version: 1, ...over }; };
-const row = (id: string, over: object = {}) => ({ session: id, started_at: 1, last_at: 2, turns: 2, character: "buffalo", mode: "direct", preview: "q1", version: 1, legacy: false, ...over });
+const row = (id: string, over: object = {}) => ({ session: id, started_at: 1, last_at: 2, turns: 2, character: "buffalo", preview: "q1", version: 1, legacy: false, ...over });
 
 function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
   const f = vi.fn(async (url: string, init?: RequestInit) => {
@@ -56,7 +56,7 @@ const loc = () => screen.getByTestId("loc").textContent;
 const whoKey = () => screen.getByRole("button", { name: /^陪讀者:/ });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
   ["token", { text: t.slice(0, 1) }], ["token", { text: t.slice(1) }],
-  ["message", { role: "assistant", text: t, session_id: sid, mode: "slow", character, spans }], ["done", { ok: true, session_id: sid }]);
+  ["message", { role: "assistant", text: t, session_id: sid, character, spans }], ["done", { ok: true, session_id: sid }]);
 const say = (s: string) => {
   fireEvent.change(screen.getByLabelText("對話輸入"), { target: { value: s } });
   fireEvent.click(screen.getByRole("button", { name: "送出" }));
@@ -158,7 +158,7 @@ describe("對話", () => {
         w("token", { text: "半" });
         await gate;
         w("token", { text: "句" });
-        w("message", { role: "assistant", text: "半句", session_id: "s1", mode: "direct", character: "buffalo", spans: [] });
+        w("message", { role: "assistant", text: "半句", session_id: "s1", character: "buffalo", spans: [] });
         w("done", { ok: true, session_id: "s1" });
         c.close();
       },
@@ -188,7 +188,7 @@ describe("對話", () => {
   });
   it("換人那則前才露角色,同一人連續不重複;沒有分隔線;舊局沒有 character 時用同 mode 的角色", async () => {
     rows = [row("s1")];
-    session("s1", [u("一"), a("我先讀", null, [], "slow"), u("二"), a("再讀", "hyena"), u("三"), a("換我", "buffalo")]);
+    session("s1", [u("一"), a("我先讀", "hyena"), u("二"), a("再讀", "hyena"), u("三"), a("換我", "buffalo")]);
     const { container } = mount();
     await (await findLog()).findByText("換我");
     expect(log().queryAllByRole("separator")).toEqual([]);
@@ -418,7 +418,7 @@ describe("邊說邊畫線", () => {
         for (const t of tokens) w("token", { text: t });
         await gate;
         before?.();
-        w("message", { role: "assistant", text: full, session_id: "s1", mode: "direct", character: "buffalo", spans });
+        w("message", { role: "assistant", text: full, session_id: "s1", character: "buffalo", spans });
         w("done", { ok: true, session_id: "s1" });
         c.close();
       },
@@ -582,7 +582,7 @@ describe("交新版之後", () => {
     rows = [row("s1")];
     session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
     talkReply = () => sse(["token", { text: "好" }],
-      ["message", { role: "assistant", text: "好", session_id: "s1", mode: "slow", character: "hyena", spans: [], v: 2 }],
+      ["message", { role: "assistant", text: "好", session_id: "s1", character: "hyena", spans: [], v: 2 }],
       ["done", { ok: true, session_id: "s1" }]);
     mount();
     await (await findLog()).findByText("我先讀");
@@ -601,7 +601,7 @@ describe("交新版之後", () => {
 
 describe("輸入紙與角色狀態", () => {
   const chars = makeCharacters([hyena, buffalo, deer], "hyena");
-  const byId = (id: string | null, m?: string | null) => chars.byId(id, m);
+  const byId = (id: string | null) => chars.byId(id);
   it("speakerChanges:第一則 assistant 與換人那則", () => {
     const ts = [u("q"), a("1", "hyena"), u("q"), a("2", "hyena"), a("3", "deer"), a("4", "deer")];
     expect([...speakerChanges(ts as never, byId)]).toEqual([1, 4]);
@@ -658,7 +658,7 @@ describe("輸入紙與角色狀態", () => {
 
   it("串流完的回覆當場可標記;沒有 seq 的舊資料沒有記號", async () => {
     talkReply = () => sse(
-      ["message", { role: "assistant", text: "嗯", session_id: "s1", seq: 1, mode: "direct", character: "buffalo", spans: [] }],
+      ["message", { role: "assistant", text: "嗯", session_id: "s1", seq: 1, character: "buffalo", spans: [] }],
       ["done", { ok: true, session_id: "s1" }]);
     mount();
     await screen.findByText("第一段。");
