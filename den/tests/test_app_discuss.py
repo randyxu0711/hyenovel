@@ -632,6 +632,28 @@ def test_assistant_turn_records_recipe_user_turn_does_not(c, fake_chat):
     assert "work" in asst["recipe"]["prompt"]["material"]
 
 
+def test_turn_records_character_version_and_uses_latest(c, fake_chat):
+    sid = first_turn(c)
+    assert in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]["recipe"]["character_v"] == 1
+
+    def bump(conn):
+        card = repo.latest_character(conn, "hyena")["card"]
+        card["data"]["personality"] = "新版讀法"
+        with conn:
+            repo.add_character_version(conn, "hyena", card, 2.0)
+    in_loop(c, bump)
+    post_discuss(c, "mini", sid, "再說")
+    rows = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert [u["recipe"]["character_v"] for u in rows if u["role"] == "assistant"] == [1, 2]
+    assert "新版讀法" in fake_chat.calls[-1][0]
+
+
+def test_get_characters_route_lists_versions(c):
+    body = c.get("/api/characters").json()
+    assert body["default"] == "hyena"
+    assert {x["id"]: x["version"] for x in body["characters"]} == {"buffalo": 1, "deer": 1, "hyena": 1}
+
+
 def test_anchored_turn_injects_details_and_records_ids(c, fake_chat):
     conn_nodes = in_loop(c, lambda conn: repo.current_artifact(
         conn, repo.story_by_slug(conn, "mini")["id"], "analysis")["body"]["nodes"])

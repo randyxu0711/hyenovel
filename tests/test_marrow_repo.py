@@ -1,4 +1,6 @@
 """marrow.repo:冪等寫入與 current 指標。repo 不 commit,transaction 由呼叫者擁有。"""
+import hashlib
+
 from marrow import repo
 
 
@@ -442,3 +444,24 @@ def test_recent_discussions_legacy_filter_applies_before_limit(conn):
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["new"]
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1, legacy=True)] == ["old2"]
     assert [g["external_id"] for g in repo.recent_discussions(conn, 5, legacy=True)] == ["old2", "old1"]
+
+
+def test_character_versions_and_latest(conn):
+    assert repo.latest_character(conn, "x") is None and repo.latest_characters(conn) == []
+    repo.add_character(conn, "x", "builtin", 1.0)
+    assert repo.latest_character(conn, "x") is None
+    assert repo.add_character_version(conn, "x", {"a": 1}, 1.0) == 1
+    assert repo.add_character_version(conn, "x", {"a": 2}, 2.0) == 2
+    repo.add_character(conn, "w", "imported", 3.0)
+    repo.add_character_version(conn, "w", {"b": 1}, 3.0)
+    x = repo.latest_character(conn, "x")
+    assert (x["id"], x["origin"], x["archived_at"], x["n"], x["card"]) == ("x", "builtin", None, 2, {"a": 2})
+    assert x["sha256"] == hashlib.sha256(repo.canonical_json({"a": 2}).encode()).hexdigest()
+    assert [(r["id"], r["n"]) for r in repo.latest_characters(conn)] == [("w", 1), ("x", 2)]
+
+
+def test_setting_upsert(conn):
+    assert repo.get_setting(conn, "k") is None
+    repo.set_setting(conn, "k", "a")
+    repo.set_setting(conn, "k", "b")
+    assert repo.get_setting(conn, "k") == "b"

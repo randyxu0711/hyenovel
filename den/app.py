@@ -70,7 +70,7 @@ import filelock
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
-from den import discuss, version  # noqa: F401
+from den import characters, discuss, version  # noqa: F401
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, PHASE_TIMEOUT, PORT,
                         SESSION_MAX_AGE)
 from den.jobs import JobManager
@@ -264,6 +264,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             app.state.streams = 0                       # 開著的 SSE 數;閒置退場不能砍到它
             conn = db.connect(conn_url)
             db.migrate(conn, db.sqlite_path(conn_url))
+            with conn:
+                characters.sync_builtins(conn, time.time())
             mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)
             mgr.startup()
             app.state.mgr = mgr

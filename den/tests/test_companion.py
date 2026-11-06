@@ -12,33 +12,32 @@ def render(ctx, character):
 READS = {"hyena": "照閱讀的順序", "buffalo": "最強的感覺", "deer": "世界撐開"}
 
 
+def _reading(character_id):
+    return _read(f"characters/{character_id}.md")
+
+
 def _c(character_id, voice=""):
-    return {"id": character_id, "voice": voice}
+    return {"id": character_id, "voice": voice, "reading": _reading(character_id)}
 
 
 def test_every_character_gets_base_and_only_its_own_reading():
     assert {c["id"] for c in characters.builtins()} == set(READS)
     for cid, mine in READS.items():
-        p = persona(cid)
+        p = persona(_reading(cid))
         assert "不幫作者寫句子" in p and mine in p
         assert not any(other in p for o, other in READS.items() if o != cid)
-
-
-def test_persona_unknown_character():
-    with pytest.raises(FileNotFoundError):
-        persona("doubt")
 
 
 def test_persona_text_is_channel_agnostic():   # spec §4:人格不提管道
     for cid in READS:
         for word in ("talk", "submit_work", "mcp", "tool"):
-            assert word not in persona(cid)
+            assert word not in persona(_reading(cid))
 
 
 def test_no_character_asks_consent_before_disagreeing():   # spike v1:先徵詢會變閃躲
     for cid in READS:
-        assert "想聽嗎" not in persona(cid)
-        assert "老實講你讀到的" in persona(cid)
+        assert "想聽嗎" not in persona(_reading(cid))
+        assert "老實講你讀到的" in persona(_reading(cid))
 
 
 # ── assemble ──
@@ -122,9 +121,9 @@ def test_assembled_prompt_keeps_every_byte(analysis, progress, voice):
 
 def test_persona_keeps_every_byte():
     want = _read("companion/base.md").rstrip() + "\n\n" + _read("characters/deer.md").rstrip() + "\n"
-    assert persona("deer") == want
-    assert persona("deer", "一句\n") == want + "\n一句\n"
-    assert persona("deer", "   ") == want
+    assert persona(_reading("deer")) == want
+    assert persona(_reading("deer"), "一句\n") == want + "\n一句\n"
+    assert persona(_reading("deer"), "   ") == want
 
 
 def test_same_prompt_on_different_works_shares_instruction_fingerprint():
