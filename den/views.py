@@ -180,12 +180,11 @@ def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:
     for sid, us in by.items():
         asst = [u for u in us if u["role"] == "assistant"]
         last = us[-1]
-        is_legacy = not any(u["mode"] is not None for u in asst)
+        is_legacy = not any(u["character"] is not None for u in asst)
         if is_legacy != legacy:
             continue
         out.append({"session": sid, "started_at": us[0]["ts"], "last_at": last["ts"],
                     "turns": len(asst), "character": asst[-1]["character"] if asst else None,
-                    "mode": asst[-1]["mode"] if asst else None,
                     "preview": us[0]["text"][:60],   # 這局的第一句話(us 依 ts, seq 排)
                     "version": versions.get(asst[-1]["analysis_fp"]) if asst else None,
                     "legacy": is_legacy, "versions": _span(made, us)})
@@ -232,12 +231,12 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
             qs = u["quotes"] or []
         turns.append({"seq": u["seq"], "reaction": marked.get(u["seq"]),
                       "memories": remembered.get(u["seq"], []),
-                      "role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
+                      "role": u["role"], "text": u["text"], "ts": u["ts"],
                       "character": u["character"], "quotes": u["quotes"] or [],
                       "spans": spans.locate_all(qs, shown["text"]),
                       "v": _at(made, u["ts"])})   # 說話當時的版本
     return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
-            "legacy": not any(u["role"] == "assistant" and u["mode"] is not None for u in us),
+            "legacy": not any(u["role"] == "assistant" and u["character"] is not None for u in us),
             "version": shown["n"], "turns": turns}
 
 

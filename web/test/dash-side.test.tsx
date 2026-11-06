@@ -94,13 +94,13 @@ describe("分隔線", () => {
 
 describe("marksFrom", () => {
   const chars = makeCharacters([hyena, buffalo, deer], "hyena");
-  const turn = (role: string, spans: { quote: string; start: number | null; end: number | null }[], character: string | null = null, mode: string | null = null) =>
-    ({ role, text: "", ts: 0, mode, character, quotes: [], spans });
+  const turn = (role: string, spans: { quote: string; start: number | null; end: number | null }[], character: string | null = null) =>
+    ({ role, text: "", ts: 0, character, quotes: [], spans });
   it("assistant 的 spans(有位置的)→ 該 turn 角色的痕跡;user 的引文不畫", () => {
     const marks = marksFrom([
       turn("user", [{ quote: "u", start: 0, end: 1 }]),
       turn("assistant", [{ quote: "a", start: 2, end: 4 }, { quote: "x", start: null, end: null }], "buffalo"),
-      turn("assistant", [{ quote: "b", start: 5, end: 6 }], null, "imaginative"),
+      turn("assistant", [{ quote: "b", start: 5, end: 6 }], "deer"),
     ], chars);
     expect(marks.map(m => [m.start, m.end, m.character])).toEqual([[2, 4, "buffalo"], [5, 6, "deer"]]);
     expect(new Set(marks.map(m => m.id)).size).toBe(2);

@@ -99,9 +99,9 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   }, []);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
-  // 沒選過人時,既有的局由最後說話的那位接著陪讀(舊局只有 mode 也照樣對到角色)。
+  // 沒選過人時,既有的局由最後說話的那位接著陪讀。
   const last = [...turns].reverse().find(t => t.role === "assistant");
-  const inherited = last ? chars.byId(last.character, last.mode).id : null;
+  const inherited = last ? chars.byId(last.character).id : null;
   const whoId = picked ?? inherited ?? companionId(chars);
 
   const setDraft = useCallback((v: string | ((d: string) => string)) => {
@@ -208,14 +208,14 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           setSession(d.session_id);
           if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
-            { seq: userSeq(message, d.seq), role: "user", text: message, ts, mode: null, character: null, quotes, spans: [], v: d.v },
-            { seq: d.seq, role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
+            { seq: userSeq(message, d.seq), role: "user", text: message, ts, character: null, quotes, spans: [], v: d.v },
+            { seq: d.seq, role: "assistant", text: d.text, ts, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           markSeen(slug);
           ok = true;
           // 串流中的痕跡交給逐字稿;spans 裡先前沒找到的(如只差標點)此時補畫
           setLiveMarks([]);
           if (!old) {
-            const by = chars.byId(d.character, d.mode).id;
+            const by = chars.byId(d.character).id;
             const late: string[] = [];
             for (const s of d.spans) {
               if (s.start === null || s.end === null) continue;

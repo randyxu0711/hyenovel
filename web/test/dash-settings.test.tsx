@@ -23,10 +23,10 @@ const row = (session: string, legacy: boolean) => ({
 const DETAIL = {
   session: "old1", slug: "d1", title: "舊的", legacy: true, version: 1,
   turns: [
-    { role: "user", text: "我問的那句", ts: 1, mode: null, character: null, quotes: [], spans: [] },
-    { role: "assistant", text: "舊討論的回答", ts: 2, mode: "direct", character: "buffalo", quotes: [], spans: [] },
-    { role: "user", text: "再問", ts: 3, mode: null, character: null, quotes: [], spans: [] },
-    { role: "assistant", text: "同一位再答", ts: 4, mode: "direct", character: "buffalo", quotes: [], spans: [] },
+    { role: "user", text: "我問的那句", ts: 1, character: null, quotes: [], spans: [] },
+    { role: "assistant", text: "舊討論的回答", ts: 2, character: "buffalo", quotes: [], spans: [] },
+    { role: "user", text: "再問", ts: 3, character: null, quotes: [], spans: [] },
+    { role: "assistant", text: "同一位再答", ts: 4, character: "buffalo", quotes: [], spans: [] },
   ],
 };
 
@@ -238,11 +238,11 @@ describe("記憶頁跳回來源", () => {
       if (u === "/api/works/d1") return json({ slug: "d1", title: "舊的", version: 1, versions: [1], text: "內文", state: "ready", job_id: null, notes_ready: false });
       if (u === "/api/works/d1/map") return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
       if (u === "/api/works/d1/sessions") return json({ sessions: [
-        { session: "s2", started_at: 2, last_at: 3, turns: 1, character: "hyena", mode: null, preview: "新局", version: 1, legacy: false },
-        { session: "s1", started_at: 1, last_at: 2, turns: 1, character: "hyena", mode: null, preview: "舊局", version: 1, legacy: false },
+        { session: "s2", started_at: 2, last_at: 3, turns: 1, character: "hyena", preview: "新局", version: 1, legacy: false },
+        { session: "s1", started_at: 1, last_at: 2, turns: 1, character: "hyena", preview: "舊局", version: 1, legacy: false },
       ] });
       if (u === "/api/sessions/s1") return json({ session: "s1", slug: "d1", title: "舊的", legacy: false, version: 1, turns: [
-        { seq: 0, role: "user", text: "那句我說的話", ts: 1, mode: null, character: null, quotes: [], spans: [], memories: [] },
+        { seq: 0, role: "user", text: "那句我說的話", ts: 1, character: null, quotes: [], spans: [], memories: [] },
       ] });
       if (u === "/api/sessions/s2") return json({ session: "s2", slug: "d1", title: "舊的", legacy: false, version: 1, turns: [] });
       if (u === "/api/memory") return json({ memories: [{

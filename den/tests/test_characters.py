@@ -7,9 +7,7 @@ import pytest
 from den import characters, companion, themes
 
 
-def test_builtins_keep_legacy_mode_mapping():
-    assert {m: characters.of_legacy_mode(m)["id"] for m in ("direct", "imaginative", "slow")} == {
-        "direct": "buffalo", "imaginative": "deer", "slow": "hyena"}
+def test_builtin_lookup():
     assert characters.DEFAULT_CHARACTER == "hyena"
     assert characters.get("deer")["name"]["en"] == "Deer" and characters.get("nope") is None
 

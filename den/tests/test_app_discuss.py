@@ -130,7 +130,7 @@ def test_first_turn_creates_session_and_persists_both(c):
     assert [e["data"] for e in evs[:2]] == [{"text": "A"}, {"text": "B"}]
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
-    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "seq": 1, "mode": "slow",
+    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "seq": 1,
                                "character": "hyena", "spans": [], "v": 1}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
@@ -462,11 +462,11 @@ def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
             assert p["body"] not in system
 
 
-def test_mode_defaults_to_slow_and_is_recorded(c, fake_chat):
+def test_character_defaults_to_hyena_and_is_recorded(c, fake_chat):
     sid = first_turn(c)
     assert "照閱讀的順序" in fake_chat.calls[-1][0]
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
-    assert (user["mode"], asst["mode"]) == (None, "slow")
+    assert (user["character"], asst["character"]) == (None, "hyena")
 
 
 def test_empty_message_stores_only_assistant(c, fake_chat):
@@ -517,7 +517,7 @@ def test_caller_cannot_pick_by_mode(c, fake_chat):
     r = _post(c, {"mode": "direct", "home": "mcp"})
     evs = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
     row = _last_assistant(c, evs)
-    assert (row["character"], row["mode"]) == ("hyena", "slow")
+    assert row["character"] == "hyena" and "mode" not in row
     assert evs[-2]["data"]["character"] == "hyena"
 
 
@@ -525,20 +525,11 @@ def test_character_carries_over_and_overrides(c, fake_chat):
     evs = [json.loads(line[6:]) for line in _post(c, {"character": "deer"}).text.splitlines()
            if line.startswith("data: ")]
     sid = evs[-1]["data"]["session_id"]
-    assert (_last_assistant(c, evs)["character"], _last_assistant(c, evs)["mode"]) == ("deer", "imaginative")
+    assert _last_assistant(c, evs)["character"] == "deer"
     post_discuss(c, "mini", sid, "然後")
     assert _last_assistant(c, evs)["character"] == "deer"
     assert "世界撐開" in fake_chat.calls[-1][0]
 
-
-def test_legacy_session_with_only_mode_keeps_that_mode(c, fake_chat):
-    sid = first_turn(c)
-    def strip(conn):
-        with conn:
-            conn.execute("UPDATE utterance SET character = NULL, mode = 'direct' WHERE role = 'assistant'")
-    in_loop(c, strip)
-    post_discuss(c, "mini", sid, "再說")
-    assert "最強的感覺" in fake_chat.calls[-1][0]
 
 
 def test_get_themes_route(c):

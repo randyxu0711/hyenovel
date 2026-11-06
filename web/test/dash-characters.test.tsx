@@ -8,9 +8,7 @@ describe("useCharacters", () => {
   it("找得到就回那一位", () => {
     expect(chars.byId("deer").id).toBe("deer");
   });
-  it("找不到:先同 mode,再預設,永遠回一個", () => {
-    expect(chars.byId("gone", "direct").id).toBe("buffalo");
-    expect(chars.byId("gone", "no-such-mode").id).toBe("hyena");
+  it("找不到:退回預設,永遠回一個", () => {
     expect(chars.byId("gone").id).toBe("hyena");
     expect(chars.byId(null).id).toBe("hyena");
   });

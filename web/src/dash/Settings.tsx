@@ -70,7 +70,7 @@ function Archive() {
           <h3>{detail.title}</h3>
           {detail.turns.map((turn, i) => {
             if (turn.role !== "assistant") return <div key={i} className="chat-me"><p>{turn.text}</p></div>;
-            const c = chars.byId(turn.character, turn.mode);
+            const c = chars.byId(turn.character);
             return (
               <div key={i} className="chat-turn">
                 {who.has(i) && <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>}

@@ -171,9 +171,9 @@ describe("userSeq", () => {
 
 describe("掛在對話裡", () => {
   const u = (seq: number | undefined, t: string, memories: TurnMemory[] = []) =>
-    ({ seq, role: "user", text: t, ts: 1, mode: null, character: null, quotes: [], spans: [], memories });
+    ({ seq, role: "user", text: t, ts: 1, character: null, quotes: [], spans: [], memories });
   const a = (seq: number, t: string) =>
-    ({ seq, role: "assistant", text: t, ts: 1, mode: null, character: "hyena", quotes: [], spans: [], memories: [] });
+    ({ seq, role: "assistant", text: t, ts: 1, character: "hyena", quotes: [], spans: [], memories: [] });
   const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
   const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
     start(c) {
@@ -183,7 +183,7 @@ describe("掛在對話裡", () => {
     },
   }));
   function mountDash(turns: object[]) {
-    const rows = turns.length ? [{ session: "s1", started_at: 1, last_at: 2, turns: 1, character: "hyena", mode: null, preview: "", version: 1, legacy: false }] : [];
+    const rows = turns.length ? [{ session: "s1", started_at: 1, last_at: 2, turns: 1, character: "hyena", preview: "", version: 1, legacy: false }] : [];
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       const p = url.split("?")[0];
       if (p === "/api/themes") return json({ themes: [olive], default: "olive" });
@@ -193,7 +193,7 @@ describe("掛在對話裡", () => {
       if (p === "/api/works/d1/map") return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
       if (p === "/api/works/d1/sessions") return json({ sessions: rows });
       if (p.startsWith("/api/discuss/")) return sse(
-        ["message", { role: "assistant", text: "回覆", session_id: "s1", seq: 1, mode: "slow", character: "hyena", spans: [] }],
+        ["message", { role: "assistant", text: "回覆", session_id: "s1", seq: 1, character: "hyena", spans: [] }],
         ["done", { ok: true, session_id: "s1" }]);
       if (p === "/api/sessions/s1") return json({ session: "s1", slug: "d1", title: "海", turns, legacy: false, version: 1 });
       return json({ sessions: [] });

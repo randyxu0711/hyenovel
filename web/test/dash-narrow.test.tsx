@@ -28,7 +28,7 @@ function mount(path = "/w/d1") {
     if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "海水很藍", state: "ready", job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map") return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
     if (p.startsWith("/api/discuss/")) return sse(
-      ["message", { role: "assistant", text: "「海」好", session_id: "s1", mode: "slow", character: "hyena", spans: [{ quote: "海", start: 0, end: 1 }] }],
+      ["message", { role: "assistant", text: "「海」好", session_id: "s1", character: "hyena", spans: [{ quote: "海", start: 0, end: 1 }] }],
       ["done", { ok: true, session_id: "s1" }]);
     return json({ sessions: [] });
   }));

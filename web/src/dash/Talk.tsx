@@ -28,12 +28,12 @@ export function versionBreaks(turns: Turn[]): Set<number> {
   return out;
 }
 
-export function speakerChanges(turns: Turn[], byId: (id: string | null, m?: string | null) => Character): Set<number> {
+export function speakerChanges(turns: Turn[], byId: (id: string | null) => Character): Set<number> {
   const out = new Set<number>();
   let prev: string | null = null;
   turns.forEach((turn, i) => {
     if (turn.role !== "assistant") return;
-    const id = byId(turn.character, turn.mode).id;
+    const id = byId(turn.character).id;
     if (id !== prev) out.add(i);
     prev = id;
   });
@@ -61,7 +61,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
   const { markTurn, markMemories, slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
   const me = chars.byId(whoId);
-  const nameOf = (id: string | null, m?: string | null) => localized(chars.byId(id, m).name, lang);
+  const nameOf = (id: string | null) => localized(chars.byId(id).name, lang);
 
   useEffect(() => {
     const el = log.current;
@@ -121,7 +121,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
         </div>,
       ];
     }
-    const c = chars.byId(turn.character, turn.mode);
+    const c = chars.byId(turn.character);
     lastId = c.id;
     const lit = flash?.i === i;
     return [brk,

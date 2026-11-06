@@ -1,4 +1,4 @@
-"""角色登記表:內建角色是 marrow/prompts/characters/<id>.json(長相)+ <id>.md(讀法)。mode 只剩舊局對應用。"""
+"""角色登記表:內建角色是 marrow/prompts/characters/<id>.json(長相)+ <id>.md(讀法)。"""
 import json
 from functools import cache
 from pathlib import Path
@@ -8,7 +8,7 @@ from den import companion, themes
 _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characters"
 
 DEFAULT_CHARACTER = "hyena"
-_FIELDS = {"id", "mode", "name", "line", "avatar", "colors", "voice"}
+_FIELDS = {"id", "name", "line", "avatar", "colors", "voice"}
 MARKS = ("pencil", "highlighter", "circle")
 
 
@@ -51,11 +51,6 @@ def resolve(character: str | None, last: str | None) -> dict:
             raise UnknownCharacter(character)
         return found
     return (last and get(last)) or get(DEFAULT_CHARACTER)
-
-
-def of_legacy_mode(mode: str) -> dict:
-    """舊局只記了 mode 沒記角色時,對回當時的角色。"""
-    return next(c for c in _load() if c["mode"] == mode)
 
 
 def check_colors(colors: dict) -> list[str]:
