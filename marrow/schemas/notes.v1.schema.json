@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hyenovel/notes.v1.schema.json",
   "title": "hyenovel reading notes",
-  "description": "備課筆記:reviewer(中性冷讀者)讀原文與分析後,值得跟作者聊的點。只給作者看,不進 companion 素材。refs 指向 analysis 的 node id;quotes 為逐字原文。",
+  "description": "閱讀筆記:讀原文與分析後對文本下的判斷。refs 指向 analysis 的 node id;quotes 為逐字原文。",
   "type": "object",
   "required": [
     "slug",
@@ -21,7 +21,7 @@
     },
     "points": {
       "type": "array",
-      "description": "值得跟作者聊的點,依輕重排序,第一條最重要。",
+      "description": "對文本的判斷,依輕重排序,第一條最重要。",
       "items": {
         "$ref": "#/$defs/point"
       },
@@ -29,7 +29,7 @@
     },
     "one_line": {
       "type": "string",
-      "description": "如果作者只想聽一件事,最值得先想的是什麼。"
+      "description": "這篇最值得先想的一件事。"
     }
   },
   "$defs": {
@@ -53,7 +53,7 @@
             "wondering",
             "opinion"
           ],
-          "description": "moved=被打動、confused=讀不懂或卡住、wondering=想問作者、opinion=你的判斷。"
+          "description": "moved=被打動、confused=讀不懂或卡住、wondering=讀得懂但看不出這個選擇起了什麼作用、opinion=你的判斷。"
         },
         "title": {
           "type": "string",
@@ -86,7 +86,7 @@
             "string",
             "null"
           ],
-          "description": "留給作者的問題(沒有填 null)。"
+          "description": "讀完留下、順著想下去會有收穫的問題(沒有填 null)。"
         }
       }
     }

@@ -43,9 +43,29 @@ def test_prompts_are_toolless(name):
 
 
 def test_prompts_keep_persona():
-    assert "絕不評價好壞" in workpacks.WORKPACKS["analyst"].system_prompt
+    a = workpacks.WORKPACKS["analyst"].system_prompt
+    assert "不評價好壞" in a and "不給修改建議" in a
+    assert "逐字" in a and "不要硬連" in a and "被閘門擋下時" in a
     r = workpacks.WORKPACKS["reviewer"].system_prompt
-    assert "第一條放最重要的一件" in r and "中性的讀者" in r and "不准寫「文筆優美」" in r
+    assert "第一條放這篇最大的問題" in r and "不認識的人寫的稿子" in r and "「文筆優美」" in r
+    assert "真的沒有大問題就照實說" in r and "直接寫缺什麼" in r
+
+
+def test_reviewer_prompt_has_no_quota_or_example():
+    raw = (Path(workpacks.__file__).parent / "prompts" / "reviewer.md").read_text(encoding="utf-8")
+    for banned in ("至少", "3–6", '{"kind"', "**", "不准"):
+        assert banned not in raw
+
+
+def test_analyst_prompt_has_no_legacy_or_emphasis():
+    raw = (Path(workpacks.__file__).parent / "prompts" / "analyst.md").read_text(encoding="utf-8")
+    for banned in ("Criticizer", "source.md", "analysis.json", "極重要", "絕不", "**"):
+        assert banned not in raw
+
+
+def test_output_format_has_no_emphasis():
+    tail = workpacks.WORKPACKS["analyst"].system_prompt.split("\n## 輸出格式\n")[1]
+    assert "**" not in tail.split("\n")[0]
 
 
 @pytest.mark.parametrize("name,key", [("analyst", "edges"), ("reviewer", "points")])
@@ -90,7 +110,7 @@ def test_repair_input_lists_errors_without_answers(source, analysis):
         rest = rest.replace(e, "")
     assert rest == ("slug: mini\n<source>\n\n</source>"
                     "\n<previous_output>\n\n</previous_output>\n"
-                    "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
+                    "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，修正連帶要改的地方之外，其餘內容保持不變：\n"
                     "- \n- ")
 
 

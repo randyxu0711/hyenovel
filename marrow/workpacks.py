@@ -36,7 +36,7 @@ def _system_prompt(name: str, sch: dict) -> str:
     shown = {k: v for k, v in sch.items() if k != "$schema"}
     return (_prompt(name).rstrip()
             + "\n\n## 輸出格式\n"
-            + "只輸出**單一 JSON 物件**：不要用程式碼框（```）包住，也不要任何前後說明文字。"
+            + "只輸出單一 JSON 物件：不要用程式碼框（```）包住，也不要任何前後說明文字。"
             + "這個物件必須符合下列 JSON Schema：\n"
             + canonical_json(shown) + "\n")
 
@@ -69,7 +69,7 @@ def repair_input(name: str, slug: str, source: str, analysis: dict | None,
                "請依輸出格式從頭重交完整的 JSON：\n")
     else:
         prev = canonical_json(previous)
-        ask = "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，其餘內容保持不變：\n"
+        ask = "上一份輸出沒通過驗證，逐條錯誤如下。請修正這些問題後重交整份 JSON，修正連帶要改的地方之外，其餘內容保持不變：\n"
     return (first_input(name, slug, source, analysis)
             + f"\n<previous_output>\n{prev}\n</previous_output>\n"
             + ask
