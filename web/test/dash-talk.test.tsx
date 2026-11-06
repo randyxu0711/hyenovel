@@ -670,6 +670,7 @@ describe("輸入紙與角色狀態", () => {
   });
 
   it("記號在切分頁和閃一下之後都還在", async () => {
+    text = "海很藍。";
     rows = [row("s1")];
     session("s1", [{ ...u("看看"), seq: 0 },
       { ...a("我讀到「海很藍」。", "buffalo", [{ quote: "海很藍", start: 0, end: 3 }]), seq: 1 }]);
