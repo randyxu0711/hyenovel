@@ -46,3 +46,4 @@ htmlcov/
 # graphify 知識圖(本機產物)
 graphify-out/
 CLAUDE.local.md
+/CLAUDE.md

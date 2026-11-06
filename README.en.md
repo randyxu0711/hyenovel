@@ -86,7 +86,9 @@ Existing users: import pieces from the old `stories/` once with `python -m marro
 
 > localhost, single-user only; subscription auth is bound to local credentials — **do not deploy to the cloud**.
 
-### In the agent (a Claude Code session in any directory; register the hyenovel MCP first, see CLAUDE.md)
+### In the agent (a Claude Code session in any directory)
+
+Register the hyenovel MCP first: `claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`
 
 1. `/hyenovel:companion` — give a .md/.txt path to submit (analysis runs in the background); the companion speaks first, then you talk.
 2. `/hyenovel:continue` — pick up the most recent piece. Finding works, reading the analysis or stopping a run: just ask ("which pieces do I have", "show me the analysis of the sea one").
