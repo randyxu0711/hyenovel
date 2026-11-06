@@ -19,8 +19,7 @@ from marrow.schema import SCHEMA_VERSION
 
 log = logging.getLogger("hyenovel")
 
-# 宣告式步驟清單;reviewer 的 analysis 輸入 = 本 job analyst 步的產物
-CRITIQUE: tuple[str, ...] = ("analyst", "reviewer")
+CRITIQUE: tuple[str, ...] = workpacks.order()
 
 # (system_prompt, user_prompt, schema) -> RunResult;由 worker 注入(綁好 preset、timeout、on_proc)
 RunFn = Callable[[str, str, dict], Awaitable[RunResult]]
@@ -56,14 +55,14 @@ def _phase(name: str, status: str, attempt: int, detail: str | None = None) -> d
     return {"event": "phase", "data": data}
 
 
-async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis: dict | None,
+async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: workpacks.Inputs,
                     run: RunFn, emit, *, runner_name: str, cli_version: str | None,
                     now, sleep) -> dict | StepOutcome:
     """一步的 attempt 迴圈。成功回 artifact,停止回 StepOutcome。"""
     pack = workpacks.WORKPACKS[step]
     jid = job["id"]
     n = sum(1 for a in repo.attempts(conn, jid) if a["step"] == step)
-    prompt = workpacks.first_input(step, slug, source, analysis)
+    prompt = workpacks.first_input(step, slug, source, inputs)
     # 該次工人 system prompt 全文的指紋:prompt 是 repo 檔案,改過就重建不出當時那版
     prompt_sha = repo.sha256_text(pack.system_prompt)[:12]
     gate_retries = transient = 0
@@ -95,7 +94,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
         if r.outcome == "ok":
             # 抽不出 JSON 物件也是格式錯誤:記成 gate、走同一條修補重試,不另開分流
             errs = ([_NOT_JSON] if r.parsed is None
-                    else workpacks.gate(step, r.parsed, source, analysis))
+                    else workpacks.gate(step, r.parsed, source, inputs))
             if not errs:
                 prov = {"tier": "A", "runner": runner_name, "model": r.model,
                         "cli_version": cli_version, "job": jid, "attempt": n}
@@ -116,7 +115,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, analysis
                 return stop(StepOutcome("paused", "gate", {"message": _GATE_MSG}))
             previous = r.parsed if r.parsed is not None else (
                 r.text if r.text is not None else r.raw)
-            prompt = workpacks.repair_input(step, slug, source, analysis, previous, errs)
+            prompt = workpacks.repair_input(step, slug, source, inputs, previous, errs)
         else:
             with conn:
                 record(r.outcome, r)
@@ -140,20 +139,20 @@ async def run_critique(conn, job: dict, run: RunFn, emit: Callable[[dict], None]
     jid = job["id"]
     source = repo.source_version(conn, job["source_version_id"])["text"]
     slug = repo.story(conn, job["story_id"])["slug"]
-    done: dict[str, dict] = {}
+    inputs: dict[str, dict] = {}
     for step in CRITIQUE:
-        analysis = done["analyst"]["body"] if "analyst" in done else None
+        kind = workpacks.WORKPACKS[step].kind
         prior = repo.ok_attempt(conn, jid, step)
         if prior is not None:
             log.info("event=step-skip job=%s step=%s", jid, step)
             emit(_phase(step, "ok", prior["n"], "resume-skip"))
-            done[step] = repo.artifact(conn, prior["artifact_id"])
+            inputs[kind] = repo.artifact(conn, prior["artifact_id"])["body"]
             # 舊 den 只在全部成功時換 current:它停下的 job 已 ok 的步驟從沒換上。
             # 續跑已由 _resume_blocker 保證是最新版、沒被取代,換上是安全的(已是 current 時無變化)
             with conn:
-                repo.set_current(conn, job["story_id"], workpacks.WORKPACKS[step].kind, prior["artifact_id"])
+                repo.set_current(conn, job["story_id"], kind, prior["artifact_id"])
             continue
-        res = await _run_step(conn, job, step, slug, source, analysis, run, emit,
+        res = await _run_step(conn, job, step, slug, source, inputs, run, emit,
                               runner_name=runner_name, cli_version=cli_version,
                               now=now, sleep=sleep)
         if isinstance(res, StepOutcome):
@@ -163,7 +162,7 @@ async def run_critique(conn, job: dict, run: RunFn, emit: Callable[[dict], None]
                 "where": step, **res.detail, "recoverable": True,
                 "reason": res.error_class}})
             return res
-        done[step] = res
+        inputs[kind] = res["body"]
     log.info("event=job-done job=%s", jid)
     emit({"event": "done", "data": {"ok": True}})
     return StepOutcome("done", None, None)
