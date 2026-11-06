@@ -43,8 +43,11 @@ def test_no_character_asks_consent_before_disagreeing():   # spike v1:先徵詢�
 
 # ── assemble ──
 
+_NO_MEMORY = {"author": [], "work": []}
+
 def _ctx(**kw):
-    base = {"slug": "s", "title": "題", "source": "她把傘收進門縫。\n", "analysis": None, "progress": "none", "seeds": []}
+    base = {"slug": "s", "title": "題", "source": "她把傘收進門縫。\n", "analysis": None, "progress": "none", "seeds": [],
+            "memory": {"author": [], "work": []}}
     return {**base, **kw}
 
 
@@ -112,7 +115,7 @@ _FULL = {"synopsis": "梗", "nodes": [{"type": "theme", "label": "海", "note": 
     (_FULL, "running", "角色層一句\n"),
 ])
 def test_assembled_prompt_keeps_every_byte(analysis, progress, voice):
-    ctx = {"title": "海", "slug": "s", "source": "原文\n", "analysis": analysis, "progress": progress, "seeds": []}
+    ctx = {"title": "海", "slug": "s", "source": "原文\n", "analysis": analysis, "progress": progress, "seeds": [], "memory": _NO_MEMORY}
     c = _c("hyena", voice)
     assert render(ctx, c) == _legacy_render(ctx, c)
 
@@ -125,14 +128,14 @@ def test_persona_keeps_every_byte():
 
 
 def test_same_prompt_on_different_works_shares_instruction_fingerprint():
-    a = companion.assemble({"title": "甲", "slug": "a", "source": "甲文", "analysis": None, "progress": "idle", "seeds": []}, _c("hyena"))
-    b = companion.assemble({"title": "乙", "slug": "b", "source": "乙文", "analysis": None, "progress": "idle", "seeds": []}, _c("hyena"))
+    a = companion.assemble({"title": "甲", "slug": "a", "source": "甲文", "analysis": None, "progress": "idle", "seeds": [], "memory": _NO_MEMORY}, _c("hyena"))
+    b = companion.assemble({"title": "乙", "slug": "b", "source": "乙文", "analysis": None, "progress": "idle", "seeds": [], "memory": _NO_MEMORY}, _c("hyena"))
     assert a.fingerprint()["instructions"] == b.fingerprint()["instructions"]
     assert a.fingerprint()["material"] != b.fingerprint()["material"]
 
 
 def test_analysis_header_and_status_count_as_instructions():
-    ctx = {"title": "海", "slug": "s", "source": "原文", "progress": "done", "seeds": []}
+    ctx = {"title": "海", "slug": "s", "source": "原文", "progress": "done", "seeds": [], "memory": _NO_MEMORY}
     fp = companion.assemble({**ctx, "analysis": _FULL}, _c("hyena")).fingerprint()
     assert "analysis_header" in fp["layers"] and "analysis" in fp["material"]
     fp = companion.assemble({**ctx, "analysis": None, "progress": "running"}, _c("hyena")).fingerprint()
@@ -155,3 +158,34 @@ def test_no_seeds_no_section():
 def test_seed_header_is_instruction_and_lines_are_material():
     fp = companion.assemble(_ctx(seeds=[{"kind": "moved", "quotes": ["句"]}]), _c("hyena")).fingerprint()
     assert "seeds_header" in fp["layers"] and "seeds" in fp["material"]
+
+
+# ── 記憶區塊 ──
+
+def test_memory_layer_sits_between_persona_and_work():
+    p = companion.assemble(_ctx(memory={"author": ["我不寫結局"], "work": ["想寫海"]}), _c("hyena", "聲音"))
+    names = [x.name for x in p.layers]
+    assert names.index("voice") < names.index("memory_header") < names.index("memory") < names.index("work")
+    assert "關於作者:\n- 我不寫結局\n" in p.text and "關於這篇:\n- 想寫海\n" in p.text
+
+
+def test_memory_header_says_reading_wins():
+    p = companion.assemble(_ctx(memory={"author": ["x"], "work": []}), _c("hyena"))
+    assert "照你讀到的說" in p.text
+    assert "關於這篇" not in p.text
+
+
+def test_only_work_memory_omits_author_heading():
+    p = companion.assemble(_ctx(memory={"author": [], "work": ["y"]}), _c("hyena"))
+    assert "關於這篇:\n- y\n" in p.text and "關於作者" not in p.text
+
+
+def test_no_memory_adds_no_layers():
+    p = companion.assemble(_ctx(), _c("hyena"))
+    assert not {"memory_header", "memory"} & {x.name for x in p.layers}
+
+
+def test_memory_is_material_not_instruction():
+    a = companion.assemble(_ctx(memory={"author": ["一"], "work": []}), _c("hyena")).fingerprint()
+    b = companion.assemble(_ctx(memory={"author": ["二"], "work": []}), _c("hyena")).fingerprint()
+    assert a["instructions"] == b["instructions"] and a["material"]["memory"] != b["material"]["memory"]
