@@ -1,5 +1,5 @@
 """收原文與討論素材(純 DB 邏輯,路由在 app.py)。呼叫 ingest 的人包 `with conn:`。"""
-from den import config
+from den import config, memory
 from marrow import ingest as marrow_ingest
 from marrow import repo
 
@@ -53,4 +53,5 @@ def companion_context(conn, slug: str) -> dict:
         "slug": slug, "title": st["title"], "source": latest["text"],
         "analysis": analysis["body"] if analysis and analysis["source_version_id"] == latest["id"] else None,
         "progress": job["state"] if job else "none",
+        "memory": memory.load(conn, st["id"]),
     }

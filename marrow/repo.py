@@ -298,6 +298,56 @@ def add_settlement(conn, discussion_id: int, settled_at: float, written: int) ->
     return cur.rowcount == 1
 
 
+# ── memory ──
+
+_MEMORY_JOINED = ("SELECT m.*, d.external_id AS session, st.id AS work_id, st.slug AS slug, st.title AS title FROM memory m "
+                  "LEFT JOIN discussion d ON d.id = m.discussion_id "
+                  "LEFT JOIN story st ON st.id = COALESCE(m.story_id, d.story_id)")
+
+
+def add_memory(conn, scope: str, text: str, now: float, *, story_id: int | None = None,
+               character: str | None = None, quote: str | None = None,
+               discussion_id: int | None = None, seq: int | None = None,
+               valid_from: float | None = None, root_id: int | None = None) -> int:
+    cur = conn.execute(
+        "INSERT INTO memory (root_id, scope, story_id, character, text, quote, discussion_id, seq, "
+        "valid_from, learned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (root_id, scope, story_id, character, text, quote, discussion_id, seq,
+         now if valid_from is None else valid_from, now))
+    return cur.lastrowid
+
+
+def memory(conn, memory_id: int) -> dict | None:
+    return _row(conn.execute(f"{_MEMORY_JOINED} WHERE m.id = ?", (memory_id,)).fetchone())
+
+
+def active_memories(conn, scope: str, story_id: int | None = None) -> list[dict]:
+    where = "story_id IS NULL" if story_id is None else "story_id = ?"
+    args = (scope,) if story_id is None else (scope, story_id)
+    return [_row(r) for r in conn.execute(
+        f"SELECT * FROM memory WHERE scope = ? AND {where} AND invalidated_at IS NULL ORDER BY id", args)]
+
+
+def current_in_chain(conn, root_id: int) -> dict | None:
+    return _row(conn.execute(
+        "SELECT * FROM memory WHERE COALESCE(root_id, id) = ? AND invalidated_at IS NULL",
+        (root_id,)).fetchone())
+
+
+def invalidate_memory(conn, memory_id: int, now: float) -> None:
+    conn.execute("UPDATE memory SET invalidated_at = ? WHERE id = ?", (now, memory_id))
+
+
+def all_memories(conn) -> list[dict]:
+    return [_row(r) for r in conn.execute(f"{_MEMORY_JOINED} ORDER BY COALESCE(m.root_id, m.id), m.id")]
+
+
+def memories_of_discussion(conn, discussion_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM memory WHERE discussion_id = ? AND invalidated_at IS NULL ORDER BY id",
+        (discussion_id,))]
+
+
 # ── 列表用批次查詢(固定次數,不隨篇數成長) ──
 
 def stories(conn) -> list[dict]:

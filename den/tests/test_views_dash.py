@@ -119,9 +119,9 @@ def test_session_turns_unknown_and_ambiguous(c):
     _say(c, d, 1, "assistant", "答", 2.0, mode="slow", character="hyena")
     got = views.session_turns(c, "s")
     assert got == {"session": "s", "slug": "x1", "title": "標", "legacy": False, "version": 1, "turns": [
-        {"seq": 0, "reaction": None, "role": "user", "text": "問", "ts": 1.0, "mode": None, "character": None, "quotes": ["原"],
+        {"seq": 0, "reaction": None, "memories": [], "role": "user", "text": "問", "ts": 1.0, "mode": None, "character": None, "quotes": ["原"],
          "spans": [{"quote": "原", "start": 0, "end": 1}], "v": 1},
-        {"seq": 1, "reaction": None, "role": "assistant", "text": "答", "ts": 2.0, "mode": "slow", "character": "hyena",
+        {"seq": 1, "reaction": None, "memories": [], "role": "assistant", "text": "答", "ts": 2.0, "mode": "slow", "character": "hyena",
          "quotes": [], "spans": [], "v": 1}]}
     with pytest.raises(LookupError):
         views.session_turns(c, "nope")

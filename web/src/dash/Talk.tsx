@@ -6,6 +6,7 @@ import Icon from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
 import Reaction from "./Reaction";
+import Remember from "./Remember";
 import { useLinks } from "./links";
 import { bare } from "./Paper";
 import { useThemeState } from "./theme";
@@ -58,7 +59,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const { registerTalk } = useLinks();
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
-  const { markTurn, slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
+  const { markTurn, markMemories, slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
   const me = chars.byId(whoId);
   const nameOf = (id: string | null, m?: string | null) => localized(chars.byId(id, m).name, lang);
 
@@ -113,7 +114,10 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
       return [brk,
         <div key={i} className="chat-me">
           {turn.quotes.map((q, j) => <blockquote key={j} className="chat-quote">{q}</blockquote>)}
-          <p>{turn.text}</p>
+          {slug && session && turn.seq !== undefined
+            ? <Remember key={`${session}-${turn.seq}`} slug={slug} session={session} seq={turn.seq} text={turn.text}
+                initial={turn.memories ?? []} onChange={m => markMemories(session, turn.seq!, m)} />
+            : <p>{turn.text}</p>}
         </div>,
       ];
     }

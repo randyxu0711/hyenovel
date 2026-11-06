@@ -33,11 +33,24 @@ def persona(character_id: str, voice: str = "") -> str:
 _RUNNING = "這篇的結構分析還在背景跑,你現在是先憑原文讀。作者問進度,就用你自己的話說還在跑。"
 _IDLE = "這篇目前沒有在跑結構分析,你憑原文讀。"
 _SEED_KIND = {"confused": "讀到卡住:", "wondering": "看不出作用:", "moved": ""}
+_MEMORY_HEADER = ("---\n## 作者說過的話(背景,可能已過期)\n"
+                  "這是作者以前說過、要你記得的話,不是你對這篇的判斷。知道就好,不用主動提。作品讀起來不是這樣時,照你讀到的說。\n\n")
+
+
+def _memory_block(memory: dict) -> str:
+    out = ""
+    for heading, items in (("關於作者:", memory["author"]), ("關於這篇:", memory["work"])):
+        if items:
+            out += heading + "\n" + "".join("- " + x.replace("\n", "\n  ") + "\n" for x in items)
+    return out + "\n"
 
 
 def assemble(ctx: dict, character: dict) -> Prompt:
-    """companion 的 system prompt:人格、原文、分析地圖(梗概與標籤)、進度、話題種子。"""
+    """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子。"""
     layers = list(_persona_layers(character["id"], character["voice"]))
+    if ctx["memory"]["author"] or ctx["memory"]["work"]:
+        layers.append(Layer("memory_header", _MEMORY_HEADER))
+        layers.append(Layer("memory", _memory_block(ctx["memory"]), material=True))
     layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
                                 f"{ctx['source'].rstrip()}\n</source>\n", material=True))
     a = ctx["analysis"]

@@ -69,7 +69,7 @@ def test_ingest_rejects_bad_slug(conn):
 
 def test_companion_context_keys_have_no_judgment_layer(conn):
     out = stories.companion_context(conn, "mini")
-    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds"}
+    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds", "memory"}
     assert isinstance(out["analysis"], dict) and out["progress"] == "none"
 
 
@@ -144,3 +144,19 @@ def test_companion_context_never_includes_notes(conn):
 def test_companion_context_unknown_slug(conn):
     with pytest.raises(LookupError):
         stories.companion_context(conn, "nope")
+
+
+def test_companion_context_loads_only_this_works_memory(conn):
+    mini = repo.story_by_slug(conn, "mini")["id"]
+    other = repo.ensure_story(conn, "other", None, 0)
+    repo.add_memory(conn, "author", "共用", 1.0)
+    repo.add_memory(conn, "work", "這篇", 1.0, story_id=mini)
+    repo.add_memory(conn, "work", "別篇", 1.0, story_id=other)
+    repo.add_memory(conn, "character", "印象", 1.0, character="hyena")
+    gone = repo.add_memory(conn, "work", "封存", 1.0, story_id=mini)
+    repo.invalidate_memory(conn, gone, 2.0)
+    assert stories.companion_context(conn, "mini")["memory"] == {"author": ["共用"], "work": ["這篇"]}
+
+
+def test_companion_context_no_memory_is_empty_lists(conn):
+    assert stories.companion_context(conn, "mini")["memory"] == {"author": [], "work": []}

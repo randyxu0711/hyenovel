@@ -137,3 +137,22 @@ def test_gate_notes_rejects_confidence_field(analysis, source):
 def test_gate_notes_non_dict_body(analysis, source):
     errs = gate.gate_notes([], analysis, source)
     assert errs and all(e.startswith("schema:") for e in errs)
+
+
+# ── gate_utterance_quote ──
+
+USER_TURN = {"role": "user", "text": "我不寫結局,真的"}
+
+
+def test_utterance_gate_accepts_authors_own_words_with_punct_variance():
+    assert gate.gate_utterance_quote("不寫結局,", USER_TURN) == []
+    assert gate.gate_utterance_quote("不寫結局,", USER_TURN) == []
+
+
+def test_utterance_gate_rejects_companion_words():
+    assert gate.gate_utterance_quote("不寫結局", {"role": "assistant", "text": "你不寫結局"})
+
+
+@pytest.mark.parametrize("quote", ["  ", " ", "", "我要寫結局"])
+def test_utterance_gate_rejects_blank_and_missing(quote):
+    assert gate.gate_utterance_quote(quote, USER_TURN)

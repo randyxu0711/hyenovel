@@ -27,6 +27,13 @@
   PUT  /works/{slug}/sessions/{id}/turns/{seq}/reaction {"mark","comment"?} → {mark, comment}
   DELETE 同路徑              → 204(404 unknown-work / unknown-session / unknown-turn;
                             422 not-assistant-turn / bad-mark / comment-too-long)
+  GET  /memory              → {"memories": [...], "caps": {author, work}}
+  POST /memory              {scope, text, slug?, session?, seq?, quote?} → 201 一筆
+                            (422 bad-scope / blank-memory / slug-required / bad-source / quote-not-in-turn / memory-full;
+                             404 unknown-work / unknown-session / unknown-turn)
+  PATCH /memory/{id}        {text} → 新列
+  POST /memory/{id}/archive → 204;POST /memory/{id}/revert → 新列
+                            (404 unknown-memory;409 memory-not-current / memory-is-current;422 同上)
   GET  /estimate?chars=N    → {"estimate": {...} | null}(開跑前預估)
   GET  /works/{slug}/{part} → {"text"}(part = source/analysis/notes/feedback;422 part 不對、404 無此篇、
                             409 not-analyzed / no-notes / no-feedback)
@@ -55,7 +62,7 @@ import os
 import re
 import secrets
 import time
-from contextlib import aclosing, asynccontextmanager, nullcontext
+from contextlib import aclosing, asynccontextmanager, contextmanager, nullcontext
 from pathlib import Path
 from typing import Annotated, Callable, Literal
 
@@ -64,7 +71,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Path as PathParam, Query,
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import characters, discuss, pipeline, stories, themes, version, views, works
+from den import characters, discuss, memory, pipeline, stories, themes, version, views, works
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, MAX_ANCHORS,
                         MAX_CHAT_CHARS, MAX_QUOTES, MAX_REACTION_CHARS, REACTION_MARKS, MAX_SOURCE_BYTES, PHASE_TIMEOUT, PORT, SESSION_MAX_AGE,
                         valid_slug)
@@ -98,6 +105,8 @@ ERROR_CODES: tuple[str, ...] = (
     "unknown-character", "unknown-session-id", "ambiguous-session",
     "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",
     "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
+    "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
+    "unknown-memory", "memory-not-current", "memory-is-current",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
@@ -186,6 +195,19 @@ _Seq = Annotated[int, PathParam(ge=0, le=2**63 - 1)]
 class ReactionIn(BaseModel):
     mark: str = Field(max_length=32)
     comment: str | None = Field(default=None, max_length=MAX_REACTION_CHARS * 8)
+
+
+class MemoryIn(BaseModel):
+    scope: str = Field(max_length=32)
+    text: str = Field(max_length=MAX_CHAT_CHARS)
+    slug: str | None = Field(default=None, max_length=64)
+    session: str | None = Field(default=None, max_length=64)
+    seq: int | None = Field(default=None, ge=0, le=2**63 - 1)
+    quote: str | None = Field(default=None, max_length=MAX_CHAT_CHARS)
+
+
+class MemoryEditIn(BaseModel):
+    text: str = Field(max_length=MAX_CHAT_CHARS)
 
 
 class DiscussIn(BaseModel):
@@ -671,6 +693,79 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         conn = request.app.state.mgr.conn
         with conn:
             repo.clear_reaction(conn, d, seq)
+
+    def _memory_reject(status: int, code: str, detail: str) -> ApiError:
+        log.info("event=reject where=memory reason=%s", code)
+        return ApiError(status, code, detail)
+
+    def _memory_text(text: str) -> str:
+        text = text.strip()
+        if not text:
+            raise _memory_reject(422, "blank-memory", "記憶不能是空白")
+        return text
+
+    @contextmanager
+    def _memory_errors():
+        try:
+            yield
+        except LookupError:
+            raise _memory_reject(404, "unknown-memory", "沒有這條記憶") from None
+        except memory.BadSource as e:
+            status = 422 if e.code == "quote-not-in-turn" else 404
+            raise _memory_reject(status, e.code, "來源對不上") from None
+        except memory.MemoryFull:
+            raise _memory_reject(422, "memory-full", "超過這層的字數上限") from None
+        except memory.NotCurrent:
+            raise _memory_reject(409, "memory-not-current", "這條已不是生效中的版本") from None
+        except memory.AlreadyCurrent:
+            raise _memory_reject(409, "memory-is-current", "這條已經是生效中的版本") from None
+
+    @api.get("/memory")
+    async def list_memory(request: Request):
+        return views.memories(request.app.state.mgr.conn)
+
+    @api.post("/memory", status_code=201)
+    async def add_memory(body: MemoryIn, request: Request):
+        if body.scope not in ("author", "work"):
+            raise _memory_reject(422, "bad-scope", "沒有這一層")
+        text = _memory_text(body.text)
+        given = [x is not None for x in (body.session, body.seq, body.quote)]
+        if any(given) and not all(given):
+            raise _memory_reject(422, "bad-source", "來源要給齊")
+        if body.slug is None and (body.scope == "work" or any(given)):
+            raise _memory_reject(422, "slug-required", "要指定作品")
+        conn = request.app.state.mgr.conn
+        story_id = None
+        if body.slug is not None:
+            _slug_ok(body.slug, "memory")
+            st = repo.story_by_slug(conn, body.slug)
+            if st is None:
+                raise _memory_reject(404, "unknown-work", "這篇不在 DB")
+            story_id = st["id"]
+        source = {"session": body.session, "seq": body.seq, "quote": body.quote} if all(given) else None
+        with _memory_errors():
+            mid = memory.remember(conn, body.scope, text, time.time(), story_id=story_id, source=source)
+        return views.memory_row(conn, repo.memory(conn, mid))
+
+    @api.patch("/memory/{memory_id}")
+    async def edit_memory(memory_id: _Seq, body: MemoryEditIn, request: Request):
+        text = _memory_text(body.text)
+        conn = request.app.state.mgr.conn
+        with _memory_errors():
+            mid = memory.edit(conn, memory_id, text, time.time())
+        return views.memory_row(conn, repo.memory(conn, mid))
+
+    @api.post("/memory/{memory_id}/archive", status_code=204)
+    async def archive_memory(memory_id: _Seq, request: Request):
+        with _memory_errors():
+            memory.archive(request.app.state.mgr.conn, memory_id, time.time())
+
+    @api.post("/memory/{memory_id}/revert")
+    async def revert_memory(memory_id: _Seq, request: Request):
+        conn = request.app.state.mgr.conn
+        with _memory_errors():
+            mid = memory.revert(conn, memory_id, time.time())
+        return views.memory_row(conn, repo.memory(conn, mid))
 
     @api.post("/discuss/{slug}")
     async def discuss_turn(slug: str, body: DiscussIn, request: Request):

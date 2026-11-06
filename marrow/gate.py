@@ -92,3 +92,10 @@ def gate_notes(body: dict, analysis: dict, source: str) -> list[str]:
         return errs
     ids = _node_ids(analysis) if isinstance(analysis, dict) else []
     return errs + _check_points(body.get("points"), ids, source, "筆記")
+
+
+def gate_utterance_quote(quote: str, utterance: dict) -> list[str]:
+    errs = [] if utterance["role"] == "user" else ["來源不是作者的發言"]
+    if not _found(quote, utterance["text"]):
+        errs.append(f"引文在這則發言找不到:「{quote[:50]}」")
+    return errs
