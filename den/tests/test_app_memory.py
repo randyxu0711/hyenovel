@@ -191,3 +191,19 @@ def test_longest_turn_as_is_gets_memory_full_not_a_bare_422(c):
 def test_longest_turn_quote_with_short_text_passes(c):
     r = _post(c, text="短", slug="mini", session="long", seq=0, quote="長" * MAX_CHAT_CHARS)
     assert r.status_code == 201
+
+
+def test_title_follows_the_rest_of_the_dashboard(data):
+    url, d = data
+    conn = db.connect(url)
+    with conn:
+        sid = repo.ensure_story(conn, "untitled", None, 1.0)
+        v, _ = repo.add_source_version(conn, sid, "文", 1.0)
+        aid, _ = repo.add_artifact(conn, sid, v, "analysis", 1, {"title": "分析給的題"}, {}, 1.0)
+        repo.set_current(conn, sid, "analysis", aid)
+    conn.close()
+    with TestClient(den_app.create_app(url, d, run_factory=Run()), base_url="http://127.0.0.1") as client:
+        client.headers.update(_auth(d))
+        row = _post(client, scope="work", slug="untitled").json()
+        assert row["title"] == "分析給的題"
+        assert client.get("/api/memory").json()["memories"][0]["title"] == "分析給的題"

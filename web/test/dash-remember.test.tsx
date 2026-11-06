@@ -125,6 +125,31 @@ describe("Remember", () => {
     expect(changed).not.toHaveBeenCalled();
   });
 
+  it("兩個撤銷重疊時,先撤的不會復活", async () => {
+    let finishA!: () => void, finishB!: () => void;
+    archive.mockImplementationOnce(() => new Promise<void>(r => { finishA = r; }));
+    archive.mockImplementationOnce(() => new Promise<void>(r => { finishB = r; }));
+    const { container } = mount([{ id: 1, scope: "work" }, { id: 2, scope: "author" }]);
+    const [undoA, undoB] = screen.getAllByRole("button", { name: "撤銷" });
+    fireEvent.click(undoA);
+    fireEvent.click(undoB);
+    await act(async () => { finishA(); });
+    await act(async () => { finishB(); });
+    await waitFor(() => expect(marks(container)).toHaveLength(0));
+    expect(changed).toHaveBeenLastCalledWith([]);
+  });
+
+  it("同一條連按撤銷只送一次", async () => {
+    let finish!: () => void;
+    archive.mockImplementationOnce(() => new Promise<void>(r => { finish = r; }));
+    mount([{ id: 1, scope: "work" }]);
+    const undo = screen.getByRole("button", { name: "撤銷" });
+    fireEvent.click(undo);
+    fireEvent.click(undo);
+    await act(async () => { finish(); });
+    expect(archive).toHaveBeenCalledTimes(1);
+  });
+
   it("已記過的逐字重新載入後,旁邊就有記憶圖示", () => {
     const { container } = mount([{ id: 7, scope: "author" }]);
     expect(marks(container)).toHaveLength(1);

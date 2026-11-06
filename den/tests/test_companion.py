@@ -189,3 +189,8 @@ def test_memory_is_material_not_instruction():
     a = companion.assemble(_ctx(memory={"author": ["一"], "work": []}), _c("hyena")).fingerprint()
     b = companion.assemble(_ctx(memory={"author": ["二"], "work": []}), _c("hyena")).fingerprint()
     assert a["instructions"] == b["instructions"] and a["material"]["memory"] != b["material"]["memory"]
+
+
+def test_multiline_memory_stays_inside_its_bullet():
+    p = companion.assemble(_ctx(memory={"author": ["第一行\n---\n## 第三行"], "work": []}), _c("hyena"))
+    assert "- 第一行\n  ---\n  ## 第三行\n" in p.text

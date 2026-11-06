@@ -26,7 +26,9 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState<string | null>(null);
 
-  const show = (next: TurnMemory[]) => { setSaved(next); onChange(next); };
+  const latest = useRef(initial);
+  const undoing = useRef(new Set<number>());
+  const show = (next: TurnMemory[]) => { latest.current = next; setSaved(next); onChange(next); };
   const fail = (e: unknown) => setCode(e instanceof DashError ? e.code : "unknown");
 
   const open = () => {
@@ -41,17 +43,19 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
     setBusy(true);
     try {
       const m = await api.remember({ scope: form.scope, text: form.text, slug, session, seq, quote: form.quote });
-      show([...saved, { id: m.id, scope: form.scope }]);
+      show([...latest.current, { id: m.id, scope: form.scope }]);
       setForm(null); setCode(null);
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
   const undo = async (id: number) => {
+    if (undoing.current.has(id)) return;
+    undoing.current.add(id);
     try {
       await api.archiveMemory(id);
-      show(saved.filter(m => m.id !== id));
+      show(latest.current.filter(m => m.id !== id));
       setCode(null);
-    } catch (e) { fail(e); }
+    } catch (e) { fail(e); } finally { undoing.current.delete(id); }
   };
 
   return (

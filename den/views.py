@@ -241,16 +241,18 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
             "version": shown["n"], "turns": turns}
 
 
-def memory_row(row: dict) -> dict:
+def memory_row(conn, row: dict) -> dict:
     return {"id": row["id"], "root": row["id"] if row["root_id"] is None else row["root_id"],
-            "scope": row["scope"], "slug": row["slug"], "title": row["title"], "text": row["text"],
+            "scope": row["scope"], "slug": row["slug"],
+            "title": None if row["work_id"] is None else _title(conn, row["work_id"], row["slug"]),
+            "text": row["text"],
             "quote": row["quote"], "session": row["session"], "seq": row["seq"],
             "valid_from": row["valid_from"], "learned_at": row["learned_at"],
             "invalidated_at": row["invalidated_at"]}
 
 
 def memories(conn) -> dict:
-    return {"memories": [memory_row(r) for r in repo.all_memories(conn)],
+    return {"memories": [memory_row(conn, r) for r in repo.all_memories(conn)],
             "caps": {"author": memory.CAPS["author"], "work": memory.CAPS["work"]}}
 
 

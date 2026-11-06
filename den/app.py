@@ -745,7 +745,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         source = {"session": body.session, "seq": body.seq, "quote": body.quote} if all(given) else None
         with _memory_errors():
             mid = memory.remember(conn, body.scope, text, time.time(), story_id=story_id, source=source)
-        return views.memory_row(repo.memory(conn, mid))
+        return views.memory_row(conn, repo.memory(conn, mid))
 
     @api.patch("/memory/{memory_id}")
     async def edit_memory(memory_id: _Seq, body: MemoryEditIn, request: Request):
@@ -753,7 +753,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         conn = request.app.state.mgr.conn
         with _memory_errors():
             mid = memory.edit(conn, memory_id, text, time.time())
-        return views.memory_row(repo.memory(conn, mid))
+        return views.memory_row(conn, repo.memory(conn, mid))
 
     @api.post("/memory/{memory_id}/archive", status_code=204)
     async def archive_memory(memory_id: _Seq, request: Request):
@@ -765,7 +765,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         conn = request.app.state.mgr.conn
         with _memory_errors():
             mid = memory.revert(conn, memory_id, time.time())
-        return views.memory_row(repo.memory(conn, mid))
+        return views.memory_row(conn, repo.memory(conn, mid))
 
     @api.post("/discuss/{slug}")
     async def discuss_turn(slug: str, body: DiscussIn, request: Request):

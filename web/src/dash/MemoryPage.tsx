@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, DashError, type Memory, type MemoryList, type MemoryScope, type Work } from "./api";
 import { cpLength } from "./cp";
@@ -114,13 +114,19 @@ export default function MemoryPage() {
   const reload = useCallback(() => api.memories().then(setData), []);
   useEffect(() => { reload().catch(fail); }, [reload]);
 
+  const acting = useRef(false);
   const act: Act = async fn => {
+    if (acting.current) return false;
+    acting.current = true;
     try {
       await fn();
-      await reload();
-      setCode(null);
-      return true;
-    } catch (e) { fail(e); return false; }
+    } catch (e) {
+      fail(e);
+      return false;
+    } finally { acting.current = false; }
+    setCode(null);
+    await reload().catch(fail);
+    return true;
   };
 
   const chains = data ? chainsOf(data.memories) : [];

@@ -41,7 +41,7 @@ def _memory_block(memory: dict) -> str:
     out = ""
     for heading, items in (("關於作者:", memory["author"]), ("關於這篇:", memory["work"])):
         if items:
-            out += heading + "\n" + "".join(f"- {x}\n" for x in items)
+            out += heading + "\n" + "".join("- " + x.replace("\n", "\n  ") + "\n" for x in items)
     return out + "\n"
 
 

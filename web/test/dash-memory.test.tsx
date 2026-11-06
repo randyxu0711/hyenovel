@@ -169,6 +169,33 @@ describe("MemoryPage", () => {
     expect((screen.getByRole("textbox", { name: "新增記憶" }) as HTMLTextAreaElement).value).toBe("很長");
   });
 
+  it("新增連按兩次只寫一條", async () => {
+    let finish!: (m: Memory) => void;
+    remember.mockImplementationOnce(() => new Promise<Memory>(r => { finish = r; }));
+    mount();
+    fireEvent.change(await screen.findByRole("textbox", { name: "新增記憶" }), { target: { value: "一次" } });
+    const add = screen.getByRole("button", { name: "新增" });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    finish(mem({ id: 9 }));
+    await waitFor(() => expect(memories).toHaveBeenCalledTimes(2));
+    expect(remember).toHaveBeenCalledTimes(1);
+  });
+
+  it("寫入成功但重新載入失敗:不當成寫入失敗,文字清掉、編輯收起,顯示原因", async () => {
+    memories.mockResolvedValueOnce(list(mem({ id: 1, text: "舊" })));
+    memories.mockRejectedValue(new DashError(0, "den-down"));
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "改" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "記憶內容" }), { target: { value: "新" } });
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("den");
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "記憶內容" })).toBeNull());
+    fireEvent.change(screen.getByRole("textbox", { name: "新增記憶" }), { target: { value: "手打" } });
+    fireEvent.click(screen.getByRole("button", { name: "新增" }));
+    await waitFor(() => expect((screen.getByRole("textbox", { name: "新增記憶" }) as HTMLTextAreaElement).value).toBe(""));
+  });
+
   it("載入失敗顯示原因", async () => {
     memories.mockRejectedValue(new DashError(0, "den-down"));
     mount();

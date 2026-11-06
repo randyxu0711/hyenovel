@@ -300,7 +300,7 @@ def add_settlement(conn, discussion_id: int, settled_at: float, written: int) ->
 
 # ── memory ──
 
-_MEMORY_JOINED = ("SELECT m.*, d.external_id AS session, st.slug AS slug, st.title AS title FROM memory m "
+_MEMORY_JOINED = ("SELECT m.*, d.external_id AS session, st.id AS work_id, st.slug AS slug, st.title AS title FROM memory m "
                   "LEFT JOIN discussion d ON d.id = m.discussion_id "
                   "LEFT JOIN story st ON st.id = COALESCE(m.story_id, d.story_id)")
 
