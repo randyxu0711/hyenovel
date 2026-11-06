@@ -9,6 +9,8 @@ export const DEN_ERROR_CODES = [
   "unknown-character", "unknown-session-id", "ambiguous-session",
   "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session", "usage-limit", "no-response", "commit-failed", "chat-failed",
   "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
+  "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
+  "unknown-memory", "memory-not-current", "memory-is-current",
   "den-down",
 ];
 

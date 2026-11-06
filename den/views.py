@@ -5,7 +5,7 @@ den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的�
 """
 import bisect
 
-from den import spans, works
+from den import memory, spans, works
 from marrow import gate, repo, vizdata
 
 
@@ -221,6 +221,9 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
     us = repo.utterances(conn, d["id"])
     made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     marked = repo.reactions(conn, d["id"])
+    remembered: dict[int, list[dict]] = {}
+    for m in repo.memories_of_discussion(conn, d["id"]):
+        remembered.setdefault(m["seq"], []).append({"id": m["id"], "scope": m["scope"]})
     turns = []
     for u in us:
         if u["role"] == "assistant":
@@ -228,6 +231,7 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
         else:
             qs = u["quotes"] or []
         turns.append({"seq": u["seq"], "reaction": marked.get(u["seq"]),
+                      "memories": remembered.get(u["seq"], []),
                       "role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
                       "character": u["character"], "quotes": u["quotes"] or [],
                       "spans": spans.locate_all(qs, shown["text"]),
@@ -235,6 +239,19 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
     return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
             "legacy": not any(u["role"] == "assistant" and u["mode"] is not None for u in us),
             "version": shown["n"], "turns": turns}
+
+
+def memory_row(row: dict) -> dict:
+    return {"id": row["id"], "root": row["id"] if row["root_id"] is None else row["root_id"],
+            "scope": row["scope"], "slug": row["slug"], "title": row["title"], "text": row["text"],
+            "quote": row["quote"], "session": row["session"], "seq": row["seq"],
+            "valid_from": row["valid_from"], "learned_at": row["learned_at"],
+            "invalidated_at": row["invalidated_at"]}
+
+
+def memories(conn) -> dict:
+    return {"memories": [memory_row(r) for r in repo.all_memories(conn)],
+            "caps": {"author": memory.CAPS["author"], "work": memory.CAPS["work"]}}
 
 
 def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:

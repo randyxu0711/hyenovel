@@ -300,6 +300,11 @@ def add_settlement(conn, discussion_id: int, settled_at: float, written: int) ->
 
 # ── memory ──
 
+_MEMORY_JOINED = ("SELECT m.*, d.external_id AS session, st.slug AS slug, st.title AS title FROM memory m "
+                  "LEFT JOIN discussion d ON d.id = m.discussion_id "
+                  "LEFT JOIN story st ON st.id = COALESCE(m.story_id, d.story_id)")
+
+
 def add_memory(conn, scope: str, text: str, now: float, *, story_id: int | None = None,
                character: str | None = None, quote: str | None = None,
                discussion_id: int | None = None, seq: int | None = None,
@@ -313,7 +318,7 @@ def add_memory(conn, scope: str, text: str, now: float, *, story_id: int | None 
 
 
 def memory(conn, memory_id: int) -> dict | None:
-    return _row(conn.execute("SELECT * FROM memory WHERE id = ?", (memory_id,)).fetchone())
+    return _row(conn.execute(f"{_MEMORY_JOINED} WHERE m.id = ?", (memory_id,)).fetchone())
 
 
 def active_memories(conn, scope: str, story_id: int | None = None) -> list[dict]:
@@ -334,11 +339,7 @@ def invalidate_memory(conn, memory_id: int, now: float) -> None:
 
 
 def all_memories(conn) -> list[dict]:
-    return [_row(r) for r in conn.execute(
-        "SELECT m.*, d.external_id AS session, st.slug AS slug, st.title AS title FROM memory m "
-        "LEFT JOIN discussion d ON d.id = m.discussion_id "
-        "LEFT JOIN story st ON st.id = COALESCE(m.story_id, d.story_id) "
-        "ORDER BY COALESCE(m.root_id, m.id), m.id")]
+    return [_row(r) for r in conn.execute(f"{_MEMORY_JOINED} ORDER BY COALESCE(m.root_id, m.id), m.id")]
 
 
 def memories_of_discussion(conn, discussion_id: int) -> list[dict]:
