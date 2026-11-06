@@ -655,4 +655,17 @@ describe("輸入紙與角色狀態", () => {
     expect(drop.querySelector("svg.ico")).not.toBeNull();
     expect(drop.textContent).toBe("");
   });
+
+  it("串流完的回覆當場可標記;沒有 seq 的舊資料沒有記號", async () => {
+    talkReply = () => sse(
+      ["message", { role: "assistant", text: "嗯", session_id: "s1", seq: 1, mode: "direct", character: "buffalo", spans: [] }],
+      ["done", { ok: true, session_id: "s1" }]);
+    mount();
+    await screen.findByText("第一段。");
+    fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "你好" } });
+    fireEvent.click(screen.getByRole("button", { name: "送出" }));
+    fireEvent.click(await screen.findByRole("button", { name: "讀錯了" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]: any) =>
+      u === "/api/works/d1/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
+  });
 });

@@ -23,6 +23,8 @@ const PATHS = {
   stop: <rect x="5" y="5" width="8" height="8" rx="1.5" />,
   focus: <path d="M3 7V3h4M15 7V3h-4M3 11v4h4M15 11v4h-4" />,
   close: <path d="M5 5l8 8M13 5l-8 8" />,
+  pause: <path d="M6.5 4v10M11.5 4v10" />,
+  offTarget: <><circle cx="9" cy="9" r="6" /><path d="M4.8 13.2l8.4-8.4" /></>,
   sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
 } satisfies Record<string, ReactNode>;
 

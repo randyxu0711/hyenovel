@@ -204,7 +204,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
             { role: "user", text: message, ts, mode: null, character: null, quotes, spans: [], v: d.v },
-            { role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
+            { seq: d.seq, role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           markSeen(slug);
           ok = true;
           // 串流中的痕跡交給逐字稿;spans 裡先前沒找到的(如只差標點)此時補畫
@@ -242,7 +242,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   }, [slug, session, whoId, streaming, legacy, setDraft, refreshSessions, chars, draw]);
 
   return {
-    turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
+    slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
   };
 }
