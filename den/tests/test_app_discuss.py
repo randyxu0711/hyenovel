@@ -130,7 +130,7 @@ def test_first_turn_creates_session_and_persists_both(c):
     assert [e["data"] for e in evs[:2]] == [{"text": "A"}, {"text": "B"}]
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
-    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "seq": 1, "mode": "slow",
+    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "seq": 1,
                                "character": "hyena", "spans": [], "v": 1}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
@@ -462,11 +462,11 @@ def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
             assert p["body"] not in system
 
 
-def test_mode_defaults_to_slow_and_is_recorded(c, fake_chat):
+def test_character_defaults_to_hyena_and_is_recorded(c, fake_chat):
     sid = first_turn(c)
     assert "照閱讀的順序" in fake_chat.calls[-1][0]
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
-    assert (user["mode"], asst["mode"]) == (None, "slow")
+    assert (user["character"], asst["character"]) == (None, "hyena")
 
 
 def test_empty_message_stores_only_assistant(c, fake_chat):
@@ -517,7 +517,7 @@ def test_caller_cannot_pick_by_mode(c, fake_chat):
     r = _post(c, {"mode": "direct", "home": "mcp"})
     evs = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
     row = _last_assistant(c, evs)
-    assert (row["character"], row["mode"]) == ("hyena", "slow")
+    assert row["character"] == "hyena" and "mode" not in row
     assert evs[-2]["data"]["character"] == "hyena"
 
 
@@ -525,20 +525,11 @@ def test_character_carries_over_and_overrides(c, fake_chat):
     evs = [json.loads(line[6:]) for line in _post(c, {"character": "deer"}).text.splitlines()
            if line.startswith("data: ")]
     sid = evs[-1]["data"]["session_id"]
-    assert (_last_assistant(c, evs)["character"], _last_assistant(c, evs)["mode"]) == ("deer", "imaginative")
+    assert _last_assistant(c, evs)["character"] == "deer"
     post_discuss(c, "mini", sid, "然後")
     assert _last_assistant(c, evs)["character"] == "deer"
     assert "世界撐開" in fake_chat.calls[-1][0]
 
-
-def test_legacy_session_with_only_mode_keeps_that_mode(c, fake_chat):
-    sid = first_turn(c)
-    def strip(conn):
-        with conn:
-            conn.execute("UPDATE utterance SET character = NULL, mode = 'direct' WHERE role = 'assistant'")
-    in_loop(c, strip)
-    post_discuss(c, "mini", sid, "再說")
-    assert "最強的感覺" in fake_chat.calls[-1][0]
 
 
 def test_get_themes_route(c):
@@ -639,6 +630,41 @@ def test_assistant_turn_records_recipe_user_turn_does_not(c, fake_chat):
     assert asst["recipe"]["run"] == {"model": "sonnet", "effort": "medium"}
     assert {"base", "character"} <= set(asst["recipe"]["prompt"]["layers"])
     assert "work" in asst["recipe"]["prompt"]["material"]
+
+
+def test_turn_records_character_version_and_uses_latest(c, fake_chat):
+    sid = first_turn(c)
+    assert in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]["recipe"]["character_v"] == 1
+
+    def bump(conn):
+        card = repo.latest_character(conn, "hyena")["card"]
+        card["data"]["personality"] = "新版讀法"
+        with conn:
+            repo.add_character_version(conn, "hyena", card, 2.0)
+    in_loop(c, bump)
+    post_discuss(c, "mini", sid, "再說")
+    rows = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
+    assert [u["recipe"]["character_v"] for u in rows if u["role"] == "assistant"] == [1, 2]
+    assert "新版讀法" in fake_chat.calls[-1][0]
+
+
+def test_new_session_uses_den_default(c, fake_chat):
+    assert c.put("/api/characters/default", json={"character": "deer"}).json() == {"default": "deer"}
+    assert c.get("/api/characters").json()["default"] == "deer"
+    evs = post_discuss(c, "mini", None, "嗨")
+    assert evs[-2]["data"]["character"] == "deer"
+
+
+def test_put_default_unknown_is_422(c):
+    r = c.put("/api/characters/default", json={"character": "dragon"})
+    assert r.status_code == 422 and r.json()["code"] == "unknown-character"
+    assert c.get("/api/characters").json()["default"] == "hyena"
+
+
+def test_get_characters_route_lists_versions(c):
+    body = c.get("/api/characters").json()
+    assert body["default"] == "hyena"
+    assert {x["id"]: x["version"] for x in body["characters"]} == {"buffalo": 1, "deer": 1, "hyena": 1}
 
 
 def test_anchored_turn_injects_details_and_records_ids(c, fake_chat):

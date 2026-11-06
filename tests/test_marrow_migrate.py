@@ -27,7 +27,7 @@ def _close_all():
 
 def test_fresh_db_gets_all_tables_and_version():
     conn = _mem()
-    assert db.migrate(conn, None) == 11
+    assert db.migrate(conn, None) == 13
     names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert TABLES <= names
 
@@ -35,7 +35,7 @@ def test_fresh_db_gets_all_tables_and_version():
 def test_migrate_is_idempotent():
     conn = _mem()
     db.migrate(conn, None)
-    assert db.migrate(conn, None) == 11
+    assert db.migrate(conn, None) == 13
 
 
 def test_upgrade_backs_up_first(tmp_path):
@@ -133,7 +133,31 @@ def test_v2_db_upgrades_to_prompt_sha_with_backup(tmp_path):     # Task 9e
     conn.execute("INSERT INTO attempt (job_id, step, n, runner, created_at) "
                  "VALUES (1,'analyst',0,'cli',0)")
     conn.commit()
-    assert db.migrate(conn, p) == 11
+    assert db.migrate(conn, p) == 13
     assert "prompt_sha" in _cols(conn, "attempt")
     assert conn.execute("SELECT prompt_sha FROM attempt").fetchone()[0] is None
     assert (tmp_path / "h.db.bak-v2").exists()
+
+
+def test_0012_backfills_character_then_drops_mode(tmp_path):
+    mig = tmp_path / "mig"
+    mig.mkdir()
+    for f in sorted(db.MIGRATIONS_DIR.glob("*.sql"))[:11]:
+        (mig / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    conn = _mem()
+    assert db.migrate(conn, None, mig) == 11
+    conn.execute("INSERT INTO story VALUES (1,'s','t',0)")
+    conn.execute("INSERT INTO discussion VALUES (1,1,'x','web',NULL,0,NULL)")
+    seed = [(1, "slow", None), (2, "direct", None), (3, "imaginative", None), (4, "slow", "deer"), (5, None, None)]
+    for seq, mode, character in seed:
+        conn.execute("INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, mode, character) "
+                     "VALUES (1, ?, 'assistant', 't', 0, 'den', '[]', ?, ?)", (seq, mode, character))
+    conn.execute("INSERT INTO memory (scope, text, quote, discussion_id, seq, valid_from, learned_at) "
+                 "VALUES ('author', 'm', 'q', 1, 1, 0, 0)")
+    conn.commit()
+    assert db.migrate(conn, None) >= 12
+    rows = {r["seq"]: r["character"] for r in conn.execute("SELECT seq, character FROM utterance")}
+    assert rows == {1: "hyena", 2: "buffalo", 3: "deer", 4: "deer", 5: None}
+    assert "mode" not in _cols(conn, "utterance")
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert conn.execute("SELECT discussion_id, seq FROM memory").fetchone()[:] == (1, 1)

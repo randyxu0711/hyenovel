@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, DashError, type RecentSession, type SessionDetail } from "./api";
 import Blob from "./Blob";
@@ -70,7 +70,7 @@ function Archive() {
           <h3>{detail.title}</h3>
           {detail.turns.map((turn, i) => {
             if (turn.role !== "assistant") return <div key={i} className="chat-me"><p>{turn.text}</p></div>;
-            const c = chars.byId(turn.character, turn.mode);
+            const c = chars.byId(turn.character);
             return (
               <div key={i} className="chat-turn">
                 {who.has(i) && <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>}
@@ -191,16 +191,78 @@ function Companions() {
   const lang = useLang();
   const chars = useCharacters();
   const [who, setWho] = useState(() => companionId(chars));
+  const [err, setErr] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => setWho(companionId(chars)), [chars]);
+  const code = (e: unknown) => (e instanceof DashError ? e.code : "unknown");
+  const pick = (id: string) => {
+    const before = who;
+    setWho(id); setErr(null);
+    setCompanion(id).catch(e => { setWho(before); setErr(code(e)); });
+  };
+  const send = async (card: unknown, confirm: boolean) => {
+    setErr(null); setProblems([]);
+    try {
+      const r = await api.importCharacter(card, confirm);
+      if (!r.imported) { setHeld({ card, warnings: r.warnings }); return; }
+      setHeld(null);
+      await chars.reload();
+    } catch (e) {
+      setHeld(null);
+      if (e instanceof DashError && Array.isArray(e.params.errors)) setProblems(e.params.errors as string[]);
+      else setErr(code(e));
+    }
+  };
+  const fromFile = async (file: File) => {
+    setErr(null); setHeld(null);
+    let card: unknown;
+    try { card = JSON.parse(await file.text()); } catch { setProblems(["not-json"]); return; }
+    await send(card, false);
+  };
+  const archive = (id: string) => {
+    setErr(null);
+    api.archiveCharacter(id).then(() => chars.reload()).catch(e => setErr(code(e)));
+  };
   return (
     <div className="set-rows">
-      {chars.list.map(c => (
-        <label key={c.id} className="dash-set-who">
-          <input type="radio" name="default-companion" checked={who === c.id}
-            onChange={() => { setCompanion(c.id); setWho(c.id); }} />
-          <Blob character={c} size={28} />
-          <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
-        </label>
-      ))}
+      {err && <p role="alert">{t(errorMessage(err))}</p>}
+      {chars.active.map(c => {
+        const name = localized(c.name, lang);
+        return (
+          <div key={c.id} className="dash-set-card">
+            <label className="dash-set-who">
+              <input type="radio" name="default-companion" checked={who === c.id}
+                onChange={() => pick(c.id)} />
+              <Blob character={c} size={28} />
+              <span>{name} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
+            </label>
+            <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
+              aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
+            {c.origin !== "builtin" && (
+              <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
+                onClick={() => archive(c.id)}><Icon name="box" /></button>
+            )}
+          </div>
+        );
+      })}
+      <div>
+        <button type="button" className="ib" aria-label={t("set.card.import")} title={t("set.card.import")}
+          onClick={() => fileInput.current?.click()}><Icon name="up" /></button>
+        <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t("set.card.import")}
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void fromFile(f); }} />
+      </div>
+      {problems.length > 0 && (
+        <ul role="alert">{problems.map(p => <li key={p}>{t(`card.err.${p}` as MsgKey)}</li>)}</ul>
+      )}
+      {held && (
+        <div role="group" aria-label={t("set.card.import")}>
+          <ul>{held.warnings.map(w => <li key={w}>{t(`card.warn.${w}` as MsgKey)}</li>)}</ul>
+          <button type="button" onClick={() => void send(held.card, true)}>{t("set.card.confirm")}</button>
+          <button type="button" onClick={() => setHeld(null)}>{t("set.card.cancel")}</button>
+        </div>
+      )}
     </div>
   );
 }

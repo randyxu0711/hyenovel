@@ -13,7 +13,7 @@ import json
 import re
 import sqlite3
 
-_JSON_COLS = {"recipe", "body", "provenance", "anchors", "refs", "quotes",
+_JSON_COLS = {"card", "recipe", "body", "provenance", "anchors", "refs", "quotes",
               "params", "detail", "parsed", "gate_verdict", "tokens", "usage"}
 
 
@@ -157,24 +157,17 @@ def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
 
 def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: float,
                   origin: str, anchors: list[str], analysis_fp: str | None,
-                  usage: dict | None = None, mode: str | None = None,
+                  *, usage: dict | None = None,
                   character: str | None = None, quotes: list[str] | None = None,
                   recipe: dict | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage, mode, character, quotes, recipe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, character, quotes, recipe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
-         None if usage is None else canonical_json(usage), mode, character,
+         None if usage is None else canonical_json(usage), character,
          canonical_json(quotes) if quotes else None,
          None if recipe is None else canonical_json(recipe)))
     return cur.rowcount == 1
-
-
-def last_mode(conn, discussion_id: int) -> str | None:
-    """該局最後一筆有記模式的 assistant 發言用的模式(舊局沒有 → None)。"""
-    r = conn.execute("SELECT mode FROM utterance WHERE discussion_id = ? AND role = 'assistant' "
-                     "AND mode IS NOT NULL ORDER BY seq DESC LIMIT 1", (discussion_id,)).fetchone()
-    return r[0] if r else None
 
 
 def last_character(conn, discussion_id: int) -> str | None:
@@ -214,7 +207,7 @@ def discussions_with_utterances(conn, story_id: int) -> list[dict]:
     """一篇所有討論局的逐字,依 ts, seq 排;一次查完。"""
     return [_row(r) for r in conn.execute(
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
-        "u.ts AS ts, u.anchors AS anchors, u.mode AS mode, u.character AS character, "
+        "u.ts AS ts, u.anchors AS anchors, u.character AS character, "
         "u.quotes AS quotes, u.analysis_fp AS analysis_fp FROM utterance u JOIN discussion d "
         "ON d.id = u.discussion_id WHERE d.story_id = ? ORDER BY u.ts, u.seq", (story_id,))]
 
@@ -242,8 +235,8 @@ def artifact_versions(conn, story_id: int, kind: str) -> set[int]:
 
 def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
     """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
-    turns = assistant 則數;character / mode / preview 取最後一則 assistant 發言(preview 前 60 字)。
-    legacy = 沒有任何記了 mode 的 assistant 發言(改版前的舊局);只回 legacy 或只回非 legacy,過濾在 LIMIT 之前。"""
+    turns = assistant 則數;character / preview 取最後一則 assistant 發言(preview 前 60 字)。
+    legacy = 沒有任何記了 character 的 assistant 發言(改版前的舊局);只回 legacy 或只回非 legacy,過濾在 LIMIT 之前。"""
     last = ("(SELECT {c} FROM utterance WHERE discussion_id = d.id AND role = 'assistant' "
             "ORDER BY seq DESC LIMIT 1)")
     out = []
@@ -252,12 +245,12 @@ def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
             "d.started_at AS started_at, "
             "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
             "(SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'assistant') AS turns, "
-            f"{last.format(c='character')} AS character, {last.format(c='mode')} AS mode, "
+            f"{last.format(c='character')} AS character, "
             f"{last.format(c='text')} AS preview "
             "FROM discussion d JOIN story st ON st.id = d.story_id "
             "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
             f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
-            "AND role = 'assistant' AND mode IS NOT NULL) "
+            "AND role = 'assistant' AND character IS NOT NULL) "
             "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
         row = _row(r)
         row["preview"] = (row["preview"] or "")[:60]
@@ -561,3 +554,50 @@ def has_newer_resumable_job(conn, story_id: int, source_version_id: int, job_id:
         "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
         "AND state IN (?, ?, ?) LIMIT 1",
         (story_id, source_version_id, job_id, *_RESUMABLE)).fetchone() is not None
+
+
+# ── character / setting ──
+
+_LATEST_CHARACTER = ("SELECT c.id AS id, c.origin AS origin, c.archived_at AS archived_at, v.n AS n, "
+                     "v.card AS card, v.sha256 AS sha256 FROM character c JOIN character_version v "
+                     "ON v.character_id = c.id AND v.n = (SELECT MAX(n) FROM character_version "
+                     "WHERE character_id = c.id) ")
+
+
+def add_character(conn, character_id: str, origin: str, now: float) -> None:
+    conn.execute("INSERT INTO character (id, origin, created_at) VALUES (?, ?, ?)", (character_id, origin, now))
+
+
+def add_character_version(conn, character_id: str, card: dict, now: float) -> int:
+    text = canonical_json(card)
+    n = conn.execute("SELECT COALESCE(MAX(n), 0) + 1 FROM character_version WHERE character_id = ?",
+                     (character_id,)).fetchone()[0]
+    conn.execute("INSERT INTO character_version (character_id, n, card, sha256, created_at) VALUES (?, ?, ?, ?, ?)",
+                 (character_id, n, text, sha256_text(text), now))
+    return n
+
+
+def latest_character(conn, character_id: str) -> dict | None:
+    return _row(conn.execute(_LATEST_CHARACTER + "WHERE c.id = ?", (character_id,)).fetchone())
+
+
+def latest_characters(conn) -> list[dict]:
+    return [_row(r) for r in conn.execute(_LATEST_CHARACTER + "ORDER BY c.id")]
+
+
+def archive_character(conn, character_id: str, now: float) -> None:
+    conn.execute("UPDATE character SET archived_at = ? WHERE id = ? AND archived_at IS NULL", (now, character_id))
+
+
+def unarchive_character(conn, character_id: str) -> None:
+    conn.execute("UPDATE character SET archived_at = NULL WHERE id = ?", (character_id,))
+
+
+def get_setting(conn, key: str) -> str | None:
+    r = conn.execute("SELECT value FROM setting WHERE key = ?", (key,)).fetchone()
+    return r[0] if r else None
+
+
+def set_setting(conn, key: str, value: str) -> None:
+    conn.execute("INSERT INTO setting (key, value) VALUES (?, ?) "
+                 "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))

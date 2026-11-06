@@ -43,7 +43,7 @@ describe("Blob", () => {
     expect(container.querySelector("svg.blob")!.getAttribute("data-state")).toBe("idle");
   });
   it("未知 avatar.kind 的角色照常畫", () => {
-    const { container } = render(<Blob character={ch("fox", "slow", "狐狸", "Fox", "zzz")} />);
+    const { container } = render(<Blob character={ch("fox", "狐狸", "Fox", "zzz")} />);
     expect(container.querySelector("svg.blob path.body")).not.toBeNull();
   });
 });

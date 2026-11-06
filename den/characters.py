@@ -1,19 +1,25 @@
-"""角色登記表:內建角色是 marrow/prompts/characters/<id>.json(長相)+ <id>.md(讀法)。mode 只剩舊局對應用。"""
+"""角色登記表:DB 的 character_version.card 是正本;內建角色的 <id>.json(長相)+ <id>.md(讀法)啟動時同步成新版本。"""
 import json
 from functools import cache
 from pathlib import Path
 
-from den import companion, themes
+from den import cards, companion
+from den.cards import MARKS, check_colors  # noqa: F401
+from marrow import repo
 
 _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characters"
 
 DEFAULT_CHARACTER = "hyena"
-_FIELDS = {"id", "mode", "name", "line", "avatar", "colors", "voice"}
-MARKS = ("pencil", "highlighter", "circle")
+_DEFAULT_KEY = "default_character"
+_FIELDS = {"id", "name", "line", "avatar", "colors", "voice"}
 
 
 class UnknownCharacter(Exception):
     """指定的角色 id 不存在。"""
+
+
+class BuiltinCharacter(Exception):
+    """內建角色不能封存。"""
 
 
 @cache
@@ -39,36 +45,78 @@ def builtins() -> list[dict]:
     return list(_load())
 
 
-def get(character_id: str) -> dict | None:
-    return next((c for c in _load() if c["id"] == character_id), None)
+def sync_builtins(conn, now: float) -> None:
+    """內建檔和最新版不同才加版;呼叫者持 transaction。"""
+    for profile in _load():
+        cid = profile["id"]
+        card = cards.from_builtin(profile, (_DIR / f"{cid}.md").read_text(encoding="utf-8"))
+        latest = repo.latest_character(conn, cid)
+        if latest is None:
+            repo.add_character(conn, cid, "builtin", now)
+        if latest is None or latest["card"] != card:
+            repo.add_character_version(conn, cid, card, now)
 
 
-def resolve(character: str | None, last: str | None) -> dict:
+def _view(row: dict) -> dict:
+    return {**cards.view(row["card"], row["id"], row["n"]), "origin": row["origin"],
+            "archived": row["archived_at"] is not None}
+
+
+def all_(conn) -> list[dict]:
+    return [_view(r) for r in repo.latest_characters(conn)]
+
+
+def get(conn, character_id: str) -> dict | None:
+    row = repo.latest_character(conn, character_id)
+    return row and _view(row)
+
+
+def _active(conn, character_id: str) -> dict | None:
+    found = get(conn, character_id)
+    return found if found and not found["archived"] else None
+
+
+def default_id(conn) -> str:
+    saved = repo.get_setting(conn, _DEFAULT_KEY)
+    return saved if saved and _active(conn, saved) else DEFAULT_CHARACTER
+
+
+def set_default(conn, character_id: str) -> None:
+    if _active(conn, character_id) is None:
+        raise UnknownCharacter(character_id)
+    repo.set_setting(conn, _DEFAULT_KEY, character_id)
+
+
+def resolve(conn, character: str | None, last: str | None) -> dict:
     """指定角色 > 該局上一位 > 預設。"""
     if character is not None:
-        found = get(character)
+        found = _active(conn, character)
         if found is None:
             raise UnknownCharacter(character)
         return found
-    return (last and get(last)) or get(DEFAULT_CHARACTER)
+    return (last and _active(conn, last)) or get(conn, default_id(conn))
 
 
-def of_legacy_mode(mode: str) -> dict:
-    """舊局只記了 mode 沒記角色時,對回當時的角色。"""
-    return next(c for c in _load() if c["mode"] == mode)
+def import_card(conn, card: dict, now: float) -> dict:
+    """同一張卡再匯入 = 同一隻角色,封存過就拉回來。呼叫者持 transaction。"""
+    cid = cards.imported_id(card)
+    row = repo.latest_character(conn, cid)
+    if row is None:
+        repo.add_character(conn, cid, "imported", now)
+        repo.add_character_version(conn, cid, card, now)
+    else:
+        repo.unarchive_character(conn, cid)
+    return get(conn, cid)
 
 
-def check_colors(colors: dict) -> list[str]:
-    """名字色(text)在每一套內建主題的晝夜、對話欄與桌面上都要 ≥ 4.5:1。fill 是毛色(頭像有墨色輪廓),不驗。"""
-    bad = []
-    for theme in themes.builtins():
-        for scheme in ("light", "dark"):
-            for bg in ("desk-2", "desk"):
-                r = themes.contrast(colors[scheme]["text"], theme[scheme][bg])
-                if r < 4.5:
-                    bad.append(f"{theme['id']} {scheme} text/{bg} = {r:.2f}")
-    return bad
+def archive(conn, character_id: str, now: float) -> None:
+    row = repo.latest_character(conn, character_id)
+    if row is None:
+        raise UnknownCharacter(character_id)
+    if row["origin"] == "builtin":
+        raise BuiltinCharacter(character_id)
+    repo.archive_character(conn, character_id, now)
 
 
 def persona(character: dict) -> str:
-    return companion.persona(character["id"], character["voice"])
+    return companion.persona(character["reading"], character["voice"])

@@ -11,6 +11,7 @@ export const DEN_ERROR_CODES = [
   "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
   "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
   "unknown-memory", "memory-not-current", "memory-is-current",
+  "bad-card", "builtin-character",
   "den-down",
 ];
 
@@ -23,7 +24,8 @@ export class DashError extends Error {
 export type LText = { "zh-Hant"?: string; en?: string };
 export type ColorPair = { fill: string; text: string };
 export type Character = {
-  id: string; mode: string; name: LText; line: LText;
+  id: string; version: number; origin: "builtin" | "imported" | "created"; archived: boolean;
+  name: LText; line: LText;
   avatar: { kind: string; seed: string };
   colors: { light: ColorPair; dark: ColorPair };
   voice: string;
@@ -47,7 +49,7 @@ export type WorkDetail = {
 };
 export type SessionRow = {
   session: string; started_at: number; last_at: number; turns: number;
-  character: string | null; mode: string | null; preview: string; version: number | null; legacy: boolean;
+  character: string | null; preview: string; version: number | null; legacy: boolean;
   /** 這局發言當下的原文版本範圍 [lo, hi] */
   versions?: [number, number] | null;
 };
@@ -68,13 +70,13 @@ export type Turn = {
   seq?: number;
   reaction?: TurnReaction | null;
   memories?: TurnMemory[];
-  role: string; text: string; ts: number; mode: string | null; character: string | null; quotes: string[]; spans: Span[];
+  role: string; text: string; ts: number; character: string | null; quotes: string[]; spans: Span[];
   /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有 */
   v?: number;
 };
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {
-  role: "assistant"; text: string; session_id: string; seq: number; mode: string; character: string; spans: Span[];
+  role: "assistant"; text: string; session_id: string; seq: number; character: string; spans: Span[];
   /** 這輪存下當時的最新版(問與答都算這一版) */
   v?: number;
 };
@@ -139,6 +141,13 @@ export const api = {
   recentSessions: async (limit = 20, opts: { legacy?: boolean } = {}) =>
     (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}${opts.legacy ? "&legacy=1" : ""}`)).sessions,
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
+  setDefaultCharacter: (character: string) =>
+    request<{ default: string }>("/api/characters/default", { ...post({ character }), method: "PUT" }),
+  importCharacter: (card: unknown, confirm: boolean) =>
+    request<{ imported: boolean; warnings: string[]; character?: Character }>("/api/characters/import", post({ card, confirm })),
+  characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
+  archiveCharacter: (id: string) =>
+    request<{ archived: string }>(`/api/characters/${encodeURIComponent(id)}`, { method: "DELETE" }),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),
   estimate: async (chars: number) =>
     (await request<{ estimate: Estimate | null }>(`/api/estimate?chars=${chars}`)).estimate,

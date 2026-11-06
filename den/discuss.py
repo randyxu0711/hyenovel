@@ -41,7 +41,7 @@ class UnknownSession(Exception):
 
 
 class LegacySession(Exception):
-    """改版前的舊局(沒有記 mode 的 assistant 發言):只能看,不能續聊。"""
+    """改版前的舊局(沒有記 character 的 assistant 發言):只能看,不能續聊。"""
 
 
 class UnknownTurn(Exception):
@@ -109,7 +109,7 @@ def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] 
         if row is None:
             raise UnknownSession(session_id)
         us = repo.utterances(conn, row["id"])
-        if us and not any(u["role"] == "assistant" and u["mode"] is not None for u in us):
+        if us and not any(u["role"] == "assistant" and u["character"] is not None for u in us):
             raise LegacySession(session_id)   # 空局(還沒有逐字)不算舊局
         d = row["id"]
     analysis = repo.current_artifact(conn, st["id"], "analysis")
@@ -120,12 +120,10 @@ def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] 
 
 def pick_character(conn, turn: dict, character: str | None) -> None:
     """定這輪的角色(寫進 turn["character"]);characters.UnknownCharacter 要在串流開始前炸。
-    角色 > 該局上一位 > 預設;舊局只記了 mode 沒記角色,就沿用那個 mode 的角色。"""
+    角色 > 該局上一位 > 預設。"""
     d = turn["discussion_id"]
     last = repo.last_character(conn, d) if d is not None else None
-    if last is None and d is not None and (old := repo.last_mode(conn, d)):
-        last = characters.of_legacy_mode(old)["id"]
-    turn["character"] = characters.resolve(character, last)
+    turn["character"] = characters.resolve(conn, character, last)
 
 
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
@@ -192,8 +190,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
                 seq += 1
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
-                               usage=usage, mode=character["mode"], character=character["id"],
+                               usage=usage, character=character["id"],
                                recipe={**prompt.recipe(system, companion.CHAT_RUN.as_dict()),
+                                       "character_v": character["version"],
                                        "retrieved": [n["id"] for n in picked]})
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
@@ -204,7 +203,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
         return
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
-                                        "session_id": sid, "seq": seq, "mode": character["mode"],
+                                        "session_id": sid, "seq": seq,
                                         "character": character["id"], "v": v,
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)

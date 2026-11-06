@@ -7,11 +7,10 @@ import { marksFrom } from "./Side";
 import { useCharacters } from "./useCharacters";
 import { useSeen } from "./useSeen";
 
-const WHO_KEY = "hyenovel.companion";
-const read = (): string | null => { try { return localStorage.getItem(WHO_KEY); } catch { return null; } };
+let defaultWho: string | null = null;
 const whoListeners = new Set<(id: string) => void>();
-const write = (v: string) => {
-  try { localStorage.setItem(WHO_KEY, v); } catch { /* 存不了也照用 */ }
+const announce = (v: string) => {
+  defaultWho = v;
   whoListeners.forEach(fn => fn(v));   // 指令框、設定頁換人:開著的對話立刻跟著換
 };
 
@@ -24,13 +23,18 @@ const writeDraft = (slug: string, text: string) => {
   try { if (text) localStorage.setItem(draftKey(slug), text); else localStorage.removeItem(draftKey(slug)); } catch { /* 存不了就算了 */ }
 };
 
-/** 設定頁選的預設陪讀者:進門畫面與新局用它。 */
-export const setCompanion = write;
+/** den 給的全域預設陪讀者:載入角色時設一次。 */
+export const initCompanion = (id: string | null) => { defaultWho = id; };
 
-/** 記住的陪讀者(要在清單裡),沒有就預設。進門畫面用它決定誰接話。 */
-export function companionId(chars: { list: { id: string }[]; defaultId: string }): string {
-  const saved = read();
-  return saved && chars.list.some(c => c.id === saved) ? saved : chars.defaultId;
+/** 設定頁、指令框換全域預設:den 存好才生效,存不下就把錯誤丟給呼叫者。 */
+export async function setCompanion(id: string): Promise<void> {
+  await api.setDefaultCharacter(id);
+  announce(id);
+}
+
+/** 全域預設陪讀者(要在清單裡),沒有就用清單的預設。進門畫面與新局用它。 */
+export function companionId(chars: { active: { id: string }[]; defaultId: string }): string {
+  return defaultWho && chars.active.some(c => c.id === defaultWho) ? defaultWho : chars.defaultId;
 }
 
 /** 與 den/config.py 的 MAX_CHAT_CHARS 一致(den/tests/test_app_errors.py 比對)。 */
@@ -53,10 +57,9 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   wanted: string | null = null, onSession?: (id: string | null) => void, reloadKey = 0) {
   const chars = useCharacters();
   const { markSeen } = useSeen();
-  // 記住的 id 要對照清單:找不到就當作沒選過、用預設。
-  const saved = read();
-  const [picked, setPicked] = useState<string | null>(saved && chars.list.some(c => c.id === saved) ? saved : null);
-  const setWho = useCallback((id: string) => { write(id); setPicked(id); }, []);
+  // 對話裡換人只影響這一局;換作品、開局、開新局就清掉。
+  const [picked, setPicked] = useState<string | null>(null);
+  const setWho = setPicked;
   useEffect(() => { whoListeners.add(setPicked); return () => { whoListeners.delete(setPicked); }; }, []);
 
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -99,10 +102,10 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   }, []);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
-  // 沒選過人時,既有的局由最後說話的那位接著陪讀(舊局只有 mode 也照樣對到角色)。
+  // 這局沒換過人時,由最後說話的那位接著陪讀。
   const last = [...turns].reverse().find(t => t.role === "assistant");
-  const inherited = last ? chars.byId(last.character, last.mode).id : null;
-  const whoId = picked ?? inherited ?? companionId(chars);
+  const usable = (id: string | null | undefined) => (id && chars.active.some(c => c.id === id) ? id : null);
+  const whoId = usable(picked) ?? usable(last?.character) ?? companionId(chars);
 
   const setDraft = useCallback((v: string | ((d: string) => string)) => {
     const s = now.current.slug;
@@ -137,6 +140,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     ++epoch.current;
     touched.current = false;
     stopDrawing();
+    setPicked(null);
     setTurns([]); setSession(null); setLegacy(false); setSessions([]); setStreaming(null); setPending(null); setError(null);
     if (!slug) return;
     refreshSessions(slug, rows => {
@@ -160,12 +164,13 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     else setSpansV(version);
   }, [version, busy, spansV, load, reloadKey]);
 
-  const open = useCallback((id: string) => { touched.current = true; load(id); now.current.onSession?.(id); }, [load]);
+  const open = useCallback((id: string) => { touched.current = true; setPicked(null); load(id); now.current.onSession?.(id); }, [load]);
   const fresh = useCallback(() => {
     touched.current = true;
     now.current.onSession?.(null);
     ++epoch.current;
     stopDrawing();
+    setPicked(null);
     setTurns([]); setSession(null); setLegacy(false); setError(null); setSpansV(now.current.version);
   }, [stopDrawing]);
 
@@ -208,14 +213,14 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           setSession(d.session_id);
           if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
-            { seq: userSeq(message, d.seq), role: "user", text: message, ts, mode: null, character: null, quotes, spans: [], v: d.v },
-            { seq: d.seq, role: "assistant", text: d.text, ts, mode: d.mode, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
+            { seq: userSeq(message, d.seq), role: "user", text: message, ts, character: null, quotes, spans: [], v: d.v },
+            { seq: d.seq, role: "assistant", text: d.text, ts, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           markSeen(slug);
           ok = true;
           // 串流中的痕跡交給逐字稿;spans 裡先前沒找到的(如只差標點)此時補畫
           setLiveMarks([]);
           if (!old) {
-            const by = chars.byId(d.character, d.mode).id;
+            const by = chars.byId(d.character).id;
             const late: string[] = [];
             for (const s of d.spans) {
               if (s.start === null || s.end === null) continue;

@@ -16,7 +16,7 @@ export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
   const at = new Map<string, Mark>();
   turns.forEach(turn => {
     if (turn.role !== "assistant") return;
-    const character = chars.byId(turn.character, turn.mode).id;
+    const character = chars.byId(turn.character).id;
     turn.spans.forEach(s => {
       if (s.start === null || s.end === null) return;
       const key = `${s.start}:${s.end}`;

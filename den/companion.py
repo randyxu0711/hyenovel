@@ -1,6 +1,6 @@
 """companion:陪讀角色的人格與素材(spec §3、§6)。
 
-人格 = 共同底層 base.md + 角色讀法 characters/<id>.md,靠角色 id 對應。
+人格 = 共同底層 base.md + 角色卡的讀法;底層不在卡上,卡片不能覆蓋。
 """
 from functools import cache
 from pathlib import Path
@@ -17,17 +17,17 @@ def _read(rel: str) -> str:
     return (_PROMPTS / rel).read_text(encoding="utf-8")
 
 
-def _persona_layers(character_id: str, voice: str) -> tuple[Layer, ...]:
+def _persona_layers(reading: str, voice: str) -> tuple[Layer, ...]:
     out = [Layer("base", _read("companion/base.md").rstrip() + "\n\n"),
-           Layer("character", _read(f"characters/{character_id}.md").rstrip() + "\n\n")]
+           Layer("character", reading.rstrip() + "\n\n")]
     if voice.strip():
         out.append(Layer("voice", voice.rstrip() + "\n\n"))
     return tuple(out)
 
 
-def persona(character_id: str, voice: str = "") -> str:
+def persona(reading: str, voice: str = "") -> str:
     """共同底層 + 角色讀法;voice 非空時接在後面。"""
-    return Prompt(_persona_layers(character_id, voice)).text.rstrip() + "\n"
+    return Prompt(_persona_layers(reading, voice)).text.rstrip() + "\n"
 
 
 _RUNNING = "這篇的結構分析還在背景跑,你現在是先憑原文讀。作者問進度,就用你自己的話說還在跑。"
@@ -47,7 +47,7 @@ def _memory_block(memory: dict) -> str:
 
 def assemble(ctx: dict, character: dict) -> Prompt:
     """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子。"""
-    layers = list(_persona_layers(character["id"], character["voice"]))
+    layers = list(_persona_layers(character["reading"], character["voice"]))
     if ctx["memory"]["author"] or ctx["memory"]["work"]:
         layers.append(Layer("memory_header", _MEMORY_HEADER))
         layers.append(Layer("memory", _memory_block(ctx["memory"]), material=True))

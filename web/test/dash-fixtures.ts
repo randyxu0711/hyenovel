@@ -15,13 +15,13 @@ export const grass: Theme = {
   dark: tok("#1f1f25", "#dad0ba", "#4e5059", "#e4ded0"),
 };
 
-const ch = (id: string, mode: string, zh: string, en: string, kind = id): Character => ({
-  id, mode, name: { "zh-Hant": zh, en }, line: { "zh-Hant": "一句話", en: "A line" },
+const ch = (id: string, zh: string, en: string, kind = id): Character => ({
+  id, version: 1, origin: "builtin", archived: false, name: { "zh-Hant": zh, en }, line: { "zh-Hant": "一句話", en: "A line" },
   avatar: { kind, seed: id },
   colors: { light: { fill: "#cc8650", text: "#925a2b" }, dark: { fill: "#dc9a66", text: "#dc9a66" } }, voice: "",
   mark: (({ hyena: "pencil", buffalo: "highlighter", deer: "circle" }) as Record<string, Character["mark"]>)[id] ?? "pencil",
 });
-export const hyena = ch("hyena", "slow", "鬣狗", "Hyena");
-export const buffalo = ch("buffalo", "direct", "水牛", "Water buffalo");
-export const deer = ch("deer", "imaginative", "鹿", "Deer");
+export const hyena = ch("hyena", "鬣狗", "Hyena");
+export const buffalo = ch("buffalo", "水牛", "Water buffalo");
+export const deer = ch("deer", "鹿", "Deer");
 export { ch };

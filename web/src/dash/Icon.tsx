@@ -25,6 +25,8 @@ const PATHS = {
   close: <path d="M5 5l8 8M13 5l-8 8" />,
   pause: <path d="M6.5 4v10M11.5 4v10" />,
   offTarget: <><circle cx="9" cy="9" r="6" /><path d="M4.8 13.2l8.4-8.4" /></>,
+  down: <path d="M9 3v8M5.5 8L9 11.5 12.5 8M3.5 15h11" />,
+  up: <path d="M9 12V4M5.5 7L9 3.5 12.5 7M3.5 15h11" />,
   memory: <path d="M5 2.5h8v13l-4-3-4 3z" />,
   sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
 } satisfies Record<string, ReactNode>;

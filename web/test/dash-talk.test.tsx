@@ -10,6 +10,8 @@ import { composerState, speakerChanges, versionBreaks } from "../src/dash/Talk";
 import { makeCharacters } from "../src/dash/useCharacters";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
+let serverDefault = "hyena";
+
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
 const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
   start(c) {
@@ -27,18 +29,18 @@ let rows: object[];
 let text: string;
 let versions: number[];
 
-const a = (t: string, character: string | null, spans: Span[] = [], mode: string | null = null) =>
-  ({ role: "assistant", text: t, ts: 1, mode, character, quotes: [], spans });
-const u = (t: string, quotes: string[] = []) => ({ role: "user", text: t, ts: 1, mode: null, character: null, quotes, spans: [] });
+const a = (t: string, character: string | null, spans: Span[] = []) =>
+  ({ role: "assistant", text: t, ts: 1, character, quotes: [], spans });
+const u = (t: string, quotes: string[] = []) => ({ role: "user", text: t, ts: 1, character: null, quotes, spans: [] });
 const session = (id: string, turns: object[], over: object = {}) => { sessions[id] = { session: id, slug: "d1", title: "海", turns, legacy: false, version: 1, ...over }; };
-const row = (id: string, over: object = {}) => ({ session: id, started_at: 1, last_at: 2, turns: 2, character: "buffalo", mode: "direct", preview: "q1", version: 1, legacy: false, ...over });
+const row = (id: string, over: object = {}) => ({ session: id, started_at: 1, last_at: 2, turns: 2, character: "buffalo", preview: "q1", version: 1, legacy: false, ...over });
 
 function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
   const f = vi.fn(async (url: string, init?: RequestInit) => {
     const [p, q] = url.split("?");
     const v = q?.startsWith("v=") ? Number(q.slice(2)) : null;
     if (p === "/api/themes") return json({ themes: [olive], default: "olive" });
-    if (p === "/api/characters") return json({ characters: chars, default: "hyena" });
+    if (p === "/api/characters") return json({ characters: chars, default: serverDefault });
     if (p === "/api/works") return json({ works });
     if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: v ?? Math.max(...versions), versions, text, state: "ready", job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map") return json({ version: v ?? 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
@@ -56,7 +58,7 @@ const loc = () => screen.getByTestId("loc").textContent;
 const whoKey = () => screen.getByRole("button", { name: /^陪讀者:/ });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
   ["token", { text: t.slice(0, 1) }], ["token", { text: t.slice(1) }],
-  ["message", { role: "assistant", text: t, session_id: sid, mode: "slow", character, spans }], ["done", { ok: true, session_id: sid }]);
+  ["message", { role: "assistant", text: t, session_id: sid, character, spans }], ["done", { ok: true, session_id: sid }]);
 const say = (s: string) => {
   fireEvent.change(screen.getByLabelText("對話輸入"), { target: { value: s } });
   fireEvent.click(screen.getByRole("button", { name: "送出" }));
@@ -66,13 +68,13 @@ const log = () => within(screen.getByRole("log"));
 const findLog = async () => within(await screen.findByRole("log"));
 
 beforeEach(() => {
-  setLang("zh-Hant"); localStorage.clear(); talkBodies = []; talkReply = reply("嗯"); sessions = {}; rows = [];
+  setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; talkBodies = []; talkReply = reply("嗯"); sessions = {}; rows = [];
   text = "第一段。"; versions = [1];
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("選人", () => {
-  it("在輸入框的陪讀者選單選過的角色會被記住", async () => {
+  it("對話裡換人只影響這一局:不動全域預設,重開回到預設", async () => {
     const { unmount } = mount();
     const pick = async () => {
       fireEvent.click(await screen.findByRole("button", { name: /^陪讀者:/ }));
@@ -80,9 +82,30 @@ describe("選人", () => {
     };
     fireEvent.click(await pick());
     expect((await pick()).getAttribute("aria-pressed")).toBe("true");
+    say("嗨");
+    await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
+    expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u) === "/api/characters/default")).toBe(false);
     unmount();
     mount();
-    expect((await pick()).getAttribute("aria-pressed")).toBe("true");
+    expect((await pick()).getAttribute("aria-pressed")).toBe("false");
+  });
+  it("上一位已封存:由預設接著讀,不送已封存的 id", async () => {
+    rows = [row("s1")];
+    session("s1", [u("q"), a("我是老讀", "u1")]);
+    mount("/w/d1", [hyena, buffalo, { ...deer, id: "u1", origin: "imported", archived: true }]);
+    expect(await (await findLog()).findByText("我是老讀")).toBeTruthy();
+    say("嗨");
+    await waitFor(() => expect(talkBodies[0]?.character).toBe("hyena"));
+  });
+  it("開一局回到預設,不沿用上一局的人", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    rows = [row("s1")];
+    session("s1", [u("q"), a("我是水牛", "buffalo")]);
+    mount();
+    expect(await (await findLog()).findByText("我是水牛")).toBeTruthy();
+    expect(whoKey().getAttribute("aria-label")).toContain("水牛");
+    fireEvent.click(within(await screen.findByRole("list", { name: "這篇的對話" })).getByRole("button", { name: "開一局" }));
+    await waitFor(() => expect(whoKey().getAttribute("aria-label")).toContain("鬣狗"));
   });
   it("沒選過人時打開既有的局:直接看逐字,接著由最後說話的那位陪讀", async () => {
     rows = [row("s1")];
@@ -91,13 +114,6 @@ describe("選人", () => {
     expect(await (await findLog()).findByText("我是水牛")).toBeTruthy();
     say("接著聊");
     await waitFor(() => expect(talkBodies[0]).toMatchObject({ character: "buffalo", session_id: "s1" }));
-  });
-  it("記住的角色不在清單時退回預設", async () => {
-    localStorage.setItem("hyenovel.companion", "ghost");
-    mount();
-    await screen.findByLabelText("對話輸入");
-    say("嗨");
-    await waitFor(() => expect(talkBodies[0].character).toBe("hyena"));
   });
 });
 
@@ -113,7 +129,7 @@ describe("換預設陪讀者在作品頁立即生效", () => {
     await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
   });
   it("設定頁改預設為鹿(之前記的是水牛)→ 再打開沒有局的作品,由鹿接話", async () => {
-    localStorage.setItem("hyenovel.companion", "buffalo");
+    serverDefault = "buffalo";
     mount("/w/d1");
     await screen.findByText("第一段。");
     expect(whoKey().getAttribute("aria-label")).toContain("水牛");
@@ -130,7 +146,7 @@ describe("換預設陪讀者在作品頁立即生效", () => {
 });
 
 describe("對話", () => {
-  beforeEach(() => localStorage.setItem("hyenovel.companion", "buffalo"));
+  beforeEach(() => { serverDefault = "buffalo"; });
   it("送出帶 character,帶著的引文送進 quotes 並顯示在訊息上", async () => {
     mount();
     await screen.findByText("第一段。");
@@ -158,7 +174,7 @@ describe("對話", () => {
         w("token", { text: "半" });
         await gate;
         w("token", { text: "句" });
-        w("message", { role: "assistant", text: "半句", session_id: "s1", mode: "direct", character: "buffalo", spans: [] });
+        w("message", { role: "assistant", text: "半句", session_id: "s1", character: "buffalo", spans: [] });
         w("done", { ok: true, session_id: "s1" });
         c.close();
       },
@@ -188,7 +204,7 @@ describe("對話", () => {
   });
   it("換人那則前才露角色,同一人連續不重複;沒有分隔線;舊局沒有 character 時用同 mode 的角色", async () => {
     rows = [row("s1")];
-    session("s1", [u("一"), a("我先讀", null, [], "slow"), u("二"), a("再讀", "hyena"), u("三"), a("換我", "buffalo")]);
+    session("s1", [u("一"), a("我先讀", "hyena"), u("二"), a("再讀", "hyena"), u("三"), a("換我", "buffalo")]);
     const { container } = mount();
     await (await findLog()).findByText("換我");
     expect(log().queryAllByRole("separator")).toEqual([]);
@@ -364,7 +380,7 @@ describe("引文", () => {
 });
 
 describe("對話錯誤與上限", () => {
-  beforeEach(() => localStorage.setItem("hyenovel.companion", "buffalo"));
+  beforeEach(() => { serverDefault = "buffalo"; });
   it("串流中的 error 事件用它帶的 code 顯示", async () => {
     talkReply = () => sse(["error", { where: "discuss", message: "用量已達上限", recoverable: true, code: "usage-limit" }]);
     mount();
@@ -404,7 +420,7 @@ describe("沒有寫死角色", () => {
 });
 
 describe("邊說邊畫線", () => {
-  beforeEach(() => { text = "海很藍。第二句。"; localStorage.setItem("hyenovel.companion", "buffalo"); });
+  beforeEach(() => { text = "海很藍。第二句。"; serverDefault = "buffalo"; });
   afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
   /** 先送 tokens,等 release() 才送 message(帶 spans)。 */
   const gated = (tokens: string[], spans: Span[], before?: () => void) => {
@@ -418,7 +434,7 @@ describe("邊說邊畫線", () => {
         for (const t of tokens) w("token", { text: t });
         await gate;
         before?.();
-        w("message", { role: "assistant", text: full, session_id: "s1", mode: "direct", character: "buffalo", spans });
+        w("message", { role: "assistant", text: full, session_id: "s1", character: "buffalo", spans });
         w("done", { ok: true, session_id: "s1" });
         c.close();
       },
@@ -582,7 +598,7 @@ describe("交新版之後", () => {
     rows = [row("s1")];
     session("s1", [{ ...u("一"), v: 1 }, { ...a("我先讀", "hyena"), v: 1 }]);
     talkReply = () => sse(["token", { text: "好" }],
-      ["message", { role: "assistant", text: "好", session_id: "s1", mode: "slow", character: "hyena", spans: [], v: 2 }],
+      ["message", { role: "assistant", text: "好", session_id: "s1", character: "hyena", spans: [], v: 2 }],
       ["done", { ok: true, session_id: "s1" }]);
     mount();
     await (await findLog()).findByText("我先讀");
@@ -601,7 +617,7 @@ describe("交新版之後", () => {
 
 describe("輸入紙與角色狀態", () => {
   const chars = makeCharacters([hyena, buffalo, deer], "hyena");
-  const byId = (id: string | null, m?: string | null) => chars.byId(id, m);
+  const byId = (id: string | null) => chars.byId(id);
   it("speakerChanges:第一則 assistant 與換人那則", () => {
     const ts = [u("q"), a("1", "hyena"), u("q"), a("2", "hyena"), a("3", "deer"), a("4", "deer")];
     expect([...speakerChanges(ts as never, byId)]).toEqual([1, 4]);
@@ -658,7 +674,7 @@ describe("輸入紙與角色狀態", () => {
 
   it("串流完的回覆當場可標記;沒有 seq 的舊資料沒有記號", async () => {
     talkReply = () => sse(
-      ["message", { role: "assistant", text: "嗯", session_id: "s1", seq: 1, mode: "direct", character: "buffalo", spans: [] }],
+      ["message", { role: "assistant", text: "嗯", session_id: "s1", seq: 1, character: "buffalo", spans: [] }],
       ["done", { ok: true, session_id: "s1" }]);
     mount();
     await screen.findByText("第一段。");

@@ -907,7 +907,7 @@ def _seed_session(data, slug="mini", sid="sess1"):
         d = repo.ensure_discussion(conn, st["id"], sid, "web", None, 5.0)
         repo.add_utterance(conn, d, 0, "user", "問", 5.0, "den", [], None)
         repo.add_utterance(conn, d, 1, "assistant", "答", 6.0, "den", [], None,
-                           mode="slow", character="hyena")
+                           character="hyena")
     conn.close()
 
 

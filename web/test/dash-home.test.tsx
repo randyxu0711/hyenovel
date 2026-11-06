@@ -6,6 +6,8 @@ import { blobPath } from "../src/dash/Blob";
 import { setLang } from "../src/dash/i18n";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
+let serverDefault = "hyena";
+
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
 const W = (slug: string, title: string, updated_at: number, state = "ready", version = 1) =>
   ({ slug, title, version, chars: 4, updated_at, state });
@@ -19,7 +21,7 @@ function mount() {
   const f = vi.fn(async (u: string, init?: RequestInit) => {
     calls.push({ url: u, body: init?.body && typeof init.body === "string" ? JSON.parse(init.body) : undefined });
     if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
-    if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
+    if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: serverDefault });
     if (u === "/api/works") return worksFetch ? worksFetch() : json({ works });
     if (u === "/api/estimate?chars=2001") return json({ estimate: { seconds: 300, output_tokens: 1, basis: 2 } });
     if (u === "/api/extract") return json({ filename: "海.md", text: "檔案內容", chars: 4 });
@@ -45,7 +47,7 @@ const box = () => screen.findByRole("textbox", { name: "貼上或拖進一篇稿
 const confirmBtn = () => screen.queryByRole("button", { name: /交稿並開始分析/ });
 
 beforeEach(() => {
-  setLang("zh-Hant"); localStorage.clear(); calls = [];
+  setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; calls = [];
   works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null;
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -68,7 +70,7 @@ describe("進門只有一張紙", () => {
     expect(calls.some(c => c.url.endsWith("/sessions"))).toBe(false);
   });
   it("紙上的角色是預設陪讀者", async () => {
-    localStorage.setItem("hyenovel.companion", "deer");
+    serverDefault = "deer";
     mount();
     await box();
     const body = document.querySelector(".home form.composer svg.blob path.body")!;

@@ -1,4 +1,6 @@
 """marrow.repo:冪等寫入與 current 指標。repo 不 commit,transaction 由呼叫者擁有。"""
+import hashlib
+
 from marrow import repo
 
 
@@ -265,17 +267,17 @@ def test_discussions_with_utterances_orders_by_ts_then_seq(conn):
     got = repo.discussions_with_utterances(conn, s)
     assert [(u["external_id"], u["text"]) for u in got] == [("A", "a0"), ("B", "b0"), ("A", "a1")]
     assert got[0]["anchors"] == ["t1"] and set(got[0]) == {
-        "external_id", "seq", "role", "text", "ts", "anchors", "mode", "character", "quotes",
+        "external_id", "seq", "role", "text", "ts", "anchors", "character", "quotes",
         "analysis_fp"}
 
 
-def test_discussions_with_utterances_carries_mode_character_quotes(conn):
+def test_discussions_with_utterances_carries_character_quotes(conn):
     s, d = _disc(conn)
     repo.add_utterance(conn, d, 0, "user", "問", 1.0, "den", [], None, quotes=["原句"])
-    repo.add_utterance(conn, d, 1, "assistant", "答", 2.0, "den", [], None, mode="slow", character="hyena")
+    repo.add_utterance(conn, d, 1, "assistant", "答", 2.0, "den", [], None, character="hyena")
     u, a = repo.discussions_with_utterances(conn, s)
-    assert u["quotes"] == ["原句"] and u["mode"] is None
-    assert (a["mode"], a["character"], a["quotes"]) == ("slow", "hyena", None)
+    assert u["quotes"] == ["原句"]
+    assert (a["character"], a["quotes"]) == ("hyena", None)
 
 
 def test_recent_discussions_orders_by_last_activity_and_limits(conn):
@@ -285,14 +287,14 @@ def test_recent_discussions_orders_by_last_activity_and_limits(conn):
     b = repo.ensure_discussion(conn, s2, "B", "web", None, 2.0)
     repo.ensure_discussion(conn, s, "empty", "web", None, 3.0)           # 沒發言的局不列
     repo.add_utterance(conn, a, 0, "user", "問", 1.0, "den", [], None)
-    repo.add_utterance(conn, a, 1, "assistant", "答" * 80, 5.0, "den", [], None, mode="slow", character="hyena")
+    repo.add_utterance(conn, a, 1, "assistant", "答" * 80, 5.0, "den", [], None, character="hyena")
     repo.add_utterance(conn, a, 2, "user", "再問", 6.0, "den", [], None)
     repo.add_utterance(conn, b, 0, "user", "問", 2.0, "den", [], None)
-    repo.add_utterance(conn, b, 1, "assistant", "乙答", 4.0, "den", [], None, mode="direct", character="buffalo")
+    repo.add_utterance(conn, b, 1, "assistant", "乙答", 4.0, "den", [], None, character="buffalo")
     got = repo.recent_discussions(conn, 10)
     assert [g["external_id"] for g in got] == ["A", "B"]
     assert got[0] == {"external_id": "A", "slug": "s1", "title": None, "started_at": 1.0,
-                      "last_at": 6.0, "turns": 1, "character": "hyena", "mode": "slow",
+                      "last_at": 6.0, "turns": 1, "character": "hyena",
                       "preview": "答" * 60}
     assert (got[1]["title"], got[1]["turns"], got[1]["preview"]) == ("乙", 1, "乙答")
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["A"]
@@ -365,19 +367,6 @@ def test_latest_job_picks_highest_id_of_that_version(conn):
     assert repo.latest_job(conn, s, v2)["id"] == b != a
 
 
-def test_last_mode_returns_latest_assistant_mode(conn):
-    s, d = _disc(conn)
-    repo.add_utterance(conn, d, 0, "user", "a", 1.0, "den", [], None)
-    repo.add_utterance(conn, d, 1, "assistant", "b", 1.0, "den", [], None, mode="slow")
-    repo.add_utterance(conn, d, 2, "assistant", "c", 2.0, "den", [], None, mode="direct")
-    assert repo.last_mode(conn, d) == "direct"
-    assert repo.utterances(conn, d)[0]["mode"] is None
-
-
-def test_last_mode_none_for_legacy_rows(conn):
-    s, d = _disc(conn)
-    repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
-    assert repo.last_mode(conn, d) is None
 
 
 def test_works_latest_version_and_last_talk(conn):
@@ -410,8 +399,8 @@ def test_last_character_and_stored_on_utterance(conn):
     s, d = _disc(conn)
     repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
     assert repo.last_character(conn, d) is None
-    repo.add_utterance(conn, d, 1, "assistant", "b", 1.0, "den", [], None, mode="slow", character="hyena")
-    repo.add_utterance(conn, d, 2, "assistant", "c", 2.0, "den", [], None, mode="direct", character="buffalo")
+    repo.add_utterance(conn, d, 1, "assistant", "b", 1.0, "den", [], None, character="hyena")
+    repo.add_utterance(conn, d, 2, "assistant", "c", 2.0, "den", [], None, character="buffalo")
     assert repo.last_character(conn, d) == "buffalo"
     assert repo.utterances(conn, d)[0]["character"] is None
 
@@ -447,11 +436,42 @@ def test_source_versions_and_by_n(conn):
 def test_recent_discussions_legacy_filter_applies_before_limit(conn):
     s, _ = _story(conn)
     new = repo.ensure_discussion(conn, s, "new", "web", None, 1.0)
-    repo.add_utterance(conn, new, 0, "assistant", "答", 1.0, "den", [], None, mode="slow", character="hyena")
-    for i, ext in enumerate(["old1", "old2"]):   # 舊局:assistant 沒記 mode(或只有 user)
+    repo.add_utterance(conn, new, 0, "assistant", "答", 1.0, "den", [], None, character="hyena")
+    for i, ext in enumerate(["old1", "old2"]):   # 舊局:assistant 沒記 character(或只有 user)
         d = repo.ensure_discussion(conn, s, ext, "web", None, 2.0 + i)
         repo.add_utterance(conn, d, 0, "user", "問", 2.0 + i, "den", [], None)
         repo.add_utterance(conn, d, 1, "assistant", "舊答", 3.0 + i, "den", [], None)
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["new"]
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1, legacy=True)] == ["old2"]
     assert [g["external_id"] for g in repo.recent_discussions(conn, 5, legacy=True)] == ["old2", "old1"]
+
+
+def test_character_versions_and_latest(conn):
+    assert repo.latest_character(conn, "x") is None and repo.latest_characters(conn) == []
+    repo.add_character(conn, "x", "builtin", 1.0)
+    assert repo.latest_character(conn, "x") is None
+    assert repo.add_character_version(conn, "x", {"a": 1}, 1.0) == 1
+    assert repo.add_character_version(conn, "x", {"a": 2}, 2.0) == 2
+    repo.add_character(conn, "w", "imported", 3.0)
+    repo.add_character_version(conn, "w", {"b": 1}, 3.0)
+    x = repo.latest_character(conn, "x")
+    assert (x["id"], x["origin"], x["archived_at"], x["n"], x["card"]) == ("x", "builtin", None, 2, {"a": 2})
+    assert x["sha256"] == hashlib.sha256(repo.canonical_json({"a": 2}).encode()).hexdigest()
+    assert [(r["id"], r["n"]) for r in repo.latest_characters(conn)] == [("w", 1), ("x", 2)]
+
+
+def test_archive_keeps_first_time_and_unarchive_clears(conn):
+    repo.add_character(conn, "x", "imported", 1.0)
+    repo.add_character_version(conn, "x", {}, 1.0)
+    repo.archive_character(conn, "x", 2.0)
+    repo.archive_character(conn, "x", 3.0)
+    assert repo.latest_character(conn, "x")["archived_at"] == 2.0
+    repo.unarchive_character(conn, "x")
+    assert repo.latest_character(conn, "x")["archived_at"] is None
+
+
+def test_setting_upsert(conn):
+    assert repo.get_setting(conn, "k") is None
+    repo.set_setting(conn, "k", "a")
+    repo.set_setting(conn, "k", "b")
+    assert repo.get_setting(conn, "k") == "b"

@@ -136,7 +136,7 @@ def test_companion_context_never_includes_notes(conn):
         nid, _ = repo.add_artifact(conn, st["id"], ana["source_version_id"], "notes", 1, notes, {}, 9.0)
         repo.set_current(conn, st["id"], "notes", nid)
     ctx = stories.companion_context(conn, "mini")
-    text = repr(ctx) + assemble(ctx, {"id": "buffalo", "voice": ""}).text
+    text = repr(ctx) + assemble(ctx, {"id": "buffalo", "voice": "", "reading": "讀法"}).text
     for marker in ("筆記讀法甲乙", "筆記一句丙丁", "筆記標題戊己", "筆記內文庚辛"):
         assert marker not in text
 

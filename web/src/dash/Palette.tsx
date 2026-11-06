@@ -24,7 +24,7 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
 
   const all: Item[] = [
     ...works.map(w => ({ id: `w-${w.slug}`, label: t("palette.work", { title: w.title }), run: () => onOpen(w.slug) })),
-    ...chars.list.map(c => ({ id: `c-${c.id}`, label: t("palette.companion", { name: localized(c.name, lang) }), run: () => setCompanion(c.id) })),
+    ...chars.active.map(c => ({ id: `c-${c.id}`, label: t("palette.companion", { name: localized(c.name, lang) }), run: () => { setCompanion(c.id).catch(() => {}); } })),
     { id: "settings", label: t("palette.settings"), run: onSettings },
     { id: "daynight", label: t("palette.dayNight"), run: onToggle },
   ];
