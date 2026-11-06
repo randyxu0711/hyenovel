@@ -16,7 +16,7 @@ export const grass: Theme = {
 };
 
 const ch = (id: string, zh: string, en: string, kind = id): Character => ({
-  id, name: { "zh-Hant": zh, en }, line: { "zh-Hant": "一句話", en: "A line" },
+  id, version: 1, origin: "builtin", archived: false, name: { "zh-Hant": zh, en }, line: { "zh-Hant": "一句話", en: "A line" },
   avatar: { kind, seed: id },
   colors: { light: { fill: "#cc8650", text: "#925a2b" }, dark: { fill: "#dc9a66", text: "#dc9a66" } }, voice: "",
   mark: (({ hyena: "pencil", buffalo: "highlighter", deer: "circle" }) as Record<string, Character["mark"]>)[id] ?? "pencil",

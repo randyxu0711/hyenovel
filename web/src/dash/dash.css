@@ -273,6 +273,8 @@
 .dash .dash-set-chip{width:14px; height:14px; border-radius:50%; border:1px solid var(--dash-line)}
 .dash .dash-set-who{display:flex; align-items:center; gap:10px; margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-ink); cursor:pointer}
 .dash .dash-set-who small{color:var(--dash-ink-2); font-size:var(--dash-t-xs)}
+.dash .dash-set-card{display:flex; align-items:center; gap:6px}
+.dash .dash-set-card .dash-set-who{flex:1; min-width:0}
 .dash .dash-set-archive li{list-style:none; margin:0 0 6px}
 .dash .dash-set-archive ul{margin:0; padding:0}
 .dash .dash-set-log{margin-top:12px}

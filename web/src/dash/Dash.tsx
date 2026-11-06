@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, DashError, type Work, type WorkMap } from "./api";
+import { api, DashError, type Character, type Work, type WorkMap } from "./api";
 import { errorMessage, useT } from "./i18n";
 import { flushSync } from "react-dom";
 import { LinksProvider, useLinks, useNarrow } from "./links";
@@ -244,10 +244,13 @@ export default function Dash() {
   const [chars, setChars] = useState<Characters | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
+    const apply = (ch: { characters: Character[]; default: string }) => {
+      initCompanion(ch.default);
+      setChars(makeCharacters(ch.characters, ch.default, () => api.characters().then(apply)));
+    };
     Promise.all([api.themes(), api.characters()]).then(([th, ch]) => {
       initThemes(th.themes, th.default);
-      initCompanion(ch.default);
-      setChars(makeCharacters(ch.characters, ch.default));
+      apply(ch);
     }, e => setErr(e instanceof DashError ? e.code : "unknown"));
   }, []);
   if (err) return <div className="dash dash-note" role="alert">{t(errorMessage(err))}</div>;

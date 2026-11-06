@@ -79,6 +79,12 @@ def from_builtin(profile: dict, reading: str) -> dict:
     }}
 
 
+def _avatar(value, character_id: str) -> dict:
+    if isinstance(value, dict) and all(isinstance(value.get(k), str) and len(value[k]) <= MAX_NAME for k in ("kind", "seed")):
+        return {"kind": value["kind"], "seed": value["seed"]}
+    return {"kind": "blob", "seed": character_id}
+
+
 def _reading(data: dict) -> str:
     who = {"char": data.get("nickname") or data["name"], "user": "作者"}
     text = "\n\n".join(x for x in (data.get("personality"), data.get("description")) if x and x.strip())
@@ -93,7 +99,7 @@ def view(card: dict, character_id: str, version: int) -> dict:
         "id": character_id, "version": version,
         "name": ext["name"] if _ltext_ok(ext.get("name"), MAX_NAME) else {"zh-Hant": name, "en": name},
         "line": ext["line"] if _ltext_ok(ext.get("line"), MAX_LINE) else {"zh-Hant": notes, "en": notes},
-        "avatar": ext["avatar"] if isinstance(ext.get("avatar"), dict) else {"kind": "blob", "seed": character_id},
+        "avatar": _avatar(ext.get("avatar"), character_id),
         "colors": ext["colors"] if _colors_ok(ext.get("colors")) else FALLBACK_COLORS,
         "voice": _voice(ext),
         "mark": ext.get("mark") if ext.get("mark") in MARKS else "pencil",
@@ -113,8 +119,9 @@ def scan(card) -> dict:
     if next(_validator().iter_errors(card), None) is not None:
         return {"errors": ["bad-schema"], "warnings": []}
     try:
+        json.dumps(card, allow_nan=False)
         size = len(canonical_json(card).encode("utf-8"))
-    except UnicodeEncodeError:
+    except (UnicodeEncodeError, ValueError):
         return {"errors": ["bad-schema"], "warnings": []}
     data = card["data"]
     ext = _ext(data)
@@ -123,16 +130,17 @@ def scan(card) -> dict:
     if size > MAX_CARD_BYTES:
         errors.append("too-large")
     ext_name = ext.get("name")
-    if len(data["name"]) > MAX_NAME or (isinstance(ext_name, dict) and not _ltext_ok(ext_name, MAX_NAME)):
+    if max(len(data["name"]), len(data.get("nickname", ""))) > MAX_NAME or (isinstance(ext_name, dict) and not _ltext_ok(ext_name, MAX_NAME)):
         errors.append("name-too-long")
     if not (personality.strip() or description.strip()):
         errors.append("no-reading")
-    if len(personality) + len(description) + len(voice) > MAX_READING:
+    reading = _reading(data)
+    if len(reading) + len(voice) > MAX_READING:
         errors.append("reading-too-long")
     warnings = []
     if _newer_spec(card["spec_version"]):
         warnings.append("newer-spec")
-    if any(_INSTRUCTIONS.search(x) for x in (personality, description, voice)):
+    if any(_INSTRUCTIONS.search(x) for x in (reading, voice)):
         warnings.append("looks-like-instructions")
     if any(data.get(k) for k in _IGNORED):
         warnings.append("ignored-fields")
@@ -142,4 +150,4 @@ def scan(card) -> dict:
 
 
 def imported_id(card: dict) -> str:
-    return "u" + sha256_text(canonical_json(card))[:8]
+    return "u" + sha256_text(canonical_json(card))[:16]

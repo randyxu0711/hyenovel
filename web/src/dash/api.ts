@@ -24,7 +24,8 @@ export class DashError extends Error {
 export type LText = { "zh-Hant"?: string; en?: string };
 export type ColorPair = { fill: string; text: string };
 export type Character = {
-  id: string; name: LText; line: LText;
+  id: string; version: number; origin: "builtin" | "imported" | "created"; archived: boolean;
+  name: LText; line: LText;
   avatar: { kind: string; seed: string };
   colors: { light: ColorPair; dark: ColorPair };
   voice: string;
@@ -142,6 +143,11 @@ export const api = {
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
   setDefaultCharacter: (character: string) =>
     request<{ default: string }>("/api/characters/default", { ...post({ character }), method: "PUT" }),
+  importCharacter: (card: unknown, confirm: boolean) =>
+    request<{ imported: boolean; warnings: string[]; character?: Character }>("/api/characters/import", post({ card, confirm })),
+  characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
+  archiveCharacter: (id: string) =>
+    request<{ archived: string }>(`/api/characters/${encodeURIComponent(id)}`, { method: "DELETE" }),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),
   estimate: async (chars: number) =>
     (await request<{ estimate: Estimate | null }>(`/api/estimate?chars=${chars}`)).estimate,

@@ -89,6 +89,14 @@ describe("選人", () => {
     mount();
     expect((await pick()).getAttribute("aria-pressed")).toBe("false");
   });
+  it("上一位已封存:由預設接著讀,不送已封存的 id", async () => {
+    rows = [row("s1")];
+    session("s1", [u("q"), a("我是老讀", "u1")]);
+    mount("/w/d1", [hyena, buffalo, { ...deer, id: "u1", origin: "imported", archived: true }]);
+    expect(await (await findLog()).findByText("我是老讀")).toBeTruthy();
+    say("嗨");
+    await waitFor(() => expect(talkBodies[0]?.character).toBe("hyena"));
+  });
   it("開一局回到預設,不沿用上一局的人", async () => {
     localStorage.setItem("hyenovel.shelf", "open");
     rows = [row("s1")];

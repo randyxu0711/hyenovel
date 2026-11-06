@@ -21,7 +21,7 @@ export default function WhoPick({ me, onPick }: { me: Character; onPick: (id: st
       {open && (
         <div className="dash-float dash-who-menu" role="group" aria-label={t("talk.who")}
           onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); toggle.current?.focus(); } }}>
-          {chars.list.map(c => (
+          {chars.active.map(c => (
             <button key={c.id} type="button" className="dash-who-item" aria-pressed={c.id === me.id}
               autoFocus={c.id === me.id}
               onClick={() => { onPick(c.id); setOpen(false); toggle.current?.focus(); }}>
