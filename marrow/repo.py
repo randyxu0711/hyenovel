@@ -13,7 +13,7 @@ import json
 import re
 import sqlite3
 
-_JSON_COLS = {"recipe", "body", "provenance", "anchors", "refs", "quotes",
+_JSON_COLS = {"card", "recipe", "body", "provenance", "anchors", "refs", "quotes",
               "params", "detail", "parsed", "gate_verdict", "tokens", "usage"}
 
 
@@ -554,3 +554,42 @@ def has_newer_resumable_job(conn, story_id: int, source_version_id: int, job_id:
         "SELECT 1 FROM job WHERE story_id = ? AND source_version_id = ? AND id > ? "
         "AND state IN (?, ?, ?) LIMIT 1",
         (story_id, source_version_id, job_id, *_RESUMABLE)).fetchone() is not None
+
+
+# ── character / setting ──
+
+_LATEST_CHARACTER = ("SELECT c.id AS id, c.origin AS origin, c.archived_at AS archived_at, v.n AS n, "
+                     "v.card AS card, v.sha256 AS sha256 FROM character c JOIN character_version v "
+                     "ON v.character_id = c.id AND v.n = (SELECT MAX(n) FROM character_version "
+                     "WHERE character_id = c.id) ")
+
+
+def add_character(conn, character_id: str, origin: str, now: float) -> None:
+    conn.execute("INSERT INTO character (id, origin, created_at) VALUES (?, ?, ?)", (character_id, origin, now))
+
+
+def add_character_version(conn, character_id: str, card: dict, now: float) -> int:
+    text = canonical_json(card)
+    n = conn.execute("SELECT COALESCE(MAX(n), 0) + 1 FROM character_version WHERE character_id = ?",
+                     (character_id,)).fetchone()[0]
+    conn.execute("INSERT INTO character_version (character_id, n, card, sha256, created_at) VALUES (?, ?, ?, ?, ?)",
+                 (character_id, n, text, sha256_text(text), now))
+    return n
+
+
+def latest_character(conn, character_id: str) -> dict | None:
+    return _row(conn.execute(_LATEST_CHARACTER + "WHERE c.id = ?", (character_id,)).fetchone())
+
+
+def latest_characters(conn) -> list[dict]:
+    return [_row(r) for r in conn.execute(_LATEST_CHARACTER + "ORDER BY c.id")]
+
+
+def get_setting(conn, key: str) -> str | None:
+    r = conn.execute("SELECT value FROM setting WHERE key = ?", (key,)).fetchone()
+    return r[0] if r else None
+
+
+def set_setting(conn, key: str, value: str) -> None:
+    conn.execute("INSERT INTO setting (key, value) VALUES (?, ?) "
+                 "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))

@@ -123,7 +123,7 @@ def pick_character(conn, turn: dict, character: str | None) -> None:
     角色 > 該局上一位 > 預設。"""
     d = turn["discussion_id"]
     last = repo.last_character(conn, d) if d is not None else None
-    turn["character"] = characters.resolve(character, last)
+    turn["character"] = characters.resolve(conn, character, last)
 
 
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
@@ -192,6 +192,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
                                usage=usage, character=character["id"],
                                recipe={**prompt.recipe(system, companion.CHAT_RUN.as_dict()),
+                                       "character_v": character["version"],
                                        "retrieved": [n["id"] for n in picked]})
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
