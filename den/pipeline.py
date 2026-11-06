@@ -15,7 +15,7 @@ from typing import Awaitable, Callable
 from den import config
 from den.runner import RunResult
 from marrow import repo, workpacks
-from marrow.schema import SCHEMA_VERSION
+from marrow.schema import version_of
 
 log = logging.getLogger("hyenovel")
 
@@ -101,7 +101,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
                         "run": pack.run.as_dict()}
                 with conn:
                     aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"],
-                                               pack.kind, SCHEMA_VERSION, r.parsed, prov, now())
+                                               pack.kind, version_of(pack.kind), r.parsed, prov, now())
                     record("ok", r, artifact_id=aid)
                     repo.set_current(conn, job["story_id"], pack.kind, aid)
                 emit(_phase(step, "ok", n))

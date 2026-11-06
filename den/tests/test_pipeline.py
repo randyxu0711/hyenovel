@@ -106,6 +106,7 @@ def test_happy_path_commits_and_swaps_current(conn):
         assert art["provenance"] == {"tier": "A", "runner": "claude-cli", "model": "claude-sonnet",
                                      "cli_version": "9.9.9", "job": job["id"], "attempt": n,
                                      "run": {"model": "sonnet", "effort": "medium"}}
+        assert art["schema_version"] == schema.version_of(art["kind"])
     atts = repo.attempts(conn, job["id"])
     assert [(x["step"], x["n"], x["outcome"]) for x in atts] == [
         ("analyst", 0, "ok"), ("reviewer", 0, "ok")]

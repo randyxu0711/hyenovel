@@ -79,3 +79,18 @@ def test_v1_rejects_missing_key():
 def test_v1_rejects_unknown_key():                           # to_v1 不刪多餘欄位,讓 validate 擋
     v1 = schema.to_v1("feedback", {**MINIMAL_FEEDBACK, "extra": 1})
     assert v1["extra"] == 1 and schema.validate_v1("feedback", v1) != []
+
+
+def test_each_kind_has_its_own_version():
+    assert {k: schema.version_of(k) for k in schema.VERSIONS} == {
+        "analysis": 1, "feedback": 1, "notes": 1}
+
+
+def test_schema_file_follows_version(monkeypatch):
+    schema._schema.cache_clear()
+    monkeypatch.setitem(schema.VERSIONS, "notes", 99)
+    with pytest.raises(FileNotFoundError):
+        schema.load_schema("notes")
+    monkeypatch.undo()
+    schema._schema.cache_clear()
+    assert schema.load_schema("notes")
