@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from den import app as den_app
 from den import config as den_config
+from den.routes import jobs as den_routes_jobs
 from den.tests.test_pipeline import _analysis, _notes, ok
 from marrow import db, repo
 from marrow.workpacks import WORKPACKS
@@ -255,7 +256,7 @@ def test_events_terminal_without_replay_sends_state_and_ends(data):
 
 def test_events_ends_when_db_turns_terminal_without_event(data, monkeypatch):
     """worker 死在收尾前之類:bus 永遠不會發 done/error,靠定期看 DB 收尾。"""
-    monkeypatch.setattr(den_app, "_SSE_POLL", 0.05)
+    monkeypatch.setattr(den_routes_jobs, "_SSE_POLL", 0.05)
     with _client(data, Run(released=False)) as c:
         h = _auth(data[1])
         jid = c.post("/api/jobs", json={"kind": "critique", "slug": "mini"}, headers=h).json()["job_id"]
