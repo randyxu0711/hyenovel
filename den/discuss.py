@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 from contextlib import aclosing
 
-from den import characters, companion, spans, stories
+from den import characters, companion, retrieve, spans, stories
 from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from marrow import gate, prompt, repo
 
@@ -24,10 +24,11 @@ def _quotes_block(quotes) -> list[str]:
     return ["作者指著原文的這幾段:", *[f"「{q}」" for q in quotes]] if quotes else []
 
 
-def render_turn(history: list[dict], message: str, quotes=()) -> str:
+def render_turn(history: list[dict], message: str, quotes=(), notes: str = "") -> str:
     """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
-    作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。"""
-    block = _quotes_block(quotes)
+    作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。
+    notes 是這輪檢索到的細節,只存在這輪,不進歷史。"""
+    block = [*([notes] if notes else []), *_quotes_block(quotes)]
     if not history:
         return "\n".join([*block, "", "作者這一輪說:", message]) if block else message
     lines = [x for h in history for x in (*_quotes_block(h.get("quotes")), f"{_ROLE[h['role']]}:{h['text']}")]
@@ -146,9 +147,14 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     slug = turn["slug"]
     failed = False
     system = companion.assemble(turn["ctx"], character)
+    analysis = turn["ctx"]["analysis"]
+    last = history[-1] if history and history[-1]["role"] == "assistant" else {"text": "", "recipe": None}
+    picked = retrieve.pick(analysis, turn["ctx"]["source"], quotes=quotes, message=message, last_reply=last["text"],
+                           previous=(last["recipe"] or {}).get("retrieved", ()))
     try:
         async with aclosing(chat(system.text,
-                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes),
+                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes,
+                                             retrieve.render(analysis, picked)),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
@@ -187,7 +193,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 seq += 1
             repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
                                usage=usage, mode=character["mode"], character=character["id"],
-                               recipe=prompt.recipe(system, companion.CHAT_RUN.as_dict()))
+                               recipe={**prompt.recipe(system, companion.CHAT_RUN.as_dict()),
+                                       "retrieved": [n["id"] for n in picked]})
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
     except Exception:

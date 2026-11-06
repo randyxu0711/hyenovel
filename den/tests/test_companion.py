@@ -44,7 +44,7 @@ def test_no_character_asks_consent_before_disagreeing():   # spike v1:先徵詢�
 # ── assemble ──
 
 def _ctx(**kw):
-    base = {"slug": "s", "title": "題", "source": "她把傘收進門縫。\n", "analysis": None, "progress": "none"}
+    base = {"slug": "s", "title": "題", "source": "她把傘收進門縫。\n", "analysis": None, "progress": "none", "seeds": []}
     return {**base, **kw}
 
 
@@ -58,7 +58,7 @@ def test_assemble_with_analysis_lists_nodes_not_edges():
     a = {"synopsis": "梗", "nodes": [{"id": "m1", "type": "motif", "label": "水", "note": "遞增"}],
          "edges": [{"from": "m1", "to": "t1", "type": "serves"}]}
     out = render(_ctx(analysis=a, progress="done"), _c("buffalo"))
-    assert "- motif 水:遞增" in out and "梗概:梗" in out
+    assert "- motif 水\n" in out and "梗概:梗" in out and "遞增" not in out
     assert "serves" not in out and "## 現在的狀況" not in out
     assert READS["buffalo"] in out
 
@@ -91,8 +91,7 @@ def _legacy_render(ctx, character):
         out += ["", "## 你讀的時候注意到的結構(私下筆記,不要原樣念給作者)"]
         if a.get("synopsis"):
             out.append(f"梗概:{a['synopsis']}")
-        out += [f"- {n['type']} {n['label']}" + (f":{n['note']}" if n.get("note") else "")
-                for n in a.get("nodes") or ()]
+        out += [f"- {n['type']} {n['label']}" for n in a.get("nodes") or ()]
     if a is None and ctx["progress"] in ("queued", "running"):
         out += ["", "## 現在的狀況", companion._RUNNING]
     elif a is None:
@@ -113,7 +112,7 @@ _FULL = {"synopsis": "梗", "nodes": [{"type": "theme", "label": "海", "note": 
     (_FULL, "running", "角色層一句\n"),
 ])
 def test_assembled_prompt_keeps_every_byte(analysis, progress, voice):
-    ctx = {"title": "海", "slug": "s", "source": "原文\n", "analysis": analysis, "progress": progress}
+    ctx = {"title": "海", "slug": "s", "source": "原文\n", "analysis": analysis, "progress": progress, "seeds": []}
     c = _c("hyena", voice)
     assert render(ctx, c) == _legacy_render(ctx, c)
 
@@ -126,15 +125,33 @@ def test_persona_keeps_every_byte():
 
 
 def test_same_prompt_on_different_works_shares_instruction_fingerprint():
-    a = companion.assemble({"title": "甲", "slug": "a", "source": "甲文", "analysis": None, "progress": "idle"}, _c("hyena"))
-    b = companion.assemble({"title": "乙", "slug": "b", "source": "乙文", "analysis": None, "progress": "idle"}, _c("hyena"))
+    a = companion.assemble({"title": "甲", "slug": "a", "source": "甲文", "analysis": None, "progress": "idle", "seeds": []}, _c("hyena"))
+    b = companion.assemble({"title": "乙", "slug": "b", "source": "乙文", "analysis": None, "progress": "idle", "seeds": []}, _c("hyena"))
     assert a.fingerprint()["instructions"] == b.fingerprint()["instructions"]
     assert a.fingerprint()["material"] != b.fingerprint()["material"]
 
 
 def test_analysis_header_and_status_count_as_instructions():
-    ctx = {"title": "海", "slug": "s", "source": "原文", "progress": "done"}
+    ctx = {"title": "海", "slug": "s", "source": "原文", "progress": "done", "seeds": []}
     fp = companion.assemble({**ctx, "analysis": _FULL}, _c("hyena")).fingerprint()
     assert "analysis_header" in fp["layers"] and "analysis" in fp["material"]
     fp = companion.assemble({**ctx, "analysis": None, "progress": "running"}, _c("hyena")).fingerprint()
     assert "status" in fp["layers"]
+
+
+def test_seeds_show_kind_and_quotes_only_moved_shows_position_only():
+    seeds = [{"kind": "confused", "quotes": ["卡句"]}, {"kind": "wondering", "quotes": ["甲句", "乙句"]},
+             {"kind": "moved", "quotes": ["動句"]}]
+    out = render(_ctx(seeds=seeds), _c("hyena"))
+    assert "- 讀到卡住:「卡句」\n" in out
+    assert "- 看不出作用:「甲句」「乙句」\n" in out
+    assert "- 「動句」\n" in out and "打動" not in out
+
+
+def test_no_seeds_no_section():
+    assert "可以聊的地方" not in render(_ctx(), _c("hyena"))
+
+
+def test_seed_header_is_instruction_and_lines_are_material():
+    fp = companion.assemble(_ctx(seeds=[{"kind": "moved", "quotes": ["句"]}]), _c("hyena")).fingerprint()
+    assert "seeds_header" in fp["layers"] and "seeds" in fp["material"]
