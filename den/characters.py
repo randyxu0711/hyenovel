@@ -1,4 +1,4 @@
-"""角色登記表(角色 ≠ 模式):內建角色是 marrow/prompts/characters/*.json,每隻掛一個行為模式。"""
+"""角色登記表:內建角色是 marrow/prompts/characters/<id>.json(長相)+ <id>.md(讀法)。mode 只剩舊局對應用。"""
 import json
 from functools import cache
 from pathlib import Path
@@ -27,10 +27,11 @@ def _load() -> tuple[dict, ...]:
             raise ValueError(f"character {c.get('id')} 欄位不齊")
         if c.get("mark") not in MARKS:
             c["mark"] = "pencil"
-        if c["mode"] not in companion.MODES:
-            raise ValueError(f"character {c['id']} mode 不明: {c['mode']}")
     if DEFAULT_CHARACTER not in ids:
         raise ValueError("缺預設角色")
+    for i in ids:
+        if not (_DIR / f"{i}.md").is_file():
+            raise ValueError(f"character {i} 缺讀法檔")
     return tuple(out)
 
 
@@ -42,16 +43,19 @@ def get(character_id: str) -> dict | None:
     return next((c for c in _load() if c["id"] == character_id), None)
 
 
-def resolve(character: str | None, mode: str | None, last: str | None) -> dict:
-    """指定角色 > 指定 mode(該 mode 的第一個內建角色)> 該局上一位 > 預設。"""
+def resolve(character: str | None, last: str | None) -> dict:
+    """指定角色 > 該局上一位 > 預設。"""
     if character is not None:
         found = get(character)
         if found is None:
             raise UnknownCharacter(character)
         return found
-    if mode is not None:
-        return next(c for c in _load() if c["mode"] == mode)
     return (last and get(last)) or get(DEFAULT_CHARACTER)
+
+
+def of_legacy_mode(mode: str) -> dict:
+    """舊局只記了 mode 沒記角色時,對回當時的角色。"""
+    return next(c for c in _load() if c["mode"] == mode)
 
 
 def check_colors(colors: dict) -> list[str]:
@@ -67,4 +71,4 @@ def check_colors(colors: dict) -> list[str]:
 
 
 def persona(character: dict) -> str:
-    return companion.persona(character["mode"], character["voice"])
+    return companion.persona(character["id"], character["voice"])

@@ -1,4 +1,4 @@
-"""角色登記表:角色 ≠ 模式。"""
+"""角色登記表。"""
 import copy
 from pathlib import Path
 
@@ -7,10 +7,9 @@ import pytest
 from den import characters, companion, themes
 
 
-def test_builtins_three_with_distinct_modes():
-    cs = characters.builtins()
-    assert {c["id"]: c["mode"] for c in cs} == {"buffalo": "direct", "deer": "imaginative", "hyena": "slow"}
-    assert {c["mode"] for c in cs} == set(companion.MODES)
+def test_builtins_keep_legacy_mode_mapping():
+    assert {m: characters.of_legacy_mode(m)["id"] for m in ("direct", "imaginative", "slow")} == {
+        "direct": "buffalo", "imaginative": "deer", "slow": "hyena"}
     assert characters.DEFAULT_CHARACTER == "hyena"
     assert characters.get("deer")["name"]["en"] == "Deer" and characters.get("nope") is None
 
@@ -35,21 +34,20 @@ def test_check_colors_covers_every_theme(monkeypatch):
 
 
 def test_resolve_precedence():
-    assert characters.resolve("deer", "direct", "buffalo")["id"] == "deer"
-    assert characters.resolve(None, "direct", "deer")["id"] == "buffalo"
-    assert characters.resolve(None, None, "deer")["id"] == "deer"
-    assert characters.resolve(None, None, None)["id"] == "hyena"
-    assert characters.resolve(None, None, "gone")["id"] == "hyena"
+    assert characters.resolve("deer", "buffalo")["id"] == "deer"
+    assert characters.resolve(None, "deer")["id"] == "deer"
+    assert characters.resolve(None, None)["id"] == "hyena"
+    assert characters.resolve(None, "gone")["id"] == "hyena"
 
 
 def test_resolve_unknown_character():
     with pytest.raises(characters.UnknownCharacter):
-        characters.resolve("dragon", None, None)
+        characters.resolve("dragon", None)
 
 
 def test_persona_appends_voice_only_when_present():
     base = characters.persona(characters.get("hyena"))
-    assert base == companion.persona("slow")
+    assert base == companion.persona("hyena")
     assert characters.persona({**characters.get("hyena"), "voice": "角色層一句"}).endswith("\n角色層一句\n")
 
 
@@ -58,8 +56,8 @@ def test_load_rejects_broken_files(tmp_path, monkeypatch):
     monkeypatch.setattr(characters, "_DIR", tmp_path)
     for files, why in (({"a.json": good, "b.json": good}, "重複"),
                        ({"a.json": good.replace('"voice"', '"v"')}, "欄位"),
-                       ({"a.json": good.replace('"slow"', '"fast"')}, "mode"),
-                       ({"a.json": good.replace('"hyena"', '"x"', 1)}, "預設")):
+                       ({"a.json": good.replace('"hyena"', '"x"', 1)}, "預設"),
+                       ({"hyena.json": good}, "讀法")):
         for p in tmp_path.iterdir():
             p.unlink()
         for n, t in files.items():
@@ -91,6 +89,7 @@ def _write_hyena(dirpath, mark):
     if mark is not None:
         d["mark"] = mark
     (dirpath / "hyena.json").write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    (dirpath / "hyena.md").write_text("讀法", encoding="utf-8")
 
 
 def test_mark_default(custom_dir):

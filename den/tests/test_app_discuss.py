@@ -267,7 +267,7 @@ def test_body_aclose_at_yield_closes_chat(c, fake_chat):
     async def drive():
         conn = c.app.state.mgr.conn
         turn = den_app.discuss.prepare_turn(conn, "mini", sid)
-        den_app.discuss.pick_character(conn, turn, None, None)
+        den_app.discuss.pick_character(conn, turn, None)
         events = den_app.discuss.run_turn(conn, c.app.state.chat, turn, "x", [])
         gen = den_app._chat_stream(c.app.state, lock, events)
         first = await anext(gen)
@@ -350,7 +350,7 @@ def test_busy_lock_at_stream_start_yields_error(c):
 
 # ── 4xx(串流開始前判)──
 
-@pytest.mark.parametrize("body", [{"message": "x", "mode": "doubt"}, {"message": "x" * 8001},
+@pytest.mark.parametrize("body", [{"message": "x" * 8001},
                                   {"message": "x", "home": "cli"},
                                   {"message": "x", "anchors": ["a"] * 9},
                                   {"message": "x", "session_id": "s" * 65}])
@@ -461,19 +461,9 @@ def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
 
 def test_mode_defaults_to_slow_and_is_recorded(c, fake_chat):
     sid = first_turn(c)
-    assert "你的讀法:慢讀" in fake_chat.calls[-1][0]
+    assert "照閱讀的順序" in fake_chat.calls[-1][0]
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert (user["mode"], asst["mode"]) == (None, "slow")
-
-
-def test_mode_carries_over_within_session(c, fake_chat):
-    evs = [json.loads(line[6:]) for line in c.post("/api/discuss/mini", json={
-        "message": "講重點", "mode": "direct"}).text.splitlines() if line.startswith("data: ")]
-    sid = evs[-1]["data"]["session_id"]
-    assert "你的讀法:直說" in fake_chat.calls[-1][0]
-    post_discuss(c, "mini", sid, "然後呢")
-    assert "你的讀法:直說" in fake_chat.calls[-1][0]
-    assert in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]["mode"] == "direct"
 
 
 def test_empty_message_stores_only_assistant(c, fake_chat):
@@ -495,13 +485,6 @@ def test_home_and_client_recorded(c):
     sid = [json.loads(x[6:]) for x in r.text.splitlines() if x.startswith("data: ")][-1]["data"]["session_id"]
     d = in_loop(c, lambda conn: _session_rows(conn, sid))[0]
     assert (d["home"], d["client"]) == ("mcp", "claude-code")
-
-
-def test_discuss_mode_literal_matches_companion_modes():
-    import typing
-    from den.companion import MODES
-    ann = den_app.DiscussIn.model_fields["mode"].annotation
-    assert typing.get_args(typing.get_args(ann)[0]) == MODES
 
 
 def test_empty_message_mid_conversation_asks_to_continue(c, fake_chat):
@@ -527,12 +510,12 @@ def test_unknown_character_is_422_before_stream(c, fake_chat):
     assert fake_chat.calls == []
 
 
-def test_mcp_mode_only_stores_matching_character(c, fake_chat):
+def test_caller_cannot_pick_by_mode(c, fake_chat):
     r = _post(c, {"mode": "direct", "home": "mcp"})
     evs = [json.loads(line[6:]) for line in r.text.splitlines() if line.startswith("data: ")]
     row = _last_assistant(c, evs)
-    assert (row["character"], row["mode"]) == ("buffalo", "direct")
-    assert evs[-2]["data"]["character"] == "buffalo"
+    assert (row["character"], row["mode"]) == ("hyena", "slow")
+    assert evs[-2]["data"]["character"] == "hyena"
 
 
 def test_character_carries_over_and_overrides(c, fake_chat):
@@ -542,7 +525,7 @@ def test_character_carries_over_and_overrides(c, fake_chat):
     assert (_last_assistant(c, evs)["character"], _last_assistant(c, evs)["mode"]) == ("deer", "imaginative")
     post_discuss(c, "mini", sid, "然後")
     assert _last_assistant(c, evs)["character"] == "deer"
-    assert "你的讀法:想像" in fake_chat.calls[-1][0]
+    assert "世界撐開" in fake_chat.calls[-1][0]
 
 
 def test_legacy_session_with_only_mode_keeps_that_mode(c, fake_chat):
@@ -552,7 +535,7 @@ def test_legacy_session_with_only_mode_keeps_that_mode(c, fake_chat):
             conn.execute("UPDATE utterance SET character = NULL, mode = 'direct' WHERE role = 'assistant'")
     in_loop(c, strip)
     post_discuss(c, "mini", sid, "再說")
-    assert "你的讀法:直說" in fake_chat.calls[-1][0]
+    assert "最強的感覺" in fake_chat.calls[-1][0]
 
 
 def test_get_themes_route(c):

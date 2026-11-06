@@ -96,7 +96,8 @@ def test_tools_listed(den):
     async def go():
         async with Client(den_mcp.build_server(den.client())) as c:
             return {t.name for t in (await c.list_tools()).tools}
-    assert anyio.run(go) == {"submit_work", "talk_to_companion", "find_works", "read_work", "cancel_work"}
+    assert anyio.run(go) == {"submit_work", "talk_to_companion", "find_works", "read_work", "cancel_work",
+                                 "list_characters", "set_character"}
     assert den.spawns == 0   # 列 tool 不碰 den
 
 
@@ -183,7 +184,7 @@ def test_main_keeps_stdout_clean(tmp_path):
     for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
         if ln.strip():
             json.loads(ln)
-    assert len(listed["result"]["tools"]) == 5
+    assert len(listed["result"]["tools"]) == 7
     assert not (tmp_path / "den.json").exists()   # 沒拉起 den
 
 
@@ -266,17 +267,86 @@ def test_talk_work_by_title_keyword(cden):
     assert not r.is_error and ("POST", "/api/discuss/d07") in cden.paths
 
 
-def test_talk_bad_mode_rejected_locally(cden):
-    r = _call(cden.client(), "talk_to_companion", {"work": "mini", "mode": "doubt"})
-    assert r.is_error and "direct(直說)" in _text(r)
+def _call_all(client, *calls):
+    async def go():
+        async with Client(den_mcp.build_server(client),
+                          client_info=Implementation(name="claude-code", version="2.1.312")) as c:
+            return [await c.call_tool(n, a) for n, a in calls]
+    return anyio.run(go)
+
+
+def test_list_characters_marks_default_without_any_work(cden):
+    [r] = _call_all(cden.client(), ("list_characters", {}))
+    lines = _text(r).splitlines()
+    assert len(lines) == 3 and [ln for ln in lines if ln.endswith("(目前)")][0].startswith("hyena:")
+
+
+def test_set_character_applies_to_next_turn_and_session_keeps_it(cden):
+    rs = _call_all(cden.client(),
+                   ("set_character", {"character": "deer", "work": "mini"}),
+                   ("list_characters", {}),
+                   ("talk_to_companion", {"message": "一"}),
+                   ("talk_to_companion", {"message": "二"}),
+                   ("list_characters", {}))
+    assert "鹿" in _text(rs[0])
+    assert "deer:" in [ln for ln in _text(rs[1]).splitlines() if ln.endswith("(目前)")][0]
+    assert all("世界撐開" in call[0] for call in cden.chat.calls[-2:])
+    assert "deer:" in [ln for ln in _text(rs[4]).splitlines() if ln.endswith("(目前)")][0]
+
+
+def test_set_character_during_a_running_turn_survives_it(cden):
+    async def go():
+        async with Client(den_mcp.build_server(cden.client()),
+                          client_info=Implementation(name="claude-code", version="2.1.312")) as c:
+            cden.chat.hang = True
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(c.call_tool, "talk_to_companion", {"message": "一", "work": "mini"})
+                await anyio.to_thread.run_sync(cden.chat.started.wait)
+                await c.call_tool("set_character", {"character": "deer", "work": "mini"})
+                cden.chat.release.set()
+            await c.call_tool("talk_to_companion", {"message": "二"})
+    anyio.run(go)
+    assert "世界撐開" not in cden.chat.calls[0][0]
+    assert "世界撐開" in cden.chat.calls[1][0]
+
+
+def test_list_characters_falls_back_when_session_is_gone(cden):
+    def wipe():
+        c = _conn(cden)
+        with c:
+            c.execute("DELETE FROM utterance")
+            c.execute("DELETE FROM discussion")
+        c.close()
+
+    async def go():
+        async with Client(den_mcp.build_server(cden.client())) as c:
+            await c.call_tool("set_character", {"character": "deer", "work": "mini"})
+            await c.call_tool("talk_to_companion", {"message": "一"})
+            wipe()
+            return await c.call_tool("list_characters", {})
+    r = anyio.run(go)
+    assert [ln for ln in _text(r).splitlines() if ln.endswith("(目前)")][0].startswith("hyena:")
+
+
+def test_set_character_only_affects_that_work(cden):
+    _add_story(cden, "d07", "海的另一邊", "她走到岸邊。")
+    rs = _call_all(cden.client(),
+                   ("set_character", {"character": "deer", "work": "mini"}),
+                   ("talk_to_companion", {"message": "一", "work": "海"}))
+    assert not rs[1].is_error and "照閱讀的順序" in cden.chat.calls[-1][0]
+
+
+def test_set_unknown_character_rejected_before_any_turn(cden):
+    [r] = _call_all(cden.client(), ("set_character", {"character": "dragon", "work": "mini"}))
+    assert r.is_error and "hyena" in _text(r)
     assert not any(p.startswith("/api/discuss") for _, p in cden.paths)
 
 
 def test_talk_records_home_mcp_and_client_name(cden):
-    _call(cden.client(), "talk_to_companion", {"work": "mini", "mode": "direct"})
+    _call(cden.client(), "talk_to_companion", {"work": "mini"})
     (d,) = _discussions(cden)
     assert (d["home"], d["client"]) == ("mcp", "claude-code")
-    assert "你的讀法:直說" in cden.chat.calls[-1][0]
+    assert "照閱讀的順序" in cden.chat.calls[-1][0]
 
 
 def test_talk_worker_error_tells_host_to_report_failure(cden):
@@ -438,6 +508,11 @@ def test_read_work_bad_part_local_reject(den):
     r = _call(den.client(), "read_work", {"work": "mini", "part": "bogus"})
     assert r.is_error and "notes(備課筆記" in _text(r)
     assert den.paths == []
+
+
+def test_talk_does_not_let_host_pick_character(den):
+    tools = {t.name: t for t in _list_tools(den)}
+    assert set(tools["talk_to_companion"].input_schema["properties"]) == {"message", "work"}
 
 
 def test_readonly_annotations(den):
@@ -671,6 +746,28 @@ def test_instructions_name_new_tools_only():
     assert t.startswith("talk_to_companion 回傳的是陪讀角色 companion 對作者說的話") and len(t) <= 4096
     assert all(n in t for n in ("submit_work", "find_works", "read_work", "cancel_work"))
     assert "start_critique" not in t and "critique_status" not in t
+
+
+def test_talk_description_keeps_relay_rule():
+    assert "原文轉給作者" in den_mcp.DESC_TALK
+
+
+def test_read_description_keeps_companion_boundary():
+    assert "不要拿來代替 companion 回答" in den_mcp.DESC_READ
+    assert "不要主動把內容放進 talk_to_companion" in den_mcp.DESC_READ
+    assert "不是 companion 的感受" in den_mcp.DESC_READ
+
+
+def test_set_character_only_when_author_names_one():
+    assert "只有作者點名要換時才用" in den_mcp.DESC_SET_CHARACTER
+
+
+def test_host_texts_have_no_emphasis():
+    texts = (den_mcp.INSTRUCTIONS, den_mcp.DESC_TALK, den_mcp.DESC_LIST_CHARACTERS, den_mcp.DESC_SET_CHARACTER,
+             den_mcp.DESC_FIND, den_mcp.DESC_READ, den_mcp.DESC_SUBMIT, den_mcp.DESC_CANCEL_WORK,
+             den_mcp.PROMPT_COMPANION, den_mcp.PROMPT_CONTINUE)
+    for t in texts:
+        assert "**" not in t and "務必" not in t and "極重要" not in t
 
 
 def test_resolve_full_title_reachable_despite_longer_titles(cden):

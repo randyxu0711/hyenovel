@@ -181,7 +181,6 @@ class DiscussIn(BaseModel):
     message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
     anchors: list[str] = Field(default_factory=list, max_length=MAX_ANCHORS)
     quotes: list[str] = Field(default_factory=list, max_length=MAX_QUOTES * 8)   # 「帶這段」:原文逐字引文;段數上限由 prepare_turn 回 too-many-quotes,這裡只擋超大 body
-    mode: Literal["direct", "slow", "imaginative"] | None = None   # 同 companion.MODES;MCP 只送這個
     character: str | None = Field(default=None, max_length=32)
     home: Literal["web", "mcp"] = "web"
     client: ClientIn | None = None
@@ -654,7 +653,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 raise reject(409, "busy", "這一局還有一輪在跑")
         client = body.client.model_dump() if body.client else None
         try:
-            discuss.pick_character(state.mgr.conn, turn, body.character, body.mode)
+            discuss.pick_character(state.mgr.conn, turn, body.character)
         except characters.UnknownCharacter:
             raise reject(422, "unknown-character", "沒有這隻角色") from None
         events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors,

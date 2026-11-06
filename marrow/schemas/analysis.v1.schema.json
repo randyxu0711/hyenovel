@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hyenovel/analysis.v1.schema.json",
   "title": "hyenovel story analysis",
-  "description": "唯一正本:一篇短篇的結構化分析。analyst 產出、viz.py 消費。型別固定、內容自由。(v1 strict:所有欄位必填,v0 的可選欄位改為可為 null。)",
+  "description": "一篇短篇的結構化分析。型別固定、內容自由。所有欄位必填,可選的欄位填 null。",
   "type": "object",
   "required": [
     "slug",
@@ -15,7 +15,7 @@
   "properties": {
     "slug": {
       "type": "string",
-      "description": "故事資料夾名,對應 stories/<slug>/"
+      "description": "作品識別碼,照使用者訊息第一行填"
     },
     "title": {
       "type": [
@@ -91,7 +91,7 @@
           ],
           "minimum": 0,
           "maximum": 1,
-          "description": "張力/情緒強度 0–1。effect / beat 節點才需要(給文本軸曲線);其他型別忽略。"
+          "description": "張力/情緒強度 0–1。effect / beat 節點才需要(給文本軸曲線);其他型別填 null。"
         },
         "evidence": {
           "type": [
@@ -115,7 +115,7 @@
       "properties": {
         "quote": {
           "type": "string",
-          "description": "逐字原句,必須能在 source.md 中精確找到(硬閘門:viz.py 會驗證並算出文本軸座標)。"
+          "description": "逐字原句。引用閘門會比對 <source> 的原文,並算出文本軸座標。"
         },
         "note": {
           "type": [

@@ -93,14 +93,14 @@ def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] 
             "analysis_fp": analysis["sha256"] if ctx["analysis"] is not None else None}
 
 
-def pick_character(conn, turn: dict, character: str | None, mode: str | None) -> None:
+def pick_character(conn, turn: dict, character: str | None) -> None:
     """定這輪的角色(寫進 turn["character"]);characters.UnknownCharacter 要在串流開始前炸。
-    角色 > mode > 該局上一位 > 預設;舊局只記了 mode 沒記角色,就沿用那個 mode 的角色。"""
+    角色 > 該局上一位 > 預設;舊局只記了 mode 沒記角色,就沿用那個 mode 的角色。"""
     d = turn["discussion_id"]
     last = repo.last_character(conn, d) if d is not None else None
     if last is None and d is not None and (old := repo.last_mode(conn, d)):
-        last = characters.resolve(None, old, None)["id"]
-    turn["character"] = characters.resolve(character, mode, last)
+        last = characters.of_legacy_mode(old)["id"]
+    turn["character"] = characters.resolve(character, last)
 
 
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],

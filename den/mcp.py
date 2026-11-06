@@ -18,7 +18,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 
 from den.client import DenClient, DenRejected, DenUnavailable
-from den.companion import MODES
 from den.config import MAX_CHAT_CHARS, MAX_SOURCE_BYTES
 from marrow import db
 from marrow.ingest import decode
@@ -34,29 +33,37 @@ _REASONS = {"usage-limit": "訂閱額度用完", "gate": "引文閘門重試耗�
 
 # ≤4,096 字元(Claude Code 會靜默截斷);最重要的放第一句
 INSTRUCTIONS = (
-    "talk_to_companion 回傳的是陪讀角色 companion 對作者說的話:請一字不改地轉給作者,"
-    "不要改寫、摘要、補充或加上你自己的評論。作者想聊自己寫的作品、想聽讀者感受時用 talk_to_companion。"
-    "交稿用 submit_work(只收檔案路徑)、找作品 find_works、作者自己要看原文或分析用 read_work、"
-    "停下分析用 cancel_work。作品用標題或關鍵詞指定,不必記編號。")
+    "talk_to_companion 回傳的是陪讀角色 companion 對作者說的話:一字不改地轉給作者,"
+    "不改寫、摘要、補充,也不加你自己的評論,因為作者是在跟 companion 對話。"
+    "作者想聊自己寫的作品、想聽讀者感受時用 talk_to_companion,不要自己評論作品或讀分析代答。"
+    "交稿用 submit_work(只收檔案路徑)、找作品用 find_works、作者自己要看原文或分析用 read_work、"
+    "停下分析用 cancel_work。作品用標題或關鍵詞指定,不必記編號。"
+    "作者問有哪些陪讀角色、現在是誰時用 list_characters;作者點名要換才用 set_character。")
 DESC_TALK = (
-    "和陪讀的 companion 說話,回傳它的回覆——請原文轉給作者,不要改寫、摘要或補充。"
-    "作者對 companion 說的任何話(包括「好了沒」)都用這個。message 留空 = 讓 companion 先開口。"
-    "work = 作品標題或開頭裡的關鍵詞(例「海」);省略則沿用剛聊的那篇,或最近的一篇。"
-    "mode = direct(直說)/ slow(慢讀,預設)/ imaginative(想像);"
-    "作者說「講重點就好」時用 direct,「慢慢講」用 slow,「陪我想像」用 imaginative,沒提就不要給。")
+    "和陪讀的 companion 說話,回傳它的回覆。把回覆原文轉給作者,不改寫、摘要或補充。"
+    "作者對 companion 說的任何話都用這個,包括「好了沒」。交稿或作者自己要看資料時改用 submit_work、read_work。"
+    "message 留空 = 讓 companion 先開口。"
+    "work = 作品標題或開頭裡的關鍵詞(例「海」);省略則沿用剛聊的那篇,或最近的一篇。")
+DESC_LIST_CHARACTERS = (
+    "列出陪讀角色(id、名字、一句話)並標出這篇目前是誰。作者問有哪些角色、現在是誰時用。"
+    "work 用法同 talk_to_companion。")
+DESC_SET_CHARACTER = (
+    "換陪讀角色,下一輪起由這隻接著讀,只影響這篇這一局。character 是 list_characters 給的 id。"
+    "只有作者點名要換時才用,因為角色是作者的選擇,不要依語氣或內容自己判斷。")
 _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
              "query 給標題或開頭裡的關鍵詞(例「海」),不給就列最近的。")
 DESC_READ = ("讀一篇作品的資料給作者看:part = source(原文)/ analysis(客觀結構分析)/ "
-             "notes(備課筆記:另一位冷讀者依輕重排好的問題清單,作者說「直接給我問題」「冷一點的版本」時用)/ "
-             "feedback(舊版客觀回饋)。給 notes 時要跟作者說明這是另一位冷讀者的筆記,不是 companion 的感受。"
-             "只在作者自己要看時用,不要拿來代替 companion 回答。work 同 talk_to_companion。")
+             "notes(備課筆記:另一位冷讀者依輕重排好的判斷,作者說「直接給我問題」「冷一點的版本」時用)/ "
+             "feedback(舊版客觀回饋)。給 notes 時跟作者說明這是另一位冷讀者的筆記,不是 companion 的感受。"
+             "只在作者自己要看時用,不要拿來代替 companion 回答,也不要主動把內容放進 talk_to_companion 的 message,"
+             "因為 companion 要自己讀。work 同 talk_to_companion。")
 DESC_SUBMIT = (
-    "交一篇稿子給 hyenovel:只收本機 .md / .txt 檔案路徑(不收貼上的全文、不收 pdf/docx——請作者先存成純文字檔)。"
-    "改稿重交請帶 work(作品標題或關鍵詞)。不給 path = 續跑這篇停住的分析(不會重跑已完成的)。"
-    "分析在背景跑幾分鐘,回報收到的檔名、修改時間、字數,請作者確認是對的檔。會用作者同一份 Claude 訂閱額度。")
-DESC_CANCEL_WORK = "停下一篇作品正在跑的分析(作者說「先別跑了」)。停下後可用不帶 path 的 submit_work 續跑。"
+    "交一篇稿子給 hyenovel:作者給了本機 .md / .txt 檔案路徑時用。貼上的全文、pdf、docx 不收,請作者先存成純文字檔。"
+    "改稿重交時帶 work(作品標題或關鍵詞)。不給 path = 續跑這篇停住的分析,已完成的不會重跑。"
+    "分析在背景跑幾分鐘,會用作者同一份 Claude 訂閱額度。回覆裡有收到的檔名、修改時間、字數,請作者確認是對的檔。")
+DESC_CANCEL_WORK = "作者說「先別跑了」時用,停下一篇作品正在跑的分析。停下後可用不帶 path 的 submit_work 續跑。"
 _PARTS = ("source", "analysis", "notes", "feedback")
 _CANDIDATES = 20   # 作品有歧義時最多列幾篇
 _WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析",
@@ -168,6 +175,7 @@ def build_server(den: DenClient) -> MCPServer:
 
     sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug → 對話 id
     current: list[str] = []         # 最近一次聊的那篇
+    picked: dict[str, str] = {}     # 作者點名、還沒講過話的角色:slug → 角色 id
 
     async def _works(**params) -> list[dict]:
         return (await call("GET", "/api/works?" + urlencode({k: v for k, v in params.items() if v is not None})))["works"]
@@ -292,9 +300,7 @@ def build_server(den: DenClient) -> MCPServer:
                 raise ToolError(ev["data"]["message"] + _TALK_FAILED)
         raise ToolError("companion 沒有回應" + _TALK_FAILED)
 
-    async def _talk(message: str, work: str | None, mode: str | None, client) -> str:
-        if mode is not None and mode not in MODES:
-            raise _reject("mode", "模式只有 direct(直說)/ slow(慢讀)/ imaginative(想像)。")
+    async def _talk(message: str, work: str | None, client) -> str:
         if len(message) > MAX_CHAT_CHARS:   # 本地擋:den 的 422 會把整段原文回吐給宿主
             raise _reject("too-long", f"這段話超過 {MAX_CHAT_CHARS} 字,請分段說。")
         try:
@@ -305,13 +311,13 @@ def build_server(den: DenClient) -> MCPServer:
             raise _reject("busy", "上一輪還在跑,等它回來再說" + _TALK_FAILED)
         in_flight.add(slug)
         try:
-            return await _talk_once(slug, message, mode, client)
+            return await _talk_once(slug, message, client)
         finally:
             in_flight.discard(slug)
 
-    async def _talk_once(slug: str, message: str, mode: str | None, client) -> str:
+    async def _talk_once(slug: str, message: str, client) -> str:
         body = {"session_id": sessions.get(slug), "message": message, "anchors": [],
-                "mode": mode, "home": "mcp", "client": client}
+                "character": picked.get(slug), "home": "mcp", "client": client}
         try:
             try:
                 data = await anyio.to_thread.run_sync(lambda: _turn(slug, body))
@@ -331,12 +337,47 @@ def build_server(den: DenClient) -> MCPServer:
             raise ToolError(f"連不上 hyenovel den:{e}{_TALK_FAILED}") from None
         sessions[slug] = data["session_id"]
         current[:] = [slug]
+        if picked.get(slug) == body["character"]:
+            picked.pop(slug, None)
         return data["text"]
 
     @server.tool(description=DESC_TALK)
-    async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None,
-                                mode: str | None = None) -> str:
-        return await guarded(_talk(message, work, mode, client_of(ctx)))
+    async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None) -> str:
+        return await guarded(_talk(message, work, client_of(ctx)))
+
+    async def _character_now(slug: str, default: str) -> str:
+        if slug in picked:
+            return picked[slug]
+        if slug not in sessions:
+            return default
+        data = await call("GET", f"/api/sessions/{sessions[slug]}", ok_details=("沒有這一局",))
+        said = [t["character"] for t in data.get("turns", ()) if t["role"] == "assistant"]
+        return said[-1] if said else default
+
+    async def _list_characters(work: str | None) -> str:
+        data = await call("GET", "/api/characters")
+        now = data["default"]
+        if work is not None or current:
+            now = await _character_now((await resolve_work(work))["slug"], now)
+        return "\n".join(f"{c['id']}:{c['name']['zh-Hant']},{c['line']['zh-Hant']}" + ("(目前)" if c["id"] == now else "")
+                         for c in data["characters"])
+
+    async def _set_character(character: str, work: str | None) -> str:
+        cs = {c["id"]: c for c in (await call("GET", "/api/characters"))["characters"]}
+        if character not in cs:
+            raise _reject("character", f"沒有這隻角色。可選:{'、'.join(cs)}。")
+        w = await resolve_work(work)
+        picked[w["slug"]] = character
+        current[:] = [w["slug"]]
+        return f"〈{w['title']}〉下一輪由{cs[character]['name']['zh-Hant']}接著讀。"
+
+    @server.tool(description=DESC_LIST_CHARACTERS, annotations=_READONLY)
+    async def list_characters(work: str | None = None) -> str:
+        return await guarded(_list_characters(work))
+
+    @server.tool(description=DESC_SET_CHARACTER)
+    async def set_character(character: str, work: str | None = None) -> str:
+        return await guarded(_set_character(character, work))
 
     @server.prompt(description="開始陪讀:交一篇稿子(或直接聊最近那篇),讓 companion 先開口。")
     def companion() -> str:
