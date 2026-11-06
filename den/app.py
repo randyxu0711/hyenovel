@@ -57,10 +57,10 @@ import secrets
 import time
 from contextlib import aclosing, asynccontextmanager, nullcontext
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Annotated, Callable, Literal
 
 import filelock
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Path as PathParam, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -178,6 +178,9 @@ class StoryIn(BaseModel):
     text: str
     title: str | None = None
     slug: str | None = None
+
+
+_Seq = Annotated[int, PathParam(ge=0, le=2**63 - 1)]
 
 
 class ReactionIn(BaseModel):
@@ -648,7 +651,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             raise reject(422, "not-assistant-turn", "只能標陪讀者的回覆") from None
 
     @api.put("/works/{slug}/sessions/{session}/turns/{seq}/reaction")
-    async def put_reaction(slug: str, session: str, seq: int, body: ReactionIn, request: Request):
+    async def put_reaction(slug: str, session: str, seq: _Seq, body: ReactionIn, request: Request):
         d = _reaction_target(request, slug, session, seq)
         if body.mark not in REACTION_MARKS:
             log.info("event=reject where=reaction reason=bad-mark")
@@ -663,7 +666,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
         return {"mark": body.mark, "comment": comment}
 
     @api.delete("/works/{slug}/sessions/{session}/turns/{seq}/reaction", status_code=204)
-    async def delete_reaction(slug: str, session: str, seq: int, request: Request):
+    async def delete_reaction(slug: str, session: str, seq: _Seq, request: Request):
         d = _reaction_target(request, slug, session, seq)
         conn = request.app.state.mgr.conn
         with conn:

@@ -175,8 +175,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                           "code": "usage-limit" if result.outcome == "usage-limit" else "chat-failed"}}
         return
     end = now()
-    usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model,
-             "effort": companion.CHAT_RUN.effort}
+    usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
     fp = turn["analysis_fp"]
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫

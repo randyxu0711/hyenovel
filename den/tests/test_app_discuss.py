@@ -168,8 +168,7 @@ def test_assistant_utterance_records_usage(c):
     sid = first_turn(c)
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert user["usage"] is None
-    assert asst["usage"] == {"output": 7, "cost_usd": 0.01, "duration_ms": 42, "model": "claude-x",
-                            "effort": "medium"}
+    assert asst["usage"] == {"output": 7, "cost_usd": 0.01, "duration_ms": 42, "model": "claude-x"}
 
 
 def test_turn_logged_without_text(c, caplog):
@@ -718,3 +717,9 @@ def test_companion_never_sees_reaction(c, fake_chat):
     post_discuss(c, "mini", sid, "再一句")
     system, user = fake_chat.calls[-1]
     assert "獨特短評字串" not in system and "獨特短評字串" not in user
+
+
+def test_reaction_rejects_seq_beyond_sqlite_integer(c):
+    sid = first_turn(c)
+    assert c.put(_reaction_url(sid, 2**63), json={"mark": "stopped"}).status_code == 422
+    assert c.delete(_reaction_url(sid, 2**63)).status_code == 422

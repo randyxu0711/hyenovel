@@ -668,4 +668,19 @@ describe("輸入紙與角色狀態", () => {
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]: any) =>
       u === "/api/works/d1/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
   });
+
+  it("記號在切分頁和閃一下之後都還在", async () => {
+    rows = [row("s1")];
+    session("s1", [{ ...u("看看"), seq: 0 },
+      { ...a("我讀到「海很藍」。", "buffalo", [{ quote: "海很藍", start: 0, end: 3 }]), seq: 1 }]);
+    const { container } = mount();
+    const mark = await (await findLog()).findByRole("button", { name: "讀錯了" });
+    fireEvent.click(mark);
+    const pressed = () => screen.getByRole("button", { name: "讀錯了" }).getAttribute("aria-pressed");
+    expect(pressed()).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "筆記" }));
+    fireEvent.click(container.querySelector(".dash-mark")!);
+    expect(container.querySelector(".chat-turn.is-flash")).toBeTruthy();
+    expect(pressed()).toBe("true");
+  });
 });

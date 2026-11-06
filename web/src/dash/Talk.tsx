@@ -58,7 +58,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const { registerTalk } = useLinks();
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
-  const { slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
+  const { markTurn, slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
   const me = chars.byId(whoId);
   const nameOf = (id: string | null, m?: string | null) => localized(chars.byId(id, m).name, lang);
 
@@ -125,7 +125,8 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
         {who.has(i) && whoLine(c)}
         <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
         {slug && session && turn.seq !== undefined && (
-          <Reaction key={`${session}-${turn.seq}`} slug={slug} session={session} seq={turn.seq} initial={turn.reaction ?? null} />
+          <Reaction key={`${session}-${turn.seq}`} slug={slug} session={session} seq={turn.seq} initial={turn.reaction ?? null}
+            onChange={r => markTurn(session, turn.seq!, r)} />
         )}
       </div>,
     ];

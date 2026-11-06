@@ -50,7 +50,3 @@ def assemble(ctx: dict, character: dict) -> Prompt:
         status = _RUNNING if ctx["progress"] in ("queued", "running") else _IDLE
         layers.append(Layer("status", f"\n## 現在的狀況\n{status}\n"))
     return Prompt(tuple(layers))
-
-
-def render_companion(ctx: dict, character: dict) -> str:
-    return assemble(ctx, character).text

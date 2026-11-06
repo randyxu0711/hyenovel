@@ -2,7 +2,12 @@
 import pytest
 
 from den import characters, companion
-from den.companion import _read, persona, render_companion
+from den.companion import _read, persona
+
+
+def render(ctx, character):
+    return companion.assemble(ctx, character).text
+
 
 READS = {"hyena": "照閱讀的順序", "buffalo": "最強的感覺", "deer": "世界撐開"}
 
@@ -36,43 +41,43 @@ def test_no_character_asks_consent_before_disagreeing():   # spike v1:先徵詢�
         assert "老實講你讀到的" in persona(cid)
 
 
-# ── render_companion ──
+# ── assemble ──
 
 def _ctx(**kw):
     base = {"slug": "s", "title": "題", "source": "她把傘收進門縫。\n", "analysis": None, "progress": "none"}
     return {**base, **kw}
 
 
-def test_render_companion_source_only_mentions_no_structure():
-    out = render_companion(_ctx(progress="running"), _c("hyena"))
+def test_assemble_source_only_mentions_no_structure():
+    out = render(_ctx(progress="running"), _c("hyena"))
     assert "她把傘收進門縫。" in out and "你讀的時候注意到的結構" not in out
     assert "還在背景跑" in out and READS["hyena"] in out
 
 
-def test_render_companion_with_analysis_lists_nodes_not_edges():
+def test_assemble_with_analysis_lists_nodes_not_edges():
     a = {"synopsis": "梗", "nodes": [{"id": "m1", "type": "motif", "label": "水", "note": "遞增"}],
          "edges": [{"from": "m1", "to": "t1", "type": "serves"}]}
-    out = render_companion(_ctx(analysis=a, progress="done"), _c("buffalo"))
+    out = render(_ctx(analysis=a, progress="done"), _c("buffalo"))
     assert "- motif 水:遞增" in out and "梗概:梗" in out
     assert "serves" not in out and "## 現在的狀況" not in out
     assert READS["buffalo"] in out
 
 
-def test_render_companion_not_running_says_reading_from_source():
+def test_assemble_not_running_says_reading_from_source():
     for prog in ("none", "paused", "failed", "cancelled", "done"):
-        assert "這篇目前沒有在跑結構分析,你憑原文讀。" in render_companion(_ctx(progress=prog), _c("hyena"))
+        assert "這篇目前沒有在跑結構分析,你憑原文讀。" in render(_ctx(progress=prog), _c("hyena"))
 
 
-def test_render_companion_title_falls_back_to_slug():
-    assert "# 《s》" in render_companion(_ctx(title=None), _c("hyena"))
+def test_assemble_title_falls_back_to_slug():
+    assert "# 《s》" in render(_ctx(title=None), _c("hyena"))
 
 
 def test_running_hint_only_without_analysis():
     """reviewer 還在跑時已有分析:不能再說結構分析還在跑(analyst 成功就換 current)。"""
     a = {"synopsis": "梗", "nodes": [], "edges": []}
     for prog in ("queued", "running"):
-        assert "還在背景跑" not in render_companion(_ctx(analysis=a, progress=prog), _c("hyena"))
-        assert "還在背景跑" in render_companion(_ctx(progress=prog), _c("hyena"))
+        assert "還在背景跑" not in render(_ctx(analysis=a, progress=prog), _c("hyena"))
+        assert "還在背景跑" in render(_ctx(progress=prog), _c("hyena"))
 
 
 def _legacy_render(ctx, character):
@@ -110,7 +115,7 @@ _FULL = {"synopsis": "梗", "nodes": [{"type": "theme", "label": "海", "note": 
 def test_assembled_prompt_keeps_every_byte(analysis, progress, voice):
     ctx = {"title": "海", "slug": "s", "source": "原文\n", "analysis": analysis, "progress": progress}
     c = _c("hyena", voice)
-    assert render_companion(ctx, c) == _legacy_render(ctx, c)
+    assert render(ctx, c) == _legacy_render(ctx, c)
 
 
 def test_persona_keeps_every_byte():

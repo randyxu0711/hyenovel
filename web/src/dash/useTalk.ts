@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, DashError, type SessionRow, type Turn, type TalkMessage } from "./api";
+import { api, DashError, type SessionRow, type Turn, type TurnReaction, type TalkMessage } from "./api";
 import { cpLength } from "./cp";
 import { liveQuotes } from "./liveQuotes";
 import { DRAW_MS, markId, type Mark } from "./Paper";
@@ -70,6 +70,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const touched = useRef(false); // 使用者已經自己選局或送出:不再自動打開最近那局
   const now = useRef({ slug, version, draft, source, turns, wanted, onSession });
   now.current = { slug, version, draft, source, turns, wanted, onSession };
+  const shownSession = useRef(session);
+  shownSession.current = session;
 
   // 邊說邊畫線:串流中找到的痕跡(message 到了就交給逐字稿的 spans),與一次一筆的畫線佇列。
   const [liveMarks, setLiveMarks] = useState<Mark[]>([]);
@@ -241,8 +243,13 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, session, whoId, streaming, legacy, setDraft, refreshSessions, chars, draw]);
 
+  const markTurn = useCallback((forSession: string, seq: number, reaction: TurnReaction | null) => {
+    if (forSession !== shownSession.current) return;
+    setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, reaction } : x)));
+  }, []);
+
   return {
-    slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
+    markTurn, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
   };
 }
