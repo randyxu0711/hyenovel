@@ -130,7 +130,7 @@ def test_first_turn_creates_session_and_persists_both(c):
     assert [e["data"] for e in evs[:2]] == [{"text": "A"}, {"text": "B"}]
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
-    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "mode": "slow",
+    assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "seq": 1, "mode": "slow",
                                "character": "hyena", "spans": [], "v": 1}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
@@ -640,3 +640,81 @@ def test_assistant_turn_records_recipe_user_turn_does_not(c, fake_chat):
     assert asst["recipe"]["run"] == {"model": "sonnet", "effort": "medium"}
     assert {"base", "character"} <= set(asst["recipe"]["prompt"]["layers"])
     assert "work" in asst["recipe"]["prompt"]["material"]
+
+
+def _reaction_url(sid, seq, slug="mini"):
+    return f"/api/works/{slug}/sessions/{sid}/turns/{seq}/reaction"
+
+
+def _turn(c, sid, seq):
+    return c.get(f"/api/sessions/{sid}").json()["turns"][seq]
+
+
+def test_reaction_put_replace_delete(c):
+    sid = first_turn(c)
+    assert _turn(c, sid, 1)["seq"] == 1 and _turn(c, sid, 1)["reaction"] is None
+    r = c.put(_reaction_url(sid, 1), json={"mark": "stopped", "comment": "  "})
+    assert r.status_code == 200 and r.json() == {"mark": "stopped", "comment": None}
+    r = c.put(_reaction_url(sid, 1), json={"mark": "misread", "comment": " 不是這樣 "})
+    assert r.json() == {"mark": "misread", "comment": "不是這樣"}
+    assert _turn(c, sid, 1)["reaction"] == {"mark": "misread", "comment": "不是這樣"}
+    assert c.delete(_reaction_url(sid, 1)).status_code == 204
+    assert _turn(c, sid, 1)["reaction"] is None
+    assert c.delete(_reaction_url(sid, 1)).status_code == 204
+
+
+def test_reaction_rejects(c):
+    sid = first_turn(c)
+    other = first_turn(c, "other")
+    for url, body, status, code in (
+        (_reaction_url(sid, 1, "nope"), {"mark": "stopped"}, 404, "unknown-work"),
+        (_reaction_url(sid, 1, "BAD!"), {"mark": "stopped"}, 400, "bad-slug"),
+        (_reaction_url("missing", 1), {"mark": "stopped"}, 404, "unknown-session"),
+        (_reaction_url(other, 1), {"mark": "stopped"}, 404, "unknown-session"),
+        (_reaction_url(sid, 9), {"mark": "stopped"}, 404, "unknown-turn"),
+        (_reaction_url(sid, 0), {"mark": "stopped"}, 422, "not-assistant-turn"),
+        (_reaction_url(sid, 1), {"mark": "liked"}, 422, "bad-mark"),
+        (_reaction_url(sid, 1), {"mark": "stopped", "comment": "字" * 501}, 422, "comment-too-long"),
+    ):
+        r = c.put(url, json=body)
+        assert (r.status_code, r.json()["code"]) == (status, code), url
+    assert _turn(c, sid, 1)["reaction"] is None
+
+
+def test_reaction_delete_rejects_unknown_turn(c):
+    sid = first_turn(c)
+    assert c.delete(_reaction_url(sid, 9)).json()["code"] == "unknown-turn"
+
+
+def test_reaction_on_turn_without_recipe(c):
+    sid = first_turn(c)
+    def clear(conn):
+        with conn:
+            conn.execute("UPDATE utterance SET recipe = NULL")
+    in_loop(c, clear)
+    assert c.put(_reaction_url(sid, 1), json={"mark": "stopped"}).status_code == 200
+
+
+def test_reaction_joins_back_to_recipe(c):
+    sid = first_turn(c)
+    c.put(_reaction_url(sid, 1), json={"mark": "misread"})
+    def read(conn):
+        return conn.execute("SELECT u.recipe FROM reaction r JOIN utterance u "
+                            "ON u.discussion_id = r.discussion_id AND u.seq = r.seq").fetchone()[0]
+    assert json.loads(in_loop(c, read))["prompt"]["instructions"]
+
+
+def test_message_event_carries_assistant_seq(c):
+    evs = post_discuss(c, "mini", None, "結尾太快?")
+    sid = evs[-1]["data"]["session_id"]
+    assert next(e for e in evs if e["event"] == "message")["data"]["seq"] == 1
+    evs = post_discuss(c, "mini", sid, "再一句")
+    assert next(e for e in evs if e["event"] == "message")["data"]["seq"] == 3
+
+
+def test_companion_never_sees_reaction(c, fake_chat):
+    sid = first_turn(c)
+    c.put(_reaction_url(sid, 1), json={"mark": "misread", "comment": "獨特短評字串"})
+    post_discuss(c, "mini", sid, "再一句")
+    system, user = fake_chat.calls[-1]
+    assert "獨特短評字串" not in system and "獨特短評字串" not in user

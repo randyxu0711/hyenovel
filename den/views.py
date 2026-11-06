@@ -220,13 +220,15 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
         raise UnknownVersion(v)
     us = repo.utterances(conn, d["id"])
     made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
+    marked = repo.reactions(conn, d["id"])
     turns = []
     for u in us:
         if u["role"] == "assistant":
             qs = [q for q in spans.quotes_in(u["text"]) if gate.locate(q, latest["text"])]
         else:
             qs = u["quotes"] or []
-        turns.append({"role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
+        turns.append({"seq": u["seq"], "reaction": marked.get(u["seq"]),
+                      "role": u["role"], "text": u["text"], "ts": u["ts"], "mode": u["mode"],
                       "character": u["character"], "quotes": u["quotes"] or [],
                       "spans": spans.locate_all(qs, shown["text"]),
                       "v": _at(made, u["ts"])})   # 說話當時的版本

@@ -184,6 +184,27 @@ def last_character(conn, discussion_id: int) -> str | None:
     return r[0] if r else None
 
 
+def utterance(conn, discussion_id: int, seq: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM utterance WHERE discussion_id = ? AND seq = ?",
+                             (discussion_id, seq)).fetchone())
+
+
+def set_reaction(conn, discussion_id: int, seq: int, mark: str, comment: str | None, now: float) -> None:
+    conn.execute("INSERT INTO reaction (discussion_id, seq, mark, comment, updated_at) VALUES (?, ?, ?, ?, ?) "
+                 "ON CONFLICT (discussion_id, seq) DO UPDATE SET mark = excluded.mark, "
+                 "comment = excluded.comment, updated_at = excluded.updated_at",
+                 (discussion_id, seq, mark, comment, now))
+
+
+def clear_reaction(conn, discussion_id: int, seq: int) -> None:
+    conn.execute("DELETE FROM reaction WHERE discussion_id = ? AND seq = ?", (discussion_id, seq))
+
+
+def reactions(conn, discussion_id: int) -> dict[int, dict]:
+    return {r["seq"]: {"mark": r["mark"], "comment": r["comment"]} for r in conn.execute(
+        "SELECT seq, mark, comment FROM reaction WHERE discussion_id = ?", (discussion_id,))}
+
+
 def utterances(conn, discussion_id: int) -> list[dict]:
     return [_row(r) for r in conn.execute(
         "SELECT * FROM utterance WHERE discussion_id = ? ORDER BY seq", (discussion_id,))]

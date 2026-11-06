@@ -43,6 +43,30 @@ class LegacySession(Exception):
     """改版前的舊局(沒有記 mode 的 assistant 發言):只能看,不能續聊。"""
 
 
+class UnknownTurn(Exception):
+    """這一局沒有這則發言。"""
+
+
+class NotAssistantTurn(Exception):
+    """回饋記號只標在 assistant 的回覆上。"""
+
+
+def reaction_target(conn, slug: str, session: str, seq: int) -> int:
+    """回 discussion id。LookupError 無此篇 / UnknownSession / UnknownTurn / NotAssistantTurn。"""
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise LookupError(slug)
+    d = repo.discussion_by_external(conn, st["id"], session)
+    if d is None:
+        raise UnknownSession(session)
+    u = repo.utterance(conn, d["id"], seq)
+    if u is None:
+        raise UnknownTurn(seq)
+    if u["role"] != "assistant":
+        raise NotAssistantTurn(seq)
+    return d["id"]
+
+
 class QuoteNotInSource(Exception):
     """帶的引文在最新版原文找不到(幻覺或過期)。"""
 
@@ -174,7 +198,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
         return
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
-                                        "session_id": sid, "mode": character["mode"],
+                                        "session_id": sid, "seq": seq, "mode": character["mode"],
                                         "character": character["id"], "v": v,
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)
