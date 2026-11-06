@@ -163,14 +163,28 @@ describe("設定頁", () => {
     expect(mini()).toBe("s");
   });
 
+  it("陪讀者:den 存不下預設時,選取退回原角色並顯示錯誤", async () => {
+    const f = mount();
+    const base = f.getMockImplementation()!;
+    f.mockImplementation(async (u: string, ...rest: unknown[]) =>
+      u === "/api/characters/default"
+        ? new Response(JSON.stringify({ detail: "x", code: "unknown-character", params: {} }), { status: 422 })
+        : (base as (...a: unknown[]) => Promise<Response>)(u, ...rest));
+    const p = await page();
+    await go("陪讀者");
+    fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
+    expect(await p.findByRole("alert")).toBeTruthy();
+    expect((p.getByRole("radio", { name: /鬣狗/ }) as HTMLInputElement).checked).toBe(true);
+  });
   it("陪讀者:每位有名字與 line;選水牛為預設,進門輸入框是水牛", async () => {
     mount();
     const p = await page();
     await go("陪讀者");
     expect(p.getAllByText("一句話")).toHaveLength(3);
     fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
-    expect(localStorage.getItem("hyenovel.companion")).toBe("buffalo");
     expect((p.getByRole("radio", { name: /水牛/ }) as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
+      u === "/api/characters/default" && i?.method === "PUT" && i.body === JSON.stringify({ character: "buffalo" }))).toBe(true));
     fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
     await waitFor(() => expect(document.querySelector(".home form.composer svg.blob path.body")!.getAttribute("d")).toBe(`${blobPath("buffalo")}Z`));
   });

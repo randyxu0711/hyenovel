@@ -13,7 +13,7 @@ import Side, { marksFrom } from "./Side";
 import Blob from "./Blob";
 import { composerState } from "./Talk";
 import { useSeen } from "./useSeen";
-import { useTalk } from "./useTalk";
+import { initCompanion, useTalk } from "./useTalk";
 import { SHELF_W, useShelf } from "./useShelf";
 import { applySignature, initThemes, toggleDayNight, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
@@ -246,6 +246,7 @@ export default function Dash() {
   useEffect(() => {
     Promise.all([api.themes(), api.characters()]).then(([th, ch]) => {
       initThemes(th.themes, th.default);
+      initCompanion(ch.default);
       setChars(makeCharacters(ch.characters, ch.default));
     }, e => setErr(e instanceof DashError ? e.code : "unknown"));
   }, []);

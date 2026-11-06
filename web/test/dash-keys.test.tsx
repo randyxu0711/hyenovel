@@ -89,7 +89,8 @@ describe("鍵盤", () => {
     await waitFor(() => expect(mode()).not.toBe(before));
     ctrlK();
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "陪讀者:水牛" }));
-    expect(localStorage.getItem("hyenovel.companion")).toBe("buffalo");
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
+      u === "/api/characters/default" && (i as RequestInit)?.method === "PUT")).toBe(true));
     ctrlK();
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "設定" }));
     expect(where()).toBe("/settings");
