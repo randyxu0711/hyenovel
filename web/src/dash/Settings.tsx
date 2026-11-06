@@ -191,12 +191,19 @@ function Companions() {
   const lang = useLang();
   const chars = useCharacters();
   const [who, setWho] = useState(() => companionId(chars));
+  const [err, setErr] = useState<string | null>(null);
+  const pick = (id: string) => {
+    const before = who;
+    setWho(id); setErr(null);
+    setCompanion(id).catch(e => { setWho(before); setErr(e instanceof DashError ? e.code : "unknown"); });
+  };
   return (
     <div className="set-rows">
+      {err && <p role="alert">{t(errorMessage(err))}</p>}
       {chars.list.map(c => (
         <label key={c.id} className="dash-set-who">
           <input type="radio" name="default-companion" checked={who === c.id}
-            onChange={() => { setCompanion(c.id); setWho(c.id); }} />
+            onChange={() => pick(c.id)} />
           <Blob character={c} size={28} />
           <span>{localized(c.name, lang)} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
         </label>

@@ -648,6 +648,19 @@ def test_turn_records_character_version_and_uses_latest(c, fake_chat):
     assert "新版讀法" in fake_chat.calls[-1][0]
 
 
+def test_new_session_uses_den_default(c, fake_chat):
+    assert c.put("/api/characters/default", json={"character": "deer"}).json() == {"default": "deer"}
+    assert c.get("/api/characters").json()["default"] == "deer"
+    evs = post_discuss(c, "mini", None, "嗨")
+    assert evs[-2]["data"]["character"] == "deer"
+
+
+def test_put_default_unknown_is_422(c):
+    r = c.put("/api/characters/default", json={"character": "dragon"})
+    assert r.status_code == 422 and r.json()["code"] == "unknown-character"
+    assert c.get("/api/characters").json()["default"] == "hyena"
+
+
 def test_get_characters_route_lists_versions(c):
     body = c.get("/api/characters").json()
     assert body["default"] == "hyena"

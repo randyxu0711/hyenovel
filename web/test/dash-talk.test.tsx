@@ -10,6 +10,8 @@ import { composerState, speakerChanges, versionBreaks } from "../src/dash/Talk";
 import { makeCharacters } from "../src/dash/useCharacters";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
+let serverDefault = "hyena";
+
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
 const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
   start(c) {
@@ -38,7 +40,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
     const [p, q] = url.split("?");
     const v = q?.startsWith("v=") ? Number(q.slice(2)) : null;
     if (p === "/api/themes") return json({ themes: [olive], default: "olive" });
-    if (p === "/api/characters") return json({ characters: chars, default: "hyena" });
+    if (p === "/api/characters") return json({ characters: chars, default: serverDefault });
     if (p === "/api/works") return json({ works });
     if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: v ?? Math.max(...versions), versions, text, state: "ready", job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map") return json({ version: v ?? 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
@@ -66,13 +68,13 @@ const log = () => within(screen.getByRole("log"));
 const findLog = async () => within(await screen.findByRole("log"));
 
 beforeEach(() => {
-  setLang("zh-Hant"); localStorage.clear(); talkBodies = []; talkReply = reply("嗯"); sessions = {}; rows = [];
+  setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; talkBodies = []; talkReply = reply("嗯"); sessions = {}; rows = [];
   text = "第一段。"; versions = [1];
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("選人", () => {
-  it("在輸入框的陪讀者選單選過的角色會被記住", async () => {
+  it("對話裡換人只影響這一局:不動全域預設,重開回到預設", async () => {
     const { unmount } = mount();
     const pick = async () => {
       fireEvent.click(await screen.findByRole("button", { name: /^陪讀者:/ }));
@@ -80,9 +82,22 @@ describe("選人", () => {
     };
     fireEvent.click(await pick());
     expect((await pick()).getAttribute("aria-pressed")).toBe("true");
+    say("嗨");
+    await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
+    expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u) === "/api/characters/default")).toBe(false);
     unmount();
     mount();
-    expect((await pick()).getAttribute("aria-pressed")).toBe("true");
+    expect((await pick()).getAttribute("aria-pressed")).toBe("false");
+  });
+  it("開一局回到預設,不沿用上一局的人", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    rows = [row("s1")];
+    session("s1", [u("q"), a("我是水牛", "buffalo")]);
+    mount();
+    expect(await (await findLog()).findByText("我是水牛")).toBeTruthy();
+    expect(whoKey().getAttribute("aria-label")).toContain("水牛");
+    fireEvent.click(within(await screen.findByRole("list", { name: "這篇的對話" })).getByRole("button", { name: "開一局" }));
+    await waitFor(() => expect(whoKey().getAttribute("aria-label")).toContain("鬣狗"));
   });
   it("沒選過人時打開既有的局:直接看逐字,接著由最後說話的那位陪讀", async () => {
     rows = [row("s1")];
@@ -91,13 +106,6 @@ describe("選人", () => {
     expect(await (await findLog()).findByText("我是水牛")).toBeTruthy();
     say("接著聊");
     await waitFor(() => expect(talkBodies[0]).toMatchObject({ character: "buffalo", session_id: "s1" }));
-  });
-  it("記住的角色不在清單時退回預設", async () => {
-    localStorage.setItem("hyenovel.companion", "ghost");
-    mount();
-    await screen.findByLabelText("對話輸入");
-    say("嗨");
-    await waitFor(() => expect(talkBodies[0].character).toBe("hyena"));
   });
 });
 
@@ -113,7 +121,7 @@ describe("換預設陪讀者在作品頁立即生效", () => {
     await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
   });
   it("設定頁改預設為鹿(之前記的是水牛)→ 再打開沒有局的作品,由鹿接話", async () => {
-    localStorage.setItem("hyenovel.companion", "buffalo");
+    serverDefault = "buffalo";
     mount("/w/d1");
     await screen.findByText("第一段。");
     expect(whoKey().getAttribute("aria-label")).toContain("水牛");
@@ -130,7 +138,7 @@ describe("換預設陪讀者在作品頁立即生效", () => {
 });
 
 describe("對話", () => {
-  beforeEach(() => localStorage.setItem("hyenovel.companion", "buffalo"));
+  beforeEach(() => { serverDefault = "buffalo"; });
   it("送出帶 character,帶著的引文送進 quotes 並顯示在訊息上", async () => {
     mount();
     await screen.findByText("第一段。");
@@ -364,7 +372,7 @@ describe("引文", () => {
 });
 
 describe("對話錯誤與上限", () => {
-  beforeEach(() => localStorage.setItem("hyenovel.companion", "buffalo"));
+  beforeEach(() => { serverDefault = "buffalo"; });
   it("串流中的 error 事件用它帶的 code 顯示", async () => {
     talkReply = () => sse(["error", { where: "discuss", message: "用量已達上限", recoverable: true, code: "usage-limit" }]);
     mount();
@@ -404,7 +412,7 @@ describe("沒有寫死角色", () => {
 });
 
 describe("邊說邊畫線", () => {
-  beforeEach(() => { text = "海很藍。第二句。"; localStorage.setItem("hyenovel.companion", "buffalo"); });
+  beforeEach(() => { text = "海很藍。第二句。"; serverDefault = "buffalo"; });
   afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
   /** 先送 tokens,等 release() 才送 message(帶 spans)。 */
   const gated = (tokens: string[], spans: Span[], before?: () => void) => {

@@ -281,6 +281,15 @@ def test_list_characters_marks_default_without_any_work(cden):
     assert len(lines) == 3 and [ln for ln in lines if ln.endswith("(目前)")][0].startswith("hyena:")
 
 
+def test_list_characters_marks_den_default(cden):
+    conn = db.connect(cden.url)
+    with conn:
+        repo.set_setting(conn, "default_character", "deer")
+    conn.close()
+    [r] = _call_all(cden.client(), ("list_characters", {}))
+    assert [ln for ln in _text(r).splitlines() if ln.endswith("(目前)")][0].startswith("deer:")
+
+
 def test_set_character_applies_to_next_turn_and_session_keeps_it(cden):
     rs = _call_all(cden.client(),
                    ("set_character", {"character": "deer", "work": "mini"}),

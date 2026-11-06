@@ -139,6 +139,8 @@ export const api = {
   recentSessions: async (limit = 20, opts: { legacy?: boolean } = {}) =>
     (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}${opts.legacy ? "&legacy=1" : ""}`)).sessions,
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
+  setDefaultCharacter: (character: string) =>
+    request<{ default: string }>("/api/characters/default", { ...post({ character }), method: "PUT" }),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),
   estimate: async (chars: number) =>
     (await request<{ estimate: Estimate | null }>(`/api/estimate?chars=${chars}`)).estimate,

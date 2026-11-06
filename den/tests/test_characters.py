@@ -60,6 +60,25 @@ def test_persona_appends_voice_only_when_present(conn):
     assert characters.persona({**hyena, "voice": "角色層一句"}).endswith("\n角色層一句\n")
 
 
+def test_default_pointing_at_missing_character_falls_back(conn):
+    repo.set_setting(conn, "default_character", "gone")
+    assert characters.default_id(conn) == "hyena"
+    assert characters.resolve(conn, None, None)["id"] == "hyena"
+
+
+def test_set_default_is_used_when_nothing_else_given(conn):
+    characters.set_default(conn, "deer")
+    assert characters.default_id(conn) == "deer"
+    assert characters.resolve(conn, None, None)["id"] == "deer"
+    assert characters.resolve(conn, None, "buffalo")["id"] == "buffalo"
+
+
+def test_set_default_rejects_unknown(conn):
+    with pytest.raises(characters.UnknownCharacter):
+        characters.set_default(conn, "dragon")
+    assert characters.default_id(conn) == "hyena"
+
+
 def test_sync_is_idempotent(conn):
     characters.sync_builtins(conn, 2.0)
     assert {c["id"]: c["version"] for c in characters.all_(conn)} == {"buffalo": 1, "deer": 1, "hyena": 1}

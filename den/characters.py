@@ -9,6 +9,7 @@ from marrow import repo
 _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characters"
 
 DEFAULT_CHARACTER = "hyena"
+_DEFAULT_KEY = "default_character"
 _FIELDS = {"id", "name", "line", "avatar", "colors", "voice"}
 MARKS = ("pencil", "highlighter", "circle")
 
@@ -65,6 +66,17 @@ def get(conn, character_id: str) -> dict | None:
     return row and _view(row)
 
 
+def default_id(conn) -> str:
+    saved = repo.get_setting(conn, _DEFAULT_KEY)
+    return saved if saved and get(conn, saved) else DEFAULT_CHARACTER
+
+
+def set_default(conn, character_id: str) -> None:
+    if get(conn, character_id) is None:
+        raise UnknownCharacter(character_id)
+    repo.set_setting(conn, _DEFAULT_KEY, character_id)
+
+
 def resolve(conn, character: str | None, last: str | None) -> dict:
     """指定角色 > 該局上一位 > 預設。"""
     if character is not None:
@@ -72,7 +84,7 @@ def resolve(conn, character: str | None, last: str | None) -> dict:
         if found is None:
             raise UnknownCharacter(character)
         return found
-    return (last and get(conn, last)) or get(conn, DEFAULT_CHARACTER)
+    return (last and get(conn, last)) or get(conn, default_id(conn))
 
 
 def check_colors(colors: dict) -> list[str]:
