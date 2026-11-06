@@ -356,14 +356,17 @@ def build_server(den: DenClient) -> MCPServer:
 
     async def _list_characters(work: str | None) -> str:
         data = await call("GET", "/api/characters")
+        active = [c for c in data["characters"] if not c["archived"]]
         now = data["default"]
         if work is not None or current:
             now = await _character_now((await resolve_work(work))["slug"], now)
+        if not any(c["id"] == now for c in active):
+            now = data["default"]
         return "\n".join(f"{c['id']}:{c['name']['zh-Hant']},{c['line']['zh-Hant']}" + ("(目前)" if c["id"] == now else "")
-                         for c in data["characters"])
+                         for c in active)
 
     async def _set_character(character: str, work: str | None) -> str:
-        cs = {c["id"]: c for c in (await call("GET", "/api/characters"))["characters"]}
+        cs = {c["id"]: c for c in (await call("GET", "/api/characters"))["characters"] if not c["archived"]}
         if character not in cs:
             raise _reject("character", f"沒有這隻角色。可選:{'、'.join(cs)}。")
         w = await resolve_work(work)

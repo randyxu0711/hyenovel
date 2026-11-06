@@ -585,6 +585,14 @@ def latest_characters(conn) -> list[dict]:
     return [_row(r) for r in conn.execute(_LATEST_CHARACTER + "ORDER BY c.id")]
 
 
+def archive_character(conn, character_id: str, now: float) -> None:
+    conn.execute("UPDATE character SET archived_at = ? WHERE id = ? AND archived_at IS NULL", (now, character_id))
+
+
+def unarchive_character(conn, character_id: str) -> None:
+    conn.execute("UPDATE character SET archived_at = NULL WHERE id = ?", (character_id,))
+
+
 def get_setting(conn, key: str) -> str | None:
     r = conn.execute("SELECT value FROM setting WHERE key = ?", (key,)).fetchone()
     return r[0] if r else None
