@@ -37,6 +37,7 @@ function mount(path = "/settings") {
     if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
     if (u === "/api/works") return json({ works: [{ slug: "d1", title: "舊的", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
     if (u === "/api/works/d1") return json({ slug: "d1", title: "舊的", version: 1, versions: [1], text: "內文", state: "ready", job_id: null, notes_ready: false });
+    if (u === "/api/memory") return json({ memories: [], caps: { author: 800, work: 600 } });
     if (u.startsWith("/api/sessions/old1")) return json(DETAIL);
     if (u.startsWith("/api/sessions")) return json({ sessions: [row("old1", true), row("new1", false), row("old2", true)] });
     return json({ sessions: [] });
@@ -58,8 +59,17 @@ describe("設定頁", () => {
     expect(nav.queryByText("舊的")).toBeNull();
     expect(nav.queryByRole("searchbox")).toBeNull();
     const names = within(nav.getByRole("group", { name: "設定分區" })).getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["回到進門", "外觀", "陪讀者", "舊討論"]);
+    expect(names).toEqual(["回到進門", "外觀", "陪讀者", "記憶", "舊討論"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
+  });
+  it("記憶分區畫出記憶頁,圖示是記憶專用的", async () => {
+    mount();
+    const nav = await shelf();
+    const key = nav.getByRole("button", { name: "記憶" });
+    fireEvent.click(key);
+    expect(await screen.findByRole("textbox", { name: "新增記憶" })).toBeTruthy();
+    expect(key.getAttribute("aria-current")).toBe("true");
+    expect(document.querySelector(".dash-settings")!.getAttribute("data-section")).toBe("memory");
   });
   it("沒開過作品 → 「回到進門」到 /;開過〈舊的〉→「回到〈舊的〉」到 /w/d1", async () => {
     mount();
@@ -214,5 +224,39 @@ describe("設定頁", () => {
       for (const w of ["主動先開口", "讀完開口", "用量", "資料庫"]) expect(document.querySelector(".dash-settings")!.textContent).not.toContain(w);
     }
     expect(n).toBeGreaterThan(10);
+  });
+});
+
+describe("記憶頁跳回來源", () => {
+  it("從設定點來源 → 到那篇的那一局,看得到逐字", async () => {
+    setLang("zh-Hant");
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = url.split("?")[0];
+      if (u === "/api/themes") return json({ themes: [olive, grass], default: "olive" });
+      if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
+      if (u === "/api/works") return json({ works: [{ slug: "d1", title: "舊的", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
+      if (u === "/api/works/d1") return json({ slug: "d1", title: "舊的", version: 1, versions: [1], text: "內文", state: "ready", job_id: null, notes_ready: false });
+      if (u === "/api/works/d1/map") return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
+      if (u === "/api/works/d1/sessions") return json({ sessions: [
+        { session: "s2", started_at: 2, last_at: 3, turns: 1, character: "hyena", mode: null, preview: "新局", version: 1, legacy: false },
+        { session: "s1", started_at: 1, last_at: 2, turns: 1, character: "hyena", mode: null, preview: "舊局", version: 1, legacy: false },
+      ] });
+      if (u === "/api/sessions/s1") return json({ session: "s1", slug: "d1", title: "舊的", legacy: false, version: 1, turns: [
+        { seq: 0, role: "user", text: "那句我說的話", ts: 1, mode: null, character: null, quotes: [], spans: [], memories: [] },
+      ] });
+      if (u === "/api/sessions/s2") return json({ session: "s2", slug: "d1", title: "舊的", legacy: false, version: 1, turns: [] });
+      if (u === "/api/memory") return json({ memories: [{
+        id: 1, root: 1, scope: "author", slug: "d1", title: "舊的", text: "記", quote: "那句", session: "s1", seq: 0,
+        valid_from: 1, learned_at: 1, invalidated_at: null,
+      }], caps: { author: 800, work: 600 } });
+      return json({ sessions: [] });
+    }));
+    render(<MemoryRouter initialEntries={["/settings"]}><Where />
+      <Routes><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
+    const nav = within(await screen.findByRole("navigation"));
+    fireEvent.click(await nav.findByRole("button", { name: "記憶" }));
+    fireEvent.click(await screen.findByRole("link", { name: "那句" }));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d1"));
+    expect(await within(await screen.findByRole("log")).findByText("那句我說的話")).toBeTruthy();
   });
 });

@@ -4,6 +4,7 @@ import { api, DashError, type RecentSession, type SessionDetail } from "./api";
 import Blob from "./Blob";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
+import MemoryPage from "./MemoryPage";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
 import { speakerChanges } from "./Talk";
@@ -83,13 +84,13 @@ function Archive() {
   );
 }
 
-export type SettingsSection = "look" | "companions" | "archive";
+export type SettingsSection = "look" | "companions" | "memory" | "archive";
 const SECTIONS: { id: SettingsSection; key: MsgKey; icon: IconName }[] = [
   { id: "look", key: "set.look", icon: "look" }, { id: "companions", key: "set.companions", icon: "person" },
-  { id: "archive", key: "set.archive", icon: "box" },
+  { id: "memory", key: "set.memory", icon: "memory" }, { id: "archive", key: "set.archive", icon: "box" },
 ];
 
-/** 設定分區:回去鍵 + 三個分區。書架在設定頁時畫它;窄螢幕由 Settings 畫在內容上方(橫排)。 */
+/** 設定分區:回去鍵 + 各分區。書架在設定頁時畫它;窄螢幕由 Settings 畫在內容上方(橫排)。 */
 export function SettingsNav({ section, onPick, back }: {
   section: SettingsSection; onPick: (s: SettingsSection) => void; back: { label: string; to: string };
 }) {
@@ -214,6 +215,7 @@ export default function Settings({ section, nav }: { section: SettingsSection; n
       <h1 className="dash-h">{title}</h1>
       {section === "look" && <Look />}
       {section === "companions" && <Companions />}
+      {section === "memory" && <MemoryPage />}
       {section === "archive" && <Archive />}
     </section>
   );
