@@ -290,6 +290,47 @@ def test_list_characters_marks_den_default(cden):
     assert [ln for ln in _text(r).splitlines() if ln.endswith("(目前)")][0].startswith("deer:")
 
 
+def _archived_character(cden, cid="u1"):
+    conn = db.connect(cden.url)
+    with conn:
+        repo.add_character(conn, cid, "imported", 1.0)
+        repo.add_character_version(conn, cid, {"spec": "chara_card_v3", "spec_version": "3.0",
+                                               "data": {"name": "老讀", "personality": "讀"}}, 1.0)
+        repo.archive_character(conn, cid, 2.0)
+    conn.close()
+
+
+def test_list_characters_hides_archived(cden):
+    _archived_character(cden)
+    [r] = _call_all(cden.client(), ("list_characters", {}))
+    assert "老讀" not in _text(r) and len(_text(r).splitlines()) == 3
+
+
+def test_set_archived_character_is_rejected(cden):
+    _archived_character(cden)
+    [r] = _call_all(cden.client(), ("set_character", {"character": "u1", "work": "mini"}))
+    assert r.is_error and "沒有這隻角色" in _text(r) and "u1" not in _text(r)
+
+
+def test_list_characters_current_falls_back_when_last_speaker_archived(cden):
+    _archived_character(cden)
+    conn = db.connect(cden.url)
+    with conn:
+        repo.unarchive_character(conn, "u1")
+    conn.close()
+
+    def archive(i):
+        if i == 1:
+            c = db.connect(cden.url)
+            with c:
+                repo.archive_character(c, "u1", 3.0)
+            c.close()
+    rs = _session(cden.client(), [("set_character", {"character": "u1", "work": "mini"}),
+                                  ("talk_to_companion", {"message": "嗨", "work": "mini"}),
+                                  ("list_characters", {})], archive)
+    assert [ln for ln in _text(rs[-1]).splitlines() if ln.endswith("(目前)")][0].startswith("hyena:")
+
+
 def test_set_character_applies_to_next_turn_and_session_keeps_it(cden):
     rs = _call_all(cden.client(),
                    ("set_character", {"character": "deer", "work": "mini"}),

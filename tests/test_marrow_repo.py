@@ -460,6 +460,16 @@ def test_character_versions_and_latest(conn):
     assert [(r["id"], r["n"]) for r in repo.latest_characters(conn)] == [("w", 1), ("x", 2)]
 
 
+def test_archive_keeps_first_time_and_unarchive_clears(conn):
+    repo.add_character(conn, "x", "imported", 1.0)
+    repo.add_character_version(conn, "x", {}, 1.0)
+    repo.archive_character(conn, "x", 2.0)
+    repo.archive_character(conn, "x", 3.0)
+    assert repo.latest_character(conn, "x")["archived_at"] == 2.0
+    repo.unarchive_character(conn, "x")
+    assert repo.latest_character(conn, "x")["archived_at"] is None
+
+
 def test_setting_upsert(conn):
     assert repo.get_setting(conn, "k") is None
     repo.set_setting(conn, "k", "a")

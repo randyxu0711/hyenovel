@@ -11,6 +11,7 @@ export const DEN_ERROR_CODES = [
   "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
   "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
   "unknown-memory", "memory-not-current", "memory-is-current",
+  "bad-card", "builtin-character",
   "den-down",
 ];
 

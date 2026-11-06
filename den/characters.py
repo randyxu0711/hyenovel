@@ -18,6 +18,10 @@ class UnknownCharacter(Exception):
     """指定的角色 id 不存在。"""
 
 
+class BuiltinCharacter(Exception):
+    """內建角色不能封存。"""
+
+
 @cache
 def _load() -> tuple[dict, ...]:
     out = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(_DIR.glob("*.json"))]
@@ -54,7 +58,8 @@ def sync_builtins(conn, now: float) -> None:
 
 
 def _view(row: dict) -> dict:
-    return cards.view(row["card"], row["id"], row["n"])
+    return {**cards.view(row["card"], row["id"], row["n"]), "origin": row["origin"],
+            "archived": row["archived_at"] is not None}
 
 
 def all_(conn) -> list[dict]:
@@ -66,13 +71,18 @@ def get(conn, character_id: str) -> dict | None:
     return row and _view(row)
 
 
+def _active(conn, character_id: str) -> dict | None:
+    found = get(conn, character_id)
+    return found if found and not found["archived"] else None
+
+
 def default_id(conn) -> str:
     saved = repo.get_setting(conn, _DEFAULT_KEY)
-    return saved if saved and get(conn, saved) else DEFAULT_CHARACTER
+    return saved if saved and _active(conn, saved) else DEFAULT_CHARACTER
 
 
 def set_default(conn, character_id: str) -> None:
-    if get(conn, character_id) is None:
+    if _active(conn, character_id) is None:
         raise UnknownCharacter(character_id)
     repo.set_setting(conn, _DEFAULT_KEY, character_id)
 
@@ -80,11 +90,32 @@ def set_default(conn, character_id: str) -> None:
 def resolve(conn, character: str | None, last: str | None) -> dict:
     """指定角色 > 該局上一位 > 預設。"""
     if character is not None:
-        found = get(conn, character)
+        found = _active(conn, character)
         if found is None:
             raise UnknownCharacter(character)
         return found
-    return (last and get(conn, last)) or get(conn, default_id(conn))
+    return (last and _active(conn, last)) or get(conn, default_id(conn))
+
+
+def import_card(conn, card: dict, now: float) -> dict:
+    """同一張卡再匯入 = 同一隻角色,封存過就拉回來。呼叫者持 transaction。"""
+    cid = cards.imported_id(card)
+    row = repo.latest_character(conn, cid)
+    if row is None:
+        repo.add_character(conn, cid, "imported", now)
+        repo.add_character_version(conn, cid, card, now)
+    else:
+        repo.unarchive_character(conn, cid)
+    return get(conn, cid)
+
+
+def archive(conn, character_id: str, now: float) -> None:
+    row = repo.latest_character(conn, character_id)
+    if row is None:
+        raise UnknownCharacter(character_id)
+    if row["origin"] == "builtin":
+        raise BuiltinCharacter(character_id)
+    repo.archive_character(conn, character_id, now)
 
 
 def persona(character: dict) -> str:

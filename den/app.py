@@ -97,6 +97,7 @@ ERROR_CODES: tuple[str, ...] = (
     "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
     "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
     "unknown-memory", "memory-not-current", "memory-is-current",
+    "bad-card", "builtin-character",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
