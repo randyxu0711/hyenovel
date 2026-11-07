@@ -83,16 +83,13 @@ describe("設定頁", () => {
     await go("回到〈舊的〉");
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
   });
-  it("點「陪讀者」→ 內容換成預設陪讀者單選,沒有預覽欄;點「外觀」→ 有預覽欄", async () => {
+  it("點「陪讀者」→ 內容換成預設陪讀者單選;外觀沒有預覽卡", async () => {
     mount();
     const p = await page();
-    expect(p.getByRole("figure", { name: "預覽" })).toBeTruthy();
+    expect(p.queryByRole("figure")).toBeNull();
     await go("陪讀者");
     expect(p.getAllByRole("radio")).toHaveLength(3);
-    expect(p.queryByRole("figure")).toBeNull();
     expect(p.getByRole("heading", { level: 1, name: "陪讀者" })).toBeTruthy();
-    await go("外觀");
-    expect(p.getByRole("figure", { name: "預覽" })).toBeTruthy();
   });
   it("晝夜是三顆圖示鈕(跟系統/晝/夜),aria-pressed 跟 pref", async () => {
     mount();
@@ -147,13 +144,15 @@ describe("設定頁", () => {
     setPaperFlow("v");
   });
 
-  it("字級存 localStorage,預覽紙與 Paper 都套 data-size", async () => {
+  it("字級是三個大小不同的「字」;存 localStorage,Paper 套 data-size", async () => {
     mount();
     const p = await page();
-    const mini = () => p.getByRole("figure", { name: "預覽" }).querySelector("p")!.getAttribute("data-size");
-    fireEvent.click(p.getByRole("button", { name: "大" }));
+    const big = p.getByRole("button", { name: "大" });
+    expect(big.textContent).toBe("字");
+    expect(big.querySelector(".set-glyph")!.getAttribute("data-size")).toBe("l");
+    fireEvent.click(big);
     expect(localStorage.getItem("hyenovel.paperSize")).toBe("l");
-    expect(mini()).toBe("l");
+    expect(big.getAttribute("aria-pressed")).toBe("true");
     const { container } = render(
       <CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
         <Paper text="一行" title="x" marks={[]} onBring={() => {}} />
@@ -161,7 +160,6 @@ describe("設定頁", () => {
     expect(container.querySelector(".paper-sheet")?.getAttribute("data-size")).toBe("l");
     fireEvent.click(p.getByRole("button", { name: "小" }));
     expect(localStorage.getItem("hyenovel.paperSize")).toBe("s");
-    expect(mini()).toBe("s");
   });
 
   it("陪讀者:den 存好預設才讓開著的對話跟著換", async () => {

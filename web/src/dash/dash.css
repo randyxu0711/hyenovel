@@ -278,8 +278,7 @@
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 
 /* ── 設定頁 ── */
-.dash .dash-settings{max-width:40em; margin:0 auto; padding:8px 24px 80px}
-.dash .dash-settings[data-section="look"]{max-width:calc(40em + 300px)}
+.dash .dash-settings{max-width:46em; margin:0 auto; padding:8px 24px 80px}
 .dash .dash-settings .dash-h{margin:0 0 14px; font-family:var(--serif); font-size:var(--dash-t-xl)}
 .dash .dash-set-opt{display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--dash-line); border-radius:6px; background:transparent; cursor:pointer; font:inherit; color:var(--dash-ink)}
 .dash .dash-set-opt[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); border-color:var(--dash-accent)}
@@ -363,7 +362,7 @@
 
 /* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
 /* 建角色:短文是唯一的亮點,其餘安靜;波浪 = 陪讀者提到,跟稿上同一個意思 */
-.dash .dash-settings:has(.nc-results, .char-cards){max-width:calc(40em + 300px)}
+.dash .dash-settings:has(.nc-results){max-width:calc(46em + 240px)}
 .dash .dash-settings:has(.nc, .nc-busy) > .dash-h{display:none}
 .dash .nc-results{outline:0}
 .dash .nc-back{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:4px 8px 4px 2px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
@@ -427,6 +426,21 @@
 .dash .nc-revise-foot button:not(:disabled):hover, .dash .nc-use:not(:disabled):hover{text-decoration:underline; text-underline-offset:.3em}
 .dash .char-card .nc-note{color:var(--dash-paper-ink-2); font-variant-numeric:tabular-nums}
 .dash .nc-use{align-self:flex-start; margin-top:10px; font-weight:500}
+.dash .char-cards{grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px}
+.dash .char-cards .char-card{align-items:center; padding:16px 10px 10px; border-radius:16px; background:none; box-shadow:none; color:var(--dash-ink); text-align:center}
+.dash .char-cards .char-card[data-on="true"]{background:var(--dash-desk-2); box-shadow:none}
+.dash .char-cards .char-card header{flex-direction:column; gap:8px; margin-bottom:6px}
+.dash .char-cards .char-line{min-height:2.6em; text-wrap:balance; margin-bottom:10px; color:var(--dash-ink-2)}
+.dash .char-cards .char-foot{flex-direction:column; gap:4px; width:100%; color:var(--dash-ink-2)}
+.dash .char-acts{display:flex; justify-content:center; gap:2px}
+.dash .char-cards .char-default{flex:none}
+.dash .char-cards .char-acts{opacity:0; transition:opacity .15s}
+.dash .char-cards .char-card:hover .char-acts, .dash .char-cards .char-acts:focus-within{opacity:1}
+@media (hover:none){ .dash .char-cards .char-acts{opacity:1} }
+.dash .char-cards .char-new{align-items:center; justify-content:flex-start; gap:6px; padding:16px 10px 10px; border:0}
+.dash .char-new .char-new-slot{display:flex; flex-direction:column; gap:8px; padding:0; background:none}
+.dash .char-new-slot > span{display:grid; place-items:center; width:72px; height:72px; border:1.5px dashed var(--dash-line); border-radius:50%}
+.dash .char-new-slot:hover > span{border-color:var(--dash-ink-2)}
 .dash .char-edit{grid-column:1 / -1; gap:14px}
 .dash .char-edit label{display:block; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
 .dash .char-edit .nc-edit{margin:4px 0 0; color:var(--dash-paper-ink)}
@@ -447,19 +461,19 @@
 .dash-rail[data-shelf="rail"] .set-nav{align-items:center; padding:4px 0}
 .dash-rail[data-shelf="rail"] .set-nav button{width:30px; height:30px; padding:0; justify-content:center}
 .dash-rail[data-shelf="rail"] .set-nav span{display:none}
-.dash .set-look{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:24px; align-items:start}
+.dash .set-look{display:block}
 .dash .set-rows{display:flex; flex-direction:column; gap:6px}
-.dash .set-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; padding:12px 14px; border-radius:10px; color:var(--dash-ink)}
-.dash .set-row:hover{background:var(--dash-desk-2)}
+.dash .set-row{display:grid; grid-template-columns:6em auto; gap:16px; align-items:center; justify-content:start; padding:10px 0; color:var(--dash-ink)}
 .dash .set-lab{font-weight:500}
-.dash .set-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+.dash .set-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-start}
 .dash .set-seg{display:flex; gap:2px; padding:2px; border-radius:9px; background:var(--dash-desk-2)}
 .dash .set-seg button{display:grid; place-items:center; min-width:30px; height:28px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .set-seg button:has(.dash-set-chip){display:inline-flex; gap:7px}
+.dash .set-glyph{font-family:var(--serif); line-height:1}
+.dash .set-glyph[data-size="s"]{font-size:var(--dash-t-xs)}
+.dash .set-glyph[data-size="m"]{font-size:var(--dash-t-md)}
+.dash .set-glyph[data-size="l"]{font-size:var(--dash-t-xl)}
 .dash .set-seg button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-ink); box-shadow:var(--dash-sh-raise)}
-.dash .set-prev{margin:0}
-.dash .set-mini{--dash-t-paper:16.5px; margin:0; padding:18px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise); font-family:var(--serif); font-size:var(--dash-t-paper); line-height:2}
-.dash .set-mini[data-size="s"]{--dash-t-paper:14.5px}
-.dash .set-mini[data-size="l"]{--dash-t-paper:19px}
 .dash[data-narrow="true"] .dash-settings .set-nav{flex-direction:row; overflow-x:auto; padding:0 0 12px}
 .dash[data-narrow="true"] .dash-settings .set-nav .set-back{margin:0 8px 0 0}
 .dash[data-narrow="true"] .set-look{grid-template-columns:minmax(0,1fr)}

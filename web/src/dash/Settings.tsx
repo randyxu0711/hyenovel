@@ -151,13 +151,14 @@ function Look() {
           </div>
         </Row>
         <Row label={t("set.palette")}>
-          {themes.map(th => (
-            <button key={th.id} type="button" className="dash-set-opt" aria-pressed={theme?.id === th.id}
-              onClick={() => selectTheme(th.id)}>
-              <span className="dash-set-chip" style={{ background: th[mode].paper }} aria-hidden="true" />
-              {localized(th.name, lang)}
-            </button>
-          ))}
+          <div className="set-seg" role="group" aria-label={t("set.palette")}>
+            {themes.map(th => (
+              <button key={th.id} type="button" aria-pressed={theme?.id === th.id} onClick={() => selectTheme(th.id)}>
+                <span className="dash-set-chip" style={{ background: th[mode].paper }} aria-hidden="true" />
+                {localized(th.name, lang)}
+              </button>
+            ))}
+          </div>
         </Row>
         <Row label={t("set.lang")}>
           <div className="set-seg" role="group" aria-label={t("set.lang")}>
@@ -177,14 +178,12 @@ function Look() {
         <Row label={t("set.paper")}>
           <div className="set-seg" role="group" aria-label={t("set.paper")}>
             {SIZES.map(s => (
-              <button key={s.size} type="button" aria-pressed={size === s.size} onClick={() => pickSize(s.size)}>{t(s.key)}</button>
+              <button key={s.size} type="button" aria-pressed={size === s.size} aria-label={t(s.key)} title={t(s.key)}
+                onClick={() => pickSize(s.size)}><span className="set-glyph" data-size={s.size} aria-hidden="true">字</span></button>
             ))}
           </div>
         </Row>
       </div>
-      <figure className="set-prev" aria-label={t("set.preview")}>
-        <p className="set-mini" data-size={size}>{t("set.sample")}</p>
-      </figure>
     </div>
   );
 }
@@ -256,14 +255,15 @@ function Companions() {
             onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
         }
         return (
-          <CharacterCard key={c.id} character={c} name={name} on={who === c.id}>
+          <CharacterCard key={c.id} character={c} name={name} on={who === c.id} size={72}>
             <p className="char-line">{localized(c.line, lang)}</p>
             <div className="char-foot">
             <label className="char-default">
               <input type="radio" name="default-companion" checked={who === c.id}
-                aria-label={name} onChange={() => pick(c.id)} />
-              <span className="nc-mark" aria-hidden="true" />{t(who === c.id ? "set.default" : "set.makeDefault")}
+                aria-label={name} title={t("set.makeDefault")} onChange={() => pick(c.id)} />
+              <span className="nc-mark" aria-hidden="true" />{who === c.id && t("set.default")}
             </label>
+            <span className="char-acts">
             <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
               aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
             <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
@@ -276,13 +276,14 @@ function Companions() {
                   onClick={() => archive(c.id)}><Icon name="box" /></button>
               </>
             )}
+            </span>
             </div>
           </CharacterCard>
         );
       })}
       <div className="char-new">
-        <button type="button" onClick={() => setCreating(true)}><Icon name="plus" />{t("set.card.new")}</button>
-        <button type="button" onClick={() => fileInput.current?.click()}><Icon name="up" />{t("set.card.import")}</button>
+        <button type="button" className="char-new-slot" onClick={() => setCreating(true)}><span aria-hidden="true"><Icon name="plus" /></span>{t("set.card.new")}</button>
+        <button type="button" className="ib" aria-label={t("set.card.import")} title={t("set.card.import")} onClick={() => fileInput.current?.click()}><Icon name="up" /></button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t("set.card.import")}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void fromFile(f); }} />
       </div>
