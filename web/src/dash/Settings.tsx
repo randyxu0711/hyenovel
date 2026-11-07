@@ -239,7 +239,7 @@ function Companions() {
   return (
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
-      <div className="char-cards">
+      <div className="char-cards char-lineup">
       {chars.active.map(c => {
         const name = localized(c.name, lang);
         if (editing === c.id) {
