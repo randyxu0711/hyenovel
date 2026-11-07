@@ -55,9 +55,9 @@
 .dash .reader{position:relative; min-height:100%}
 .dash .reader-note{padding:32px; color:var(--dash-ink-2)}
 
-/* ── 作品頁:稿 | 分隔線 | 右欄。兩側各至少 380px;沒拖過就平分,拖過用 --dash-split(右欄寬)。 ── */
+/* ── 作品頁:稿 | 分隔線 | 右欄。兩側各至少 380px;沒拖過稿先拿到紙寬(紙 657 + 內距 48 = 705px)再 1.1:1 分,拖過用 --dash-split(右欄寬)。 ── */
 .dash[data-shelf="open"]{--dash-shelf:244px}
-.dash[data-view="work"]{grid-template-columns:var(--dash-shelf) minmax(380px,1fr) 9px minmax(380px,1fr)}
+.dash[data-view="work"]{grid-template-columns:var(--dash-shelf) minmax(max(380px, min(705px, calc(100vw - var(--dash-shelf) - 9px - 380px))),1.1fr) 9px minmax(380px,1fr)}
 .dash[data-view="work"][style*="--dash-split"]{grid-template-columns:var(--dash-shelf) minmax(380px,1fr) 9px max(380px, min(var(--dash-split), calc(100vw - var(--dash-shelf) - 9px - 380px)))}
 .dash-grip{cursor:col-resize; background:radial-gradient(circle, var(--dash-line) 1px, transparent 1.2px) center top/9px 6px repeat-y; touch-action:none}
 .dash-grip:hover, .dash-grip:focus-visible{background-image:radial-gradient(circle, var(--dash-accent) 1.4px, transparent 1.8px); outline:none}
@@ -65,13 +65,14 @@
 .dash-h{margin:0; font-size:var(--dash-t-xl); font-weight:600; color:var(--dash-ink)}
 .dash button:focus-visible, .dash textarea:focus-visible, .dash select:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ink)}
+.dash .chat > .composer, .dash .chat > .chat-carries{box-sizing:border-box; width:calc(100% - 32px); max-width:36em; margin-inline:auto}
 .dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 28px; display:flex; flex-direction:column; gap:18px}
-.dash .chat-log > *{width:100%; max-width:30em; margin-inline:auto}
+.dash .chat-log > *{width:100%; max-width:36em; margin-inline:auto}
 .dash .chat-wait{margin:0; color:var(--dash-ink-2); font-size:var(--dash-t-sm)}
 .dash .chat-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
 .dash .chat-text{margin:0; white-space:pre-wrap; line-height:1.8}
 .dash .chat-me{box-sizing:border-box; padding:8px 14px; border-radius:10px; background:var(--dash-desk-2)}
-.dash .chat-log > .chat-me{width:auto; max-width:min(26em, 85%); margin-right:max(0px, calc((100% - 30em) / 2)); align-self:flex-end}
+.dash .chat-log > .chat-me{width:auto; max-width:min(30em, 85%); margin-right:max(0px, calc((100% - 36em) / 2)); align-self:flex-end}
 .dash .chat-me p{margin:0; white-space:pre-wrap}
 .dash .chat-quote{margin:0 0 6px; font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ink-2);
   text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
@@ -278,7 +279,8 @@
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 
 /* ── 設定頁 ── */
-.dash .dash-settings{max-width:46em; margin:0 auto; padding:8px 24px 80px}
+.dash .dash-settings{max-width:52em; margin:0; padding:8px clamp(32px, 5vw, 80px) 80px}
+.dash .dash-settings[data-section="companions"]{max-width:64em}
 .dash .dash-settings .dash-h{margin:0 0 14px; font-family:var(--serif); font-size:var(--dash-t-xl)}
 .dash .dash-set-opt{display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--dash-line); border-radius:6px; background:transparent; cursor:pointer; font:inherit; color:var(--dash-ink)}
 .dash .dash-set-opt[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); border-color:var(--dash-accent)}
@@ -366,12 +368,12 @@
 
 /* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
 /* 建角色:短文是唯一的亮點,其餘安靜;波浪 = 陪讀者提到,跟稿上同一個意思 */
-.dash .dash-settings:has(.nc-results){max-width:calc(46em + 240px)}
+.dash .dash-settings:has(.nc-results){max-width:64em}
 .dash .dash-settings:has(.nc, .nc-busy) > .dash-h{display:none}
 .dash .nc-results{outline:0}
 .dash .nc-back{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:4px 8px 4px 2px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .nc-back:hover{color:var(--dash-ink)}
-.dash .nc-sheet{padding:32px 36px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .nc-sheet{max-width:40em; padding:32px 36px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .nc-q{margin:0 0 36px; padding:0; border:0; min-width:0}
 .dash .nc-q legend, .dash .nc-q > label{display:block; padding:0; margin:0 0 10px; font-family:var(--serif); font-size:var(--dash-t-lg); line-height:1.6}
 .dash .nc-form > label{font-size:var(--dash-t-xl)}
@@ -430,7 +432,7 @@
 .dash .nc-revise-foot button:not(:disabled):hover, .dash .nc-use:not(:disabled):hover{text-decoration:underline; text-underline-offset:.3em}
 .dash .char-card .nc-note{color:var(--dash-paper-ink-2); font-variant-numeric:tabular-nums}
 .dash .nc-use{align-self:flex-start; margin-top:10px; font-weight:500}
-.dash .char-lineup{grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px}
+.dash .char-lineup{grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px}
 .dash .char-lineup .char-card:not(.char-edit){align-items:center; padding:16px 10px 10px; border-radius:16px; background:none; box-shadow:none; color:var(--dash-ink); text-align:center}
 .dash .char-lineup .char-card:not(.char-edit)[data-on="true"]{background:var(--dash-desk-2); box-shadow:none}
 .dash .char-lineup .char-card:not(.char-edit) header{flex-direction:column; gap:8px; margin-bottom:6px}
@@ -443,9 +445,9 @@
 @media (hover:none){ .dash .char-lineup .char-acts{opacity:1} }
 .dash .char-lineup .char-new{align-items:center; justify-content:flex-start; gap:6px; padding:16px 10px 10px; border:0}
 .dash .char-new .char-new-slot{display:flex; flex-direction:column; gap:8px; padding:0; background:none}
-.dash .char-new-slot > span{display:grid; place-items:center; width:72px; height:72px; border:1.5px dashed var(--dash-line); border-radius:50%}
+.dash .char-new-slot > span{display:grid; place-items:center; width:96px; height:96px; border:1.5px dashed var(--dash-line); border-radius:50%}
 .dash .char-new-slot:hover > span{border-color:var(--dash-ink-2)}
-.dash .char-edit{grid-column:1 / -1; gap:14px}
+.dash .char-edit{grid-column:1 / -1; gap:14px; max-width:40em}
 .dash .char-edit label{display:block; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
 .dash .char-edit .nc-edit{margin:4px 0 0; color:var(--dash-paper-ink)}
 .dash .char-edit .nc-warn{margin:0}

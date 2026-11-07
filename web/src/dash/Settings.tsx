@@ -247,7 +247,7 @@ function Companions() {
             onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
         }
         return (
-          <CharacterCard key={c.id} character={c} name={name} on={who === c.id} size={72}>
+          <CharacterCard key={c.id} character={c} name={name} on={who === c.id} size={96}>
             <p className="char-line">{localized(c.line, lang)}</p>
             <div className="char-foot">
             <label className="char-default">
