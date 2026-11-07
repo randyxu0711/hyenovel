@@ -358,8 +358,8 @@
 .dash .shelf-ini{font-family:var(--serif); font-size:var(--dash-t-md); line-height:1; color:var(--dash-ink)}
 .dash .shelf-pop{position:fixed; z-index:8; width:240px; max-height:60vh; overflow:auto; padding:4px}
 .dash .shelf-pop .shelf-sess{margin:0}
-.dash .shelf-foot{margin-top:auto; display:flex; padding:8px 10px 12px 12px}
-.dash-rail[data-shelf="rail"] .shelf-foot{justify-content:center; padding:8px 0 12px}
+.dash .shelf-foot{margin-top:auto; display:flex; gap:2px; padding:8px 10px 12px 12px}
+.dash-rail[data-shelf="rail"] .shelf-foot{flex-direction:column; align-items:center; padding:8px 0 12px}
 
 /* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
 /* 建角色:短文是唯一的亮點,其餘安靜;波浪 = 陪讀者提到,跟稿上同一個意思 */

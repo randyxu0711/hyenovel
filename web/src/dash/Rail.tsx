@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SessionRow, Work } from "./api";
+import { toggleDayNight, useThemeState } from "./theme";
 import Icon, { type IconName } from "./Icon";
 import { useLang, useT } from "./i18n";
 import type { Talk as TalkState } from "./useTalk";
@@ -66,6 +67,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   settingsNav?: ReactNode;
   hidden?: boolean;
 }) {
+  const { mode: themeMode } = useThemeState();
   const t = useT();
   const lang = useLang();
   const nav = useNavigate();
@@ -123,6 +125,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
         </ul>
       )}
       <div className="shelf-foot">
+        <IB icon={themeMode === "dark" ? "sun" : "moon"} label={t("palette.dayNight")} onClick={toggleDayNight} />
         <IB icon="gear" label={t("rail.settings")} aria-current={view === "settings" ? "page" : undefined}
           onClick={() => nav("/settings")} />
       </div>
