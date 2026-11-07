@@ -253,23 +253,24 @@
 }
 .dash .dash-iq:hover, .dash .dash-iq:focus-visible{text-decoration:underline solid var(--dash-accent); background:color-mix(in srgb, var(--dash-accent) 12%, transparent)}
 .dash .dash-iq.is-lost{cursor:help; color:var(--dash-ink-2); text-decoration:underline dashed var(--dash-line); background:none}
-/* 結構圖:點陣張力。每欄 10 顆,亮的越上面越深;最高那欄微微發光。 */
-.dash .side-matrix{display:grid; gap:6px; align-items:end; padding:14px 12px 10px; border-radius:12px; background:var(--dash-desk-2)}
-.dash .side-dots{display:flex; flex-direction:column-reverse; gap:4px}
-.dash .dash-mcol{display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0; border:0; border-radius:8px; background:none; cursor:pointer}
-.dash .dash-mcol:hover:not(:disabled){background:var(--dash-paper)}
-.dash .dash-mcol:disabled{cursor:default}
-.dash .dash-mcol i{width:9px; height:9px; border-radius:50%; box-shadow:inset 0 0 0 1px var(--dash-line)}
-.dash .dash-mcol i.is-on{box-shadow:none; background:color-mix(in srgb, var(--dash-accent) calc(45% + var(--dash-k) * 6%), var(--dash-desk-2))}
-.dash .dash-mcol.is-peak i.is-on{box-shadow:0 0 6px color-mix(in srgb, var(--dash-accent) 60%, transparent)}
 /* 印字頭:分析中在紙頂來回(只表示在跑,不畫點陣、不顯示進度);analyst 完成時把點陣張力一欄一欄印一次 */
+.dash .side-curve{position:relative; display:grid; grid-template-columns:repeat(var(--dash-cols), minmax(0, 1fr)); padding:0 4px}
+.dash .side-line{position:absolute; left:4px; right:4px; top:0; width:calc(100% - 8px); height:60px; overflow:visible; color:var(--dash-ink); pointer-events:none}
+.dash .side-line polyline{fill:none; stroke:currentColor; stroke-width:1.4; stroke-linejoin:round; stroke-linecap:round; vector-effect:non-scaling-stroke}
+.dash .dash-mcol{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; height:92px; padding:0 0 4px; border:0; border-radius:6px; background:none; cursor:pointer}
+.dash .dash-mcol:hover:not(:disabled), .dash .dash-mcol:focus-visible{background:color-mix(in srgb, var(--dash-ink-2) 10%, transparent)}
+.dash .dash-mcol:disabled{cursor:default}
+.dash .dash-mcol.is-peak .side-n{color:var(--dash-ink); font-weight:800}
+.dash .side-wave{width:14px; height:4px; overflow:visible; color:var(--dash-paper-ink-2)}
+.dash .side-wave path{fill:none; stroke:currentColor; stroke-width:1; stroke-linecap:round}
+.dash .side-ob:disabled{opacity:.45; cursor:default}
+.dash .side-ob:disabled:hover{background:none}
 .dash .side-ob{display:grid; gap:2px; width:100%; margin:0 0 4px; padding:10px 12px; border:0; border-radius:10px; background:none; text-align:left; cursor:pointer; color:inherit; font:inherit}
 .dash .side-ob:hover{background:var(--dash-desk-2)}
 .dash .side-ob[aria-pressed="true"]{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .side-ob-name{font-family:var(--serif)}
 .dash .side-ob-sub{font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .side-who{width:6px; height:6px; border-radius:50%; margin-top:2px}
 
 /* ── 設定頁 ── */
 .dash .dash-settings{max-width:40em; margin:0 auto; padding:8px 24px 80px}

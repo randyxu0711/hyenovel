@@ -40,19 +40,26 @@ describe("結構圖分頁", () => {
     expect(container.textContent).toContain("這些觀察已經沒有根據");
     expect(screen.getByText("海")).toBeTruthy();
   });
-  it("lost 為 0 → 引文都還找得到", () => {
-    mount(map({ drift: { total: 3, lost: 0, orphaned: [] } }));
-    expect(screen.getByText("引文在這版都還找得到")).toBeTruthy();
+  it("lost 為 0 → 不出聲", () => {
+    const { container } = mount(map({ drift: { total: 3, lost: 0, orphaned: [] } }));
+    expect(container.querySelector(".side-old")).toBeNull();
   });
-  it("每個 beat 一欄、每欄 10 顆點,亮的 = round(intensity×10);最高那欄 is-peak;段號用點陣字", () => {
+  it("每個 beat 一欄熱區;折線一個節拍一點,高 = intensity;最高那欄 is-peak;段號用點陣字", () => {
     const { container } = mount(map());
     const cs = cols(container);
     expect(cs).toHaveLength(8);
-    for (const c of cs) expect(c.querySelectorAll("i")).toHaveLength(10);
-    expect(cs[1].querySelectorAll("i.is-on")).toHaveLength(7);
-    expect(cs[3].querySelectorAll("i.is-on")).toHaveLength(0);
+    const pts = container.querySelector(".side-line polyline")!.getAttribute("points")!.split(" ").map(p => p.split(",").map(Number));
+    expect(pts).toHaveLength(8);
+    expect(pts.map(p => p[0])).toEqual([...pts.map(p => p[0])].sort((a, b) => a - b));
+    expect(pts[4][1]).toBeLessThan(pts[1][1]);
+    expect(pts[3][1]).toBeGreaterThan(pts[0][1]);
+    expect(cs[1].getAttribute("aria-label")).toBe("第 2 段,張力 7");
     expect(cs.filter(c => c.classList.contains("is-peak"))).toEqual([cs[4]]);
     expect(cs[0].querySelector(".dash-dm")!.textContent).toBe("1");
+  });
+  it("只有一個節拍也畫得出線", () => {
+    const { container } = mount(map({ beats: [beats[0]] }));
+    expect(container.querySelector(".side-line polyline")!.getAttribute("points")!.split(" ")).toHaveLength(2);
   });
   it("點一欄 → 稿捲到那個節拍", () => {
     const { container, on } = mount(map());
@@ -63,20 +70,27 @@ describe("結構圖分頁", () => {
     const { container } = mount(map({ beats: [{ id: "b0", label: "x", intensity: 0.5, span: null }] }));
     expect(cols(container)[0].disabled).toBe(true);
   });
-  it("欄底色點 = 最後一個落在節拍範圍內的痕跡的角色", () => {
+  it("陪讀者提過的段:段號下畫波浪線(跟稿上同一種記號),記最後一個痕跡的角色", () => {
     const marks: Mark[] = [
       { start: 11, end: 13, character: "hyena", id: "a" },
       { start: 12, end: 14, character: "buffalo", id: "b" },
     ];
     const { container } = mount(map(), marks);
     const cs = cols(container);
-    expect(cs[1].querySelector<HTMLElement>(".side-who")!.dataset.who).toBe("buffalo");
-    expect(cs[0].querySelector(".side-who")).toBeNull();
+    expect(cs[1].querySelector<SVGElement>(".side-wave")!.dataset.who).toBe("buffalo");
+    expect(cs[0].querySelector(".side-wave")).toBeNull();
   });
   it("意象列出標題與出現在哪幾段", () => {
     mount(map({ motifs: [{ id: "m1", label: "鞋", spans: [{ quote: "a", start: 41, end: 42 }, { quote: "b", start: 2, end: 3 }, { quote: "c", start: null, end: null }] }] }));
     expect(screen.getByRole("button", { name: /鞋/ })).toBeTruthy();
     expect(screen.getByText("第 1、5 段")).toBeTruthy();
+  });
+  it("這版對不到的意象:變淡不能按,不寫說明字", () => {
+    mount(map({ motifs: [{ id: "m1", label: "鞋", spans: [{ quote: "a", start: null, end: null }] }] }));
+    const b = screen.getByRole("button", { name: /鞋/ }) as HTMLButtonElement;
+    expect(b.disabled).toBe(true);
+    expect(b.textContent).toBe("鞋");
+    expect(b.title).toBe("這一版的稿上對不到");
   });
   it("意象是切換鈕:按了選它、選中的再按 → 取消", () => {
     const shoe = { id: "m1", label: "鞋", spans: [{ quote: "a", start: 2, end: 3 }] };
