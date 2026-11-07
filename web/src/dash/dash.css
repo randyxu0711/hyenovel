@@ -12,10 +12,11 @@
   --dash-sh-float:0 1px 0 var(--dash-sheen) inset, 0 8px 24px color-mix(in srgb, var(--dash-ink) 16%, transparent);
   --dash-shelf:56px;
   position:fixed; inset:0; display:grid; grid-template-columns:var(--dash-shelf) 1fr;
-  background-color:var(--dash-desk); background-image:var(--dash-spots,none); background-size:480px 480px;
+  background-color:var(--dash-desk);
   color:var(--dash-ink);
   font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
 }
+.dash[data-view="home"]{background-image:var(--dash-spots,none); background-size:480px 480px}
 /* 點陣字:只用在品牌、版本、時間、段號;要讀的字不用 */
 .dash-dm{font-family:var(--dash-dot-font); font-weight:800; letter-spacing:.06em; font-variant-numeric:tabular-nums}
 /* 紙:稿子本體 */
