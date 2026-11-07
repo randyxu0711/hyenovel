@@ -31,8 +31,10 @@ const PATHS = {
   memory: <path d="M5 2.5h8v13l-4-3-4 3z" />,
   copy: <><rect x="6.5" y="6.5" width="8.5" height="8.5" rx="1.5" /><path d="M11.5 3.5H4.5A1.5 1.5 0 0 0 3 5v6.5" /></>,
   edit: <path d="M3.5 14.5l.7-3L12 3.7a1.4 1.4 0 0 1 2 0l.3.3a1.4 1.4 0 0 1 0 2l-7.8 7.8z" />,
+  note: <><path d="M4 2.5h10v13H4z" /><path d="M6.5 6h5M6.5 9h5M6.5 12h3" /></>,
+  curve: <path d="M2.5 13.5l3.5-4.5 3 2.5 3.5-7 3 3.5" />,
   flag: <><path d="M4.5 16V2.5" /><path d="M4.5 3h9l-2.2 3.2 2.2 3.3h-9" /></>,
-  sheet2:<><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
+  sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

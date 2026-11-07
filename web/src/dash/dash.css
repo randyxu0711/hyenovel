@@ -232,7 +232,8 @@
 .dash .side{display:flex; flex-direction:column; height:100%; min-height:0}
 .dash .side-head{display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:54px; padding:8px 20px; box-sizing:border-box}
 .dash .side-tabs{display:flex; gap:2px; padding:2px; border-radius:8px; background:var(--dash-desk-2)}
-.dash .side-tabs button{padding:2px 12px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .side-tabs button{display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .side-tabs button[data-empty="true"]:not([aria-selected="true"]){opacity:.45}
 .dash .side-tabs button[aria-selected="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .side-panel{flex:1; min-height:0; display:flex; flex-direction:column}
 .dash .side-panel[hidden]{display:none}

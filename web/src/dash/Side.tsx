@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import type { Turn, WorkMap } from "./api";
 import ChartTab from "./ChartTab";
 import { useT, type MsgKey } from "./i18n";
+import Icon, { type IconName } from "./Icon";
 import NotesTab from "./NotesTab";
 import { markId, type Mark } from "./Paper";
 import Talk from "./Talk";
@@ -9,7 +10,7 @@ import type { Characters } from "./useCharacters";
 import type { Talk as TalkState } from "./useTalk";
 
 type Tab = "talk" | "notes" | "chart";
-const TABS: [Tab, MsgKey][] = [["talk", "side.talk"], ["notes", "side.notes"], ["chart", "side.chart"]];
+const TABS: [Tab, MsgKey, IconName][] = [["talk", "side.talk", "talk"], ["notes", "side.notes", "note"], ["chart", "side.chart", "curve"]];
 
 /** 每則 assistant 的引文(這一版找得到的)→ 該角色在稿上的痕跡;作者帶的引文不畫。同一位置取最後一筆。 */
 export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
@@ -49,9 +50,11 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
     <div className="side">
       <header className="side-head">
         <div className="side-tabs" role="tablist" aria-label={t("side.tabs")}>
-          {TABS.map(([k, label]) => (
+          {TABS.map(([k, label, icon]) => (
             <button key={k} type="button" role="tab" id={`side-tab-${k}`} aria-controls={`side-panel-${k}`}
-              aria-selected={tab === k} onClick={() => setTab(k)}>{t(label)}</button>
+              aria-selected={tab === k} aria-label={t(label)} title={tab === k ? undefined : t(label)}
+              data-empty={k === "notes" ? !!map && !map.notes : k === "chart" ? !!map && map.analysis_version === null : undefined}
+              onClick={() => setTab(k)}><Icon name={icon} />{tab === k && <span>{t(label)}</span>}</button>
           ))}
         </div>
       </header>

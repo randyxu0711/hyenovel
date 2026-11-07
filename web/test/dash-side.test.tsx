@@ -30,6 +30,18 @@ beforeEach(() => { setLang("zh-Hant"); localStorage.clear(); mapFails = false; w
 afterEach(() => vi.unstubAllGlobals());
 
 describe("右欄分頁", () => {
+  it("分頁是圖示,只有選中的露字;沒內容的分頁標成空", async () => {
+    mount();
+    await screen.findByText("內文一行");
+    expect(tab("對話").textContent).toBe("對話");
+    expect(tab("筆記").textContent).toBe("");
+    expect(tab("筆記").querySelector("svg.ico")).not.toBeNull();
+    await vi.waitFor(() => expect(tab("筆記").dataset.empty).toBe("true"));
+    expect(tab("結構圖").dataset.empty).toBe("false");
+    fireEvent.click(tab("筆記"));
+    expect(tab("筆記").textContent).toBe("筆記");
+    expect(tab("對話").textContent).toBe("");
+  });
   it("三個分頁;切到筆記、結構圖時稿仍在", async () => {
     const { container } = mount();
     await screen.findByText("內文一行");
