@@ -117,7 +117,8 @@ describe("Reader(稿窗格)", () => {
   it("未分析的作品也能讀", async () => {
     await mount(detail({ state: "none", version: 1, versions: [1] }));
     expect(screen.getByText("第二段很長。")).toBeTruthy();
-    expect(screen.getByText("還沒分析")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "分析" })).toBeTruthy();
+    expect(document.querySelector(".paper-state")).toBeNull();
   });
   it("選一段 → 帶進對話,送出引用", async () => {
     const { onQuote } = await mount(detail());
@@ -143,7 +144,7 @@ describe("Reader(稿窗格)", () => {
     render(tree(vi.fn()));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "找不到這篇作品。");
   });
-  it.each([["stopped", "分析停住了"], ["notes-stopped", "筆記停住了"]])("狀態 %s:說停住了,附續跑(只續跑,不重開)", async (state, line) => {
+  it.each([["stopped", "停住了"], ["notes-stopped", "筆記停住了"]])("狀態 %s:說停住了,附續跑(只續跑,不重開)", async (state, line) => {
     const { f } = await mount(detail({ state }));
     expect(screen.getByText(line)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "續跑" }));
@@ -175,20 +176,15 @@ describe("Reader(稿窗格)", () => {
 
 describe("stateText", () => {
   it.each([
-    ["running", false, "分析中"],
-    ["notes-running", false, "分析好了,筆記還在寫"],
-    ["notes-stopped", false, "筆記停住了"],
-    ["ready", true, "分析和筆記都好了"],
-    ["ready", false, "分析好了"],
-    ["stopped", false, "分析停住了"],
-    ["stale", false, "新版還沒分析"],
-    ["none", false, "還沒分析"],
-  ])("%s(notes_ready=%s)→ %s", (state, notes, text) => {
-    expect(translate("zh-Hant", stateText(state, notes))).toBe(text);
+    ["running", "分析中"],
+    ["notes-running", "筆記還在寫"],
+    ["notes-stopped", "筆記停住了"],
+    ["stopped", "停住了"],
+  ])("%s → %s", (state, text) => {
+    expect(translate("zh-Hant", stateText(state)!)).toBe(text);
   });
-  it("兩種語言都有", () => {
-    for (const s of ["running", "notes-running", "notes-stopped", "ready", "stopped", "stale", "none"])
-      expect(translate("en", stateText(s, s === "ready"))).not.toBe(translate("zh-Hant", stateText(s, s === "ready")));
+  it.each(["ready", "stale", "none"])("%s:版本點已經表達,不出字", state => {
+    expect(stateText(state)).toBeNull();
   });
 });
 
@@ -329,12 +325,12 @@ describe("稿頂分析進度", () => {
     expect(running()!.textContent).toContain("觀察中");
     expect(running()!.querySelector(".t")).toBeNull();
   });
-  it.each(["ready", "stopped", "stale"])("%s:照舊狀態字,沒有進度與鉛筆線", async state => {
+  it.each([["ready", false], ["stopped", true], ["stale", false]])("%s:沒有進度與鉛筆線;只有停住才出狀態字", async (state, says) => {
     mount(work({ state, job_id: null }));
     await screen.findByText("內文");
     expect(running()).toBeNull();
     expect(document.querySelector(".paper-top .paper-track")).toBeNull();
-    expect(screen.getByRole("status").textContent).not.toBe("");
+    expect(!!document.querySelector(".paper-state")).toBe(says);
   });
 });
 
@@ -381,34 +377,35 @@ describe("交新版", () => {
   const pick = (c: HTMLElement) => fireEvent.change(c.querySelector('input[type="file"]')!, { target: { files: [file()] } });
   afterEach(() => vi.restoreAllMocks());
 
-  it("頂列有交新版鍵;選檔後出現「交成第 3 版」交稿條", async () => {
+  it("頂列有交新版鍵;選檔後出現「v3」交稿條", async () => {
     const { container } = await mountNew();
     expect(screen.getByRole("button", { name: "交新版" })).toBeTruthy();
     pick(container);
-    expect(await screen.findByText("交成第 3 版")).toBeTruthy();
+    expect(await screen.findByText("v3")).toBeTruthy();
     expect(api.extract).toHaveBeenCalled();
     expect(screen.getByText("4 字")).toBeTruthy();
-    expect(screen.getByText("第一次分析,還沒有預估。")).toBeTruthy();
+    expect(screen.queryByText(/預估/)).toBeNull();
+    expect(screen.getByText("會花額度")).toBeTruthy();
   });
   it("在 ?v=1 開交稿條也是第 3 版", async () => {
     const { container } = await mountNew({}, "/w/d1?v=1");
     await screen.findByText("第 1 版的字。");
     pick(container);
-    expect(await screen.findByText("交成第 3 版")).toBeTruthy();
+    expect(await screen.findByText("v3")).toBeTruthy();
   });
   it("交出去並分析 → submit 帶 slug、startJob、onNewVersion 收到 analyzing:true、交稿條消失", async () => {
     const { container, onNewVersion } = await mountNew();
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: true }));
     expect(api.submit).toHaveBeenCalledWith("改過的稿", undefined, "d1");
     expect(api.startJob).toHaveBeenCalledWith("d1");
-    expect(screen.queryByText("交成第 3 版")).toBeNull();
+    expect(screen.queryByText("v3")).toBeNull();
   });
   it("只存版 → 不開 job,onNewVersion 收到 analyzing:false", async () => {
     const { container, onNewVersion } = await mountNew();
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
     expect(api.startJob).not.toHaveBeenCalled();
   });
@@ -416,16 +413,16 @@ describe("交新版", () => {
     const { container, onNewVersion } = await mountNew();
     vi.mocked(api.submit).mockRejectedValue(new DashError(413, "story-too-long"));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByText("交成第 3 版")).toBeTruthy();
+    expect(screen.getByText("v3")).toBeTruthy();
     expect(onNewVersion).not.toHaveBeenCalled();
   });
   it("跟最新版一字不差 → onNewVersion 收到 same:true 與那一版的號碼", async () => {
     const { container, onNewVersion } = await mountNew();
     vi.mocked(api.submit).mockResolvedValue({ slug: "d1", title: "海", version: 2, new_version: false, reused: true });
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: true, version: 2, analyzing: false }));
   });
   it("確認還在跑時換了作品 → 結果回來不再通知 onNewVersion", async () => {
@@ -443,7 +440,7 @@ describe("交新版", () => {
     const { container, rerender } = render(el("d1"));
     await screen.findByRole("heading", { name: "海" });
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
     await waitFor(() => expect(api.submit).toHaveBeenCalled());
     rerender(el("d2"));
     done({ slug: "d1", title: "海", version: 3, new_version: true, reused: false });
@@ -455,24 +452,24 @@ describe("交新版", () => {
     vi.mocked(api.extract).mockResolvedValue({ filename: "a.md", text: "  \n ", chars: 3 });
     pick(container);
     expect((await screen.findByRole("alert")).textContent).toBe("稿子是空的。");
-    expect(screen.getByRole("button", { name: "只存版,先不分析" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "只存" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "分析" })).toHaveProperty("disabled", true);
   });
   it("新版存下了但開分析失敗 → 照樣回最新版(analyzing:false),頂列顯示錯誤", async () => {
     const { container, onNewVersion } = await mountNew();
     vi.mocked(api.startJob).mockRejectedValue(new DashError(503, "den-down"));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.queryByText("交成第 3 版")).toBeNull();
+    expect(screen.queryByText("v3")).toBeNull();
   });
   it("送出中:取消 disabled、按的那顆說送出中、選檔不換稿", async () => {
     const { container, onNewVersion } = await mountNew();
     let done!: (v: never) => void;
     vi.mocked(api.submit).mockImplementation(() => new Promise(r => { done = r as never; }));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
     expect(await screen.findByRole("button", { name: "送出中……" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "取消" })).toHaveProperty("disabled", true);
     pick(container);
@@ -484,33 +481,33 @@ describe("交新版", () => {
     const { container } = await mountNew();
     pick(container);
     fireEvent.click(await screen.findByRole("button", { name: "取消" }));
-    expect(screen.queryByText("交成第 3 版")).toBeNull();
+    expect(screen.queryByText("v3")).toBeNull();
   });
   it("把檔拖到畫面任何地方 → 出現交稿條", async () => {
     await mountNew();
     fireEvent.drop(window, { dataTransfer: { types: ["Files"], files: [file()] } });
-    expect(await screen.findByText("交成第 3 版")).toBeTruthy();
+    expect(await screen.findByText("v3")).toBeTruthy();
   });
-  it("state=stale 的最新版有「分析這版」;按下 startJob(slug)、重抓並通知", async () => {
+  it("state=stale 的最新版有「分析」;按下 startJob(slug)、重抓並通知", async () => {
     const { onFinished } = await mountNew({ state: "stale" });
-    fireEvent.click(screen.getByRole("button", { name: "分析這版" }));
+    fireEvent.click(screen.getByRole("button", { name: "分析" }));
     await waitFor(() => expect(onFinished).toHaveBeenCalled());
     expect(api.startJob).toHaveBeenCalledWith("d1");
     await waitFor(() => expect(api.work).toHaveBeenCalledTimes(2));
   });
-  it("分析這版失敗 → 顯示錯誤", async () => {
+  it("分析失敗 → 顯示錯誤", async () => {
     await mountNew({ state: "none" });
     vi.mocked(api.startJob).mockRejectedValue(new DashError(409, "busy"));
-    fireEvent.click(screen.getByRole("button", { name: "分析這版" }));
+    fireEvent.click(screen.getByRole("button", { name: "分析" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
   });
-  it("state=ready 時沒有「分析這版」", async () => {
+  it("state=ready 時沒有「分析」", async () => {
     await mountNew({ state: "ready" });
-    expect(screen.queryByRole("button", { name: "分析這版" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "分析" })).toBeNull();
   });
-  it("看 ?v=1 時沒有「分析這版」", async () => {
+  it("看 ?v=1 時沒有「分析」", async () => {
     await mountNew({ state: "stale" }, "/w/d1?v=1");
     await screen.findByText("第 1 版的字。");
-    expect(screen.queryByRole("button", { name: "分析這版" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "分析" })).toBeNull();
   });
 });

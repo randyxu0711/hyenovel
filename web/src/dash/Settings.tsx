@@ -24,7 +24,7 @@ const SIZES: { size: PaperSize; key: "set.size.s" | "set.size.m" | "set.size.l" 
 ];
 const LANGS: { lang: Lang; label: string }[] = [{ lang: "zh-Hant", label: "繁體中文" }, { lang: "en", label: "English" }];
 
-/** 舊討論封存:唯讀。先數量,打開後列出,點一局看逐字;沒有輸入框。 */
+/** 舊討論封存:唯讀。直接列出,點一局看逐字;沒有輸入框。 */
 function Archive() {
   const t = useT();
   const lang = useLang();
@@ -32,7 +32,6 @@ function Archive() {
   const { mode } = useThemeState();
   const [rows, setRows] = useState<RecentSession[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   useEffect(() => {
     let live = true;
@@ -45,31 +44,24 @@ function Archive() {
   const who = speakerChanges(detail?.turns ?? [], chars.byId);
   return (
     <>
-      {rows && <p>{t("set.legacy", { n: rows.length })}</p>}
       {err && <p role="alert">{t(errorMessage(err))}</p>}
-      {rows && rows.length > 0 && (
-        <button type="button" className="dash-set-opt" aria-expanded={open}
-          onClick={() => { setOpen(o => !o); setDetail(null); }}>
-          {t(open ? "set.closeArchive" : "set.openArchive")}
-        </button>
-      )}
-      {open && !detail && (
+      {rows && !detail && (
         <div className="dash-set-archive">
-          <p>{t("set.archiveNote")}</p>
+          <p className="dash-set-count">{t("set.legacy", { n: rows.length })}</p>
           <ul>
-            {rows!.map(s => (
+            {rows.map(s => (
               <li key={s.session}>
-                <button type="button" className="dash-set-opt" onClick={() => void show(s.session)}>
-                  <b>{s.title}</b> <span>{s.preview}</span>
+                <button type="button" onClick={() => void show(s.session)}>
+                  <b>{s.title}</b><span>{s.preview}</span>
                 </button>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {open && detail && (
+      {detail && (
         <div className="dash-set-log">
-          <button type="button" className="dash-set-opt" onClick={() => setDetail(null)}>{t("set.back")}</button>
+          <button type="button" className="ib" aria-label={t("set.back")} title={t("set.back")} onClick={() => setDetail(null)}><Icon name="back" /></button>
           <h3>{detail.title}</h3>
           {detail.turns.map((turn, i) => {
             if (turn.role !== "assistant") return <div key={i} className="chat-me"><p>{turn.text}</p></div>;
@@ -115,10 +107,10 @@ export function SettingsNav({ section, onPick, back }: {
 }
 
 /** 一列:左標籤、右控制。 */
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="set-row">
-      <span className="set-lab">{label}{hint && <span className="set-hint">{hint}</span>}</span>
+      <span className="set-lab">{label}</span>
       <div className="set-ctl">{children}</div>
     </div>
   );
@@ -132,7 +124,7 @@ const FLOWS = [
 function Look() {
   const t = useT();
   const lang = useLang();
-  const { themes, theme, pref, mode } = useThemeState();
+  const { themes, theme, pref } = useThemeState();
   const [size, setSize] = useState<PaperSize>(loadPaperSize);
   const flow = usePaperFlow();
   const pickSize = (s: PaperSize) => {
@@ -151,13 +143,20 @@ function Look() {
           </div>
         </Row>
         <Row label={t("set.palette")}>
-          {themes.map(th => (
-            <button key={th.id} type="button" className="dash-set-opt" aria-pressed={theme?.id === th.id}
-              onClick={() => selectTheme(th.id)}>
-              <span className="dash-set-chip" style={{ background: th[mode].paper }} aria-hidden="true" />
-              {localized(th.name, lang)}
-            </button>
-          ))}
+          <div className="set-seg" role="group" aria-label={t("set.palette")}>
+            {themes.map(th => (
+              <button key={th.id} type="button" className="set-swatch" aria-pressed={theme?.id === th.id}
+                aria-label={localized(th.name, lang)} title={localized(th.name, lang)} onClick={() => selectTheme(th.id)}>
+                <span className="set-scene" aria-hidden="true">
+                  {(["light", "dark"] as const).map(m => (
+                    <span key={m} style={{ background: th[m].desk }}>
+                      <i style={{ background: th[m].paper }}><b style={{ background: th[m].ink }} /><b style={{ background: th[m].accent }} /></i>
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
         </Row>
         <Row label={t("set.lang")}>
           <div className="set-seg" role="group" aria-label={t("set.lang")}>
@@ -166,7 +165,7 @@ function Look() {
             ))}
           </div>
         </Row>
-        <Row label={t("set.flow")} hint={t("set.flowHint")}>
+        <Row label={t("set.flow")}>
           <div className="set-seg" role="group" aria-label={t("set.flow")}>
             {FLOWS.map(f => (
               <button key={f.flow} type="button" aria-pressed={flow === f.flow} aria-label={t(f.key)} title={t(f.key)}
@@ -177,14 +176,12 @@ function Look() {
         <Row label={t("set.paper")}>
           <div className="set-seg" role="group" aria-label={t("set.paper")}>
             {SIZES.map(s => (
-              <button key={s.size} type="button" aria-pressed={size === s.size} onClick={() => pickSize(s.size)}>{t(s.key)}</button>
+              <button key={s.size} type="button" aria-pressed={size === s.size} aria-label={t(s.key)} title={t(s.key)}
+                onClick={() => pickSize(s.size)}><span className="set-glyph" data-size={s.size} aria-hidden="true">字</span></button>
             ))}
           </div>
         </Row>
       </div>
-      <figure className="set-prev" aria-label={t("set.preview")}>
-        <p className="set-mini" data-size={size}>{t("set.sample")}</p>
-      </figure>
     </div>
   );
 }
@@ -248,7 +245,7 @@ function Companions() {
   return (
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
-      <div className="char-cards">
+      <div className="char-cards char-lineup">
       {chars.active.map(c => {
         const name = localized(c.name, lang);
         if (editing === c.id) {
@@ -256,14 +253,15 @@ function Companions() {
             onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
         }
         return (
-          <CharacterCard key={c.id} character={c} name={name} on={who === c.id}>
+          <CharacterCard key={c.id} character={c} name={name} on={who === c.id} size={96}>
             <p className="char-line">{localized(c.line, lang)}</p>
             <div className="char-foot">
             <label className="char-default">
               <input type="radio" name="default-companion" checked={who === c.id}
-                aria-label={name} onChange={() => pick(c.id)} />
-              <span className="nc-mark" aria-hidden="true" />{t(who === c.id ? "set.default" : "set.makeDefault")}
+                aria-label={name} title={t("set.makeDefault")} onChange={() => pick(c.id)} />
+              <span className="nc-mark" aria-hidden="true" />{who === c.id && t("set.default")}
             </label>
+            <span className="char-acts">
             <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
               aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
             <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
@@ -276,13 +274,14 @@ function Companions() {
                   onClick={() => archive(c.id)}><Icon name="box" /></button>
               </>
             )}
+            </span>
             </div>
           </CharacterCard>
         );
       })}
       <div className="char-new">
-        <button type="button" onClick={() => setCreating(true)}><Icon name="plus" />{t("set.card.new")}</button>
-        <button type="button" onClick={() => fileInput.current?.click()}><Icon name="up" />{t("set.card.import")}</button>
+        <button type="button" className="char-new-slot" onClick={() => setCreating(true)}><span aria-hidden="true"><Icon name="plus" /></span>{t("set.card.new")}</button>
+        <button type="button" className="ib" aria-label={t("set.card.import")} title={t("set.card.import")} onClick={() => fileInput.current?.click()}><Icon name="up" /></button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t("set.card.import")}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void fromFile(f); }} />
       </div>

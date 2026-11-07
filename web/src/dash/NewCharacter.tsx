@@ -170,8 +170,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
           <div className="nc-formline">
             <input id="nc-form" maxLength={80} autoComplete="off" value={form} aria-describedby="nc-form-hint"
               onChange={e => setForm(e.target.value)} />
-            <button type="button" className="nc-idea" aria-pressed={round !== null}
-              onClick={() => setRound(r => (r === null ? 0 : null))}>{t("nc.noIdea")}</button>
+            <button type="button" className="ib nc-idea" aria-pressed={round !== null} aria-label={t("nc.noIdea")} title={t("nc.noIdea")}
+              onClick={() => setRound(r => (r === null ? 0 : null))}><Icon name="dice" /></button>
           </div>
           <p id="nc-form-hint" className="nc-hint">{t("nc.formHint")}</p>
           {round !== null && (

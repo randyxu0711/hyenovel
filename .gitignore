@@ -24,7 +24,7 @@ stories_bak/
 web/node_modules/
 web/dist/
 # 前端動畫原型(視覺試驗 HTML,dev 直接開;不版控)
-web/public/
+web/public/*.html
 
 # 內部開發文件(設計/現況/計畫)留本地,不進公開 repo
 docs/

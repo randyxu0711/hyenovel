@@ -5,8 +5,11 @@ import { setLang } from "../src/dash/i18n";
 import Reaction from "../src/dash/Reaction";
 
 const STOP = "讓我停下來想", MISREAD = "讀錯了";
-const mount = (initial: { mark: "stopped" | "misread"; comment: string | null } | null = null) =>
-  render(<Reaction slug="s" session="sid" seq={3} initial={initial} onChange={changed} />);
+const mount = (initial: { mark: "stopped" | "misread"; comment: string | null } | null = null) => {
+  const r = render(<Reaction slug="s" session="sid" seq={3} initial={initial} onChange={changed} />);
+  fireEvent.click(screen.getByRole("button", { expanded: false }));
+  return r;
+};
 const flush = () => new Promise(r => setTimeout(r));
 const pressed = (name: string) => screen.getByRole("button", { name }).getAttribute("aria-pressed");
 
@@ -40,17 +43,17 @@ describe("Reaction", () => {
     expect(pressed(STOP)).toBe("false");
     expect(pressed(MISREAD)).toBe("true");
     await waitFor(() => expect(set).toHaveBeenCalledWith("s", "sid", 3, "misread", undefined));
-    expect((screen.getByRole("textbox", { name: "短評" }) as HTMLInputElement).value).toBe("");
+    expect((screen.getByRole("textbox", { name: "補一句" }) as HTMLInputElement).value).toBe("");
   });
 
   it("沒選記號時沒有短評框", () => {
     mount();
-    expect(screen.queryByRole("textbox", { name: "短評" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "補一句" })).toBeNull();
   });
 
   it("Enter 送出短評;注音選字中的 Enter 不送", async () => {
     mount({ mark: "misread", comment: null });
-    const box = screen.getByRole("textbox", { name: "短評" });
+    const box = screen.getByRole("textbox", { name: "補一句" });
     fireEvent.change(box, { target: { value: "不是這樣" } });
     fireEvent.keyDown(box, { key: "Enter", isComposing: true });
     await flush();
@@ -61,7 +64,7 @@ describe("Reaction", () => {
 
   it("失焦送出;內容沒變不重送", async () => {
     mount({ mark: "misread", comment: "同一句" });
-    const box = screen.getByRole("textbox", { name: "短評" });
+    const box = screen.getByRole("textbox", { name: "補一句" });
     fireEvent.blur(box);
     await flush();
     expect(set).not.toHaveBeenCalled();
@@ -112,6 +115,53 @@ describe("Reaction", () => {
     await waitFor(() => expect(set).toHaveBeenLastCalledWith("s", "sid", 3, "misread", undefined));
     expect(pressed(MISREAD)).toBe("true");
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("Reaction 標記鈕", () => {
+  const bare = (initial: { mark: "stopped" | "misread"; comment: string | null } | null = null) =>
+    render(<Reaction slug="s" session="sid" seq={3} initial={initial} onChange={changed} />);
+
+  it("沒標過:只有一顆「標記這則」,選項收著", () => {
+    bare();
+    expect(screen.getByRole("button", { name: "標記這則" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: STOP })).toBeNull();
+  });
+
+  it("打開後選項露字,並說明這局不會變", () => {
+    bare();
+    fireEvent.click(screen.getByRole("button", { name: "標記這則" }));
+    expect(screen.getByRole("button", { name: STOP }).textContent).toBe(STOP);
+    expect(screen.getByRole("button", { name: MISREAD }).textContent).toBe(MISREAD);
+    expect(screen.getByText("只留著之後調陪讀者用,這局不會變。")).toBeTruthy();
+  });
+
+  it("標過的回覆露出記號膠囊,點它重開選單", () => {
+    bare({ mark: "stopped", comment: null });
+    const pill = screen.getByRole("button", { name: "標記:停下來想" });
+    expect(pill.textContent).toBe("停下來想");
+    fireEvent.click(pill);
+    expect(pressed(STOP)).toBe("true");
+  });
+
+  it("Esc 關選單、焦點回到標記鈕", () => {
+    bare();
+    const key = screen.getByRole("button", { name: "標記這則" });
+    fireEvent.click(key);
+    fireEvent.keyDown(screen.getByRole("button", { name: STOP }), { key: "Escape" });
+    expect(screen.queryByRole("button", { name: STOP })).toBeNull();
+    expect(document.activeElement).toBe(key);
+  });
+
+  it("點選單外面關選單,寫到一半的補充照存", async () => {
+    bare({ mark: "misread", comment: null });
+    fireEvent.click(screen.getByRole("button", { name: "標記:讀錯了" }));
+    const box = screen.getByRole("textbox", { name: "補一句" });
+    box.focus();
+    fireEvent.change(box, { target: { value: "不是這樣" } });
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(set).toHaveBeenCalledWith("s", "sid", 3, "misread", "不是這樣"));
+    expect(screen.queryByRole("textbox", { name: "補一句" })).toBeNull();
   });
 });
 

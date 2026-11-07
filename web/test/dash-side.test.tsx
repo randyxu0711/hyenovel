@@ -30,6 +30,18 @@ beforeEach(() => { setLang("zh-Hant"); localStorage.clear(); mapFails = false; w
 afterEach(() => vi.unstubAllGlobals());
 
 describe("右欄分頁", () => {
+  it("分頁是圖示,只有選中的露字;沒內容的分頁標成空", async () => {
+    mount();
+    await screen.findByText("內文一行");
+    expect(tab("對話").textContent).toBe("對話");
+    expect(tab("筆記").textContent).toBe("");
+    expect(tab("筆記").querySelector("svg.ico")).not.toBeNull();
+    await vi.waitFor(() => expect(tab("筆記").dataset.empty).toBe("true"));
+    expect(tab("結構圖").dataset.empty).toBe("false");
+    fireEvent.click(tab("筆記"));
+    expect(tab("筆記").textContent).toBe("筆記");
+    expect(tab("對話").textContent).toBe("");
+  });
   it("三個分頁;切到筆記、結構圖時稿仍在", async () => {
     const { container } = mount();
     await screen.findByText("內文一行");
@@ -37,7 +49,7 @@ describe("右欄分頁", () => {
     fireEvent.click(tab("筆記"));
     expect(tab("筆記").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("內文一行")).toBeTruthy();
-    expect(await screen.findByText("這篇是舊版流程讀的,沒有筆記。")).toBeTruthy();
+    expect(await screen.findByText("沒有筆記")).toBeTruthy();
     fireEvent.click(tab("結構圖"));
     expect(screen.getByText("內文一行")).toBeTruthy();
     expect(container.querySelectorAll("button.dash-mcol")).toHaveLength(1);
@@ -58,9 +70,9 @@ describe("右欄分頁", () => {
     mount();
     await screen.findByText("內文一行");
     fireEvent.click(tab("筆記"));
-    expect(await screen.findByText("出了點狀況,請再試一次。")).toBeTruthy();
+    expect(await screen.findByText("沒成功,再試一次。")).toBeTruthy();
     fireEvent.click(tab("結構圖"));
-    expect(screen.getByText("出了點狀況,請再試一次。")).toBeTruthy();
+    expect(screen.getByText("沒成功,再試一次。")).toBeTruthy();
     expect(screen.queryByText("載入中……")).toBeNull();
   });
   it("切走對話時對話仍掛著(草稿不丟)", async () => {

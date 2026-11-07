@@ -43,7 +43,7 @@ function mount() {
   render(tree);
 }
 const box = () => screen.findByRole("textbox", { name: "貼上或拖進一篇稿" });
-const confirmBtn = () => screen.queryByRole("button", { name: /交稿並開始分析/ });
+const confirmBtn = () => screen.queryByRole("button", { name: "分析" });
 
 beforeEach(() => {
   setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; calls = [];
@@ -113,10 +113,10 @@ describe("進門只有一張紙", () => {
 
 describe("沒有作品", () => {
   beforeEach(() => { works = []; });
-  it("紙上方多一行「拖一篇稿進來」", async () => {
+  it("紙上方不多一句提示(placeholder 已經說了)", async () => {
     mount();
-    const line = await screen.findByText("拖一篇稿進來");
-    expect(line.closest(".home-first")!.querySelector("svg.ico")).not.toBeNull();
+    await box();
+    expect(document.querySelector(".home-first")).toBeNull();
   });
   it("拖 .md 檔:原地出現預估與「交稿」確認鈕,確認後打 /api/stories 並導到新作品", async () => {
     mount();
@@ -124,8 +124,9 @@ describe("沒有作品", () => {
     const home = document.querySelector(".home")!;
     fireEvent.drop(home, { dataTransfer: { files: [new File(["x"], "海.md")] } });
     expect(await screen.findByText("4 字")).toBeTruthy();
-    expect(await screen.findByText("第一次分析,還沒有預估。")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /交稿並開始分析/ }));
+    expect(screen.queryByText(/預估/)).toBeNull();
+    expect(screen.getByText("會花額度")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "分析" }));
     await waitFor(() => expect(calls.some(c => c.url === "/api/stories")).toBe(true));
     expect(calls.find(c => c.url === "/api/stories")!.body).toMatchObject({ text: "檔案內容", title: "海" });
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d9"));
@@ -137,7 +138,7 @@ describe("沒有作品", () => {
     expect(confirmBtn()).toBeNull();
     fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(2001) } });
     expect(await screen.findByText("2001 字")).toBeTruthy();
-    expect(await screen.findByText("預估約 5 分鐘")).toBeTruthy();
+    expect(await screen.findByText("約 5 分")).toBeTruthy();
     expect(document.querySelector(".home-draft.composer")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(await box()).toBeTruthy();
@@ -145,18 +146,16 @@ describe("沒有作品", () => {
 });
 
 describe("作品清單還沒到 / 抓不到", () => {
-  it("載入中:說載入中,不出「拖一篇稿進來」", async () => {
+  it("載入中:說載入中", async () => {
     worksFetch = () => new Promise<Response>(() => {});
     mount();
     await box();
     expect(screen.getByText("載入中……")).toBeTruthy();
-    expect(screen.queryByText("拖一篇稿進來")).toBeNull();
   });
-  it("抓失敗:顯示錯誤,不出「拖一篇稿進來」", async () => {
+  it("抓失敗:顯示錯誤", async () => {
     worksFetch = async () => { throw new TypeError("down"); };
     mount();
     expect(await screen.findByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toBe("連不上本機的 den,請確認它有在跑。");
-    expect(screen.queryByText("拖一篇稿進來")).toBeNull();
   });
 });

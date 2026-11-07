@@ -31,9 +31,12 @@ function mount(m: WorkMap | null, state = "ready", on = vi.fn(), error: string |
 beforeEach(() => setLang("zh-Hant"));
 
 describe("筆記分頁", () => {
-  it("開頭說是冷讀者讀完第 N 版留下的、陪讀者看不到;各點有類型、標題、說明、問題", () => {
+  it("開頭只標版本與「陪讀者看不到」;各點有類型、標題、說明、問題", () => {
     mount(map({ notes }));
-    expect(screen.getByText("冷讀者讀完第 2 版留下的筆記。陪讀者看不到這些。")).toBeTruthy();
+    const meta = document.querySelector(".notes-meta")!;
+    expect(meta.querySelector(".dash-dm")!.textContent).toBe("v2");
+    expect(meta.getAttribute("title")).toBe("陪讀者看不到這些筆記");
+    expect(document.body.textContent).not.toContain("冷讀者");
     expect(screen.getByRole("heading", { name: "鑰匙突然出現" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "泥的溫度" })).toBeTruthy();
     expect(screen.getByText("卡住的")).toBeTruthy();
@@ -54,7 +57,7 @@ describe("筆記分頁", () => {
   it("這版對不到的引文是灰的、有說明,點了不跳", () => {
     const on = mount(map({ notes }));
     const b = screen.getByRole("button", { name: "「泥是溫的」" });
-    expect(b.getAttribute("title")).toBe("這句在第 2 版找不到");
+    expect(b.getAttribute("title")).toBe("v2 沒有這句");
     fireEvent.click(b);
     expect(on).not.toHaveBeenCalled();
   });
@@ -63,8 +66,8 @@ describe("筆記分頁", () => {
     ["running", "筆記還在寫。"],
     ["notes-stopped", "筆記停住了。"],
     ["stopped", "筆記停住了。"],
-    ["ready", "這篇是舊版流程讀的,沒有筆記。"],
-    ["none", "還沒分析,所以還沒有筆記。"],
+    ["ready", "沒有筆記"],
+    ["none", "還沒分析"],
   ])("沒有筆記、作品 %s → %s", (state, text) => {
     mount(map(), state);
     expect(screen.getByText(text)).toBeTruthy();

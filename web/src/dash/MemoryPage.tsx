@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, DashError, type Memory, type MemoryList, type MemoryScope, type Work } from "./api";
 import { cpLength } from "./cp";
 import { errorMessage, useT } from "./i18n";
+import Icon from "./Icon";
 import { MAX_CHAT } from "./useTalk";
 
 type Chain = { live: Memory | null; rows: Memory[] };
@@ -47,14 +48,16 @@ function Row({ chain, act }: { chain: Chain; act: Act }) {
         : <span className="dash-mem-source">{t("memory.typed")}</span>}
       <div className="dash-mem-bar">
         {editing === null
-          ? <button type="button" className="dash-set-opt" onClick={() => setEditing(m.text)}>{t("memory.edit")}</button>
+          ? <button type="button" className="ib" aria-label={t("memory.edit")} title={t("memory.edit")} onClick={() => setEditing(m.text)}><Icon name="edit" /></button>
           : <>
-              <button type="button" className="dash-set-opt" disabled={!editing.trim()} onClick={() => void save()}>{t("memory.store")}</button>
-              <button type="button" className="dash-set-opt" onClick={() => setEditing(null)}>{t("memory.cancel")}</button>
+              <button type="button" className="ib" aria-label={t("memory.cancel")} title={t("memory.cancel")} onClick={() => setEditing(null)}><Icon name="close" /></button>
+              <button type="button" className="dash-key" disabled={!editing.trim()} onClick={() => void save()}>{t("memory.store")}</button>
             </>}
-        <button type="button" className="dash-set-opt" onClick={() => void act(() => api.archiveMemory(m.id))}>{t("memory.archive")}</button>
+        <button type="button" className="ib" aria-label={t("memory.archive")} title={t("memory.archive")}
+          onClick={() => void act(() => api.archiveMemory(m.id))}><Icon name="box" /></button>
         {old.length > 0 && (
-          <button type="button" className="dash-set-opt" aria-expanded={history} onClick={() => setHistory(h => !h)}>{t("memory.history")}</button>
+          <button type="button" className="ib dash-mem-hist" aria-label={t("memory.history")} title={t("memory.history")} aria-expanded={history}
+            onClick={() => setHistory(h => !h)}><Icon name="history" /><span className="dash-dm">{old.length}</span></button>
         )}
       </div>
       {history && (
@@ -87,18 +90,20 @@ function AddForm({ act }: { act: Act }) {
     <form className="dash-mem-add" onSubmit={e => { e.preventDefault(); if (ready) void add(); }}>
       <textarea aria-label={t("memory.new")} rows={2} maxLength={MAX_CHAT} value={text} onChange={e => setText(e.target.value)} />
       <div className="dash-mem-bar">
-        {(["author", "work"] as const).map(s => (
-          <button key={s} type="button" className="dash-set-opt" aria-pressed={scope === s} onClick={() => setScope(s)}>
-            {t(s === "author" ? "memory.author" : "memory.work")}
-          </button>
-        ))}
+        <div className="set-seg" role="group" aria-label={t("memory.new")}>
+          {(["author", "work"] as const).map(s => (
+            <button key={s} type="button" aria-pressed={scope === s} onClick={() => setScope(s)}>
+              {t(s === "author" ? "memory.author" : "memory.work")}
+            </button>
+          ))}
+        </div>
         {scope === "work" && (
           <select aria-label={t("memory.pickWork")} value={slug} onChange={e => setSlug(e.target.value)}>
             <option value="" />
             {works.map(w => <option key={w.slug} value={w.slug}>{w.title}</option>)}
           </select>
         )}
-        <button type="submit" className="dash-set-opt" disabled={!ready}>{t("memory.add")}</button>
+        <button type="submit" className="dash-key dash-mem-go" disabled={!ready}>{t("memory.add")}</button>
       </div>
     </form>
   );
@@ -154,7 +159,8 @@ export default function MemoryPage() {
             return (
               <li key={last.root}>
                 <p>{last.text}</p>
-                <button type="button" className="dash-set-opt" onClick={() => void act(() => api.revertMemory(last.id))}>{t("memory.revert")}</button>
+                <button type="button" className="ib" aria-label={t("memory.revert")} title={t("memory.revert")}
+                  onClick={() => void act(() => api.revertMemory(last.id))}><Icon name="back" /></button>
               </li>
             );
           })}

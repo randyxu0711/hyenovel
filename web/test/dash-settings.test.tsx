@@ -83,16 +83,25 @@ describe("設定頁", () => {
     await go("回到〈舊的〉");
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
   });
-  it("點「陪讀者」→ 內容換成預設陪讀者單選,沒有預覽欄;點「外觀」→ 有預覽欄", async () => {
+  it("點「陪讀者」→ 內容換成預設陪讀者單選;外觀沒有預覽卡", async () => {
     mount();
     const p = await page();
-    expect(p.getByRole("figure", { name: "預覽" })).toBeTruthy();
+    expect(p.queryByRole("figure")).toBeNull();
     await go("陪讀者");
     expect(p.getAllByRole("radio")).toHaveLength(3);
-    expect(p.queryByRole("figure")).toBeNull();
     expect(p.getByRole("heading", { level: 1, name: "陪讀者" })).toBeTruthy();
-    await go("外觀");
-    expect(p.getByRole("figure", { name: "預覽" })).toBeTruthy();
+  });
+  it("配色只放色票(亮、暗各半),名字只在 aria-label", async () => {
+    mount();
+    const p = await page();
+    const seg = within(p.getByRole("group", { name: "配色" }));
+    const btns = seg.getAllByRole("button");
+    expect(btns.length).toBeGreaterThan(0);
+    for (const b of btns) {
+      expect(b.textContent).toBe("");
+      expect(b.getAttribute("aria-label")).toBeTruthy();
+      expect(b.querySelectorAll(".set-scene > span")).toHaveLength(2);
+    }
   });
   it("晝夜是三顆圖示鈕(跟系統/晝/夜),aria-pressed 跟 pref", async () => {
     mount();
@@ -147,13 +156,15 @@ describe("設定頁", () => {
     setPaperFlow("v");
   });
 
-  it("稿字級存 localStorage,預覽紙與 Paper 都套 data-size", async () => {
+  it("字級是三個大小不同的「字」;存 localStorage,Paper 套 data-size", async () => {
     mount();
     const p = await page();
-    const mini = () => p.getByRole("figure", { name: "預覽" }).querySelector("p")!.getAttribute("data-size");
-    fireEvent.click(p.getByRole("button", { name: "大" }));
+    const big = p.getByRole("button", { name: "大" });
+    expect(big.textContent).toBe("字");
+    expect(big.querySelector(".set-glyph")!.getAttribute("data-size")).toBe("l");
+    fireEvent.click(big);
     expect(localStorage.getItem("hyenovel.paperSize")).toBe("l");
-    expect(mini()).toBe("l");
+    expect(big.getAttribute("aria-pressed")).toBe("true");
     const { container } = render(
       <CharactersProvider value={makeCharacters([hyena], "hyena")}><LinksProvider>
         <Paper text="一行" title="x" marks={[]} onBring={() => {}} />
@@ -161,7 +172,6 @@ describe("設定頁", () => {
     expect(container.querySelector(".paper-sheet")?.getAttribute("data-size")).toBe("l");
     fireEvent.click(p.getByRole("button", { name: "小" }));
     expect(localStorage.getItem("hyenovel.paperSize")).toBe("s");
-    expect(mini()).toBe("s");
   });
 
   it("陪讀者:den 存好預設才讓開著的對話跟著換", async () => {
@@ -217,13 +227,13 @@ describe("設定頁", () => {
     expect(tagged()).toEqual([p.getByRole("radio", { name: /鹿/ })]);
   });
 
-  it("舊討論:只數 legacy 局,打開封存看得到逐字,沒有輸入框", async () => {
+  it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {
     const f = mount();
     const p = await page();
     await go("舊討論");
     await waitFor(() => expect(f.mock.calls.some(c => String(c[0]) === "/api/sessions?limit=100&legacy=1")).toBe(true));
-    await waitFor(() => expect(p.getByText(/2/)).toBeTruthy());
-    fireEvent.click(p.getByRole("button", { name: "打開封存" }));
+    await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
+    expect(p.getByText("2 局")).toBeTruthy();
     expect(p.getByText("預覽old1")).toBeTruthy();
     expect(p.getByText("預覽old2")).toBeTruthy();
     expect(p.queryByText("預覽new1")).toBeNull();
@@ -241,12 +251,12 @@ describe("設定頁", () => {
     const p = await page();
     const snap = () => JSON.stringify(Object.entries(localStorage)) + document.querySelector(".dash-settings")!.innerHTML;
     const controls = () => [...document.querySelectorAll<HTMLElement>(".dash-settings button, .dash-settings input")]
-      .filter(el => !["匯入角色卡", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
+      .filter(el => !["匯入", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
         && !/^(複製|編輯)/.test(el.getAttribute("aria-label") ?? ""));   // 系統檔案視窗不改狀態;新角色、複製、編輯另有測試
     let n = 0;
     for (const sec of ["陪讀者", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
       await go(sec);
-      if (sec === "舊討論") await waitFor(() => expect(p.getByText(/2/)).toBeTruthy());
+      if (sec === "舊討論") await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
       for (let i = 0; i < controls().length; i++, n++) {
         const el = controls()[i];
         if (el.getAttribute("aria-pressed") === "true" || (el as HTMLInputElement).checked) continue;
@@ -334,7 +344,7 @@ describe("設定頁:角色卡", () => {
     render(<MemoryRouter initialEntries={["/settings"]}><Routes><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
   };
   const upload = async (content: string) => {
-    const input = (await screen.findByLabelText("匯入角色卡", { selector: "input" })) as HTMLInputElement;
+    const input = (await screen.findByLabelText("匯入", { selector: "input" })) as HTMLInputElement;
     const file = new File([content], "card.json", { type: "application/json" });
     Object.defineProperty(file, "text", { value: async () => content });
     fireEvent.change(input, { target: { files: [file] } });

@@ -4,7 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import Rail from "../src/dash/Rail";
 import { dotState, useSeen } from "../src/dash/useSeen";
 import { setLang } from "../src/dash/i18n";
-import { initThemes } from "../src/dash/theme";
+import { getThemeState, initThemes } from "../src/dash/theme";
 import { olive } from "./dash-fixtures";
 import type { Work } from "../src/dash/api";
 import type { Talk } from "../src/dash/useTalk";
@@ -63,14 +63,14 @@ describe("Rail(展開)", () => {
       talk={talk} view={o.view ?? "home"} {...p} /></MemoryRouter>);
     return { ...p, ...r, talk };
   };
-  it("頂列:收合、交一篇新稿;底:設定;沒有晝夜鍵、沒有「交一篇新的」文字鈕", () => {
+  it("頂列:收合、交一篇新稿;底:晝夜、設定;沒有「交一篇新的」文字鈕", () => {
     const { onToggle, onNew } = mount();
     fireEvent.click(screen.getByRole("button", { name: "收合書架" }));
     expect(onToggle).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
     expect(onNew).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "切換晝夜" })).toBeNull();
+    expect(screen.getByRole("button", { name: "切換晝夜" })).toBeTruthy();
     expect(screen.queryByText("交一篇新的")).toBeNull();
   });
   it("列出作品標題,點了開那篇;目前那篇 aria-current;分析中那篇的點叫「分析中」", () => {
@@ -94,7 +94,7 @@ describe("Rail(展開)", () => {
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
       if (n.parentElement!.closest("button, output") === null) texts.push(n.textContent!.trim());
     }
-    expect(texts.filter(Boolean)).toEqual(["hyenovel"]);
+    expect(texts.filter(Boolean)).toEqual(["Hyenovel"]);
   });
   it("作品 ≤ 6 沒有篩選框;7 篇才有,輸入「山」只剩含「山」的", () => {
     const { unmount } = mount({ works: WORKS.concat([w("d4", "a"), w("d5", "b"), w("d6", "c")]) });
@@ -151,6 +151,14 @@ describe("Rail(展開)", () => {
     fireEvent.click(screen.getByRole("button", { name: "開一局" }));
     expect(t.fresh).toHaveBeenCalled();
   });
+  it("晝夜快捷鍵:一按就翻到另一邊", () => {
+    mount();
+    const before = getThemeState().mode;
+    fireEvent.click(screen.getByRole("button", { name: "切換晝夜" }));
+    expect(getThemeState().mode).not.toBe(before);
+    fireEvent.click(screen.getByRole("button", { name: "切換晝夜" }));
+    expect(getThemeState().mode).toBe(before);
+  });
   it("設定鍵導到 /settings;在 /settings 時 aria-current=page", () => {
     const { unmount } = mount();
     expect(screen.getByRole("button", { name: "設定" }).getAttribute("aria-current")).toBeNull();
@@ -170,10 +178,10 @@ describe("Rail(窄條)", () => {
       talk={talk} view="work" {...p} /></MemoryRouter>);
     return { ...p, ...r, talk };
   };
-  it("由上而下:展開、交一篇新稿、找作品、目前這篇、設定;不列作品標題", () => {
+  it("由上而下:展開、交一篇新稿、找作品、目前這篇、晝夜、設定;不列作品標題", () => {
     mount({ current: "d1" });
     const names = screen.getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["展開書架", "交一篇新稿", "找作品", "海", "設定"]);
+    expect(names).toEqual(["展開書架", "交一篇新稿", "找作品", "海", "切換晝夜", "設定"]);
     for (const t of ["山", "湖"]) expect(screen.queryByText(t)).toBeNull();
   });
   it("目前這篇顯示標題第一個字;沒有 current 就沒有這顆", () => {
@@ -181,7 +189,7 @@ describe("Rail(窄條)", () => {
     expect(screen.getByRole("button", { name: "海邊的人" }).textContent).toBe("海");
     unmount();
     mount();
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(screen.getAllByRole("button")).toHaveLength(5);
   });
   it("目前這篇分析中 → 有跳動點", () => {
     mount({ current: "d2" });

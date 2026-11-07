@@ -148,7 +148,7 @@ describe("Paper", () => {
     mount("字".repeat(450));
     select(screen.getByText("字".repeat(450)).firstChild!, 450);
     expect((screen.getByRole("button", { name: "帶進對話" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("選短一點(400 字內)")).toBeTruthy();
+    expect(screen.getByText("最多 400 字")).toBeTruthy();
   });
 });
 

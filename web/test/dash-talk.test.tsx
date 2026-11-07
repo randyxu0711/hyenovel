@@ -360,7 +360,7 @@ describe("引文", () => {
     withQuote([{ quote: "海很藍", start: null, end: null }]);
     const { container } = mount("/w/d1?v=1");
     const iq = await (await findLog()).findByRole("button", { name: "「海很藍」" });
-    expect(iq.getAttribute("title")).toBe("這句在第 1 版找不到");
+    expect(iq.getAttribute("title")).toBe("v1 沒有這句");
     expect(iq.classList.contains("is-lost")).toBe(true);
     expect(calls()).toContain("/api/sessions/s1?v=1");
     expect(calls()).toContain("/api/works/d1/map?v=1");
@@ -393,7 +393,7 @@ describe("對話錯誤與上限", () => {
     mount();
     await screen.findByText("第一段。");
     say("嗨");
-    expect((await screen.findByRole("alert")).textContent).toBe("出了點狀況,請再試一次。");
+    expect((await screen.findByRole("alert")).textContent).toBe("沒成功,再試一次。");
   });
   it("輸入框有 maxLength,與 den 的訊息上限一致", async () => {
     mount();
@@ -550,7 +550,7 @@ describe("交新版之後", () => {
     await screen.findByRole("button", { name: "交新版" });
     fireEvent.change(r.container.querySelector('input[type="file"]')!, { target: { files: [new File(["新的稿"], "海.md")] } });
     const before = calls().filter(c => c.startsWith("/api/sessions/abc")).length;
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(calls()).toContain("/api/stories"));
     return before;
   };
@@ -574,7 +574,7 @@ describe("交新版之後", () => {
   });
   it("跟最新版一字不差 → 提示「跟第 2 版一字不差」,逐字稿不重抓", async () => {
     const before = await submitFrom("/w/d1?s=abc", false);
-    expect(await screen.findByText("跟第 2 版一字不差,沒有新增版本")).toBeTruthy();
+    expect(await screen.findByText("跟 v2 一樣,沒存新版")).toBeTruthy();
     expect(sessionCalls()).toBe(before);
   });
   it("versionBreaks:v 與前一個有值的 v 不同才斷,第一則不畫,沒 v 的沿用前一則", () => {
@@ -676,6 +676,7 @@ describe("輸入紙與角色狀態", () => {
     expect(key.getAttribute("title")).toBe("陪讀者:鬣狗");
     expect(key.querySelector("svg.fig")).not.toBeNull();
     expect(key.textContent).toBe("");
+    expect(document.querySelectorAll("form.composer svg.fig")).toHaveLength(1);
     fireEvent.click(key);
     const g = screen.getByRole("group", { name: "陪讀者" });
     fireEvent.keyDown(g, { key: "Escape" });
@@ -702,7 +703,8 @@ describe("輸入紙與角色狀態", () => {
     await screen.findByText("第一段。");
     fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "你好" } });
     fireEvent.click(screen.getByRole("button", { name: "送出" }));
-    fireEvent.click(await screen.findByRole("button", { name: "讀錯了" }));
+    fireEvent.click(await screen.findByRole("button", { name: "標記這則" }));
+    fireEvent.click(screen.getByRole("button", { name: "讀錯了" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]: any) =>
       u === "/api/works/d1/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
   });
@@ -713,13 +715,13 @@ describe("輸入紙與角色狀態", () => {
     session("s1", [{ ...u("看看"), seq: 0 },
       { ...a("我讀到「海很藍」。", "buffalo", [{ quote: "海很藍", start: 0, end: 3 }]), seq: 1 }]);
     const { container } = mount();
-    const mark = await (await findLog()).findByRole("button", { name: "讀錯了" });
-    fireEvent.click(mark);
-    const pressed = () => screen.getByRole("button", { name: "讀錯了" }).getAttribute("aria-pressed");
-    expect(pressed()).toBe("true");
+    fireEvent.click(await (await findLog()).findByRole("button", { name: "標記這則" }));
+    fireEvent.click(screen.getByRole("button", { name: "讀錯了" }));
+    const pill = () => screen.queryByRole("button", { name: "標記:讀錯了" });
+    expect(pill()).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "筆記" }));
     fireEvent.click(container.querySelector(".dash-mark")!);
     expect(container.querySelector(".chat-turn.is-flash")).toBeTruthy();
-    expect(pressed()).toBe("true");
+    expect(pill()).toBeTruthy();
   });
 });

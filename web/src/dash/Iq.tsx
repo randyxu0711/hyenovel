@@ -9,14 +9,15 @@ export default function Iq({ span, version, children }: { span: Span; version: n
   const { setHover, jumpToPaper } = useLinks();
   const label = children ?? `「${span.quote}」`;
   if (span.start === null) {
-    return <button type="button" className="dash-iq is-lost" aria-disabled="true" title={t("iq.lost", { n: version })}>{label}</button>;
+    return <span role="button" tabIndex={0} className="dash-iq is-lost" aria-disabled="true" title={t("iq.lost", { n: version })}>{label}</span>;
   }
   const on = () => setHover(span.quote, span.start), off = () => setHover(null);
+  const jump = () => jumpToPaper(span);
   return (
-    <button type="button" className="dash-iq" onMouseEnter={on} onMouseLeave={off} onFocus={on} onBlur={off}
-      onClick={() => jumpToPaper(span)}>
+    <span role="button" tabIndex={0} className="dash-iq" onMouseEnter={on} onMouseLeave={off} onFocus={on} onBlur={off}
+      onClick={jump} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jump(); } }}>
       {label}
-    </button>
+    </span>
   );
 }
 

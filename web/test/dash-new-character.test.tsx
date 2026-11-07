@@ -65,10 +65,10 @@ describe("作答", () => {
   it("詞卡要按了才出現,換詞不打 API,選了填進形體", () => {
     mount();
     expect(screen.queryByRole("button", { name: "校對員" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "沒想法" }));
+    fireEvent.click(screen.getByRole("button", { name: "給幾個詞" }));
     fireEvent.click(screen.getByRole("button", { name: "校對員" }));
     expect((screen.getByLabelText("陪你讀稿的,是什麼?") as HTMLInputElement).value).toBe("校對員");
-    fireEvent.click(screen.getByRole("button", { name: "沒想法" }));
+    fireEvent.click(screen.getByRole("button", { name: "給幾個詞" }));
     fireEvent.click(screen.getByRole("button", { name: "換一批詞" }));
     expect(screen.getByRole("button", { name: "代書" })).toBeTruthy();
     expect(bodies).toEqual([]);
@@ -167,7 +167,7 @@ describe("改候選與存卡", () => {
     return screen.getAllByRole("article").map(a => within(a));
   };
   const revise = (card: ReturnType<typeof within>, text = "再冷一點") => {
-    fireEvent.change(card.getByLabelText("一句回饋"), { target: { value: text } });
+    fireEvent.change(card.getByLabelText("想改哪裡?"), { target: { value: text } });
     fireEvent.click(card.getByRole("button", { name: "改這張" }));
   };
   const last = () => bodies[bodies.length - 1] as unknown as Record<string, any>;
@@ -176,9 +176,9 @@ describe("改候選與存卡", () => {
     const [card] = await toResults();
     const send = card.getByRole("button", { name: "改這張" }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
-    fireEvent.change(card.getByLabelText("一句回饋"), { target: { value: "   " } });
+    fireEvent.change(card.getByLabelText("想改哪裡?"), { target: { value: "   " } });
     expect(send.disabled).toBe(true);
-    fireEvent.change(card.getByLabelText("一句回饋"), { target: { value: "冷一點" } });
+    fireEvent.change(card.getByLabelText("想改哪裡?"), { target: { value: "冷一點" } });
     expect(send.disabled).toBe(false);
   });
   it("只送一張,只更新那一張,回饋清空", async () => {
@@ -192,13 +192,13 @@ describe("改候選與存卡", () => {
     expect(screen.getByText("門縫1")).toBeTruthy();
     expect(screen.getByText("門縫3")).toBeTruthy();
     expect(screen.queryByText("門縫2")).toBeNull();
-    expect((screen.getAllByLabelText("一句回饋")[1] as HTMLInputElement).value).toBe("");
+    expect((screen.getAllByLabelText("想改哪裡?")[1] as HTMLInputElement).value).toBe("");
   });
   it("改的時候只有這張掃描,其他花額度的按鈕都停用", async () => {
     let release = (_: Response) => {};
     const cards = await toResults();
     replies = [new Promise<Response>(r => { release = r; }) as unknown as Response];
-    fireEvent.change(cards[2].getByLabelText("一句回饋"), { target: { value: "別的" } });
+    fireEvent.change(cards[2].getByLabelText("想改哪裡?"), { target: { value: "別的" } });
     revise(cards[0]);
     await waitFor(() => expect(document.querySelectorAll('.fig[data-state="scanning"]')).toHaveLength(1));
     expect(screen.getAllByRole("article")[0].querySelector('.fig[data-state="scanning"]')).toBeTruthy();
@@ -217,7 +217,7 @@ describe("改候選與存卡", () => {
     await screen.findByRole("alert");
     expect(screen.getByRole("alert").textContent).not.toContain("再試一次");
     expect(screen.getByText("門縫1")).toBeTruthy();
-    expect((card.getByLabelText("一句回饋") as HTMLInputElement).value).toBe("再冷一點");
+    expect((card.getByLabelText("想改哪裡?") as HTMLInputElement).value).toBe("再冷一點");
   });
   it("存之前可改名字,改過的會送出,存完回清單", async () => {
     const [card] = await toResults();
@@ -244,7 +244,7 @@ describe("改候選與存卡", () => {
     replies = [json({ created: false, warnings: ["looks-like-instructions"] })];
     fireEvent.click(screen.getByRole("button", { name: "存" }));
     await screen.findByRole("button", { name: "仍要存" });
-    expect(within(document.querySelector("form.char-edit") as HTMLElement).getByText(/像是要改寫規則/)).toBeTruthy();
+    expect(within(document.querySelector("form.char-edit") as HTMLElement).getByText(/像指令/)).toBeTruthy();
     expect(onSaved).not.toHaveBeenCalled();
     replies = [json({ created: true, character: {} }, 201)];
     fireEvent.click(screen.getByRole("button", { name: "仍要存" }));

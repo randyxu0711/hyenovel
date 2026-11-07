@@ -48,23 +48,22 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
     if (r) onSubmitted(r.slug, r.reused);
   };
 
-  const none = loaded !== null && loaded.length === 0;
   const est = draft?.estimate;
   return (
     <div className="home" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
       <div className="home-inner">
-        {none && <p className="home-first"><Icon name="new" />{t("home.first")}</p>}
         {draft ? (
           <div className="composer home-draft" role="group" aria-label={t("feed.text")}>
             <div className="who"><Figure character={me} size={92} /></div>
             {draft.title && <b className="home-draft-title">{draft.title}</b>}
             <p className="home-meta">
               <span>{t("feed.chars", { n: draft.chars })}</span>
-              {est && <span>{est.v ? t("feed.estimate", { min: Math.max(1, Math.round(est.v.seconds / 60)) }) : t("feed.noEstimate")}</span>}
+              {est?.v && <span>{t("feed.estimate", { min: Math.max(1, Math.round(est.v.seconds / 60)) })}</span>}
             </p>
             {error && <p role="alert" className="home-msg">{t(errorMessage(error))}</p>}
             <div className="home-actions">
               <button type="button" className="dash-key" onClick={cancel}>{t("feed.cancel")}</button>
+              <span className="nc-note">{t("nc.costs")}</span>
               <button type="button" className="dash-key home-go" disabled={busy} onClick={() => void submitDraft()}>
                 {busy ? t("feed.sending") : t("feed.go")}
               </button>
