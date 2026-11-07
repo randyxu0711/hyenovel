@@ -25,6 +25,7 @@ from den.version import fingerprint
 
 _REPO = Path(__file__).resolve().parent.parent
 _LOG_TAIL = 20
+_CONNECT_TIMEOUT = 3.0
 _PROBE_TIMEOUT = 3.0   # /health 探測專用:卡住的 den 不能讓等待(還持著鎖)遠超過 spawn_wait
 NOTICE_BUSY = "hyenovel 已更新,目前的分析跑完後才會換新版。"
 NOTICE_STALE = "hyenovel 已更新,請在 Claude Code 執行 `/mcp` 重新連線。"
@@ -61,7 +62,7 @@ def _sigterm(pid: int) -> None:
 
 
 def _http(base_url: str) -> httpx.Client:
-    return httpx.Client(base_url=base_url, timeout=httpx.Timeout(60.0, connect=3.0))
+    return httpx.Client(base_url=base_url, timeout=httpx.Timeout(60.0, connect=_CONNECT_TIMEOUT))
 
 
 class DenClient:
@@ -233,17 +234,18 @@ class DenClient:
 
     # request ------------------------------------------------------------
     @staticmethod
-    def _send(conn, method: str, path: str, json: dict | None) -> httpx.Response:
+    def _send(conn, method: str, path: str, json: dict | None, timeout) -> httpx.Response:
         client, token = conn
-        return client.request(method, path, json=json, headers={"Authorization": f"Bearer {token}"})
+        return client.request(method, path, json=json, headers={"Authorization": f"Bearer {token}"}, timeout=timeout)
 
-    def request(self, method: str, path: str, json: dict | None = None) -> httpx.Response:
+    def request(self, method: str, path: str, json: dict | None = None, *, timeout: float | None = None) -> httpx.Response:
         """每次先 ensure(版本規則才走得到)。只在請求「確定沒到 den」時重試一次:
         連不上(ConnectError / ConnectTimeout)或 401。其他傳輸錯誤(讀逾時、斷在半路)
         den 可能已處理——POST /jobs 會先 commit 再回應,重送 = 第二個 job、第二份花費——不重試。"""
+        limit = httpx.USE_CLIENT_DEFAULT if timeout is None else httpx.Timeout(timeout, connect=_CONNECT_TIMEOUT)
         conn = self.ensure()
         try:
-            r = self._send(conn, method, path, json)
+            r = self._send(conn, method, path, json, limit)
             if r.status_code != 401:
                 return r
         except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -252,7 +254,7 @@ class DenClient:
             raise DenUnavailable(f"den 連線中斷,請求可能已送達(不自動重送):{e!r}") from None
         conn = self.ensure()   # 只重試一次
         try:
-            return self._send(conn, method, path, json)
+            return self._send(conn, method, path, json, limit)
         except httpx.TransportError as e:
             raise DenUnavailable(f"den 連線中斷:{e!r}") from None
 

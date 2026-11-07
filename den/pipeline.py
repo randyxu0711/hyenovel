@@ -31,7 +31,7 @@ _GATE_MSG = "閘門重試後仍未過"
 _NOT_JSON = "輸出不是單一 JSON 物件（可能被截斷或夾了說明文字）"
 
 
-def _check_anomaly(jid: int, step: str, r: RunResult) -> None:
+def check_anomaly(jid: int, step: str, r: RunResult) -> None:
     """工人回來就看(不論 outcome):輪數或輸出量超門檻、或逾時 → WARNING。缺欄位當 None、不拋。"""
     turns = r.num_turns
     out = (r.tokens or {}).get("output")
@@ -70,7 +70,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
 
     def record(outcome: str, r: RunResult | None, gate_verdict=None, artifact_id=None):
         if r is not None:
-            _check_anomaly(jid, step, r)
+            check_anomaly(jid, step, r)
         repo.add_attempt(
             conn, jid, step, n, runner=runner_name, model=r and r.model, cli_version=cli_version,
             outcome=outcome, raw_output=r and r.raw, parsed=r and r.parsed,

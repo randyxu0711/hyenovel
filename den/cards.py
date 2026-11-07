@@ -24,6 +24,7 @@ _MACRO = re.compile(r"\{\{(char|user)\}\}", re.IGNORECASE)
 _INSTRUCTIONS = re.compile(r"ignore (all |any )?(previous|prior)|system prompt|忽略.{0,8}(指示|指令|規則)"
                            r"|無視.{0,8}(指示|指令|規則)|不要遵守|you are now", re.IGNORECASE)
 _IGNORED = ("system_prompt", "post_history_instructions", "character_book", "first_mes")
+_COPY_SUFFIX = {"zh-Hant": "(副本)", "en": " (copy)"}
 
 
 @cache
@@ -113,6 +114,33 @@ def view(card: dict, character_id: str, version: int) -> dict:
         "mark": ext.get("mark") if ext.get("mark") in MARKS else "pencil",
         "reading": _reading(data),
     }
+
+
+def _with_ext(card: dict, ext: dict, **fields) -> dict:
+    data = card["data"]
+    extensions = {**data.get("extensions", {}), "hyenovel": {**_ext(data), **ext}}
+    return {**card, "data": {**data, **fields, "extensions": extensions}}
+
+
+def edited(card: dict, name: dict, line: dict, reading: str) -> dict:
+    """讀法沒改就留原文,{{char}} 才會跟著新名字。"""
+    data = card["data"]
+    fields = {"name": name["zh-Hant"], "creator_notes": line["zh-Hant"]}
+    if reading != _reading(data):
+        fields |= {"personality": reading, "description": ""}
+    if data.get("nickname"):
+        fields["nickname"] = name["zh-Hant"]
+    return _with_ext(card, {"name": name, "line": line}, **fields)
+
+
+def copied(card: dict, character_id: str) -> dict:
+    """avatar 寫死:沒帶 avatar 的卡以角色 id 當種子,不寫死的話副本長相會變。
+    nickname 留原名:{{char}} 優先取它,「(副本)」才不會進讀法。"""
+    shown = view(card, character_id, 0)
+    data = card["data"]
+    name = {k: shown["name"][k][:MAX_NAME - len(s)] + s for k, s in _COPY_SUFFIX.items()}
+    return _with_ext(card, {"name": name, "line": shown["line"], "avatar": shown["avatar"]}, name=name["zh-Hant"],
+                     nickname=data.get("nickname") or data["name"])
 
 
 def _newer_spec(spec_version: str) -> bool:

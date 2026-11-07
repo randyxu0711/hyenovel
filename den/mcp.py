@@ -9,6 +9,7 @@
 import logging
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -17,6 +18,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 
+from den import cards
 from den.client import DenClient, DenRejected, DenUnavailable
 from den.config import MAX_CHAT_CHARS, MAX_SOURCE_BYTES
 from marrow import db
@@ -38,7 +40,8 @@ INSTRUCTIONS = (
     "作者想聊自己寫的作品、想聽讀者感受時用 talk_to_companion,不要自己評論作品或讀分析代答。"
     "交稿用 submit_work(只收檔案路徑)、找作品用 find_works、作者自己要看原文或分析用 read_work、"
     "停下分析用 cancel_work。作品用標題或關鍵詞指定,不必記編號。"
-    "作者問有哪些陪讀角色、現在是誰時用 list_characters;作者點名要換才用 set_character。")
+    "作者問有哪些陪讀角色、現在是誰時用 list_characters;作者點名要換才用 set_character。"
+    "作者要建新角色時先問作者的想像,再用 create_character;選哪個由作者決定,選定後用 save_character。")
 DESC_TALK = (
     "和陪讀的 companion 說話,回傳它的回覆。把回覆原文轉給作者,不改寫、摘要或補充。"
     "作者對 companion 說的任何話都用這個,包括「好了沒」。交稿或作者自己要看資料時改用 submit_work、read_work。"
@@ -50,6 +53,15 @@ DESC_LIST_CHARACTERS = (
 DESC_SET_CHARACTER = (
     "換陪讀角色,下一輪起由這隻接著讀,只影響這篇這一局。character 是 list_characters 給的 id。"
     "只有作者點名要換時才用,因為角色是作者的選擇,不要依語氣或內容自己判斷。")
+DESC_CREATE_CHARACTER = (
+    "替作者生成三個陪讀角色候選。只有作者要建角色才用;作者想換現有角色時用 set_character。"
+    "呼叫前先用開放題問作者的想像,開放題不放例子。作者的話原樣填進參數,沒回答的留空,不要替作者答,因為這個角色是作者的想像。"
+    "form:陪作者讀稿的是什麼;attention:讀的時候在意什麼;returns:讀完先交回什麼;response:想收到哪種回應;"
+    "instance:別人讀作者的稿時說過、讓作者停下來想的一句話;lang:zh-Hant 或 en,跟作者用的語言。"
+    "會花作者的訂閱額度,可能要幾分鐘。回傳的候選照列給作者,選哪個由作者決定。改候選、複製、編輯角色請作者到網頁做。")
+DESC_SAVE_CHARACTER = (
+    "把作者選定的候選存成陪讀角色。number 是 create_character 回傳的編號,只有作者選定後才用。"
+    "name 只在作者自己取了名字時給。回覆說有警告時,把警告告訴作者,作者確認要存才帶 confirm=true 再呼叫一次。")
 _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
@@ -69,6 +81,10 @@ _CANDIDATES = 20   # 作品有歧義時最多列幾篇
 _WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析",
                 "notes-running": "分析好了,備課筆記還在跑"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
+_GENERATE_TIMEOUT = 400   # 每次最長 180 秒、含修補兩次
+_CANDIDATE_REASONS = {**_REASONS, "gate": "候選沒通過檢查"}
+_CARD_WARNINGS = {"looks-like-instructions": "有像指令的文字", "newer-spec": "規格版本比較新",
+                  "ignored-fields": "有不會採用的欄位", "bad-colors": "顏色看不清楚"}
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
 PROMPT_COMPANION = (
     "我想跟 hyenovel 的 companion 聊我的作品。如果我還沒說要聊哪個檔,先問我稿子的檔案路徑(.md / .txt),"
@@ -76,6 +92,29 @@ PROMPT_COMPANION = (
     "然後用 talk_to_companion(message 留空)讓 companion 先開口。companion 的回覆請一字不改地轉給我。")
 PROMPT_CONTINUE = ("接著聊我最近那篇:用 talk_to_companion(message 留空、不給 work)讓 companion 先開口,"
                    "回覆一字不改地轉給我。")
+
+
+def _generation_failed(r) -> str:
+    reason = r.json().get("params", {}).get("reason")
+    return f"候選生成失敗({_CANDIDATE_REASONS.get(reason, reason)})。請照實告訴作者,不要自己替作者寫候選。"
+
+
+def _card_warnings(warnings: list[str]) -> str:
+    return "、".join(_CARD_WARNINGS.get(w, w) for w in warnings)
+
+
+def _shown(text: str, hidden: str) -> str:
+    flat = " ".join(text.split())
+    return hidden if cards._INSTRUCTIONS.search(unicodedata.normalize("NFKC", flat)) else flat
+
+
+def _candidate_lines(n: int, c: dict, lang: str) -> list[str]:
+    name, form = _shown(c["name"][lang], "這個名字沒顯示"), _shown(c["form"][lang], "這個形體沒顯示")
+    lines = [f"{n}. {name}({form}):{_shown(c['line'][lang], '這句介紹沒顯示')}",
+             f"   試讀:{_shown(c['sample'], '這句試讀沒顯示')}"]
+    if c["warnings"]:
+        lines.append(f"   注意:{_card_warnings(c['warnings'])}")
+    return lines
 
 
 def _when(ts: float | None) -> str:
@@ -148,17 +187,20 @@ def build_server(den: DenClient) -> MCPServer:
     server = MCPServer("hyenovel", instructions=INSTRUCTIONS)
 
     async def call(method: str, path: str, json: dict | None = None, *,
-                   on_status: dict[int, str] | None = None,
+                   on_status: dict | None = None,
                    on_detail: dict[str, str] | None = None,
-                   ok_details: tuple[str, ...] = ()) -> dict:
+                   ok_details: tuple[str, ...] = (),
+                   timeout: float | None = None) -> dict:
         try:
-            r = await anyio.to_thread.run_sync(lambda: den.request(method, path, json=json))
+            r = await anyio.to_thread.run_sync(lambda: den.request(method, path, json=json, timeout=timeout))
         except DenUnavailable as e:
             raise ToolError(f"連不上 hyenovel den:{e}") from None
         if r.status_code >= 400:
             if _detail(r) in ok_details:   # 呼叫者要自己分流的拒絕:回 {"detail": …},不當錯誤
                 return {"detail": _detail(r)}
             msg = (on_detail or {}).get(_detail(r)) or (on_status or {}).get(r.status_code)
+            if callable(msg):
+                msg = msg(r)
             raise ToolError(msg or f"den 回應 {r.status_code}:{_detail(r)}")
         return r.json()
 
@@ -366,8 +408,8 @@ def build_server(den: DenClient) -> MCPServer:
             now = await _character_now((await resolve_work(work))["slug"], now)
         if not any(c["id"] == now for c in active):
             now = data["default"]
-        return "\n".join(f"{c['id']}:{c['name']['zh-Hant']},{c['line']['zh-Hant']}" + ("(目前)" if c["id"] == now else "")
-                         for c in active)
+        return "\n".join(f"{c['id']}:{_shown(c['name']['zh-Hant'], '這個名字沒顯示')},{_shown(c['line']['zh-Hant'], '這句介紹沒顯示')}"
+                         + ("(目前)" if c["id"] == now else "") for c in active)
 
     async def _set_character(character: str, work: str | None) -> str:
         cs = {c["id"]: c for c in (await call("GET", "/api/characters"))["characters"] if not c["archived"]}
@@ -376,7 +418,7 @@ def build_server(den: DenClient) -> MCPServer:
         w = await resolve_work(work)
         picked[w["slug"]] = character
         current[:] = [w["slug"]]
-        return f"〈{w['title']}〉下一輪由{cs[character]['name']['zh-Hant']}接著讀。"
+        return f"〈{w['title']}〉下一輪由{_shown(cs[character]['name']['zh-Hant'], '這隻角色')}接著讀。"
 
     @server.tool(description=DESC_LIST_CHARACTERS, annotations=_READONLY)
     async def list_characters(work: str | None = None) -> str:
@@ -385,6 +427,54 @@ def build_server(den: DenClient) -> MCPServer:
     @server.tool(description=DESC_SET_CHARACTER)
     async def set_character(character: str, work: str | None = None) -> str:
         return await guarded(_set_character(character, work))
+
+    drafts: dict = {}               # 最後一批候選:{"items": [...], "lang": ..., "saved": {編號}}
+    held: set[tuple] = set()        # 已回過警告的 (編號, 名字):第一次帶 confirm 也要先讓作者看到警告
+
+    async def _create_character(answers: dict, lang: str) -> str:
+        drafts.clear()
+        held.clear()
+        out = await call("POST", "/api/characters/candidates", {"answers": answers, "lang": lang},
+                         timeout=_GENERATE_TIMEOUT,
+                         on_status={409: "上一批候選還在生成,等它回來再說。",
+                                    422: "答案太長(form 80 字、instance 500 字、其他 300 字),或 lang 不是 zh-Hant / en。",
+                                    502: _generation_failed})
+        drafts.update(items=out["candidates"], lang=lang, saved=set())
+        lines = [ln for n, c in enumerate(out["candidates"], 1) for ln in _candidate_lines(n, c, lang)]
+        return "\n".join(lines + ["把候選照列給作者,由作者選;作者選定後用 save_character。"])
+
+    @server.tool(description=DESC_CREATE_CHARACTER)
+    async def create_character(form: str = "", attention: str = "", returns: str = "", response: str = "",
+                               instance: str = "", lang: str = "zh-Hant") -> str:
+        answers = {"form": form, "attention": attention, "returns": returns, "response": response, "instance": instance}
+        return await guarded(_create_character(answers, lang))
+
+    async def _save_character(number: int, name: str | None, confirm: bool) -> str:
+        items = drafts.get("items")
+        if not items:
+            raise _reject("no-candidates", "這個連線還沒有候選。作者要建角色時先用 create_character。")
+        if not 1 <= number <= len(items):
+            raise _reject("candidate-number", f"number 只能是 1 到 {len(items)}。")
+        if number in drafts["saved"]:
+            raise _reject("candidate-saved", "這個候選已經存過了。")
+        candidate = items[number - 1]
+        lang = drafts["lang"]
+        if name and name.strip():
+            candidate = {**candidate, "name": {**candidate["name"], lang: name.strip()}}
+        key = (number, candidate["name"][lang])
+        out = await call("POST", "/api/characters", {"candidate": candidate, "confirm": confirm and key in held},
+                         on_status={422: "這個候選存不下來:名字太長或空白。"})
+        if not out["created"]:
+            held.add(key)
+            return (f"還沒存。這個候選{_card_warnings(out['warnings'])}。"
+                    "請告訴作者,作者確認要存才帶 confirm=true 再呼叫一次。")
+        drafts["saved"].add(number)
+        c = out["character"]
+        return f"已存成{_shown(c['name'][lang], '新角色')}(id:{c['id']})。作者要它陪讀時用 set_character。"
+
+    @server.tool(description=DESC_SAVE_CHARACTER)
+    async def save_character(number: int, name: str | None = None, confirm: bool = False) -> str:
+        return await guarded(_save_character(number, name, confirm))
 
     @server.prompt(description="開始陪讀:交一篇稿子(或直接聊最近那篇),讓 companion 先開口。")
     def companion() -> str:

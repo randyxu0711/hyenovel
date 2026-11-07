@@ -1,5 +1,6 @@
 """角色登記表:DB 的 character_version.card 是正本;內建角色的 <id>.json(長相)+ <id>.md(讀法)啟動時同步成新版本。"""
 import json
+import secrets
 from functools import cache
 from pathlib import Path
 
@@ -19,7 +20,7 @@ class UnknownCharacter(Exception):
 
 
 class BuiltinCharacter(Exception):
-    """內建角色不能封存。"""
+    """內建角色不能封存、不能編輯。"""
 
 
 @cache
@@ -98,7 +99,7 @@ def resolve(conn, character: str | None, last: str | None) -> dict:
 
 
 def import_card(conn, card: dict, now: float) -> dict:
-    """同一張卡再匯入 = 同一隻角色,封存過就拉回來。呼叫者持 transaction。"""
+    """同一張卡再匯入 = 同一隻角色,封存過就拉回來,編輯過就換回這張。呼叫者持 transaction。"""
     cid = cards.imported_id(card)
     row = repo.latest_character(conn, cid)
     if row is None:
@@ -106,7 +107,41 @@ def import_card(conn, card: dict, now: float) -> dict:
         repo.add_character_version(conn, cid, card, now)
     else:
         repo.unarchive_character(conn, cid)
+        if row["card"] != card:
+            repo.add_character_version(conn, cid, card, now)
     return get(conn, cid)
+
+
+def create(conn, card: dict, now: float) -> dict:
+    cid = "c" + secrets.token_hex(8)
+    repo.add_character(conn, cid, "created", now)
+    repo.add_character_version(conn, cid, card, now)
+    return get(conn, cid)
+
+
+def copy(conn, character_id: str, now: float) -> dict:
+    row = repo.latest_character(conn, character_id)
+    if row is None or row["archived_at"] is not None:
+        raise UnknownCharacter(character_id)
+    return create(conn, cards.copied(row["card"], character_id), now)
+
+
+def edited_card(conn, character_id: str, name: dict, line: dict, reading: str) -> dict:
+    row = repo.latest_character(conn, character_id)
+    if row is None or row["archived_at"] is not None:
+        raise UnknownCharacter(character_id)
+    if row["origin"] == "builtin":
+        raise BuiltinCharacter(character_id)
+    return cards.edited(row["card"], name, line, reading)
+
+
+def edit(conn, character_id: str, name: dict, line: dict, reading: str, now: float) -> dict:
+    """呼叫者持 transaction。名字、介紹、讀法都沒變就不加版。"""
+    card = edited_card(conn, character_id, name, line, reading)
+    shown = get(conn, character_id)
+    if (shown["name"], shown["line"], shown["reading"]) != (name, line, reading):
+        repo.add_character_version(conn, character_id, card, now)
+    return get(conn, character_id)
 
 
 def archive(conn, character_id: str, now: float) -> None:

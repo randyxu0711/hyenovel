@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, DashError, type RecentSession, type SessionDetail } from "./api";
+import { api, DashError, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
 import Blob from "./Blob";
+import CardEditor, { SAVED_LIMITS } from "./CardEditor";
+import CharacterCard from "./CharacterCard";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import MemoryPage from "./MemoryPage";
+import NewCharacter from "./NewCharacter";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
 import { speakerChanges } from "./Talk";
@@ -194,6 +197,8 @@ function Companions() {
   const [err, setErr] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => setWho(companionId(chars)), [chars]);
   const code = (e: unknown) => (e instanceof DashError ? e.code : "unknown");
@@ -225,33 +230,62 @@ function Companions() {
     setErr(null);
     api.archiveCharacter(id).then(() => chars.reload()).catch(e => setErr(code(e)));
   };
+  const reloadSaved = () => chars.reload().catch(() => {});
+  const copy = (id: string) => {
+    setErr(null);
+    api.copyCharacter(id).then(reloadSaved).catch(e => setErr(code(e)));
+  };
+  const saveEdit = async (c: Character, draft: CardDraft, confirm: boolean) => {
+    const out = await api.editCharacter(c.id, draft, confirm);
+    if (!out.edited) return out.warnings ?? [];
+    await reloadSaved();
+    setEditing(null);
+    return [];
+  };
+  if (creating) {
+    return <NewCharacter onClose={() => setCreating(false)} onSaved={async () => { await reloadSaved(); setCreating(false); }} />;
+  }
   return (
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
+      <div className="char-cards">
       {chars.active.map(c => {
         const name = localized(c.name, lang);
+        if (editing === c.id) {
+          return <CardEditor key={c.id} draft={c} limits={SAVED_LIMITS}
+            onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
+        }
         return (
-          <div key={c.id} className="dash-set-card">
-            <label className="dash-set-who">
+          <CharacterCard key={c.id} character={c} name={name} on={who === c.id}>
+            <p className="char-line">{localized(c.line, lang)}</p>
+            <div className="char-foot">
+            <label className="char-default">
               <input type="radio" name="default-companion" checked={who === c.id}
-                onChange={() => pick(c.id)} />
-              <Blob character={c} size={28} />
-              <span>{name} <small>{localized(c.line, lang)}</small>{who === c.id && ` · ${t("set.default")}`}</span>
+                aria-label={name} onChange={() => pick(c.id)} />
+              <span className="nc-mark" aria-hidden="true" />{t(who === c.id ? "set.default" : "set.makeDefault")}
             </label>
             <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
               aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
+            <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
+              onClick={() => copy(c.id)}><Icon name="copy" /></button>
             {c.origin !== "builtin" && (
-              <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
-                onClick={() => archive(c.id)}><Icon name="box" /></button>
+              <>
+                <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
+                  onClick={() => setEditing(c.id)}><Icon name="edit" /></button>
+                <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
+                  onClick={() => archive(c.id)}><Icon name="box" /></button>
+              </>
             )}
-          </div>
+            </div>
+          </CharacterCard>
         );
       })}
-      <div>
-        <button type="button" className="ib" aria-label={t("set.card.import")} title={t("set.card.import")}
-          onClick={() => fileInput.current?.click()}><Icon name="up" /></button>
+      <div className="char-new">
+        <button type="button" onClick={() => setCreating(true)}><Icon name="plus" />{t("set.card.new")}</button>
+        <button type="button" onClick={() => fileInput.current?.click()}><Icon name="up" />{t("set.card.import")}</button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t("set.card.import")}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void fromFile(f); }} />
+      </div>
       </div>
       {problems.length > 0 && (
         <ul role="alert">{problems.map(p => <li key={p}>{t(`card.err.${p}` as MsgKey)}</li>)}</ul>
