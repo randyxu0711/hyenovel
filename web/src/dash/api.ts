@@ -2,6 +2,7 @@ import { sseFetch, type SSEEvent } from "../data/client";
 
 /** 與 den/app.py 的 ERROR_CODES 一致(加 den-down);den/tests/test_app_errors.py 比對兩份。 */
 export const DEN_ERROR_CODES = [
+  "candidates-busy", "candidates-failed",
   "bad-slug", "unknown-work", "bad-part", "not-analyzed", "no-notes", "no-feedback",
   "nothing-running", "unknown-session", "busy", "quote-not-in-source", "quote-too-long",
   "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",

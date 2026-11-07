@@ -54,7 +54,7 @@ def _prompt(name: str) -> str:
     return (_PROMPTS / f"{name}.md").read_text(encoding="utf-8")
 
 
-def _assemble(name: str, sch: dict) -> Prompt:
+def assemble(name: str, sch: dict) -> Prompt:
     shown = {k: v for k, v in sch.items() if k != "$schema"}
     return Prompt((
         Layer("task", _prompt(name).rstrip()),
@@ -73,7 +73,7 @@ def _gate_reviewer(body: dict, source: str, inputs: Inputs) -> list[str]:
 
 
 WORKPACKS: dict[str, WorkPack] = {
-    name: WorkPack(name, kind, _assemble(name, schema.load_schema(kind)),
+    name: WorkPack(name, kind, assemble(name, schema.load_schema(kind)),
                    schema.load_schema(kind), needs, check)
     for name, kind, needs, check in (("analyst", "analysis", (), _gate_analyst),
                                      ("reviewer", "notes", ("analysis",), _gate_reviewer))

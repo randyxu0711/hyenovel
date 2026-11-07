@@ -88,6 +88,7 @@ _TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞�
 
 # dashboard 前端依 code 對照人話;detail 維持原字串(MCP shim 靠它),code 另附。
 ERROR_CODES: tuple[str, ...] = (
+    "candidates-busy", "candidates-failed",
     "bad-slug", "unknown-work", "bad-part", "not-analyzed", "no-notes", "no-feedback",
     "nothing-running", "unknown-session", "busy", "quote-not-in-source", "quote-too-long",
     "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
@@ -258,6 +259,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             chat_f = chat_factory or default_chat
             app.state.chat = chat_f() if chat_f else None
             app.state.chat_locks = {}                   # f"{slug}/{session_id}" → 該局的鎖
+            app.state.run_once = factory(None)
+            app.state.candidates_busy = False
             app.state.token = load_token(data_dir)
             app.state.version = version.fingerprint()   # 啟動時算一次;磁碟上現在的值由呼叫者現算比對
             app.state.available = ("claude",)           # 目前唯一 preset;其他家在 backlog
@@ -353,7 +356,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
     @api.get("/health")
     async def health(request: Request):
         return {"version": request.app.state.version, "pid": os.getpid(),
-                "busy": repo.has_pending_jobs(request.app.state.mgr.conn)}
+                "busy": (request.app.state.candidates_busy
+                         or repo.has_pending_jobs(request.app.state.mgr.conn))}
 
     for module in (catalog, memory, jobs, talk, works):
         api.include_router(module.router)

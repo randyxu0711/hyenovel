@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidates"],
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "順序對應 <positions> 的候選 1、2、3。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "line", "reading", "sample"],
+        "properties": {
+          "name": {"$ref": "#/$defs/name"},
+          "line": {"$ref": "#/$defs/line"},
+          "reading": {"type": "string", "pattern": "\\S", "maxLength": 600, "description": "這個讀者是誰、怎麼讀、在意什麼。用「你」稱呼這個讀者。"},
+          "sample": {"type": "string", "pattern": "\\S", "maxLength": 120, "description": "讀完 <passage> 的一句反應。"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zh-Hant", "en"],
+      "properties": {
+        "zh-Hant": {"type": "string", "pattern": "\\S", "maxLength": 16},
+        "en": {"type": "string", "pattern": "\\S", "maxLength": 32}
+      }
+    },
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zh-Hant", "en"],
+      "description": "一句介紹,說這個讀者怎麼讀。",
+      "properties": {
+        "zh-Hant": {"type": "string", "pattern": "\\S", "maxLength": 40},
+        "en": {"type": "string", "pattern": "\\S", "maxLength": 80}
+      }
+    }
+  }
+}
