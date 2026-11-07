@@ -1,5 +1,6 @@
 import type { WorkMap } from "./api";
 import { errorMessage, useT, type MsgKey } from "./i18n";
+import Icon from "./Icon";
 import Iq from "./Iq";
 
 const KINDS = ["moved", "confused", "wondering", "opinion"];
@@ -12,7 +13,7 @@ function why(state: string): MsgKey {
   return "notes.none";
 }
 
-/** 筆記分頁:冷讀者(reviewer)的備課筆記。陪讀者看不到這些。 */
+/** 筆記分頁:reviewer 的備課筆記。陪讀者看不到這些。 */
 export default function NotesTab({ map, state, error = null }: { map: WorkMap | null; state: string; error?: string | null }) {
   const t = useT();
   if (!map && error) return <p className="side-lede" role="alert">{t(errorMessage(error))}</p>;
@@ -20,7 +21,7 @@ export default function NotesTab({ map, state, error = null }: { map: WorkMap | 
   if (!map.notes) return <p className="side-lede">{t(why(state))}</p>;
   return (
     <div className="side-col">
-      <p className="side-lede">{t("notes.lead", { n: map.notes_version ?? map.version })}</p>
+      <p className="side-lede notes-meta" title={t("notes.lead")}><span className="dash-dm">v{map.notes_version ?? map.version}</span><Icon name="eyeOff" /><span className="vh">{t("notes.lead")}</span></p>
       {map.notes.points.map((p, i) => (
         <section key={i} className="side-note">
           {KINDS.includes(p.kind) && <p className="side-kind">{t(`notes.kind.${p.kind}` as MsgKey)}</p>}

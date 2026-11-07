@@ -18,6 +18,8 @@
 }
 .dash[data-view="home"]{background-image:var(--dash-spots,none); background-size:480px 480px}
 /* 點陣字:只用在品牌、版本、時間、段號;要讀的字不用 */
+.dash .vh{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.dash .notes-meta{display:flex; align-items:center; gap:6px}
 .dash-dm{font-family:var(--dash-dot-font); font-weight:800; letter-spacing:.06em; font-variant-numeric:tabular-nums}
 /* 紙:稿子本體 */
 .dash-paper{background:var(--dash-paper); color:var(--dash-paper-ink); border-radius:3px; box-shadow:var(--dash-sh-raise)}
@@ -65,7 +67,7 @@
 .dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ink)}
 .dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 28px; display:flex; flex-direction:column; gap:18px}
 .dash .chat-log > *{width:100%; max-width:30em; margin-inline:auto}
-.dash .chat-empty, .dash .chat-wait{margin:0; color:var(--dash-ink-2); font-size:var(--dash-t-sm)}
+.dash .chat-wait{margin:0; color:var(--dash-ink-2); font-size:var(--dash-t-sm)}
 .dash .chat-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
 .dash .chat-text{margin:0; white-space:pre-wrap; line-height:1.8}
 .dash .chat-me{box-sizing:border-box; padding:8px 14px; border-radius:10px; background:var(--dash-desk-2)}
@@ -141,8 +143,6 @@
 .dash .home .composer textarea{min-height:104px; font-size:var(--dash-t-md); padding:16px 18px 4px}
 .dash .home .composer::before{inset:16px 18px 44px}
 .dash .home-draft{display:flex; flex-direction:column; gap:8px; padding:20px 18px 10px}
-.dash .home-first{display:flex; align-items:center; gap:10px; margin:0; font-family:var(--serif); font-size:var(--dash-t-lg); color:var(--dash-ink-2)}
-.dash .home-first .ico{width:22px; height:22px}
 .dash .home-box{display:flex; flex-direction:column; gap:8px; padding:10px 12px}
 .dash .home-box textarea{border:0; background:none; resize:none; font:inherit; color:var(--dash-ink); min-height:44px; outline:none}
 .dash .home-box textarea:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:4px}
@@ -452,7 +452,6 @@
 .dash .set-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; padding:12px 14px; border-radius:10px; color:var(--dash-ink)}
 .dash .set-row:hover{background:var(--dash-desk-2)}
 .dash .set-lab{font-weight:500}
-.dash .set-hint{display:block; font-weight:400; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .set-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
 .dash .set-seg{display:flex; gap:2px; padding:2px; border-radius:9px; background:var(--dash-desk-2)}
 .dash .set-seg button{display:grid; place-items:center; min-width:30px; height:28px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}

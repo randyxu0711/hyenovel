@@ -159,7 +159,6 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   return (
     <div className="chat">
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
-        {!turns.length && !pending && <p className="chat-empty">{t("talk.start", { name: nameOf(whoId) })}</p>}
         {rows}
         {pending && (
           <div className="chat-me">

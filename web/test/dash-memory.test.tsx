@@ -44,7 +44,7 @@ describe("MemoryPage", () => {
       mem({ id: 3, scope: "work", slug: "d2", title: null, text: "別篇" }),
     ));
     mount();
-    const author = await groupOf("作者");
+    const author = await groupOf("每篇");
     expect(within(author).getByText("😀寫")).toBeTruthy();
     expect(within(author).getByText("2/800")).toBeTruthy();
     const sea = screen.getByRole("group", { name: "海" });
@@ -58,14 +58,14 @@ describe("MemoryPage", () => {
     mount();
     fireEvent.click(await screen.findByRole("link", { name: /原話/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d%201?s=s%2F1");
-    expect(screen.queryByText("手寫")).toBeNull();
+    expect(screen.queryByText("手打")).toBeNull();
   });
 
   it("沒有來源的顯示手寫標記", async () => {
     memories.mockResolvedValue(list(mem({ text: "手打的" })));
     mount();
     await screen.findByText("手打的");
-    expect(screen.getByText("手寫")).toBeTruthy();
+    expect(screen.getByText("手打")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
   });
 
@@ -206,7 +206,7 @@ describe("MemoryPage", () => {
     mount();
     await screen.findByRole("textbox", { name: "新增記憶" });
     await waitFor(() => expect(memories).toHaveBeenCalled());
-    expect(screen.queryByRole("group", { name: "作者" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "每篇" })).toBeNull();
     expect(screen.queryByRole("button", { name: /已封存/ })).toBeNull();
   });
 });

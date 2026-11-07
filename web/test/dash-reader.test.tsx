@@ -377,34 +377,35 @@ describe("交新版", () => {
   const pick = (c: HTMLElement) => fireEvent.change(c.querySelector('input[type="file"]')!, { target: { files: [file()] } });
   afterEach(() => vi.restoreAllMocks());
 
-  it("頂列有交新版鍵;選檔後出現「交成第 3 版」交稿條", async () => {
+  it("頂列有交新版鍵;選檔後出現「v3」交稿條", async () => {
     const { container } = await mountNew();
     expect(screen.getByRole("button", { name: "交新版" })).toBeTruthy();
     pick(container);
-    expect(await screen.findByText("交成第 3 版")).toBeTruthy();
+    expect(await screen.findByText("v3")).toBeTruthy();
     expect(api.extract).toHaveBeenCalled();
     expect(screen.getByText("4 字")).toBeTruthy();
-    expect(screen.getByText("第一次分析,還沒有預估。")).toBeTruthy();
+    expect(screen.queryByText(/預估/)).toBeNull();
+    expect(screen.getByText("會花額度")).toBeTruthy();
   });
   it("在 ?v=1 開交稿條也是第 3 版", async () => {
     const { container } = await mountNew({}, "/w/d1?v=1");
     await screen.findByText("第 1 版的字。");
     pick(container);
-    expect(await screen.findByText("交成第 3 版")).toBeTruthy();
+    expect(await screen.findByText("v3")).toBeTruthy();
   });
   it("交出去並分析 → submit 帶 slug、startJob、onNewVersion 收到 analyzing:true、交稿條消失", async () => {
     const { container, onNewVersion } = await mountNew();
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: true }));
     expect(api.submit).toHaveBeenCalledWith("改過的稿", undefined, "d1");
     expect(api.startJob).toHaveBeenCalledWith("d1");
-    expect(screen.queryByText("交成第 3 版")).toBeNull();
+    expect(screen.queryByText("v3")).toBeNull();
   });
   it("只存版 → 不開 job,onNewVersion 收到 analyzing:false", async () => {
     const { container, onNewVersion } = await mountNew();
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
     expect(api.startJob).not.toHaveBeenCalled();
   });
@@ -412,16 +413,16 @@ describe("交新版", () => {
     const { container, onNewVersion } = await mountNew();
     vi.mocked(api.submit).mockRejectedValue(new DashError(413, "story-too-long"));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByText("交成第 3 版")).toBeTruthy();
+    expect(screen.getByText("v3")).toBeTruthy();
     expect(onNewVersion).not.toHaveBeenCalled();
   });
   it("跟最新版一字不差 → onNewVersion 收到 same:true 與那一版的號碼", async () => {
     const { container, onNewVersion } = await mountNew();
     vi.mocked(api.submit).mockResolvedValue({ slug: "d1", title: "海", version: 2, new_version: false, reused: true });
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: true, version: 2, analyzing: false }));
   });
   it("確認還在跑時換了作品 → 結果回來不再通知 onNewVersion", async () => {
@@ -439,7 +440,7 @@ describe("交新版", () => {
     const { container, rerender } = render(el("d1"));
     await screen.findByRole("heading", { name: "海" });
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
     await waitFor(() => expect(api.submit).toHaveBeenCalled());
     rerender(el("d2"));
     done({ slug: "d1", title: "海", version: 3, new_version: true, reused: false });
@@ -451,24 +452,24 @@ describe("交新版", () => {
     vi.mocked(api.extract).mockResolvedValue({ filename: "a.md", text: "  \n ", chars: 3 });
     pick(container);
     expect((await screen.findByRole("alert")).textContent).toBe("稿子是空的。");
-    expect(screen.getByRole("button", { name: "只存版,先不分析" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "只存" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "分析" })).toHaveProperty("disabled", true);
   });
   it("新版存下了但開分析失敗 → 照樣回最新版(analyzing:false),頂列顯示錯誤", async () => {
     const { container, onNewVersion } = await mountNew();
     vi.mocked(api.startJob).mockRejectedValue(new DashError(503, "den-down"));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.queryByText("交成第 3 版")).toBeNull();
+    expect(screen.queryByText("v3")).toBeNull();
   });
   it("送出中:取消 disabled、按的那顆說送出中、選檔不換稿", async () => {
     const { container, onNewVersion } = await mountNew();
     let done!: (v: never) => void;
     vi.mocked(api.submit).mockImplementation(() => new Promise(r => { done = r as never; }));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存版,先不分析" }));
+    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
     expect(await screen.findByRole("button", { name: "送出中……" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "取消" })).toHaveProperty("disabled", true);
     pick(container);
@@ -480,12 +481,12 @@ describe("交新版", () => {
     const { container } = await mountNew();
     pick(container);
     fireEvent.click(await screen.findByRole("button", { name: "取消" }));
-    expect(screen.queryByText("交成第 3 版")).toBeNull();
+    expect(screen.queryByText("v3")).toBeNull();
   });
   it("把檔拖到畫面任何地方 → 出現交稿條", async () => {
     await mountNew();
     fireEvent.drop(window, { dataTransfer: { types: ["Files"], files: [file()] } });
-    expect(await screen.findByText("交成第 3 版")).toBeTruthy();
+    expect(await screen.findByText("v3")).toBeTruthy();
   });
   it("state=stale 的最新版有「分析」;按下 startJob(slug)、重抓並通知", async () => {
     const { onFinished } = await mountNew({ state: "stale" });

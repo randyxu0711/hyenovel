@@ -95,12 +95,12 @@ describe("鍵盤", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "設定" }));
     expect(where()).toBe("/settings");
   });
-  it("找不到時說沒有符合的", async () => {
+  it("找不到時說沒有符合", async () => {
     mount("/w/d1");
     await screen.findByLabelText("對話輸入");
     ctrlK();
     fireEvent.change(await screen.findByRole("combobox"), { target: { value: "zzzz" } });
-    expect(screen.getByText("沒有符合的")).toBeTruthy();
+    expect(screen.getByText("沒有符合")).toBeTruthy();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
   it("窄條的找作品鍵開指令框", async () => {

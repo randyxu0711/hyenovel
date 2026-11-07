@@ -49,7 +49,7 @@ describe("右欄分頁", () => {
     fireEvent.click(tab("筆記"));
     expect(tab("筆記").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("內文一行")).toBeTruthy();
-    expect(await screen.findByText("這篇是舊版流程讀的,沒有筆記。")).toBeTruthy();
+    expect(await screen.findByText("沒有筆記")).toBeTruthy();
     fireEvent.click(tab("結構圖"));
     expect(screen.getByText("內文一行")).toBeTruthy();
     expect(container.querySelectorAll("button.dash-mcol")).toHaveLength(1);
@@ -70,9 +70,9 @@ describe("右欄分頁", () => {
     mount();
     await screen.findByText("內文一行");
     fireEvent.click(tab("筆記"));
-    expect(await screen.findByText("出了點狀況,請再試一次。")).toBeTruthy();
+    expect(await screen.findByText("沒成功,再試一次。")).toBeTruthy();
     fireEvent.click(tab("結構圖"));
-    expect(screen.getByText("出了點狀況,請再試一次。")).toBeTruthy();
+    expect(screen.getByText("沒成功,再試一次。")).toBeTruthy();
     expect(screen.queryByText("載入中……")).toBeNull();
   });
   it("切走對話時對話仍掛著(草稿不丟)", async () => {

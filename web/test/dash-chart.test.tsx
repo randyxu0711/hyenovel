@@ -37,7 +37,7 @@ describe("結構圖分頁", () => {
   it("有失根 → 顯示 2/3 並列出失根觀察", () => {
     const { container } = mount(map({ drift: { total: 3, lost: 2, orphaned: [{ id: "m1", type: "motif", label: "海" }] } }));
     expect(container.textContent).toContain("2/3");
-    expect(container.textContent).toContain("這些觀察已經沒有根據");
+    expect(container.textContent).toContain("找不到根據");
     expect(screen.getByText("海")).toBeTruthy();
   });
   it("lost 為 0 → 不出聲", () => {
@@ -113,7 +113,7 @@ describe("結構圖分頁", () => {
   });
   it("分析屬於別版 → 頂端「這是第 N 版的分析」", () => {
     mount(map({ analysis_version: 1 }));
-    expect(screen.getByText("這是第 1 版的分析")).toBeTruthy();
+    expect(screen.getByText("v1 的分析")).toBeTruthy();
   });
   it("對位資料抓不到:顯示錯誤,不停在載入中", () => {
     mount(null, [], vi.fn(), "den-down");

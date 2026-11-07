@@ -206,7 +206,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
           {draft && (
             <p className="home-meta">
               <span>{t("feed.chars", { n: draft.chars })}</span>
-              {est && <span>{est.v ? t("feed.estimate", { min: Math.max(1, Math.round(est.v.seconds / 60)) }) : t("feed.noEstimate")}</span>}
+              {est?.v && <span>{t("feed.estimate", { min: Math.max(1, Math.round(est.v.seconds / 60)) })}</span>}
             </p>
           )}
           {submit.error && <p role="alert" className="home-msg">{t(errorMessage(submit.error))}</p>}
@@ -216,6 +216,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
               <button type="button" className="dash-key home-go" disabled={submit.busy || !draft.chars} onClick={() => void submitNew(false)}>
                 {submit.busy && keeping ? t("feed.sending") : t("newver.keep")}
               </button>
+              <span className="nc-note">{t("nc.costs")}</span>
               <button type="button" className="dash-key home-go" disabled={submit.busy || !draft.chars} onClick={() => void submitNew(true)}>
                 {submit.busy && !keeping ? t("feed.sending") : t("feed.go")}
               </button>

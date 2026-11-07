@@ -114,8 +114,7 @@ describe("Dash 殼與路由", () => {
   });
   it("沒有作品時 home 邀請把稿拖進來", async () => {
     mount("/", []);
-    expect(await screen.findByText("拖一篇稿進來")).toBeTruthy();
-    expect((screen.getByRole("textbox", { name: "貼上或拖進一篇稿" }) as HTMLTextAreaElement).placeholder).toBe("貼上或拖進一篇稿");
+    expect(((await screen.findByRole("textbox", { name: "貼上或拖進一篇稿" })) as HTMLTextAreaElement).placeholder).toBe("貼上或拖進一篇稿");
   });
 });
 
@@ -124,7 +123,7 @@ describe("Dash 交稿後", () => {
     fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
     await screen.findByRole("textbox", { name: "貼上或拖進一篇稿" });   // 交新稿回到進門畫面
     fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [new File(["x"], "最近的.md")] } });
-    fireEvent.click(await screen.findByRole("button", { name: /交稿並開始分析/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
   };
   const mountSubmitting = () => {
     const f = mount("/w/d2");
@@ -143,18 +142,18 @@ describe("Dash 交稿後", () => {
     await screen.findByText("內文一行");
     const before = workFetches(f);
     await draft();
-    expect(await screen.findByText("這篇已經在了,已切過去。")).toBeTruthy();
+    expect(await screen.findByText("已經在書架上")).toBeTruthy();
     await waitFor(() => expect(workFetches(f)).toBeGreaterThan(before));
     fireEvent.click(screen.getByRole("button", { name: "關閉提示" }));
-    expect(screen.queryByText("這篇已經在了,已切過去。")).toBeNull();
+    expect(screen.queryByText("已經在書架上")).toBeNull();
   });
   it("提示在下一個動作(選作品)時清掉", async () => {
     mountSubmitting();
     await screen.findByText("內文一行");
     await draft();
-    await screen.findByText("這篇已經在了,已切過去。");
+    await screen.findByText("已經在書架上");
     fireEvent.click(within(await nav()).getByRole("button", { name: "展開書架" }));
     fireEvent.click(within(await nav()).getByRole("button", { name: /最近的/ }));
-    expect(screen.queryByText("這篇已經在了,已切過去。")).toBeNull();
+    expect(screen.queryByText("已經在書架上")).toBeNull();
   });
 });

@@ -147,7 +147,7 @@ describe("設定頁", () => {
     setPaperFlow("v");
   });
 
-  it("稿字級存 localStorage,預覽紙與 Paper 都套 data-size", async () => {
+  it("字級存 localStorage,預覽紙與 Paper 都套 data-size", async () => {
     mount();
     const p = await page();
     const mini = () => p.getByRole("figure", { name: "預覽" }).querySelector("p")!.getAttribute("data-size");
@@ -241,7 +241,7 @@ describe("設定頁", () => {
     const p = await page();
     const snap = () => JSON.stringify(Object.entries(localStorage)) + document.querySelector(".dash-settings")!.innerHTML;
     const controls = () => [...document.querySelectorAll<HTMLElement>(".dash-settings button, .dash-settings input")]
-      .filter(el => !["匯入角色卡", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
+      .filter(el => !["匯入", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
         && !/^(複製|編輯)/.test(el.getAttribute("aria-label") ?? ""));   // 系統檔案視窗不改狀態;新角色、複製、編輯另有測試
     let n = 0;
     for (const sec of ["陪讀者", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
@@ -334,7 +334,7 @@ describe("設定頁:角色卡", () => {
     render(<MemoryRouter initialEntries={["/settings"]}><Routes><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
   };
   const upload = async (content: string) => {
-    const input = (await screen.findByLabelText("匯入角色卡", { selector: "input" })) as HTMLInputElement;
+    const input = (await screen.findByLabelText("匯入", { selector: "input" })) as HTMLInputElement;
     const file = new File([content], "card.json", { type: "application/json" });
     Object.defineProperty(file, "text", { value: async () => content });
     fireEvent.change(input, { target: { files: [file] } });

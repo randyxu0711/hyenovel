@@ -115,10 +115,10 @@ export function SettingsNav({ section, onPick, back }: {
 }
 
 /** 一列:左標籤、右控制。 */
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="set-row">
-      <span className="set-lab">{label}{hint && <span className="set-hint">{hint}</span>}</span>
+      <span className="set-lab">{label}</span>
       <div className="set-ctl">{children}</div>
     </div>
   );
@@ -166,7 +166,7 @@ function Look() {
             ))}
           </div>
         </Row>
-        <Row label={t("set.flow")} hint={t("set.flowHint")}>
+        <Row label={t("set.flow")}>
           <div className="set-seg" role="group" aria-label={t("set.flow")}>
             {FLOWS.map(f => (
               <button key={f.flow} type="button" aria-pressed={flow === f.flow} aria-label={t(f.key)} title={t(f.key)}

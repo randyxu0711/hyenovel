@@ -49,7 +49,7 @@ describe("Remember", () => {
     selectPart(1, 5);
     fireEvent.click(opener());
     expect(box().value).toBe("不寫結局");
-    fireEvent.click(screen.getByRole("button", { name: "記下" }));
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
     await waitFor(() => expect(remember).toHaveBeenCalledWith(
       { scope: "work", text: "不寫結局", slug: "s", session: "sid", seq: 3, quote: "不寫結局" }));
   });
@@ -70,7 +70,7 @@ describe("Remember", () => {
     mount();
     fireEvent.click(opener());
     fireEvent.change(box(), { target: { value: "作者不寫結局" } });
-    fireEvent.click(screen.getByRole("button", { name: "記下" }));
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
     await waitFor(() => expect(remember.mock.calls[0][0]).toMatchObject({ text: "作者不寫結局", quote: WORDS }));
   });
 
@@ -78,23 +78,23 @@ describe("Remember", () => {
     mount();
     fireEvent.click(opener());
     fireEvent.change(box(), { target: { value: "  " } });
-    expect((screen.getByRole("button", { name: "記下" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "存" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("選寫到這篇 → scope work 帶 slug;寫到作者 → scope author 也帶 slug", async () => {
     mount();
     fireEvent.click(opener());
     expect(screen.getByRole("button", { name: "這篇" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "作者" }));
+    fireEvent.click(screen.getByRole("button", { name: "每篇" }));
     remember.mockResolvedValue(row(8, "author"));
-    fireEvent.click(screen.getByRole("button", { name: "記下" }));
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
     await waitFor(() => expect(remember.mock.calls[0][0]).toMatchObject({ scope: "author", slug: "s" }));
   });
 
   it("寫入後那則旁出記憶圖示和層名,按撤銷呼叫 archiveMemory 並恢復成可記住", async () => {
     const { container } = mount();
     fireEvent.click(opener());
-    fireEvent.click(screen.getByRole("button", { name: "記下" }));
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
     await waitFor(() => expect(marks(container)).toHaveLength(1));
     expect(label(marks(container)[0])).toBe("記在這篇");
     expect(marks(container)[0].textContent).toBe("");
@@ -124,7 +124,7 @@ describe("Remember", () => {
     const { container } = mount();
     fireEvent.click(opener());
     fireEvent.change(box(), { target: { value: "改過的字" } });
-    fireEvent.click(screen.getByRole("button", { name: "記下" }));
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
     expect((await screen.findByRole("alert")).textContent).toContain("滿了");
     expect(marks(container)).toHaveLength(0);
     expect(box().value).toBe("改過的字");
@@ -138,7 +138,7 @@ describe("Remember", () => {
     const { container } = mount([{ id: 1, scope: "work" }, { id: 2, scope: "author" }]);
     fireEvent.click(screen.getByRole("button", { name: "記在這篇" }));
     fireEvent.click(screen.getByRole("button", { name: "撤銷" }));
-    fireEvent.click(screen.getByRole("button", { name: "記在作者" }));
+    fireEvent.click(screen.getByRole("button", { name: "記在每篇" }));
     fireEvent.click(screen.getByRole("button", { name: "撤銷" }));
     await act(async () => { finishA(); });
     await act(async () => { finishB(); });
@@ -161,7 +161,7 @@ describe("Remember", () => {
   it("已記過的逐字重新載入後,旁邊就有記憶圖示", () => {
     const { container } = mount([{ id: 7, scope: "author" }]);
     expect(marks(container)).toHaveLength(1);
-    expect(label(marks(container)[0])).toBe("記在作者");
+    expect(label(marks(container)[0])).toBe("記在每篇");
   });
 
   it("記憶圖示是專用的", () => {
@@ -215,7 +215,7 @@ describe("掛在對話裡", () => {
     fireEvent.click(screen.getByRole("button", { name: "送出" }));
     await screen.findByText("回覆");
     fireEvent.click(within(screen.getByRole("log")).getByRole("button", { name: "記住" }));
-    fireEvent.click(screen.getByRole("button", { name: "記下" }));
+    fireEvent.click(screen.getByRole("button", { name: "存" }));
     await waitFor(() => expect(remember.mock.calls[0][0]).toMatchObject({ session: "s1", seq: 0, quote: "我說的話" }));
   });
 

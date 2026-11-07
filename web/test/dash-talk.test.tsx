@@ -360,7 +360,7 @@ describe("引文", () => {
     withQuote([{ quote: "海很藍", start: null, end: null }]);
     const { container } = mount("/w/d1?v=1");
     const iq = await (await findLog()).findByRole("button", { name: "「海很藍」" });
-    expect(iq.getAttribute("title")).toBe("這句在第 1 版找不到");
+    expect(iq.getAttribute("title")).toBe("v1 沒有這句");
     expect(iq.classList.contains("is-lost")).toBe(true);
     expect(calls()).toContain("/api/sessions/s1?v=1");
     expect(calls()).toContain("/api/works/d1/map?v=1");
@@ -393,7 +393,7 @@ describe("對話錯誤與上限", () => {
     mount();
     await screen.findByText("第一段。");
     say("嗨");
-    expect((await screen.findByRole("alert")).textContent).toBe("出了點狀況,請再試一次。");
+    expect((await screen.findByRole("alert")).textContent).toBe("沒成功,再試一次。");
   });
   it("輸入框有 maxLength,與 den 的訊息上限一致", async () => {
     mount();
@@ -550,7 +550,7 @@ describe("交新版之後", () => {
     await screen.findByRole("button", { name: "交新版" });
     fireEvent.change(r.container.querySelector('input[type="file"]')!, { target: { files: [new File(["新的稿"], "海.md")] } });
     const before = calls().filter(c => c.startsWith("/api/sessions/abc")).length;
-    fireEvent.click(await screen.findByRole("button", { name: "交稿並開始分析(會用你的訂閱額度)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "分析" }));
     await waitFor(() => expect(calls()).toContain("/api/stories"));
     return before;
   };
@@ -574,7 +574,7 @@ describe("交新版之後", () => {
   });
   it("跟最新版一字不差 → 提示「跟第 2 版一字不差」,逐字稿不重抓", async () => {
     const before = await submitFrom("/w/d1?s=abc", false);
-    expect(await screen.findByText("跟第 2 版一字不差,沒有新增版本")).toBeTruthy();
+    expect(await screen.findByText("跟 v2 一樣,沒存新版")).toBeTruthy();
     expect(sessionCalls()).toBe(before);
   });
   it("versionBreaks:v 與前一個有值的 v 不同才斷,第一則不畫,沒 v 的沿用前一則", () => {
