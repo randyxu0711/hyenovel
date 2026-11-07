@@ -93,7 +93,9 @@
 .dash .chat-mem{display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:2px; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
 .dash .chat-mem-mark{display:inline-flex; align-items:center; gap:3px}
 .dash .chat-mem-undo{padding:0; border:0; background:none; color:inherit; font:inherit; text-decoration:underline; cursor:pointer}
-.dash .chat-mem-open{display:inline-flex; padding:3px; border:0; border-radius:6px; background:none; color:inherit; opacity:.45; cursor:pointer; transition:opacity .15s}
+.dash .chat-mem-open{display:inline-flex; padding:3px; border:0; border-radius:6px; background:none; color:inherit; opacity:0; cursor:pointer; transition:opacity .15s}
+@media (hover:none){ .dash .chat-mem-open{opacity:.6} }
+.dash .chat-mem-on{display:inline-flex; padding:3px; border:0; border-radius:6px; background:none; color:var(--dash-paper-ink-2); cursor:pointer}
 .dash .chat-me:hover .chat-mem-open, .dash .chat-mem-open:focus-visible{opacity:1}
 .dash .chat-mem-form{display:flex; flex-direction:column; flex-basis:100%; gap:4px}
 .dash .chat-mem-form textarea{box-sizing:border-box; width:100%; padding:4px 6px; border:1px solid var(--dash-paper-ink-2); border-radius:6px; background:none; color:inherit; font:inherit; resize:vertical}

@@ -24,6 +24,8 @@ const mount = (initial: TurnMemory[] = []) =>
 const opener = () => screen.getByRole("button", { name: "記住" });
 const box = () => screen.getByRole("textbox", { name: "記憶內容" }) as HTMLTextAreaElement;
 const marks = (c: HTMLElement) => c.querySelectorAll(".chat-mem-mark");
+const label = (el: Element) => el.querySelector("button")!.getAttribute("aria-label");
+const peekAll = () => screen.queryAllByRole("button", { name: /^記在/ }).forEach(b => fireEvent.click(b));
 
 function selectPart(from: number, to: number) {
   const node = screen.getByText(WORDS).firstChild!;
@@ -94,8 +96,11 @@ describe("Remember", () => {
     fireEvent.click(opener());
     fireEvent.click(screen.getByRole("button", { name: "記下" }));
     await waitFor(() => expect(marks(container)).toHaveLength(1));
-    expect(marks(container)[0].textContent).toContain("這篇");
+    expect(label(marks(container)[0])).toBe("記在這篇");
+    expect(marks(container)[0].textContent).toBe("");
     expect(marks(container)[0].querySelector("svg")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "撤銷" })).toBeNull();
+    peekAll();
     expect(changed).toHaveBeenLastCalledWith([{ id: 7, scope: "work" }]);
     expect(screen.queryByRole("textbox", { name: "記憶內容" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "撤銷" }));
@@ -108,6 +113,7 @@ describe("Remember", () => {
   it("撤銷失敗:記號還在,顯示原因", async () => {
     archive.mockRejectedValue(new DashError(409, "memory-not-current"));
     const { container } = mount([{ id: 7, scope: "author" }]);
+    peekAll();
     fireEvent.click(screen.getByRole("button", { name: "撤銷" }));
     expect((await screen.findByRole("alert")).textContent).toContain("不是生效中");
     expect(marks(container)).toHaveLength(1);
@@ -130,9 +136,10 @@ describe("Remember", () => {
     archive.mockImplementationOnce(() => new Promise<void>(r => { finishA = r; }));
     archive.mockImplementationOnce(() => new Promise<void>(r => { finishB = r; }));
     const { container } = mount([{ id: 1, scope: "work" }, { id: 2, scope: "author" }]);
-    const [undoA, undoB] = screen.getAllByRole("button", { name: "撤銷" });
-    fireEvent.click(undoA);
-    fireEvent.click(undoB);
+    fireEvent.click(screen.getByRole("button", { name: "記在這篇" }));
+    fireEvent.click(screen.getByRole("button", { name: "撤銷" }));
+    fireEvent.click(screen.getByRole("button", { name: "記在作者" }));
+    fireEvent.click(screen.getByRole("button", { name: "撤銷" }));
     await act(async () => { finishA(); });
     await act(async () => { finishB(); });
     await waitFor(() => expect(marks(container)).toHaveLength(0));
@@ -143,6 +150,7 @@ describe("Remember", () => {
     let finish!: () => void;
     archive.mockImplementationOnce(() => new Promise<void>(r => { finish = r; }));
     mount([{ id: 1, scope: "work" }]);
+    peekAll();
     const undo = screen.getByRole("button", { name: "撤銷" });
     fireEvent.click(undo);
     fireEvent.click(undo);
@@ -153,7 +161,7 @@ describe("Remember", () => {
   it("已記過的逐字重新載入後,旁邊就有記憶圖示", () => {
     const { container } = mount([{ id: 7, scope: "author" }]);
     expect(marks(container)).toHaveLength(1);
-    expect(marks(container)[0].textContent).toContain("作者");
+    expect(label(marks(container)[0])).toBe("記在作者");
   });
 
   it("記憶圖示是專用的", () => {
@@ -236,6 +244,7 @@ describe("掛在對話裡", () => {
     mountDash([u(0, "我的話", [{ id: 3, scope: "work" }]), a(1, "回覆")]);
     const log = await screen.findByRole("log");
     await within(log).findByText("回覆");
+    fireEvent.click(within(log).getByRole("button", { name: "記在這篇" }));
     fireEvent.click(within(log).getByRole("button", { name: "撤銷" }));
     await waitFor(() => expect(archive).toHaveBeenCalledWith(3));
     await waitFor(() => expect(marks(log)).toHaveLength(0));

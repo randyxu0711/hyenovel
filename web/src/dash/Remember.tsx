@@ -25,6 +25,7 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState<string | null>(null);
+  const [peek, setPeek] = useState<number | null>(null);
 
   const latest = useRef(initial);
   const undoing = useRef(new Set<number>());
@@ -64,8 +65,10 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
       <div className="chat-mem">
         {saved.map(m => (
           <span key={m.id} className="chat-mem-mark">
-            <Icon name="memory" />{t(LAYER_LABEL[m.scope])}
-            <button type="button" className="chat-mem-undo" onClick={() => void undo(m.id)}>{t("memory.undo")}</button>
+            <button type="button" className="chat-mem-on" aria-expanded={peek === m.id}
+              aria-label={t("memory.savedIn", { layer: t(LAYER_LABEL[m.scope]) })} title={t("memory.savedIn", { layer: t(LAYER_LABEL[m.scope]) })}
+              onClick={() => setPeek(p => (p === m.id ? null : m.id))}><Icon name="memoryOn" /></button>
+            {peek === m.id && <button type="button" className="chat-mem-undo" onClick={() => void undo(m.id)}>{t("memory.undo")}</button>}
           </span>
         ))}
         {!form && (

@@ -29,6 +29,7 @@ const PATHS = {
   up: <path d="M9 12V4M5.5 7L9 3.5 12.5 7M3.5 15h11" />,
   swap: <path d="M3 6.5h10.5L11 4M15 11.5H4.5L7 14" />,
   memory: <path d="M5 2.5h8v13l-4-3-4 3z" />,
+  memoryOn: <path d="M5 2.5h8v13l-4-3-4 3z" fill="currentColor" />,
   copy: <><rect x="6.5" y="6.5" width="8.5" height="8.5" rx="1.5" /><path d="M11.5 3.5H4.5A1.5 1.5 0 0 0 3 5v6.5" /></>,
   edit: <path d="M3.5 14.5l.7-3L12 3.7a1.4 1.4 0 0 1 2 0l.3.3a1.4 1.4 0 0 1 0 2l-7.8 7.8z" />,
   note: <><path d="M4 2.5h10v13H4z" /><path d="M6.5 6h5M6.5 9h5M6.5 12h3" /></>,
