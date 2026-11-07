@@ -56,8 +56,7 @@ DESC_SET_CHARACTER = (
 DESC_CREATE_CHARACTER = (
     "替作者生成三個陪讀角色候選。只有作者要建角色才用;作者想換現有角色時用 set_character。"
     "呼叫前先用開放題問作者的想像,開放題不放例子。作者的話原樣填進參數,沒回答的留空,不要替作者答,因為這個角色是作者的想像。"
-    "form:陪作者讀稿的是什麼;attention:讀的時候在意什麼;returns:讀完先交回什麼;response:想收到哪種回應;"
-    "instance:別人讀作者的稿時說過、讓作者停下來想的一句話;lang:zh-Hant 或 en,跟作者用的語言。"
+    "form:陪作者讀稿的是什麼;wish:作者想要它怎麼讀;lang:zh-Hant 或 en,跟作者用的語言。"
     "會花作者的訂閱額度,可能要幾分鐘。回傳的候選照列給作者,選哪個由作者決定。改候選、複製、編輯角色請作者到網頁做。")
 DESC_SAVE_CHARACTER = (
     "把作者選定的候選存成陪讀角色。number 是 create_character 回傳的編號,只有作者選定後才用。"
@@ -110,8 +109,9 @@ def _shown(text: str, hidden: str) -> str:
 
 def _candidate_lines(n: int, c: dict, lang: str) -> list[str]:
     name, form = _shown(c["name"][lang], "這個名字沒顯示"), _shown(c["form"][lang], "這個形體沒顯示")
-    lines = [f"{n}. {name}({form}):{_shown(c['line'][lang], '這句介紹沒顯示')}",
-             f"   試讀:{_shown(c['sample'], '這句試讀沒顯示')}"]
+    lines = [f"{n}. {name}({form}):{_shown(c['line'][lang], '這句介紹沒顯示')}"]
+    if c["sample"]:
+        lines.append(f"   試讀:{_shown(c['sample'], '這句試讀沒顯示')}")
     if c["warnings"]:
         lines.append(f"   注意:{_card_warnings(c['warnings'])}")
     return lines
@@ -437,17 +437,15 @@ def build_server(den: DenClient) -> MCPServer:
         out = await call("POST", "/api/characters/candidates", {"answers": answers, "lang": lang},
                          timeout=_GENERATE_TIMEOUT,
                          on_status={409: "上一批候選還在生成,等它回來再說。",
-                                    422: "答案太長(form 80 字、instance 500 字、其他 300 字),或 lang 不是 zh-Hant / en。",
+                                    422: "答案太長(form 80 字、wish 300 字),或 lang 不是 zh-Hant / en。",
                                     502: _generation_failed})
         drafts.update(items=out["candidates"], lang=lang, saved=set())
         lines = [ln for n, c in enumerate(out["candidates"], 1) for ln in _candidate_lines(n, c, lang)]
         return "\n".join(lines + ["把候選照列給作者,由作者選;作者選定後用 save_character。"])
 
     @server.tool(description=DESC_CREATE_CHARACTER)
-    async def create_character(form: str = "", attention: str = "", returns: str = "", response: str = "",
-                               instance: str = "", lang: str = "zh-Hant") -> str:
-        answers = {"form": form, "attention": attention, "returns": returns, "response": response, "instance": instance}
-        return await guarded(_create_character(answers, lang))
+    async def create_character(form: str = "", wish: str = "", lang: str = "zh-Hant") -> str:
+        return await guarded(_create_character({"form": form, "wish": wish}, lang))
 
     async def _save_character(number: int, name: str | None, confirm: bool) -> str:
         items = drafts.get("items")

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
-import { blobPath } from "../src/dash/Blob";
 import { setLang } from "../src/dash/i18n";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
@@ -73,8 +72,7 @@ describe("進門只有一張紙", () => {
     serverDefault = "deer";
     mount();
     await box();
-    const body = document.querySelector(".home form.composer svg.blob path.body")!;
-    expect(body.getAttribute("d")).toBe(`${blobPath("deer")}Z`);
+    expect(document.querySelector(".home form.composer svg.fig")!.getAttribute("data-who")).toBe("deer");
   });
   it("打很長的字按 Enter → 交稿確認條;短字按 Enter 什麼都不發生;組字中不觸發", async () => {
     mount();

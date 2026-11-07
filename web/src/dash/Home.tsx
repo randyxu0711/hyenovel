@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { useLocation } from "react-router-dom";
 import type { SubmitResult, Work } from "./api";
-import Blob from "./Blob";
+import Figure from "./Figure";
 import Icon from "./Icon";
 import { errorMessage, useT } from "./i18n";
 import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
@@ -56,7 +56,7 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
         {none && <p className="home-first"><Icon name="new" />{t("home.first")}</p>}
         {draft ? (
           <div className="composer home-draft" role="group" aria-label={t("feed.text")}>
-            <div className="who"><Blob character={me} size={92} /></div>
+            <div className="who"><Figure character={me} size={92} /></div>
             {draft.title && <b className="home-draft-title">{draft.title}</b>}
             <p className="home-meta">
               <span>{t("feed.chars", { n: draft.chars })}</span>
@@ -72,7 +72,7 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
           </div>
         ) : (
           <form className="composer" onSubmit={e => e.preventDefault()}>
-            <div className="who"><Blob character={me} size={92} /></div>
+            <div className="who"><Figure character={me} size={92} /></div>
             <textarea ref={area} rows={3} value={text} aria-label={t("home.drop")} placeholder={t("home.drop")}
               onChange={e => setText(e.target.value)} onKeyDown={onKey} onPaste={onPaste} />
             {error && <p role="alert" className="home-msg">{t(errorMessage(error))}</p>}

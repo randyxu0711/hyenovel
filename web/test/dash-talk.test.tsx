@@ -6,7 +6,7 @@ import { MemoryRouter, Routes, Route, useLocation, useNavigationType } from "rea
 import Dash from "../src/dash/Dash";
 import { setLang } from "../src/dash/i18n";
 import { DRAW_MS } from "../src/dash/Paper";
-import { composerState, speakerChanges, versionBreaks } from "../src/dash/Talk";
+import { composerState, REACT_MS, speakerChanges, useReaction, versionBreaks } from "../src/dash/Talk";
 import { makeCharacters } from "../src/dash/useCharacters";
 import { olive, hyena, buffalo, deer } from "./dash-fixtures";
 
@@ -211,7 +211,7 @@ describe("對話", () => {
     expect(container.querySelector(".chat-switch")).toBeNull();
     const whos = [...container.querySelectorAll(".chat-log .chat-who")];
     expect(whos.map(w => w.textContent)).toEqual(["鬣狗", "水牛"]);
-    for (const w of whos) expect(w.querySelector("svg.blob")).not.toBeNull();
+    for (const w of whos) expect(w.querySelector("svg.fig")).not.toBeNull();
   });
   it("409 busy 顯示訊息且輸入框保留原字", async () => {
     talkReply = () => json({ detail: "busy", code: "busy" }, 409);
@@ -623,27 +623,49 @@ describe("輸入紙與角色狀態", () => {
     expect([...speakerChanges(ts as never, byId)]).toEqual([1, 4]);
     expect(speakerChanges([], byId).size).toBe(0);
   });
-  it("composerState:串流中說話、分析中掃讀、其他在讀", () => {
-    expect(composerState({ streaming: true, analyzing: true })).toBe("speaking");
-    expect(composerState({ streaming: false, analyzing: true })).toBe("scanning");
-    expect(composerState({ streaming: false, analyzing: false })).toBe("reading");
+  it("composerState:一個姿勢一個意思", () => {
+    const base = { streaming: null, analyzing: false, reacting: false, typing: false };
+    expect(composerState(base)).toBe("idle");
+    expect(composerState({ ...base, typing: true })).toBe("reading");
+    expect(composerState({ ...base, analyzing: true, typing: true })).toBe("scanning");
+    expect(composerState({ ...base, analyzing: true, reacting: true })).toBe("reacting");
+    expect(composerState({ ...base, streaming: "", reacting: true })).toBe("thinking");
+    expect(composerState({ ...base, streaming: "嗯", analyzing: true })).toBe("speaking");
+  });
+  it("分析剛跑完時讀到有反應,一下子就回去", () => {
+    vi.useFakeTimers();
+    try {
+      const seen: boolean[] = [];
+      const Probe = ({ analyzing }: { analyzing: boolean }) => { seen.push(useReaction(analyzing)); return null; };
+      const { rerender } = render(<Probe analyzing={false} />);
+      rerender(<Probe analyzing={true} />);
+      expect(seen[seen.length - 1]).toBe(false);
+      rerender(<Probe analyzing={false} />);
+      expect(seen[seen.length - 1]).toBe(true);
+      act(() => { vi.advanceTimersByTime(REACT_MS); });
+      expect(seen[seen.length - 1]).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("輸入是一張紙,角色坐在上緣在讀;送出是圖示鈕", async () => {
     const { container } = mount();
     await screen.findByText("第一段。");
     const form = container.querySelector("form.composer")!;
-    expect(form.querySelector("svg.blob")!.getAttribute("data-state")).toBe("reading");
+    expect(form.querySelector("svg.fig")!.getAttribute("data-state")).toBe("idle");
+    fireEvent.change(within(form as HTMLElement).getByRole("textbox"), { target: { value: "我想問" } });
+    expect(form.querySelector("svg.fig")!.getAttribute("data-state")).toBe("reading");
     const send = within(form as HTMLElement).getByRole("button", { name: "送出" });
     expect(send.querySelector("svg.ico")).not.toBeNull();
     expect(send.textContent).toBe("");
   });
-  it("串流回覆中角色在說話;等第一個字時只有「X 在讀你的稿」,沒有小筆", async () => {
+  it("等第一個字時角色在想,只有「X 在讀你的稿」,沒有小筆", async () => {
     talkReply = () => new Response(new ReadableStream({ start() {} }));
     const { container } = mount();
     await screen.findByText("第一段。");
     say("嗨");
     expect((await screen.findByText("鬣狗在讀你的稿")).closest("[role=status]")).toBeTruthy();
-    expect(container.querySelector("form.composer svg.blob")!.getAttribute("data-state")).toBe("speaking");
+    expect(container.querySelector("form.composer svg.fig")!.getAttribute("data-state")).toBe("thinking");
     expect(container.querySelector(".chat-pen")).toBeNull();
   });
   it("陪讀者鈕只露角色,名字在 aria-label;清單照舊、Esc 關", async () => {
@@ -652,7 +674,7 @@ describe("輸入紙與角色狀態", () => {
     const key = whoKey();
     expect(key.getAttribute("aria-label")).toBe("陪讀者:鬣狗");
     expect(key.getAttribute("title")).toBe("陪讀者:鬣狗");
-    expect(key.querySelector("svg.blob")).not.toBeNull();
+    expect(key.querySelector("svg.fig")).not.toBeNull();
     expect(key.textContent).toBe("");
     fireEvent.click(key);
     const g = screen.getByRole("group", { name: "陪讀者" });

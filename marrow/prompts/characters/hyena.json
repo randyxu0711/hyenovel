@@ -23,5 +23,134 @@
     }
   },
   "voice": "",
-  "mark": "pencil"
+  "mark": "pencil",
+  "figure": {
+    "main": "apricot",
+    "second": "bark",
+    "parts": [
+      {
+        "group": "legs",
+        "d": "M38.5 66 L39 93 L45.5 93 L45.5 66 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M50.5 68 L51 93 L57.5 93 L57.5 68 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M83.5 66 L84 91 L90.5 91 L90.5 66 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M93.5 62 L94 89 L100.5 89 L100.5 62 Z",
+        "fill": "main"
+      },
+      {
+        "group": "tail",
+        "d": "M103 56 Q109 62 110 71",
+        "fill": "none"
+      },
+      {
+        "group": "body",
+        "d": "M38 40 C44 26 62 24 74 32 C86 38 100 44 104 56 C107 66 100 74 90 74 L50 74 C40 74 34 66 34 56 C34 50 35 45 38 40 Z",
+        "fill": "main"
+      },
+      {
+        "group": "body",
+        "d": "M63 44 A3 3 0 1 0 69 44 A3 3 0 1 0 63 44 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M77 50 A3 3 0 1 0 83 50 A3 3 0 1 0 77 50 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M69 60 A3 3 0 1 0 75 60 A3 3 0 1 0 69 60 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M89.5 58 A2.5 2.5 0 1 0 94.5 58 A2.5 2.5 0 1 0 89.5 58 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M55.5 56 A2.5 2.5 0 1 0 60.5 56 A2.5 2.5 0 1 0 55.5 56 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M84 66 A2 2 0 1 0 88 66 A2 2 0 1 0 84 66 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "ears",
+        "d": "M19 29 A6 6.5 0 1 0 31 29 A6 6.5 0 1 0 19 29 Z",
+        "fill": "main"
+      },
+      {
+        "group": "ears",
+        "d": "M32 28 A6 6.5 0 1 0 44 28 A6 6.5 0 1 0 32 28 Z",
+        "fill": "main"
+      },
+      {
+        "group": "face",
+        "d": "M14 46 C14 34 26 28 38 31 C48 34 52 44 48 54 C45 62 36 64 28 62 C20 60 14 54 14 46 Z",
+        "fill": "main"
+      },
+      {
+        "group": "face",
+        "d": "M5.5 53 A8.5 5.5 0 1 0 22.5 53 A8.5 5.5 0 1 0 5.5 53 Z",
+        "fill": "second"
+      },
+      {
+        "group": "face",
+        "d": "M4 50 A3 2.5 0 1 0 10 50 A3 2.5 0 1 0 4 50 Z",
+        "fill": "lead"
+      }
+    ],
+    "eyes": [
+      [
+        24,
+        42
+      ],
+      [
+        34,
+        40
+      ]
+    ],
+    "mouth": [
+      [
+        8,
+        58
+      ],
+      [
+        14,
+        60
+      ],
+      [
+        21,
+        58
+      ]
+    ],
+    "tempo": "quick",
+    "move": "tail-flick"
+  }
 }

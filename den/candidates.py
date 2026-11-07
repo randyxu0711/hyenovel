@@ -8,23 +8,30 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from den import cards, pipeline
+from den import cards, figure, pipeline
 from marrow.repo import canonical_json
 from marrow.workpacks import MAX_PREVIOUS_CHARS, RunConfig, assemble
 
 log = logging.getLogger("hyenovel")
 
-VOICE_AXIS = ("先聽聲音", "先看結構")
-AXES = (("直說", "迂迴"), ("讀得快", "讀得慢"), VOICE_AXIS, ("溫和", "尖銳"))
+AXES = (("直說", "迂迴"), ("讀得快", "讀得慢"), ("先聽聲音", "先看結構"), ("溫和", "尖銳"))
 COUNT = 3
 MIN_AXES_APART = 2
 RUN = RunConfig()
 TIMEOUT = 180
+OPENING_CHARS = 200
 
 _ROOT = Path(__file__).resolve().parent.parent / "marrow"
 SCHEMA = json.loads((_ROOT / "schemas" / "candidates.v1.schema.json").read_text(encoding="utf-8"))
+_FIG = SCHEMA["$defs"]["figure"]["properties"]
+_FIG["pose"]["enum"] = list(figure.GRAMMAR["poses"])
+_FIG["main"]["enum"] = _FIG["second"]["enum"] = list(figure.GRAMMAR["pens"])
+_FIG["tempo"]["enum"] = figure.GRAMMAR["tempos"]
+_FIG["move"]["enum"] = figure.GRAMMAR["moves"]
+_FIG["traits"]["maxItems"] = figure.LIMITS["traits"]
+_FIG["traits"]["items"]["properties"]["group"]["enum"] = figure.GRAMMAR["groups"]
+_FIG["traits"]["items"]["properties"]["fill"]["enum"] = figure.GRAMMAR["fills"]
 ONE = {**SCHEMA["properties"]["candidates"]["items"], "$defs": SCHEMA["$defs"]}
-PASSAGE = (_ROOT / "prompts" / "sample_passage.md").read_text(encoding="utf-8").strip()
 
 
 class Failed(Exception):
@@ -49,8 +56,8 @@ def _apart(trio: tuple[tuple[str, ...], ...]) -> bool:
     return all(sum(x != y for x, y in zip(a, b)) >= MIN_AXES_APART for a, b in itertools.combinations(trio, 2))
 
 
-def positions(seed: int, drop_voice: bool = False) -> list[tuple[str, ...]]:
-    combos = list(itertools.product(*(a for a in AXES if not (drop_voice and a == VOICE_AXIS))))
+def positions(seed: int) -> list[tuple[str, ...]]:
+    combos = list(itertools.product(*AXES))
     random.Random(seed).shuffle(combos)
     return list(next(filter(_apart, itertools.combinations(combos, COUNT))))
 
@@ -58,23 +65,38 @@ def positions(seed: int, drop_voice: bool = False) -> list[tuple[str, ...]]:
 def brief_from(answers: dict) -> str:
     form = answers.get("form")
     lines = [f"形體:{form}" if form else "形體:作者沒有定。三個候選各提一種不同類別的形體。"]
-    clues = [answers.get("attention"), answers.get("returns") and f"讀完一篇先交回:{answers['returns']}", answers.get("response")]
-    if any(clues):
-        lines.append("作者對這類反應有興趣,是線索,不是角色定義:")
-        lines += [f"- {c}" for c in clues if c]
-    if answers.get("instance"):
-        lines.append(f"作者覺得有用過的話,不要照用:{answers['instance']}")
+    if answers.get("wish"):
+        lines.append(f"作者想要它這樣讀:{answers['wish']}")
     return "\n".join(lines)
+
+
+def opening(works: list[dict]) -> str | None:
+    """作者最近交的那篇的開頭;還沒有稿就是 None。"""
+    latest = max(works, key=lambda w: w["submitted_at"], default=None)
+    return latest["latest_text"][:OPENING_CHARS] if latest else None
+
+
+def spec(fig: dict) -> dict:
+    return {"pose": fig["pose"], "parts": fig["traits"], "main": fig["main"], "second": fig["second"],
+            "tempo": fig["tempo"], "move": fig["move"]}
+
+
+def _figure_error(candidate: dict) -> list[str]:
+    fig = candidate["figure"]
+    same = ["main 和 second 要是不同的筆"] if fig["main"] == fig["second"] else []
+    return same + [f"figure {e}" for e in figure.errors(spec(fig))]
 
 
 def to_card(candidate: dict) -> dict:
     return {"spec": "chara_card_v3", "spec_version": "3.0", "data": {
         "name": candidate["name"]["zh-Hant"], "description": "", "tags": [], "creator": "hyenovel",
-        "character_version": "", "mes_example": candidate["sample"], "system_prompt": "",
+        "character_version": "", "mes_example": "", "system_prompt": "",
         "post_history_instructions": "", "first_mes": "", "alternate_greetings": [],
         "group_only_greetings": [], "personality": candidate["reading"], "scenario": "",
         "creator_notes": candidate["line"]["zh-Hant"],
-        "extensions": {"hyenovel": {"name": candidate["name"], "line": candidate["line"], "form": candidate["form"]}},
+        "extensions": {"hyenovel": {"name": candidate["name"], "line": candidate["line"], "form": candidate["form"],
+                                    "figure": spec(candidate["figure"]),
+                                    "colors": figure.pen_colors(candidate["figure"]["main"])}},
     }}
 
 
@@ -90,34 +112,52 @@ def _schema_errors(schema: dict, body: dict) -> list[str]:
     return [f"{'/'.join(map(str, e.path))}: {e.message}" for e in Draft202012Validator(schema).iter_errors(body)]
 
 
-def _one_errors(body: dict) -> list[str]:
-    return _schema_errors(ONE, body) or cards.scan(to_card(body))["errors"]
+def _sample_error(candidate: dict, passage: str | None) -> list[str]:
+    if passage and not candidate["sample"].strip():
+        return ["有 <passage> 時 sample 不能空白"]
+    if not passage and candidate["sample"]:
+        return ["沒有 <passage> 時 sample 要留空"]
+    return []
 
 
-def _errors(body: dict) -> list[str]:
+def _one_errors(body: dict, passage: str | None) -> list[str]:
+    return _schema_errors(ONE, body) or _sample_error(body, passage) or _figure_error(body) or cards.scan(to_card(body))["errors"]
+
+
+def _errors(body: dict, passage: str | None) -> list[str]:
     bad = _schema_errors(SCHEMA, body)
     if bad:
         return bad
     items = body["candidates"]
     for label, values in (("名字重複", [c["name"]["zh-Hant"].strip() for c in items]),
                           ("名字重複", [c["name"]["en"].strip() for c in items]),
-                          ("試讀重複", [c["sample"].strip() for c in items])):
+                          ("試讀重複", [c["sample"].strip() for c in items if c["sample"].strip()]),
+                          ("主色重複", [c["figure"]["main"] for c in items])):
         if len(set(values)) < len(values):
             bad.append(label)
     for i, c in enumerate(items, 1):
-        bad += [f"候選 {i}: {code}" for code in cards.scan(to_card(c))["errors"]]
+        bad += [f"候選 {i}: {code}" for code in _sample_error(c, passage) + _figure_error(c) + cards.scan(to_card(c))["errors"]]
     return bad
 
 
-def _input(brief: str, picked: list[tuple[str, ...]], lang: str) -> str:
+def _library() -> str:
+    pens = {k: v["light"] for k, v in figure.GRAMMAR["pens"].items()}
+    return f"<poses>\n{canonical_json(figure.GRAMMAR['poses'])}\n</poses>\n<pens>\n{canonical_json(pens)}\n</pens>\n"
+
+
+def _passage_block(passage: str | None) -> str:
+    return f"<passage>\n{passage}\n</passage>\n" if passage else ""
+
+
+def _input(brief: str, picked: list[tuple[str, ...]], passage: str | None, lang: str) -> str:
     lines = "\n".join(f"候選 {i}:{'、'.join(pos)}" for i, pos in enumerate(picked, 1))
-    return (f"<brief>\n{brief}\n</brief>\n<positions>\n{lines}\n</positions>\n<passage>\n{PASSAGE}\n</passage>\n"
+    return (f"<brief>\n{brief}\n</brief>\n<positions>\n{lines}\n</positions>\n{_library()}{_passage_block(passage)}"
             f"<interface_language>\n{lang}\n</interface_language>")
 
 
-def _revise_input(candidate: dict, feedback: str, lang: str) -> str:
+def _revise_input(candidate: dict, feedback: str, passage: str | None, lang: str) -> str:
     return (f"<candidate>\n{canonical_json(candidate)}\n</candidate>\n<feedback>\n{feedback}\n</feedback>\n"
-            f"<passage>\n{PASSAGE}\n</passage>\n<interface_language>\n{lang}\n</interface_language>")
+            f"{_library()}{_passage_block(passage)}<interface_language>\n{lang}\n</interface_language>")
 
 
 def _repair(first: str, previous: str, errors: list[str], parsed: bool) -> str:
@@ -154,14 +194,16 @@ def _shown(candidate: dict, pos) -> dict:
     return {**candidate, "axes": list(pos), "card": card, "warnings": cards.scan(card)["warnings"]}
 
 
-async def generate(run, answers: dict, lang: str, seed: int) -> dict:
-    picked = positions(seed, drop_voice=bool(answers.get("attention")))
-    body = await _gated(run, _prompt().text, SCHEMA, _errors, _input(brief_from(answers), picked, lang))
+async def generate(run, answers: dict, passage: str | None, lang: str, seed: int) -> dict:
+    picked = positions(seed)
+    check = lambda body: _errors(body, passage)
+    body = await _gated(run, _prompt().text, SCHEMA, check, _input(brief_from(answers), picked, passage, lang))
     return {"seed": seed, "candidates": [_shown(c, pos) for c, pos in zip(body["candidates"], picked, strict=True)]}
 
 
-async def revise(run, candidate: dict, feedback: str, lang: str) -> dict:
+async def revise(run, candidate: dict, feedback: str, passage: str | None, lang: str) -> dict:
     axes = candidate.get("axes")
-    first = _revise_input(core(candidate), feedback, lang)
-    body = await _gated(run, _revise_prompt().text, ONE, _one_errors, first)
+    first = _revise_input(core(candidate), feedback, passage, lang)
+    check = lambda body: _one_errors(body, passage)
+    body = await _gated(run, _revise_prompt().text, ONE, check, first)
     return _shown(body, axes if isinstance(axes, list) else ())

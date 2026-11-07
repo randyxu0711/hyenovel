@@ -115,8 +115,8 @@
 .dash .composer .bar .send{margin-left:auto; color:var(--dash-accent)}
 .dash .composer .bar .send:disabled{cursor:not-allowed; color:var(--dash-ink-2); opacity:.5}
 .dash .composer .who{position:absolute; left:14px; bottom:100%; width:54px; height:48px; margin-bottom:-9px; pointer-events:none}
-.dash .composer .who .blob{width:100%; height:100%}
-.dash .composer:focus-within .who .blob .eyes{transform:translate(2px,5px)}
+.dash .composer .who .fig{width:100%; height:100%}
+.dash .composer:focus-within .who .fig .eyes{transform:translate(2px,5px)}
 @media (prefers-reduced-motion:reduce){ .dash .composer, .dash .composer::before{transition:none} .dash .composer:focus-within{transform:none} }
 
 /* ── 提示 ── */
@@ -368,26 +368,9 @@
 .dash .nc-words{display:flex; flex-wrap:wrap; align-items:center; gap:4px 18px; margin-top:14px; font-family:var(--serif)}
 .dash .nc-words > button:not(.ib){padding:2px 0; border:0; background:none; cursor:pointer; color:var(--dash-paper-ink); text-underline-offset:.3em}
 .dash .nc-words > button:not(.ib):hover{text-decoration:underline}
-.dash .nc-group{position:relative}
-/* top 抵銷 .dash-desk 的 32px padding:sticky 從捲動容器的 padding 內側算起 */
-.dash .nc-pinned{position:sticky; top:-32px; z-index:1; margin:0 -8px 22px; padding:10px 8px 12px; background:var(--dash-paper); box-shadow:0 1px 0 color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
-.dash .nc-passage{margin:0; font-family:var(--serif); font-size:var(--dash-t-md); line-height:2.1; color:var(--dash-paper-ink)}
-.dash .nc-wave{text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
-.dash .nc-opts{margin:0 -10px; padding:0; list-style:none}
-.dash .nc-opts li{display:flex; align-items:flex-start; border-radius:6px}
-.dash .nc-opts li[data-on="false"]:hover{background:color-mix(in srgb, var(--dash-paper-ink) 6%, transparent)}
-.dash .nc-opt{display:flex; flex:1; gap:12px; align-items:baseline; padding:8px 10px; border:0; border-radius:6px; background:none; cursor:pointer; text-align:left; font-family:var(--serif); line-height:1.7; color:var(--dash-paper-ink)}
-.dash .nc-opts li[data-on="true"] .nc-opt{flex:none; padding:17px 12px 0 10px}
-.dash .nc-own{font-family:var(--sans); font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .nc-wish{margin-bottom:0}
 .dash .nc-mark{flex:none; width:9px; height:9px; border:1px solid var(--dash-paper-ink-2); border-radius:50%}
-.dash .nc-opt[aria-pressed="true"] .nc-mark{border-color:var(--dash-accent); background:var(--dash-accent)}
 .dash .nc-edit{display:block; flex:1; width:100%; min-width:0; margin:4px 10px 4px 0; padding:4px 0; border:0; border-bottom:1px solid var(--dash-accent); outline:0; border-radius:0; background:none; resize:none; field-sizing:content; font-family:var(--serif); font-size:var(--dash-t-md); line-height:1.7; color:inherit}
-.dash .nc-swap{display:inline-flex; align-items:center; gap:5px; margin-top:6px; padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
-.dash .nc-swap:hover{color:var(--dash-paper-ink)}
-.dash .nc-swap .ico{width:14px; height:14px}
-.dash .nc-instance{margin-bottom:0}
-.dash .nc-instance summary{cursor:pointer; font-family:var(--serif); color:var(--dash-paper-ink-2)}
-.dash .nc-instance[open] summary{margin-bottom:10px; color:var(--dash-paper-ink)}
 .dash .nc-foot{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:20px}
 .dash .nc-foot .dash-key:disabled{cursor:not-allowed; color:var(--dash-ink-2); box-shadow:none; transform:none}
 .dash .nc-note{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
@@ -395,9 +378,8 @@
 .dash .nc-busy{display:grid; justify-items:center; gap:18px; padding:72px 0; color:var(--dash-ink-2)}
 .dash .nc-busy p{margin:0; display:flex; align-items:baseline; gap:10px}
 .dash .nc-busy .dash-dm{font-size:var(--dash-t-lg); color:var(--dash-ink)}
-.dash :is(.char-card, .nc-busy) .blob{--dash-ink:var(--dash-paper-ink)}
-.dash .nc-blobs{display:flex; gap:28px}
-.dash .nc-results .nc-pinned{margin:0 0 16px; padding:14px 18px; border-radius:3px; box-shadow:var(--dash-sh-raise); color:var(--dash-paper-ink)}
+.dash :is(.char-card, .nc-busy) .fig{--dash-ink:var(--dash-paper-ink)}
+.dash .nc-figs{display:flex; gap:28px}
 .dash .char-cards{display:grid; grid-auto-flow:dense; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:start}
 .dash .char-card{display:flex; flex-direction:column; padding:18px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .char-card[data-on="true"]{box-shadow:var(--dash-sh-raise), 0 0 0 1.5px var(--dash-accent)}
@@ -421,7 +403,7 @@
 .dash .char-card summary{cursor:pointer; color:var(--dash-paper-ink-2)}
 .dash .char-card details p{margin:8px 0 0; white-space:pre-wrap}
 .dash .nc-warn{margin:10px 0 0; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
-.dash .nc :is(button, summary, .nc-sample):focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
+.dash .nc :is(button, summary):focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
 .dash .nc-revise{margin-top:14px; padding-top:12px; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
 .dash .nc-revise input{width:100%; padding:4px 0; border:0; border-bottom:1px solid var(--dash-paper-ink-2); outline:0; border-radius:0; background:none; font-size:var(--dash-t-sm); color:inherit}
 .dash .nc-revise input:focus{border-bottom-color:var(--dash-accent)}
@@ -443,7 +425,6 @@
 .dash .char-edit-foot button:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
 .dash .char-edit :is(button, input, textarea):focus-visible{outline-offset:2px}
 .dash[data-narrow="true"] .nc-sheet{padding:22px 18px}
-.dash[data-narrow="true"] .nc-pinned{position:static}
 .dash .set-nav{display:flex; flex-direction:column; gap:2px; padding:4px 10px}
 .dash .set-nav button{display:flex; align-items:center; gap:10px; padding:7px 10px; border:0; border-radius:8px; background:none; cursor:pointer; text-align:left; color:var(--dash-ink-2)}
 .dash .set-nav button:hover{background:var(--dash-line); color:var(--dash-ink)}
@@ -471,24 +452,54 @@
 .dash[data-narrow="true"] .dash-settings .set-nav .set-back{margin:0 8px 0 0}
 .dash[data-narrow="true"] .set-look{grid-template-columns:minmax(0,1fr)}
 .dash[data-narrow="true"] .set-prev{display:none}
-/* 佔位角色 */
-.dash .blob{display:block; flex:none; overflow:visible}
-.dash .blob .body{fill:color-mix(in srgb, var(--char) 22%, var(--dash-paper)); stroke:var(--char); stroke-width:1.6}
-.dash .blob .eye{fill:var(--dash-ink)}
-.dash .blob .eyes{transition:transform .5s cubic-bezier(.3,.7,.2,1)}
-.dash .blob .lid{transform-box:fill-box; transform-origin:center; animation:dash-blink 5.2s infinite}
-.dash .blob .shape{transform-box:fill-box; transform-origin:50% 100%}
-.dash .blob[data-state="idle"] .shape, .dash .blob[data-state="reading"] .shape{animation:dash-breathe 4.5s ease-in-out infinite}
-.dash .blob .mouth{fill:none; stroke:var(--dash-ink); stroke-width:1.6; stroke-linecap:round; opacity:0; transition:opacity .2s}
-.dash .blob[data-state="reading"] .eyes, .dash .blob[data-state="scanning"] .eyes{transform:translate(-4px,1px)}
-.dash .blob[data-state="scanning"] .eyes{animation:dash-scan 2.8s ease-in-out infinite}
-.dash .blob[data-state="speaking"] .shape{animation:dash-talk .42s ease-in-out infinite alternate}
-.dash .blob[data-state="speaking"] .mouth{opacity:1}
+.dash .fig{--fig-lead:var(--dash-ink); --breath:4.5s; --blink:5.2s; --hop:.42s; --hop-y:-3px; --tilt:-6deg; display:block; flex:none; overflow:visible}
+.dash .fig[data-tempo="slow"]{--breath:5.8s; --blink:7.5s; --hop:.6s; --hop-y:-2px; --tilt:-9deg}
+.dash .fig[data-tempo="quick"]{--breath:3.2s; --blink:3.6s; --hop:.32s; --hop-y:-4px; --tilt:-4deg}
+.dash .fig :is(.lid, .eye, .eyes, .face, .ears, .tail, .shape){transform-box:fill-box}
+.dash .fig :is(.lid, .eye, .eyes){transform-origin:center}
+.dash .fig :is(.face, .ears){transform-origin:30% 70%; transition:transform .45s ease}
+.dash .fig .tail{transform-origin:0 0}
+.dash .fig .eyes{transition:transform .35s ease}
+.dash .fig .eye{transition:transform .2s}
+.dash .fig .lid{animation:dash-blink var(--blink) infinite}
+.dash .fig .shape{transform-origin:50% 100%}
+.dash .fig :is(.mouth, .lips, .think, .react){transition:opacity .2s}
+.dash .fig :is(.mouth, .think, .react), .dash .fig[data-state="speaking"] .lips{opacity:0}
+.dash .fig[data-state="idle"] .shape, .dash .fig[data-state="reading"] .shape{animation:dash-breathe var(--breath) ease-in-out infinite}
+.dash .fig[data-state="reading"] :is(.face, .ears){transform:translate(-2px,2px) rotate(var(--tilt))}
+.dash .fig[data-state="reading"] .eyes{transform:translate(-1px,1.5px)}
+.dash .fig[data-state="scanning"] :is(.face, .ears){transform:translate(-1px,3px) rotate(-8deg)}
+.dash .fig[data-state="scanning"] .eyes{animation:dash-scan 1.8s ease-in-out infinite}
+.dash .fig[data-state="thinking"] :is(.face, .ears){transform:rotate(6deg) translate(1px,-1px)}
+.dash .fig[data-state="thinking"] .eyes{transform:translate(1.5px,-2px)}
+.dash .fig[data-state="thinking"] .think{opacity:1}
+.dash .fig[data-state="thinking"] .think > g{animation:dash-dot 1.8s infinite both}
+.dash .fig[data-state="thinking"] .think > g:nth-child(2){animation-delay:.3s}
+.dash .fig[data-state="thinking"] .think > g:nth-child(3){animation-delay:.6s}
+.dash .fig[data-state="speaking"] .shape{animation:dash-talk var(--hop) ease-in-out infinite alternate}
+.dash .fig[data-state="speaking"] .mouth{opacity:1}
+.dash .fig[data-state="speaking"] .v{animation:dash-boil .5s steps(1) infinite}
+.dash .fig[data-state="speaking"] .v1{animation-delay:-.33s}
+.dash .fig[data-state="speaking"] .v2{animation-delay:-.167s}
+.dash .fig[data-state="reacting"] .ears{transform:translate(1px,-4px) rotate(4deg)}
+.dash .fig[data-state="reacting"] .face{transform:translateY(-1px)}
+.dash .fig[data-state="reacting"] .eye{transform:scale(1.3)}
+.dash .fig[data-state="reacting"] .react{opacity:1}
+.dash .fig[data-state="idle"][data-move="tail-sway"] .tail{animation:dash-sway var(--breath) ease-in-out infinite}
+.dash .fig[data-state="idle"][data-move="tail-flick"] .tail{animation:dash-flick calc(var(--breath) * .6) ease-in-out infinite}
+.dash .fig[data-state="idle"][data-move="ears-drift"] .ears{animation:dash-drift calc(var(--breath) * .9) ease-in-out infinite}
+.dash .fig[data-state="idle"][data-move="ears-bob"] .ears{animation:dash-bob calc(var(--breath) * .5) ease-in-out infinite}
+@keyframes dash-boil{0%{opacity:1} 33.4%,100%{opacity:0}}
+@keyframes dash-dot{0%{opacity:0} 30%,80%{opacity:1} 100%{opacity:0}}
+@keyframes dash-sway{50%{transform:rotate(14deg)}}
+@keyframes dash-flick{0%,60%,100%{transform:rotate(0)} 75%{transform:rotate(-16deg)} 88%{transform:rotate(10deg)}}
+@keyframes dash-drift{50%{transform:translate(2px,-3px); opacity:.55}}
+@keyframes dash-bob{50%{transform:translateY(-2.5px)}}
 @keyframes dash-breathe{0%,100%{transform:scale(1,1)} 50%{transform:scale(1.025,.975)}}
-@keyframes dash-talk{from{transform:translateY(0) scale(1,1)} to{transform:translateY(-3px) scale(.985,1.02)}}
+@keyframes dash-talk{from{transform:translateY(0) scale(1,1)} to{transform:translateY(var(--hop-y)) scale(.985,1.02)}}
 @keyframes dash-blink{0%,94%,100%{transform:scaleY(1)} 96%{transform:scaleY(.1)}}
-@keyframes dash-scan{0%{transform:translate(-6px,-1px)} 45%{transform:translate(-6px,4px)} 50%{transform:translate(-3px,-1px)} 95%{transform:translate(-3px,4px)} 100%{transform:translate(-6px,-1px)}}
-@media (prefers-reduced-motion:reduce){ .dash .blob .lid, .dash .blob[data-state] .shape, .dash .blob[data-state] .eyes{animation:none; transition:none} }
+@keyframes dash-scan{0%,100%{transform:translate(-2.5px,2px)} 50%{transform:translate(2px,2px)}}
+@media (prefers-reduced-motion:reduce){ .dash .fig[data-who][data-state][data-tempo] :is(.shape, .v, .lid, .eye, .eyes, .face, .ears, .tail, .think > g, .mouth, .lips, .react){animation:none; transition:none} .dash .fig[data-state] .v:not(.v0){display:none} }
 /* 分析中:步驟、已跑時間、停下;稿頂一條鉛筆線來回 */
 .dash .running{display:flex; align-items:center; gap:8px; font-size:var(--dash-t-sm); color:var(--dash-ink); padding:3px 4px 3px 12px; border-radius:999px; background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .running .t{font-variant-numeric:tabular-nums; color:var(--dash-ink-2)}
@@ -503,9 +514,9 @@
 .dash[data-focus="true"] > .dash-rail{visibility:hidden}
 .dash-grip[hidden]{display:none}
 .dash .dash-peek{position:fixed; right:22px; bottom:18px; z-index:3; width:58px; height:52px; padding:0; border:0; background:none; cursor:pointer}
-.dash .dash-peek .blob{width:100%; height:100%; transition:transform .2s}
-.dash .dash-peek:hover .blob{transform:translateY(-3px)}
-@media (prefers-reduced-motion:reduce){ .dash[data-view="work"][data-focus="true"]{transition:none} .dash .dash-peek .blob{transition:none} }
+.dash .dash-peek .fig{width:100%; height:100%; transition:transform .2s}
+.dash .dash-peek:hover .fig{transform:translateY(-3px)}
+@media (prefers-reduced-motion:reduce){ .dash[data-view="work"][data-focus="true"]{transition:none} .dash .dash-peek .fig{transition:none} }
 .dash .dash-mem ul{list-style:none; margin:0; padding:0}
 .dash .dash-mem-group{margin:0 0 20px}
 .dash .dash-mem-group h2{margin:0 0 8px; font-size:inherit; font-weight:600}

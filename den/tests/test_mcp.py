@@ -916,7 +916,9 @@ class CandidateRun:
 def _candidate(n=1, **kw):
     return {"name": {"zh-Hant": f"門縫{n}", "en": f"Crack {n}"}, "form": {"zh-Hant": "門縫", "en": "door crack"},
             "line": {"zh-Hant": f"先聽{n}", "en": f"Listens {n}"}, "reading": f"秘密讀法{n}",
-            "sample": f"讀到「暗暗紅紅」我停住了({n})。", **kw}
+            "sample": f"讀到「暗暗紅紅」我停住了({n})。",
+            "figure": {"pose": "wisp", "main": ("olive", "rust", "slate")[(n - 1) % 3], "second": "bark", "traits": [],
+                       "tempo": "mid", "move": "tail-sway"}, **kw}
 
 
 def _batch(*items):
@@ -948,18 +950,25 @@ def test_create_character_lists_candidates_without_reading(char_den):
     assert "秘密讀法" not in t
 
 
+def test_create_character_leaves_out_a_blank_sample(char_den, monkeypatch):
+    monkeypatch.setattr("den.candidates.opening", lambda works: None)
+    d = char_den(_batch(_candidate(1, sample=""), _candidate(2, sample=""), _candidate(3, sample="")))
+    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    assert "門縫1" in t and "試讀" not in t
+
+
 def test_create_character_passes_answers_and_language(char_den, monkeypatch):
     seen = {}
     real = candidates.generate
 
-    async def spy(run, answers, lang, seed):
+    async def spy(run, answers, passage, lang, seed):
         seen.update(answers=answers, lang=lang)
-        return await real(run, answers, lang, seed)
+        return await real(run, answers, passage, lang, seed)
     monkeypatch.setattr(candidates, "generate", spy)
     d = char_den(_batch())
-    r = _call(d.client(), "create_character", {"attention": "停在燈", "lang": "en"})
+    r = _call(d.client(), "create_character", {"wish": "慢慢來", "lang": "en"})
     assert not r.is_error
-    assert seen["answers"]["attention"] == "停在燈" and seen["answers"]["form"] == "" and seen["lang"] == "en"
+    assert seen["answers"]["wish"] == "慢慢來" and seen["answers"]["form"] == "" and seen["lang"] == "en"
 
 
 def test_generation_uses_the_long_timeout(char_den, monkeypatch):

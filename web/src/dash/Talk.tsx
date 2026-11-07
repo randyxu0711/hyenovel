@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Turn } from "./api";
 import type { Character } from "./api";
-import Blob, { type BlobState } from "./Blob";
+import Figure, { type FigureState } from "./Figure";
 import Icon from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
@@ -40,8 +40,27 @@ export function speakerChanges(turns: Turn[], byId: (id: string | null) => Chara
   return out;
 }
 
-export function composerState(o: { streaming: boolean; analyzing: boolean }): BlobState {
-  return o.streaming ? "speaking" : o.analyzing ? "scanning" : "reading";
+export const REACT_MS = 1800;
+
+export function composerState(o: { streaming: string | null; analyzing: boolean; reacting: boolean; typing: boolean }): FigureState {
+  if (o.streaming !== null) return o.streaming ? "speaking" : "thinking";
+  if (o.reacting) return "reacting";
+  if (o.analyzing) return "scanning";
+  return o.typing ? "reading" : "idle";
+}
+
+export function useReaction(analyzing: boolean): boolean {
+  const [on, setOn] = useState(false);
+  const was = useRef(analyzing);
+  useEffect(() => {
+    const finished = was.current && !analyzing;
+    was.current = analyzing;
+    if (!finished) return;
+    setOn(true);
+    const id = setTimeout(() => setOn(false), REACT_MS);
+    return () => clearTimeout(id);
+  }, [analyzing]);
+  return on;
 }
 
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
@@ -60,6 +79,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
   const { markTurn, markMemories, slug, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy } = talk;
+  const reacting = useReaction(analyzing);
   const me = chars.byId(whoId);
   const nameOf = (id: string | null) => localized(chars.byId(id).name, lang);
 
@@ -105,7 +125,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const breaks = versionBreaks(turns);
   const who = speakerChanges(turns, chars.byId);
   const whoLine = (c: Character) => (
-    <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+    <p className="chat-who"><Figure character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
   );
   let lastId: string | null = null;
   const rows = turns.map((turn: Turn, i) => {
@@ -168,7 +188,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
         </div>
       )}
       <form className="composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
-        <div className="who"><Blob character={me} size={54} state={composerState({ streaming: streaming !== null, analyzing })} /></div>
+        <div className="who"><Figure character={me} size={54} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} /></div>
         <textarea value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
           placeholder={t("talk.placeholder", { name: nameOf(whoId) })}
           onChange={e => setDraft(e.target.value)} onKeyDown={onKey} />

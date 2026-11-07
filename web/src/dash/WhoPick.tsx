@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Character } from "./api";
-import Blob from "./Blob";
+import Figure from "./Figure";
 import { localized, useLang, useT } from "./i18n";
 import { useCharacters } from "./useCharacters";
 
@@ -16,7 +16,7 @@ export default function WhoPick({ me, onPick }: { me: Character; onPick: (id: st
       <button type="button" ref={toggle} className="ib dash-who-key" aria-haspopup="true" aria-expanded={open}
         aria-label={t("talk.whoIs", { name: localized(me.name, lang) })} title={t("talk.whoIs", { name: localized(me.name, lang) })}
         onClick={() => setOpen(m => !m)}>
-        <Blob character={me} size={22} />
+        <Figure character={me} size={22} />
       </button>
       {open && (
         <div className="dash-float dash-who-menu" role="group" aria-label={t("talk.who")}
@@ -25,7 +25,7 @@ export default function WhoPick({ me, onPick }: { me: Character; onPick: (id: st
             <button key={c.id} type="button" className="dash-who-item" aria-pressed={c.id === me.id}
               autoFocus={c.id === me.id}
               onClick={() => { onPick(c.id); setOpen(false); toggle.current?.focus(); }}>
-              <Blob character={c} size={22} />{localized(c.name, lang)}
+              <Figure character={c} size={22} />{localized(c.name, lang)}
             </button>
           ))}
         </div>

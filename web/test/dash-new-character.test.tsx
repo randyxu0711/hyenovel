@@ -1,14 +1,14 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLang } from "../src/dash/i18n";
 import NewCharacter from "../src/dash/NewCharacter";
-import { marked, PASSAGE, QUESTIONS, quotesIn, WORDS } from "../src/dash/questionnaire";
+import { WORDS } from "../src/dash/questionnaire";
 
 const candidate = (n: number, warnings: string[] = []) => ({
   name: { "zh-Hant": `門縫${n}`, en: `Crack ${n}` }, form: { "zh-Hant": "門縫", en: "door crack" },
   line: { "zh-Hant": "先聽", en: "Listens" }, reading: `讀法${n}`, sample: `讀到「暗暗紅紅」我停住了(${n})。`,
+  figure: { pose: "wisp", main: (["olive", "rust", "slate"] as const)[(n - 1) % 3], second: "bark",
+    traits: [{ group: "ears", d: "M40 30 L46 18 L52 30 Z", fill: "second" }] },
   axes: [], card: {}, warnings,
 });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -20,7 +20,6 @@ let onSaved: () => Promise<void>;
 
 const mount = () => render(<NewCharacter onClose={() => {}} onSaved={onSaved} />);
 const go = () => screen.getByRole("button", { name: "生成候選" }) as HTMLButtonElement;
-const option = (text: RegExp) => screen.getByRole("button", { name: text });
 
 beforeEach(() => {
   setLang("zh-Hant");
@@ -37,42 +36,31 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("問卷資料", () => {
-  it("短文和 den 用的同一份", () => {
-    expect(PASSAGE).toBe(readFileSync(join(__dirname, "../../marrow/prompts/sample_passage.md"), "utf8").trim());
-  });
-  it("注意力和回應形式的引文都逐字出自短文,中英同一組", () => {
-    for (const q of QUESTIONS.filter(x => x.id !== "returns")) for (const set of q.sets) for (const o of set.options) {
-      const zh = quotesIn(o["zh-Hant"]!), en = quotesIn(o.en!);
-      expect(zh.length).toBeGreaterThan(0);
-      expect(en.every(x => zh.includes(x))).toBe(true);
-      for (const x of zh.filter(z => z !== "我")) expect(PASSAGE).toContain(x);
-    }
-  });
-  it("每題每組選項數相同,換組不改變維度數", () => {
-    for (const q of QUESTIONS) expect(new Set(q.sets.map(s => s.options.length)).size).toBe(1);
-  });
   it("詞卡每類三張", () => {
     expect(WORDS.map(r => r.length)).toEqual([3, 3, 3, 3, 3, 3]);
-  });
-  it("marked 標出引文、合併重疊、略過找不到的", () => {
-    const text = "甲乙丙丁戊";
-    expect(marked(text, [])).toEqual([{ text, on: false }]);
-    expect(marked(text, ["乙丙", "丙丁", "沒有"])).toEqual([
-      { text: "甲", on: false }, { text: "乙丙丁", on: true }, { text: "戊", on: false },
-    ]);
   });
 });
 
 describe("作答", () => {
-  it("全部沒答不能生成;答了形體就能", () => {
+  it("只問兩題,都可留白直接生成", async () => {
     mount();
-    expect(go().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("陪你讀稿的,是什麼?"), { target: { value: "退潮" } });
     expect(go().disabled).toBe(false);
+    fireEvent.click(go());
+    await screen.findByText("門縫1");
+    expect(bodies[0]).toEqual({ answers: { form: "", wish: "" }, lang: "zh-Hant" });
   });
-  it("形體輸入框不放例子", () => {
+  it("送出兩題的答案,去掉前後空白", async () => {
+    mount();
+    fireEvent.change(screen.getByLabelText("陪你讀稿的,是什麼?"), { target: { value: " 退潮 " } });
+    fireEvent.change(screen.getByLabelText("你想要它怎麼讀?"), { target: { value: " 慢慢來 " } });
+    fireEvent.click(go());
+    await screen.findByText("門縫1");
+    expect(bodies[0].answers).toEqual({ form: "退潮", wish: "慢慢來" });
+  });
+  it("開放題不放例子", () => {
     mount();
     expect(screen.getByLabelText("陪你讀稿的,是什麼?").getAttribute("placeholder")).toBeNull();
+    expect(screen.getByLabelText("你想要它怎麼讀?").getAttribute("placeholder")).toBeNull();
   });
   it("詞卡要按了才出現,換詞不打 API,選了填進形體", () => {
     mount();
@@ -84,55 +72,6 @@ describe("作答", () => {
     fireEvent.click(screen.getByRole("button", { name: "換一批詞" }));
     expect(screen.getByRole("button", { name: "代書" })).toBeTruthy();
     expect(bodies).toEqual([]);
-  });
-  it("按沒想法後可以全留白生成", async () => {
-    mount();
-    fireEvent.click(screen.getByRole("button", { name: "沒想法" }));
-    expect(go().disabled).toBe(false);
-    fireEvent.click(go());
-    await screen.findByText("門縫1");
-    expect(Object.values(bodies[0].answers).every(v => v === "")).toBe(true);
-  });
-  it("選項可微調,送出改過的文字;只送有答的", async () => {
-    mount();
-    fireEvent.click(option(/暗暗紅紅/));
-    const edit = screen.getByLabelText("微調這句") as HTMLTextAreaElement;
-    expect(edit.value).toContain("暗暗紅紅");
-    fireEvent.change(edit, { target: { value: "我改過的" } });
-    fireEvent.click(go());
-    await screen.findByText("門縫1");
-    expect(bodies[0].answers).toEqual({ form: "", attention: "我改過的", returns: "", response: "", instance: "" });
-    expect(bodies[0].lang).toBe("zh-Hant");
-  });
-  it("再按一次取消選擇,回到沒答", () => {
-    mount();
-    fireEvent.click(option(/暗暗紅紅/));
-    expect(go().disabled).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: /取消選擇/ }));
-    expect(go().disabled).toBe(true);
-  });
-  it("自己寫:空白算沒答,有字才算", () => {
-    mount();
-    fireEvent.click(screen.getAllByRole("button", { name: "自己寫" })[0]);
-    expect(go().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("自己寫"), { target: { value: "  " } });
-    expect(go().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("自己寫"), { target: { value: "我的話" } });
-    expect(go().disabled).toBe(false);
-  });
-  it("換一組不打 API,換掉選項並清掉這題的答案", () => {
-    mount();
-    fireEvent.click(option(/暗暗紅紅/));
-    fireEvent.click(screen.getAllByRole("button", { name: "換一組" })[0]);
-    expect(screen.getByRole("button", { name: /灶腳/ })).toBeTruthy();
-    expect(go().disabled).toBe(true);
-    expect(bodies).toEqual([]);
-  });
-  it("滑到選項時,短文標出它提到的地方", () => {
-    const { container } = mount();
-    expect(container.querySelector(".nc-wave")).toBeNull();
-    fireEvent.mouseEnter(option(/暗暗紅紅/).closest("li")!);
-    expect(container.querySelector(".nc-wave")?.textContent).toBe("暗暗紅紅");
   });
 });
 
@@ -161,6 +100,20 @@ describe("候選", () => {
     await toResults();
     expect(screen.getAllByRole("article")).toHaveLength(3);
     expect(screen.getAllByRole("note")).toHaveLength(1);
+  });
+  it("沒有試讀就不留空行", async () => {
+    replies = [json({ seed: 1, candidates: [{ ...candidate(1), sample: "" }, candidate(2), candidate(3)] })];
+    await toResults();
+    const [blank, other] = screen.getAllByRole("article");
+    expect(blank.querySelector(".nc-sample")).toBeNull();
+    expect(other.querySelector(".nc-sample")).toBeTruthy();
+  });
+  it("候選卡畫出它自己的長相和主色", async () => {
+    await toResults();
+    const [first, second] = screen.getAllByRole("article").map(a => a.querySelector("svg.fig")!);
+    expect(first.getAttribute("style")).toContain("--fig-main: #7f9466");
+    expect(second.getAttribute("style")).toContain("--fig-main: #a8553a");
+    expect(first.querySelectorAll("g.ears path").length).toBeGreaterThan(0);
   });
   it("形體和名字一樣時不重複顯示", async () => {
     replies = [json({ seed: 1, candidates: [{ ...candidate(1), name: { "zh-Hant": "門縫", en: "Crack" } }, candidate(2), candidate(3)] })];
@@ -247,8 +200,8 @@ describe("改候選與存卡", () => {
     replies = [new Promise<Response>(r => { release = r; }) as unknown as Response];
     fireEvent.change(cards[2].getByLabelText("一句回饋"), { target: { value: "別的" } });
     revise(cards[0]);
-    await waitFor(() => expect(document.querySelectorAll('.blob[data-state="scanning"]')).toHaveLength(1));
-    expect(screen.getAllByRole("article")[0].querySelector('.blob[data-state="scanning"]')).toBeTruthy();
+    await waitFor(() => expect(document.querySelectorAll('.fig[data-state="scanning"]')).toHaveLength(1));
+    expect(screen.getAllByRole("article")[0].querySelector('.fig[data-state="scanning"]')).toBeTruthy();
     expect((cards[2].getByRole("button", { name: "改這張" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "換一批" }) as HTMLButtonElement).disabled).toBe(true);
     expect(cards[0].getByText("0:00")).toBeTruthy();

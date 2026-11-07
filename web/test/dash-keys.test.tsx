@@ -153,7 +153,7 @@ describe("專注模式", () => {
     expect((document.querySelector(".dash-side") as HTMLElement).hidden).toBe(true);
     const peek = screen.getByRole("button", { name: "回到對話" });
     expect(peek.classList.contains("dash-peek")).toBe(true);
-    expect(peek.querySelector("svg.blob")).not.toBeNull();
+    expect(peek.querySelector("svg.fig")).not.toBeNull();
     fireEvent.click(peek);
     expect(isFocused()).toBe(false);
     expect((document.querySelector(".dash-side") as HTMLElement).hidden).toBe(false);

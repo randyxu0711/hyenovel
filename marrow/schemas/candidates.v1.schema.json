@@ -2,7 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["candidates"],
+  "required": [
+    "candidates"
+  ],
   "properties": {
     "candidates": {
       "type": "array",
@@ -12,13 +14,38 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "form", "line", "reading", "sample"],
+        "required": [
+          "name",
+          "form",
+          "line",
+          "reading",
+          "sample",
+          "figure"
+        ],
         "properties": {
-          "name": {"$ref": "#/$defs/name"},
-          "form": {"$ref": "#/$defs/form"},
-          "line": {"$ref": "#/$defs/line"},
-          "reading": {"type": "string", "pattern": "\\S", "maxLength": 600, "description": "這個讀者是什麼、怎麼讀、在意什麼。不預設是人。用「你」稱呼這個讀者。"},
-          "sample": {"type": "string", "pattern": "\\S", "maxLength": 120, "description": "讀完 <passage> 的一句反應。引到短文時用「」逐字引。"}
+          "name": {
+            "$ref": "#/$defs/name"
+          },
+          "form": {
+            "$ref": "#/$defs/form"
+          },
+          "line": {
+            "$ref": "#/$defs/line"
+          },
+          "reading": {
+            "type": "string",
+            "pattern": "\\S",
+            "maxLength": 600,
+            "description": "這個讀者是什麼、怎麼讀、在意什麼。不預設是人。用「你」稱呼這個讀者。"
+          },
+          "sample": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "讀完 <passage> 的一句反應,引到時用「」逐字引。沒有 <passage> 時留空字串。"
+          },
+          "figure": {
+            "$ref": "#/$defs/figure"
+          }
         }
       }
     }
@@ -27,31 +54,125 @@
     "name": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["zh-Hant", "en"],
+      "required": [
+        "zh-Hant",
+        "en"
+      ],
       "description": "名字或名詞,不帶形容詞、副詞。",
       "properties": {
-        "zh-Hant": {"type": "string", "pattern": "\\S", "maxLength": 16},
-        "en": {"type": "string", "pattern": "\\S", "maxLength": 32}
+        "zh-Hant": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 16
+        },
+        "en": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 32
+        }
       }
     },
     "form": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["zh-Hant", "en"],
+      "required": [
+        "zh-Hant",
+        "en"
+      ],
       "description": "這個讀者的形體。可以不是人、不是生物。",
       "properties": {
-        "zh-Hant": {"type": "string", "pattern": "\\S", "maxLength": 40},
-        "en": {"type": "string", "pattern": "\\S", "maxLength": 80}
+        "zh-Hant": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 40
+        },
+        "en": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 80
+        }
       }
     },
     "line": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["zh-Hant", "en"],
+      "required": [
+        "zh-Hant",
+        "en"
+      ],
       "description": "一句介紹,說這個讀者怎麼讀。",
       "properties": {
-        "zh-Hant": {"type": "string", "pattern": "\\S", "maxLength": 40},
-        "en": {"type": "string", "pattern": "\\S", "maxLength": 80}
+        "zh-Hant": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 40
+        },
+        "en": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 80
+        }
+      }
+    },
+    "figure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pose",
+        "main",
+        "second",
+        "traits",
+        "tempo",
+        "move"
+      ],
+      "description": "長相。enum 由 den 依 marrow/figure.json 填入。",
+      "properties": {
+        "pose": {
+          "type": "string",
+          "description": "從 <poses> 挑輪廓最接近形體的一個。"
+        },
+        "main": {
+          "type": "string",
+          "description": "身體的筆。"
+        },
+        "second": {
+          "type": "string",
+          "description": "花紋或特徵的筆,和 main 不同。"
+        },
+        "traits": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "group",
+              "d",
+              "fill"
+            ],
+            "properties": {
+              "group": {
+                "type": "string"
+              },
+              "d": {
+                "type": "string",
+                "maxLength": 600,
+                "description": "SVG 路徑,只用絕對座標 M L C Q A Z。"
+              },
+              "fill": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "tempo": {
+          "type": "string",
+          "description": "讀的節奏:慢、中、快三檔。"
+        },
+        "move": {
+          "type": "string",
+          "description": "閒著時的招牌小動作:部位×動作。"
+        }
       }
     }
   }
