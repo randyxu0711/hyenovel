@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { SessionRow, Work } from "./api";
 import { toggleDayNight, useThemeState } from "./theme";
 import Icon, { type IconName } from "./Icon";
+import Logo from "./Logo";
 import { useLang, useT } from "./i18n";
 import type { Talk as TalkState } from "./useTalk";
 import type { ShelfMode } from "./useShelf";
@@ -82,7 +83,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
     <nav className="dash-rail" aria-label={t("rail.works")} data-shelf={mode} hidden={hidden}>
       <div className="shelf-top">
         <IB icon="panel" label={t(open ? "shelf.collapse" : "shelf.expand")} aria-expanded={open} onClick={onToggle} />
-        {open && <b className="shelf-brand">{t("brand")}</b>}
+        {open && <b className="shelf-brand"><Logo />{t("brand")}</b>}
         <IB icon="new" label={t("shelf.new")} onClick={onNew} />
         {!open && (
           <IB icon="find" label={t("shelf.find")} onClick={onFind}>

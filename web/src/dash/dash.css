@@ -330,7 +330,7 @@
 .dash-rail{display:flex; flex-direction:column; min-height:0; overflow:hidden; background:var(--dash-desk-2)}
 .dash .shelf-top{display:flex; align-items:center; gap:2px; padding:14px 10px 8px 12px}
 .dash-rail[data-shelf="rail"] .shelf-top{flex-direction:column; padding:12px 0; gap:6px}
-.dash .shelf-brand{margin-right:auto; padding-left:6px; font-family:var(--serif); font-weight:600; font-size:var(--dash-t-lg)}
+.dash .shelf-brand{display:inline-flex; align-items:center; gap:7px; margin-right:auto; padding-left:6px; font-family:var(--serif); font-weight:600; font-size:var(--dash-t-lg)}
 .dash .shelf-find{display:flex; align-items:center; gap:6px; margin:0 10px 6px; padding:0 8px; border-radius:8px; color:var(--dash-ink-2)}
 .dash .shelf-find:focus-within{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .shelf-find input{flex:1; min-width:0; border:0; background:none; padding:6px 0; font:inherit; font-size:var(--dash-t-sm); color:var(--dash-ink); outline:none}

@@ -25,8 +25,7 @@ function get2d(c: HTMLCanvasElement): CanvasRenderingContext2D | null {
 function paintTitle(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
   const ls = (v: string) => { (ctx as unknown as { letterSpacing: string }).letterSpacing = v; };
-  ls("12px"); ctx.fillStyle = "#f3ecd6"; ctx.font = SERIF; ctx.fillText("鬣文", W / 2, 126);
-  ls("7.5px"); ctx.fillStyle = "#8c8265"; ctx.font = SANS; ctx.fillText("HYENOVEL", W / 2, 170);
+  ls("12px"); ctx.fillStyle = "#f3ecd6"; ctx.font = SERIF; ctx.fillText("Hyenovel", W / 2, 126);
   ls("0px"); ctx.strokeStyle = "rgba(220,200,150,.3)"; ctx.lineWidth = 1;
   roundRect(ctx, PILL.x, PILL.y, PILL.w, PILL.h, PILL.r); ctx.stroke();
   ls("3px"); ctx.fillStyle = "#b9ad88"; ctx.font = SANS; ctx.fillText("進入 ⟶", W / 2, 251);

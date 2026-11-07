@@ -4,7 +4,7 @@ import { DEN_ERROR_CODES, type LText } from "./api";
 export type Lang = "zh-Hant" | "en";
 
 export const zhHant = {
-  "brand": "hyenovel",
+  "brand": "Hyenovel",
   "rail.works": "作品",
   "rail.settings": "設定",
   "pane.label": "切換窗格",
@@ -242,7 +242,7 @@ export const zhHant = {
 export type MsgKey = keyof typeof zhHant;
 
 export const en: Record<MsgKey, string> = {
-  "brand": "hyenovel",
+  "brand": "Hyenovel",
   "rail.works": "Works",
   "rail.settings": "Settings",
   "pane.label": "Switch pane",

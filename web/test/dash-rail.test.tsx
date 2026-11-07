@@ -94,7 +94,7 @@ describe("Rail(展開)", () => {
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
       if (n.parentElement!.closest("button, output") === null) texts.push(n.textContent!.trim());
     }
-    expect(texts.filter(Boolean)).toEqual(["hyenovel"]);
+    expect(texts.filter(Boolean)).toEqual(["Hyenovel"]);
   });
   it("作品 ≤ 6 沒有篩選框;7 篇才有,輸入「山」只剩含「山」的", () => {
     const { unmount } = mount({ works: WORKS.concat([w("d4", "a"), w("d5", "b"), w("d6", "c")]) });
