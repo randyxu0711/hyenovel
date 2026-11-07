@@ -24,7 +24,7 @@ const SIZES: { size: PaperSize; key: "set.size.s" | "set.size.m" | "set.size.l" 
 ];
 const LANGS: { lang: Lang; label: string }[] = [{ lang: "zh-Hant", label: "繁體中文" }, { lang: "en", label: "English" }];
 
-/** 舊討論封存:唯讀。先數量,打開後列出,點一局看逐字;沒有輸入框。 */
+/** 舊討論封存:唯讀。直接列出,點一局看逐字;沒有輸入框。 */
 function Archive() {
   const t = useT();
   const lang = useLang();
@@ -32,7 +32,6 @@ function Archive() {
   const { mode } = useThemeState();
   const [rows, setRows] = useState<RecentSession[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   useEffect(() => {
     let live = true;
@@ -45,31 +44,24 @@ function Archive() {
   const who = speakerChanges(detail?.turns ?? [], chars.byId);
   return (
     <>
-      {rows && <p>{t("set.legacy", { n: rows.length })}</p>}
       {err && <p role="alert">{t(errorMessage(err))}</p>}
-      {rows && rows.length > 0 && (
-        <button type="button" className="dash-set-opt" aria-expanded={open}
-          onClick={() => { setOpen(o => !o); setDetail(null); }}>
-          {t(open ? "set.closeArchive" : "set.openArchive")}
-        </button>
-      )}
-      {open && !detail && (
+      {rows && !detail && (
         <div className="dash-set-archive">
-          <p>{t("set.archiveNote")}</p>
+          <p className="dash-set-count">{t("set.legacy", { n: rows.length })}</p>
           <ul>
-            {rows!.map(s => (
+            {rows.map(s => (
               <li key={s.session}>
-                <button type="button" className="dash-set-opt" onClick={() => void show(s.session)}>
-                  <b>{s.title}</b> <span>{s.preview}</span>
+                <button type="button" onClick={() => void show(s.session)}>
+                  <b>{s.title}</b><span>{s.preview}</span>
                 </button>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {open && detail && (
+      {detail && (
         <div className="dash-set-log">
-          <button type="button" className="dash-set-opt" onClick={() => setDetail(null)}>{t("set.back")}</button>
+          <button type="button" className="ib" aria-label={t("set.back")} title={t("set.back")} onClick={() => setDetail(null)}><Icon name="back" /></button>
           <h3>{detail.title}</h3>
           {detail.turns.map((turn, i) => {
             if (turn.role !== "assistant") return <div key={i} className="chat-me"><p>{turn.text}</p></div>;

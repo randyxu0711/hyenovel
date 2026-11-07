@@ -215,13 +215,13 @@ describe("設定頁", () => {
     expect(tagged()).toEqual([p.getByRole("radio", { name: /鹿/ })]);
   });
 
-  it("舊討論:只數 legacy 局,打開封存看得到逐字,沒有輸入框", async () => {
+  it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {
     const f = mount();
     const p = await page();
     await go("舊討論");
     await waitFor(() => expect(f.mock.calls.some(c => String(c[0]) === "/api/sessions?limit=100&legacy=1")).toBe(true));
-    await waitFor(() => expect(p.getByText(/2/)).toBeTruthy());
-    fireEvent.click(p.getByRole("button", { name: "打開封存" }));
+    await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
+    expect(p.getByText("2 局")).toBeTruthy();
     expect(p.getByText("預覽old1")).toBeTruthy();
     expect(p.getByText("預覽old2")).toBeTruthy();
     expect(p.queryByText("預覽new1")).toBeNull();
@@ -244,7 +244,7 @@ describe("設定頁", () => {
     let n = 0;
     for (const sec of ["陪讀者", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
       await go(sec);
-      if (sec === "舊討論") await waitFor(() => expect(p.getByText(/2/)).toBeTruthy());
+      if (sec === "舊討論") await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
       for (let i = 0; i < controls().length; i++, n++) {
         const el = controls()[i];
         if (el.getAttribute("aria-pressed") === "true" || (el as HTMLInputElement).checked) continue;

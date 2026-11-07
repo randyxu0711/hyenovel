@@ -35,6 +35,8 @@ const PATHS = {
   note: <><path d="M4 2.5h10v13H4z" /><path d="M6.5 6h5M6.5 9h5M6.5 12h3" /></>,
   curve: <path d="M2.5 13.5l3.5-4.5 3 2.5 3.5-7 3 3.5" />,
   eyeOff: <><path d="M2 9s2.6-4.5 7-4.5S16 9 16 9s-2.6 4.5-7 4.5S2 9 2 9z" /><circle cx="9" cy="9" r="2" /><path d="M3 15L15 3" /></>,
+  history: <><path d="M3.5 9a5.5 5.5 0 1 0 1.6-3.9" /><path d="M3 3v3.5h3.5" /><path d="M9 6v3.2l2.2 1.4" /></>,
+  dice: <><rect x="3" y="3" width="12" height="12" rx="2.5" /><circle cx="6.5" cy="6.5" r=".9" fill="currentColor" /><circle cx="9" cy="9" r=".9" fill="currentColor" /><circle cx="11.5" cy="11.5" r=".9" fill="currentColor" /></>,
   flag: <><path d="M4.5 16V2.5" /><path d="M4.5 3h9l-2.2 3.2 2.2 3.3h-9" /></>,
   sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
 } satisfies Record<string, ReactNode>;

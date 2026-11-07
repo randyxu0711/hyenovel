@@ -65,10 +65,10 @@ describe("作答", () => {
   it("詞卡要按了才出現,換詞不打 API,選了填進形體", () => {
     mount();
     expect(screen.queryByRole("button", { name: "校對員" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "沒想法" }));
+    fireEvent.click(screen.getByRole("button", { name: "給幾個詞" }));
     fireEvent.click(screen.getByRole("button", { name: "校對員" }));
     expect((screen.getByLabelText("陪你讀稿的,是什麼?") as HTMLInputElement).value).toBe("校對員");
-    fireEvent.click(screen.getByRole("button", { name: "沒想法" }));
+    fireEvent.click(screen.getByRole("button", { name: "給幾個詞" }));
     fireEvent.click(screen.getByRole("button", { name: "換一批詞" }));
     expect(screen.getByRole("button", { name: "代書" })).toBeTruthy();
     expect(bodies).toEqual([]);
