@@ -271,10 +271,6 @@
 .dash .dash-set-opt{display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--dash-line); border-radius:6px; background:transparent; cursor:pointer; font:inherit; color:var(--dash-ink)}
 .dash .dash-set-opt[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); border-color:var(--dash-accent)}
 .dash .dash-set-chip{width:14px; height:14px; border-radius:50%; border:1px solid var(--dash-line)}
-.dash .dash-set-who{display:flex; align-items:center; gap:10px; margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-ink); cursor:pointer}
-.dash .dash-set-who small{color:var(--dash-ink-2); font-size:var(--dash-t-xs)}
-.dash .dash-set-card{display:flex; align-items:center; gap:6px}
-.dash .dash-set-card .dash-set-who{flex:1; min-width:0}
 .dash .dash-set-archive li{list-style:none; margin:0 0 6px}
 .dash .dash-set-archive ul{margin:0; padding:0}
 .dash .dash-set-log{margin-top:12px}
@@ -353,6 +349,101 @@
 .dash-rail[data-shelf="rail"] .shelf-foot{justify-content:center; padding:8px 0 12px}
 
 /* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
+/* 建角色:短文是唯一的亮點,其餘安靜;波浪 = 陪讀者提到,跟稿上同一個意思 */
+.dash .dash-settings:has(.nc-results, .char-cards){max-width:calc(40em + 300px)}
+.dash .dash-settings:has(.nc, .nc-busy) > .dash-h{display:none}
+.dash .nc-results{outline:0}
+.dash .nc-back{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:4px 8px 4px 2px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .nc-back:hover{color:var(--dash-ink)}
+.dash .nc-sheet{padding:32px 36px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .nc-q{margin:0 0 36px; padding:0; border:0; min-width:0}
+.dash .nc-q legend, .dash .nc-q > label{display:block; padding:0; margin:0 0 10px; font-family:var(--serif); font-size:var(--dash-t-lg); line-height:1.6}
+.dash .nc-form > label{font-size:var(--dash-t-xl)}
+.dash .nc-formline{display:flex; align-items:baseline; gap:12px; border-bottom:1px solid var(--dash-paper-ink-2)}
+.dash .nc-formline:focus-within{border-bottom-color:var(--dash-accent); box-shadow:0 1px 0 var(--dash-accent)}
+.dash .nc-formline input{flex:1; min-width:0; padding:6px 0; border:0; outline:0; background:none; font-family:var(--serif); font-size:var(--dash-t-lg); color:inherit}
+.dash .nc-idea{flex:none; padding:2px 4px; border:0; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .nc-idea:hover, .dash .nc-idea[aria-pressed="true"]{color:var(--dash-paper-ink)}
+.dash .nc-hint{margin:8px 0 0; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .nc-words{display:flex; flex-wrap:wrap; align-items:center; gap:4px 18px; margin-top:14px; font-family:var(--serif)}
+.dash .nc-words > button:not(.ib){padding:2px 0; border:0; background:none; cursor:pointer; color:var(--dash-paper-ink); text-underline-offset:.3em}
+.dash .nc-words > button:not(.ib):hover{text-decoration:underline}
+.dash .nc-group{position:relative}
+/* top 抵銷 .dash-desk 的 32px padding:sticky 從捲動容器的 padding 內側算起 */
+.dash .nc-pinned{position:sticky; top:-32px; z-index:1; margin:0 -8px 22px; padding:10px 8px 12px; background:var(--dash-paper); box-shadow:0 1px 0 color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
+.dash .nc-passage{margin:0; font-family:var(--serif); font-size:var(--dash-t-md); line-height:2.1; color:var(--dash-paper-ink)}
+.dash .nc-wave{text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
+.dash .nc-opts{margin:0 -10px; padding:0; list-style:none}
+.dash .nc-opts li{display:flex; align-items:flex-start; border-radius:6px}
+.dash .nc-opts li[data-on="false"]:hover{background:color-mix(in srgb, var(--dash-paper-ink) 6%, transparent)}
+.dash .nc-opt{display:flex; flex:1; gap:12px; align-items:baseline; padding:8px 10px; border:0; border-radius:6px; background:none; cursor:pointer; text-align:left; font-family:var(--serif); line-height:1.7; color:var(--dash-paper-ink)}
+.dash .nc-opts li[data-on="true"] .nc-opt{flex:none; padding:17px 12px 0 10px}
+.dash .nc-own{font-family:var(--sans); font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .nc-mark{flex:none; width:9px; height:9px; border:1px solid var(--dash-paper-ink-2); border-radius:50%}
+.dash .nc-opt[aria-pressed="true"] .nc-mark{border-color:var(--dash-accent); background:var(--dash-accent)}
+.dash .nc-edit{display:block; flex:1; width:100%; min-width:0; margin:4px 10px 4px 0; padding:4px 0; border:0; border-bottom:1px solid var(--dash-accent); outline:0; border-radius:0; background:none; resize:none; field-sizing:content; font-family:var(--serif); font-size:var(--dash-t-md); line-height:1.7; color:inherit}
+.dash .nc-swap{display:inline-flex; align-items:center; gap:5px; margin-top:6px; padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
+.dash .nc-swap:hover{color:var(--dash-paper-ink)}
+.dash .nc-swap .ico{width:14px; height:14px}
+.dash .nc-instance{margin-bottom:0}
+.dash .nc-instance summary{cursor:pointer; font-family:var(--serif); color:var(--dash-paper-ink-2)}
+.dash .nc-instance[open] summary{margin-bottom:10px; color:var(--dash-paper-ink)}
+.dash .nc-foot{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:20px}
+.dash .nc-foot .dash-key:disabled{cursor:not-allowed; color:var(--dash-ink-2); box-shadow:none; transform:none}
+.dash .nc-note{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .nc-err{margin:14px 0 0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .nc-busy{display:grid; justify-items:center; gap:18px; padding:72px 0; color:var(--dash-ink-2)}
+.dash .nc-busy p{margin:0; display:flex; align-items:baseline; gap:10px}
+.dash .nc-busy .dash-dm{font-size:var(--dash-t-lg); color:var(--dash-ink)}
+.dash :is(.char-card, .nc-busy) .blob{--dash-ink:var(--dash-paper-ink)}
+.dash .nc-blobs{display:flex; gap:28px}
+.dash .nc-results .nc-pinned{margin:0 0 16px; padding:14px 18px; border-radius:3px; box-shadow:var(--dash-sh-raise); color:var(--dash-paper-ink)}
+.dash .char-cards{display:grid; grid-auto-flow:dense; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:start}
+.dash .char-card{display:flex; flex-direction:column; padding:18px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .char-card[data-on="true"]{box-shadow:var(--dash-sh-raise), 0 0 0 1.5px var(--dash-accent)}
+.dash .char-line{margin:0 0 14px; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .char-foot{display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:auto; color:var(--dash-paper-ink-2)}
+.dash .char-default{display:flex; flex:1; align-items:center; gap:8px; cursor:pointer; font-size:var(--dash-t-sm)}
+.dash .char-default input{position:absolute; opacity:0; width:1px; height:1px}
+.dash .char-default:has(input:checked){color:var(--dash-paper-ink)}
+.dash .char-default:has(input:checked) .nc-mark{border-color:var(--dash-accent); background:var(--dash-accent)}
+.dash .char-default:has(input:focus-visible){outline:2px solid var(--dash-accent); outline-offset:2px}
+.dash .char-new{display:flex; flex-direction:column; align-self:stretch; justify-content:center; gap:4px; padding:14px; border:1px dashed var(--dash-line); border-radius:3px}
+.dash .char-new button{display:flex; align-items:center; justify-content:center; gap:8px; padding:8px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .char-new button:hover{background:var(--dash-desk-2); color:var(--dash-ink)}
+.dash .char-new button:focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
+.dash .char-card header{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+.dash .char-card h2{margin:0; font-family:var(--serif); font-size:var(--dash-t-lg); font-weight:500; line-height:1.3}
+.dash .char-card h2 small{display:block; font-family:var(--sans); font-size:var(--dash-t-xs); font-weight:400; color:var(--dash-paper-ink-2)}
+.dash .nc-sample{margin:0 0 14px; font-family:var(--serif); line-height:1.9}
+.dash .nc-line{margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .char-card details{font-size:var(--dash-t-sm)}
+.dash .char-card summary{cursor:pointer; color:var(--dash-paper-ink-2)}
+.dash .char-card details p{margin:8px 0 0; white-space:pre-wrap}
+.dash .nc-warn{margin:10px 0 0; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
+.dash .nc :is(button, summary, .nc-sample):focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
+.dash .nc-revise{margin-top:14px; padding-top:12px; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
+.dash .nc-revise input{width:100%; padding:4px 0; border:0; border-bottom:1px solid var(--dash-paper-ink-2); outline:0; border-radius:0; background:none; font-size:var(--dash-t-sm); color:inherit}
+.dash .nc-revise input:focus{border-bottom-color:var(--dash-accent)}
+.dash .nc-revise input::placeholder{color:var(--dash-paper-ink-2)}
+.dash .nc-revise-foot{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:6px}
+.dash .nc-revise-foot button, .dash .nc-use{padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
+.dash .nc-revise-foot button:disabled, .dash .nc-use:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
+.dash .nc-revise-foot button:not(:disabled):hover, .dash .nc-use:not(:disabled):hover{text-decoration:underline; text-underline-offset:.3em}
+.dash .char-card .nc-note{color:var(--dash-paper-ink-2); font-variant-numeric:tabular-nums}
+.dash .nc-use{align-self:flex-start; margin-top:10px; font-weight:500}
+.dash .char-edit{grid-column:1 / -1; gap:14px}
+.dash .char-edit label{display:block; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
+.dash .char-edit .nc-edit{margin:4px 0 0; color:var(--dash-paper-ink)}
+.dash .char-edit .nc-warn{margin:0}
+.dash .char-edit ul{margin:0; padding:0; list-style:none; font-size:var(--dash-t-sm)}
+.dash .char-edit-foot{display:flex; align-items:center; gap:14px}
+.dash .char-edit-foot button{padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .char-edit-foot button[type="submit"]{font-weight:500; color:var(--dash-paper-ink)}
+.dash .char-edit-foot button:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
+.dash .char-edit :is(button, input, textarea):focus-visible{outline-offset:2px}
+.dash[data-narrow="true"] .nc-sheet{padding:22px 18px}
+.dash[data-narrow="true"] .nc-pinned{position:static}
 .dash .set-nav{display:flex; flex-direction:column; gap:2px; padding:4px 10px}
 .dash .set-nav button{display:flex; align-items:center; gap:10px; padding:7px 10px; border:0; border-radius:8px; background:none; cursor:pointer; text-align:left; color:var(--dash-ink-2)}
 .dash .set-nav button:hover{background:var(--dash-line); color:var(--dash-ink)}

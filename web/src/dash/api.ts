@@ -31,6 +31,13 @@ export type Character = {
   colors: { light: ColorPair; dark: ColorPair };
   voice: string;
   mark: "pencil" | "highlighter" | "circle";
+  reading: string;
+};
+export type CardDraft = { name: LText; line: LText; reading: string };
+export type CandidateAnswers = { form: string; attention: string; returns: string; response: string; instance: string };
+export type Candidate = {
+  name: LText; form: LText; line: LText; reading: string; sample: string;
+  axes: string[]; card: unknown; warnings: string[];
 };
 export type ThemeTokens = Record<string, string>;
 export type Theme = { id: string; name: LText; source: string; light: ThemeTokens; dark: ThemeTokens };
@@ -147,6 +154,17 @@ export const api = {
   importCharacter: (card: unknown, confirm: boolean) =>
     request<{ imported: boolean; warnings: string[]; character?: Character }>("/api/characters/import", post({ card, confirm })),
   characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
+  characterCandidates: (answers: CandidateAnswers, lang: string) =>
+    request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", post({ answers, lang })),
+  reviseCandidate: (candidate: Candidate, feedback: string, lang: string) =>
+    request<Candidate>("/api/characters/candidates/revise", post({ candidate, feedback, lang })),
+  createCharacter: (candidate: Candidate, confirm: boolean) =>
+    request<{ created: boolean; warnings?: string[]; character?: Character }>("/api/characters", post({ candidate, confirm })),
+  copyCharacter: (id: string) =>
+    request<{ character: Character }>(`/api/characters/${encodeURIComponent(id)}/copy`, { method: "POST" }),
+  editCharacter: (id: string, draft: CardDraft, confirm: boolean) =>
+    request<{ edited: boolean; warnings?: string[]; character?: Character }>(
+      `/api/characters/${encodeURIComponent(id)}`, { ...post({ ...draft, confirm }), method: "PATCH" }),
   archiveCharacter: (id: string) =>
     request<{ archived: string }>(`/api/characters/${encodeURIComponent(id)}`, { method: "DELETE" }),
   themes: () => request<{ themes: Theme[]; default: string }>("/api/themes"),

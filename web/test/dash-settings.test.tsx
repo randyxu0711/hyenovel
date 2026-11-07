@@ -211,7 +211,7 @@ describe("設定頁", () => {
     mount();
     const p = await page();
     await go("陪讀者");
-    const tagged = () => p.getAllByRole("radio").filter(r => r.closest("label")!.textContent!.includes("預設"));
+    const tagged = () => p.getAllByRole("radio").filter(r => r.closest("label")!.textContent!.trim() === "預設");
     expect(tagged()).toHaveLength(1);
     expect((tagged()[0] as HTMLInputElement).checked).toBe(true);
     fireEvent.click(p.getByRole("radio", { name: /鹿/ }));
@@ -242,7 +242,8 @@ describe("設定頁", () => {
     const p = await page();
     const snap = () => JSON.stringify(Object.entries(localStorage)) + document.querySelector(".dash-settings")!.innerHTML;
     const controls = () => [...document.querySelectorAll<HTMLElement>(".dash-settings button, .dash-settings input")]
-      .filter(el => el.getAttribute("aria-label") !== "匯入角色卡");   // 開的是系統檔案視窗,不改狀態
+      .filter(el => !["匯入角色卡", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
+        && !/^(複製|編輯)/.test(el.getAttribute("aria-label") ?? ""));   // 系統檔案視窗不改狀態;新角色、複製、編輯另有測試
     let n = 0;
     for (const sec of ["陪讀者", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
       await go(sec);
@@ -298,6 +299,8 @@ describe("設定頁:角色卡", () => {
   let list: Character[];
   let posts: { card: unknown; confirm: boolean }[];
   let reply: (confirm: boolean) => Response;
+  let edits: { name: Record<string, string>; line: Record<string, string>; reading: string; confirm: boolean }[];
+  let editReply: (confirm: boolean) => Response;
   const imported = { ...deer, id: "u1", origin: "imported" as const, name: { "zh-Hant": "老讀", en: "Old" } };
   const mountCards = () => {
     const f = vi.fn(async (u: string, init?: RequestInit) => {
@@ -307,6 +310,17 @@ describe("設定頁:角色卡", () => {
         const b = JSON.parse(String(init?.body));
         posts.push(b);
         return reply(b.confirm);
+      }
+      if (u === "/api/characters/hyena/copy") {
+        list = [...list, { ...hyena, id: "c1", origin: "created", name: { "zh-Hant": "鬣狗(副本)", en: "Hyena (copy)" } }];
+        return json({ character: list[list.length - 1] });
+      }
+      if (u === "/api/characters/u1" && init?.method === "PATCH") {
+        const b = JSON.parse(String(init.body));
+        edits.push(b);
+        const r = editReply(b.confirm);
+        if (r.status === 200) list = list.map(c => c.id === "u1" ? { ...c, name: b.name, line: b.line, reading: b.reading } : c);
+        return r;
       }
       if (u === "/api/characters/u1" && init?.method === "DELETE") {
         list = list.map(c => c.id === "u1" ? { ...c, archived: true } : c);
@@ -325,14 +339,65 @@ describe("設定頁:角色卡", () => {
     fireEvent.change(input, { target: { files: [file] } });
   };
   const open = async () => { setLang("zh-Hant"); await go("陪讀者"); return page(); };
-  beforeEach(() => { list = [hyena, imported]; posts = []; reply = () => json({ imported: true, character: imported, warnings: [] }); });
+  beforeEach(() => {
+    list = [hyena, imported]; posts = []; edits = [];
+    reply = () => json({ imported: true, character: imported, warnings: [] });
+    editReply = () => json({ edited: true, character: imported });
+  });
 
+  it("新角色鈕打開問卷,回去回到清單", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(p.getByRole("button", { name: "新角色" }));
+    expect(p.getByLabelText("陪你讀稿的,是什麼?")).toBeTruthy();
+    fireEvent.click(p.getByRole("button", { name: "回陪讀者" }));
+    expect(p.getByRole("button", { name: "新角色" })).toBeTruthy();
+  });
   it("內建角色沒有封存鈕,匯入的角色有;每位都能匯出", async () => {
     mountCards();
     const p = await open();
     expect(p.queryByRole("button", { name: "封存鬣狗" })).toBeNull();
     expect(p.getByRole("button", { name: "封存老讀" })).toBeTruthy();
     expect(p.getByRole("link", { name: "匯出鬣狗" }).getAttribute("href")).toBe("/api/characters/hyena/card");
+  });
+  it("內建角色沒有編輯鈕但有複製鈕;匯入的兩個都有", async () => {
+    mountCards();
+    const p = await open();
+    expect(p.queryByRole("button", { name: "編輯鬣狗" })).toBeNull();
+    expect(p.getByRole("button", { name: "複製鬣狗" })).toBeTruthy();
+    expect(p.getByRole("button", { name: "編輯老讀" })).toBeTruthy();
+    expect(p.getByRole("button", { name: "複製老讀" })).toBeTruthy();
+  });
+  it("複製後清單多一位副本", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(p.getByRole("button", { name: "複製鬣狗" }));
+    expect(await p.findByText("鬣狗(副本)")).toBeTruthy();
+  });
+  it("編輯:卡片換成編輯器,只改目前語言,存完清單更新", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    expect((p.getByLabelText("讀法") as HTMLTextAreaElement).value).toBe(imported.reading);
+    expect(p.queryByRole("radio", { name: /老讀/ })).toBeNull();
+    fireEvent.change(p.getByLabelText("名字"), { target: { value: "新老讀" } });
+    fireEvent.click(p.getByRole("button", { name: "存" }));
+    expect(await p.findByRole("radio", { name: /新老讀/ })).toBeTruthy();
+    expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, confirm: false }]);
+    expect(p.queryByLabelText("讀法")).toBeNull();
+  });
+  it("編輯有警告要確認;取消回卡片", async () => {
+    editReply = confirm => confirm ? json({ edited: true, character: imported }) : json({ edited: false, warnings: ["looks-like-instructions"] });
+    mountCards();
+    const p = await open();
+    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    fireEvent.click(p.getByRole("button", { name: "存" }));
+    fireEvent.click(await p.findByRole("button", { name: "仍要存" }));
+    await waitFor(() => expect(edits.map(e => e.confirm)).toEqual([false, true]));
+    await waitFor(() => expect(p.queryByLabelText("讀法")).toBeNull());
+    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    fireEvent.click(p.getByRole("button", { name: "取消" }));
+    expect(p.getByRole("radio", { name: /老讀/ })).toBeTruthy();
   });
   it("匯入有警告時先列出,確認才送第二次", async () => {
     list = [hyena];

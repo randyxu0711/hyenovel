@@ -1,10 +1,11 @@
 """角色登記表。"""
 import copy
+import json
 from pathlib import Path
 
 import pytest
 
-from den import characters, companion, themes
+from den import candidates, cards, characters, companion, themes
 from marrow import db, repo
 
 
@@ -156,3 +157,82 @@ def test_mark_default(custom_dir):
 def test_mark_unknown_falls_back(custom_dir):
     _write_hyena(custom_dir, "crayon")
     assert characters.builtins()[0]["mark"] == "pencil"
+
+
+def _imported(conn, **data):
+    card = {"spec": "chara_card_v3", "spec_version": "3.0",
+            "data": {"name": "老讀", "personality": "讀", "description": "再讀", "first_mes": "嗨",
+                     "extensions": {"other": 1}, **data}}
+    return characters.import_card(conn, card, 1.0)["id"]
+
+
+NEW = ({"zh-Hant": "新名", "en": "New"}, {"zh-Hant": "新介紹", "en": "New line"}, "新讀法")
+
+
+def test_edited_card_replaces_text_and_keeps_the_rest(conn):
+    cid = _imported(conn)
+    data = cards.edited(repo.latest_character(conn, cid)["card"], *NEW)["data"]
+    assert data["name"] == "新名" and data["personality"] == "新讀法" and data["description"] == ""
+    assert data["creator_notes"] == "新介紹" and data["first_mes"] == "嗨"
+    assert data["extensions"]["other"] == 1
+    assert data["extensions"]["hyenovel"]["name"] == NEW[0] and data["extensions"]["hyenovel"]["line"] == NEW[1]
+
+
+def test_edit_adds_a_version_and_old_one_stays(conn):
+    cid = _imported(conn)
+    first = repo.latest_character(conn, cid)["card"]
+    assert characters.edit(conn, cid, *NEW, 2.0)["version"] == 2
+    row = conn.execute("SELECT card FROM character_version WHERE character_id = ? AND n = 1", (cid,)).fetchone()
+    assert json.loads(row[0]) == first
+    assert characters.get(conn, cid)["reading"] == "新讀法"
+
+
+def test_edit_unchanged_adds_no_version_even_when_card_has_description(conn):
+    cid = _imported(conn)
+    now = characters.get(conn, cid)
+    same = characters.edit(conn, cid, now["name"], now["line"], now["reading"], 2.0)
+    assert same["version"] == 1
+
+
+def test_edit_refuses_builtin_and_unknown(conn):
+    with pytest.raises(characters.BuiltinCharacter):
+        characters.edit(conn, "hyena", *NEW, 2.0)
+    with pytest.raises(characters.UnknownCharacter):
+        characters.edit(conn, "nobody", *NEW, 2.0)
+
+
+def test_create_is_origin_created_with_a_fresh_id(conn):
+    card = candidates.to_card({"name": NEW[0], "form": NEW[0], "line": NEW[1], "reading": "讀", "sample": "試"})
+    a, b = characters.create(conn, card, 2.0), characters.create(conn, card, 2.0)
+    assert a["id"] != b["id"] and a["origin"] == "created" and a["id"][0] == "c" and len(a["id"]) == 17
+
+
+def test_copy_keeps_look_and_adds_suffix(conn):
+    source = characters.get(conn, "buffalo")
+    got = characters.copy(conn, "buffalo", 2.0)
+    assert got["origin"] == "created" and got["id"] != "buffalo" and got["version"] == 1
+    assert got["name"]["zh-Hant"] == source["name"]["zh-Hant"] + "(副本)"
+    assert got["name"]["en"] == source["name"]["en"] + " (copy)"
+    for k in ("colors", "avatar", "voice", "mark", "reading", "line"):
+        assert got[k] == source[k]
+    assert characters.get(conn, "buffalo") == source
+
+
+def test_copy_keeps_the_blob_of_a_card_without_avatar(conn):
+    cid = _imported(conn)
+    assert characters.copy(conn, cid, 2.0)["avatar"] == characters.get(conn, cid)["avatar"]
+
+
+def test_copy_stays_within_the_name_limit(conn):
+    cid = _imported(conn, name="長" * cards.MAX_NAME)
+    got = characters.copy(conn, cid, 2.0)
+    assert len(got["name"]["zh-Hant"]) == cards.MAX_NAME and got["name"]["zh-Hant"].endswith("(副本)")
+    assert len(got["name"]["en"]) == cards.MAX_NAME and got["name"]["en"].endswith(" (copy)")
+
+
+def test_copy_refuses_archived_and_unknown(conn):
+    cid = _imported(conn)
+    characters.archive(conn, cid, 2.0)
+    for gone in (cid, "nobody"):
+        with pytest.raises(characters.UnknownCharacter):
+            characters.copy(conn, gone, 3.0)
