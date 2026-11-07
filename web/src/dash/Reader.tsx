@@ -15,16 +15,14 @@ const ANALYZING = ["running", "notes-running"];
 const STOPPED = ["stopped", "notes-stopped"];
 const UNANALYZED = ["stale", "none"];
 
-/** 作品狀態(den 的 state + notes_ready,都是最新版的)→ 頂列那句話。 */
-export function stateText(state: string, notesReady: boolean): MsgKey {
+/** 頂列的狀態字:只在版本點表達不了時才出聲(停住、或沒有 job 卻在跑);好了、還沒分析都靠點與「分析」鈕。 */
+export function stateText(state: string): MsgKey | null {
   switch (state) {
     case "running": return "state.running";
     case "notes-running": return "state.notesRunning";
     case "notes-stopped": return "state.notesStopped";
-    case "ready": return notesReady ? "state.allReady" : "state.ready";
     case "stopped": return "state.stopped";
-    case "stale": return "state.stale";
-    default: return "state.none";
+    default: return null;
   }
 }
 
@@ -184,7 +182,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
         )}
         {analyzing
           ? <Running jobId={work.job_id!} state={work.state} sseStep={job.step} onStopped={() => { setRev(r => r + 1); onFinished?.(); }} />
-          : <span className="paper-state" role="status">{t(stateText(work.state, work.notes_ready))}</span>}
+          : stateText(work.state) && <span className="paper-state" role="status">{t(stateText(work.state)!)}</span>}
         {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug, { resumeOnly: true }))}>{t("paper.resume")}</button>}
         {work.version === latest && UNANALYZED.includes(work.state) && (
           <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug))}>{t("newver.analyze")}</button>
