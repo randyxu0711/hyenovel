@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from den import themes
+from den import figure, themes
 from marrow.repo import canonical_json, sha256_text
 
 MAX_CARD_BYTES = 262144
@@ -81,7 +81,7 @@ def from_builtin(profile: dict, reading: str) -> dict:
         "character_version": "", "mes_example": "", "system_prompt": "", "post_history_instructions": "",
         "first_mes": "", "alternate_greetings": [], "group_only_greetings": [], "personality": reading,
         "scenario": "", "creator_notes": profile["line"]["zh-Hant"],
-        "extensions": {"hyenovel": {k: profile[k] for k in ("name", "line", "avatar", "colors", "voice", "mark")}},
+        "extensions": {"hyenovel": {k: profile[k] for k in ("name", "line", "avatar", "colors", "voice", "mark", "figure")}},
     }}
 
 
@@ -109,6 +109,7 @@ def view(card: dict, character_id: str, version: int) -> dict:
         "name": ext["name"] if _name_ok(ext.get("name")) else {"zh-Hant": name, "en": name},
         "line": ext["line"] if _ltext_ok(ext.get("line"), MAX_LINE) else {"zh-Hant": notes, "en": notes},
         "avatar": _avatar(ext.get("avatar"), character_id),
+        "figure": ext["figure"] if "figure" in ext and not figure.errors(ext["figure"]) else None,
         "colors": ext["colors"] if _colors_ok(ext.get("colors")) else FALLBACK_COLORS,
         "voice": _expand(_voice(ext), data),
         "mark": ext.get("mark") if ext.get("mark") in MARKS else "pencil",
@@ -184,6 +185,8 @@ def scan(card) -> dict:
         warnings.append("ignored-fields")
     if "colors" in ext and not _colors_ok(ext["colors"]):
         warnings.append("bad-colors")
+    if "figure" in ext and figure.errors(ext["figure"]):
+        warnings.append("bad-figure")
     return {"errors": errors, "warnings": warnings}
 
 

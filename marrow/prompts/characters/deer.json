@@ -23,5 +23,127 @@
     }
   },
   "voice": "",
-  "mark": "circle"
+  "mark": "circle",
+  "figure": {
+    "main": "olive",
+    "second": "bone",
+    "parts": [
+      {
+        "group": "legs",
+        "d": "M44 63 L44 94 L48 94 L48 63 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M54 64 L54 94 L58 94 L58 64 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M84 62 L84 93 L88 93 L88 62 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M93 59 L93 92 L97 92 L97 59 Z",
+        "fill": "main"
+      },
+      {
+        "group": "tail",
+        "d": "M100 44 C106 41 109 47 104 52 Z",
+        "fill": "second"
+      },
+      {
+        "group": "body",
+        "d": "M40 40 C48 32 70 32 86 36 C98 40 104 48 102 56 C100 64 90 66 80 66 L50 66 C42 66 36 60 36 52 C36 47 37 43 40 40 Z",
+        "fill": "main"
+      },
+      {
+        "group": "body",
+        "d": "M33 48 C31 40 31 34 33 28 L42 28 C44 34 45 41 45 47 Z",
+        "fill": "main"
+      },
+      {
+        "group": "body",
+        "d": "M58.2 42 A1.8 1.8 0 1 0 61.8 42 A1.8 1.8 0 1 0 58.2 42 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M68.2 40 A1.8 1.8 0 1 0 71.8 40 A1.8 1.8 0 1 0 68.2 40 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M78.2 43 A1.8 1.8 0 1 0 81.8 43 A1.8 1.8 0 1 0 78.2 43 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M64.2 49 A1.8 1.8 0 1 0 67.8 49 A1.8 1.8 0 1 0 64.2 49 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "body",
+        "d": "M74.2 50 A1.8 1.8 0 1 0 77.8 50 A1.8 1.8 0 1 0 74.2 50 Z",
+        "fill": "second",
+        "line": false,
+        "detail": true
+      },
+      {
+        "group": "ears",
+        "d": "M26 20 C24 14 22 10 18 5 M23 12 C20 12 17 10 14 8 M32 19 C34 13 37 9 42 5 M36 12 C39 12 42 11 45 9",
+        "fill": "none"
+      },
+      {
+        "group": "ears",
+        "d": "M36 22 C40 15 47 13 51 15 C47 21 42 24 37 24 Z",
+        "fill": "main"
+      },
+      {
+        "group": "face",
+        "d": "M13 30 C13 22 21 18 31 19 C41 20 45 28 41 34 C37 40 27 42 19 40 C15 38 13 34 13 30 Z",
+        "fill": "main"
+      },
+      {
+        "group": "face",
+        "d": "M11.6 33 A2.4 2 0 1 0 16.4 33 A2.4 2 0 1 0 11.6 33 Z",
+        "fill": "lead"
+      }
+    ],
+    "eyes": [
+      [
+        22,
+        28
+      ],
+      [
+        31,
+        27
+      ]
+    ],
+    "mouth": [
+      [
+        16,
+        37
+      ],
+      [
+        21,
+        39
+      ],
+      [
+        26,
+        37
+      ]
+    ],
+    "tempo": "mid",
+    "move": "ears-bob"
+  }
 }

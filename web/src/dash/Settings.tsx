@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, DashError, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
-import Blob from "./Blob";
+import Figure from "./Figure";
 import CardEditor, { SAVED_LIMITS } from "./CardEditor";
 import CharacterCard from "./CharacterCard";
 import Icon, { type IconName } from "./Icon";
@@ -76,7 +76,7 @@ function Archive() {
             const c = chars.byId(turn.character);
             return (
               <div key={i} className="chat-turn">
-                {who.has(i) && <p className="chat-who"><Blob character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>}
+                {who.has(i) && <p className="chat-who"><Figure character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>}
                 <p className="chat-text">{turn.text}</p>
               </div>
             );

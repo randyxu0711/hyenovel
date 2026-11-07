@@ -10,8 +10,8 @@ import Rail from "./Rail";
 import Reader from "./Reader";
 import Settings, { SettingsNav, type SettingsSection } from "./Settings";
 import Side, { marksFrom } from "./Side";
-import Blob from "./Blob";
-import { composerState } from "./Talk";
+import Figure from "./Figure";
+import { composerState, useReaction } from "./Talk";
 import { useSeen } from "./useSeen";
 import { initCompanion, useTalk } from "./useTalk";
 import { SHELF_W, useShelf } from "./useShelf";
@@ -91,6 +91,7 @@ function Shell({ chars }: { chars: Characters }) {
   const marks = talk.spansV === version ? [...marksFrom(talk.turns, chars), ...talk.liveMarks] : [];
   const work = works.find(w => w.slug === slug);
   const analyzing = ["running", "notes-running"].includes(String(work?.state));
+  const reacting = useReaction(analyzing);
   // 設定頁的回去鍵:回到進設定前開著的那篇;沒開過 → 進門。分區只記在這裡,不進網址。
   const [last, setLast] = useState<string | null>(null);
   useEffect(() => { if (slug) setLast(slug); }, [slug]);
@@ -195,7 +196,7 @@ function Shell({ chars }: { chars: Characters }) {
       )}
       {focused && (
         <button type="button" className="dash-peek" aria-label={t("focus.back")} title={t("focus.back")} onClick={() => setFocus(false)}>
-          <Blob character={me} size={58} state={composerState({ streaming: talk.streaming !== null, analyzing })} />
+          <Figure character={me} size={58} state={composerState({ streaming: talk.streaming, analyzing, reacting, typing: false })} />
         </button>
       )}
       {palette && <Palette works={works} chars={chars} onOpen={open} onSettings={() => nav("/settings")}

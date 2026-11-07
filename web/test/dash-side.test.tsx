@@ -46,7 +46,7 @@ describe("右欄分頁", () => {
     workState = "running";
     const { container } = mount();
     await screen.findByText("內文一行");
-    expect(container.querySelector("form.composer svg.blob")!.getAttribute("data-state")).toBe("scanning");
+    expect(container.querySelector("form.composer svg.fig")!.getAttribute("data-state")).toBe("scanning");
   });
   it("右欄頂沒有局選單(局搬到書架)", async () => {
     mount();

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "view": [120, 100],
+  "pens": {
+    "apricot": {"light": "#cc8650", "dark": "#dc9a66", "text": {"light": "#925a2b", "dark": "#dc9a66"}},
+    "pine": {"light": "#253122", "dark": "#6f8a64", "text": {"light": "#253122", "dark": "#93ad86"}},
+    "olive": {"light": "#7f9466", "dark": "#a9b98e", "text": {"light": "#56683f", "dark": "#a9b98e"}},
+    "moss": {"light": "#8a9a5b", "dark": "#b3c08a", "text": {"light": "#616c40", "dark": "#b3c08a"}},
+    "sand": {"light": "#c9a26a", "dark": "#d8b77f", "text": {"light": "#7b6341", "dark": "#d8b77f"}},
+    "ochre": {"light": "#b8812f", "dark": "#d9a95e", "text": {"light": "#885f23", "dark": "#d9a95e"}},
+    "rust": {"light": "#a8553a", "dark": "#d0805f", "text": {"light": "#a05137", "dark": "#d0805f"}},
+    "rose": {"light": "#c47f72", "dark": "#e2a593", "text": {"light": "#8d5b52", "dark": "#e2a593"}},
+    "plum": {"light": "#7d5a6e", "dark": "#b08ca0", "text": {"light": "#7d5a6e", "dark": "#b08ca0"}},
+    "slate": {"light": "#5d6f7a", "dark": "#93a6b0", "text": {"light": "#586974", "dark": "#93a6b0"}},
+    "bark": {"light": "#5a4a3a", "dark": "#b9a690", "text": {"light": "#5a4a3a", "dark": "#b9a690"}},
+    "bone": {"light": "#e6dcc4", "dark": "#cfc5ab", "text": {"light": "#6c675c", "dark": "#cfc5ab"}}
+  },
+  "poses": {
+    "quad": {"parts": [{"group": "legs", "d": "M34.5 66 L34.5 93 L41.5 93 L41.5 66 Z", "fill": "main"}, {"group": "legs", "d": "M46.5 66 L46.5 93 L53.5 93 L53.5 66 Z", "fill": "main"}, {"group": "legs", "d": "M78.5 66 L78.5 93 L85.5 93 L85.5 66 Z", "fill": "main"}, {"group": "legs", "d": "M90.5 66 L90.5 93 L97.5 93 L97.5 66 Z", "fill": "main"}, {"group": "body", "d": "M34 46 C40 34 62 32 80 36 C96 40 104 50 102 60 C100 70 92 72 84 72 L44 72 C36 72 30 64 30 56 C30 52 32 48 34 46 Z", "fill": "main"}, {"group": "face", "d": "M12 44 C12 32 24 26 36 30 C46 34 48 46 44 54 C40 62 30 64 22 62 C14 60 12 52 12 44 Z", "fill": "main"}], "eyes": [[22, 42], [32, 41]], "mouth": [[14, 54], [19, 57], [25, 55]]},
+    "perch": {"parts": [{"group": "legs", "d": "M52 76 L50 93 M66 76 L68 93", "fill": "none"}, {"group": "body", "d": "M36 56 C36 36 50 22 62 22 C78 22 88 38 86 56 C84 72 74 80 60 80 C46 80 36 72 36 56 Z", "fill": "main"}], "eyes": [[52, 40], [64, 40]], "mouth": [[54, 50], [58, 53], [62, 50]]},
+    "upright": {"parts": [{"group": "body", "d": "M46 24 C46 18 74 18 74 24 L74 88 C74 94 46 94 46 88 Z", "fill": "main"}], "eyes": [[54, 42], [66, 42]], "mouth": [[55, 52], [60, 55], [65, 52]]},
+    "frame": {"parts": [{"group": "body", "d": "M18 62 C18 26 40 12 60 12 C80 12 102 26 102 62 L94 62 C94 32 78 20 60 20 C42 20 26 32 26 62 Z", "fill": "main"}, {"group": "ears", "d": "M10 66 A10 16 0 1 0 30 66 A10 16 0 1 0 10 66 Z", "fill": "main"}, {"group": "ears", "d": "M90 66 A10 16 0 1 0 110 66 A10 16 0 1 0 90 66 Z", "fill": "main"}], "eyes": [[51, 58], [69, 58]], "mouth": [[54, 68], [60, 71], [66, 68]]},
+    "long": {"parts": [{"group": "tail", "d": "M96 50 L112 36 L108 52 L114 66 Z", "fill": "main"}, {"group": "body", "d": "M10 52 C14 40 34 34 58 36 C80 38 96 44 98 52 C96 62 80 70 56 70 C32 70 14 64 10 52 Z", "fill": "main"}], "eyes": [[22, 48], [31, 47]], "mouth": [[14, 56], [18, 59], [23, 57]]},
+    "mound": {"parts": [{"group": "body", "d": "M18 90 C18 52 38 30 60 30 C82 30 102 52 102 90 Z", "fill": "main"}], "eyes": [[50, 58], [70, 58]], "mouth": [[54, 70], [60, 73], [66, 70]]},
+    "wisp": {"parts": [{"group": "body", "d": "M22 70 C10 70 10 52 24 52 C24 38 44 34 50 44 C56 30 80 32 82 46 C96 44 104 58 96 66 C100 78 84 82 78 74 C70 84 50 84 46 76 C38 84 22 80 22 70 Z", "fill": "main"}], "eyes": [[50, 58], [66, 58]], "mouth": [[52, 67], [58, 70], [64, 67]]}
+  },
+  "groups": ["body", "legs", "face", "ears", "tail"],
+  "fills": ["main", "second", "lead", "none"],
+  "tempos": ["slow", "mid", "quick"],
+  "moves": ["tail-sway", "tail-flick", "ears-drift", "ears-bob"],
+  "limits": {"parts": 24, "traits": 2, "commands": 24, "coord": [-10, 130]}
+}

@@ -12,7 +12,7 @@ _DIR = Path(__file__).resolve().parent.parent / "marrow" / "prompts" / "characte
 
 DEFAULT_CHARACTER = "hyena"
 _DEFAULT_KEY = "default_character"
-_FIELDS = {"id", "name", "line", "avatar", "colors", "voice"}
+_FIELDS = {"id", "name", "line", "avatar", "colors", "voice", "figure"}
 
 
 class UnknownCharacter(Exception):

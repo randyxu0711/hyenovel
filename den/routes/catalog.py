@@ -27,10 +27,7 @@ class CardImportIn(BaseModel):
 
 class AnswersIn(BaseModel):
     form: Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)] = ""
-    attention: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
-    returns: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
-    response: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
-    instance: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] = ""
+    wish: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
 
 
 class CandidatesIn(BaseModel):
@@ -127,7 +124,8 @@ async def _spending(state, work: Callable[[], Awaitable[dict]]) -> dict:
 async def character_candidates(body: CandidatesIn, request: Request):
     state = request.app.state
     seed = secrets.randbelow(2**31) if body.seed is None else body.seed
-    return await _spending(state, lambda: candidates.generate(state.run_once, body.answers.model_dump(), body.lang, seed))
+    passage = candidates.opening(repo.works(state.mgr.conn))
+    return await _spending(state, lambda: candidates.generate(state.run_once, body.answers.model_dump(), passage, body.lang, seed))
 
 
 @router.post("/characters/candidates/revise")
@@ -135,7 +133,8 @@ async def revise_candidate(body: ReviseIn, request: Request):
     if candidates.core(body.candidate) is None:
         raise _bad_card("candidate-revise", ["bad-schema"])
     state = request.app.state
-    return await _spending(state, lambda: candidates.revise(state.run_once, body.candidate, body.feedback, body.lang))
+    passage = candidates.opening(repo.works(state.mgr.conn))
+    return await _spending(state, lambda: candidates.revise(state.run_once, body.candidate, body.feedback, passage, body.lang))
 
 
 @router.post("/characters")

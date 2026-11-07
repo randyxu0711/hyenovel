@@ -4,7 +4,6 @@ import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
 import Paper from "../src/dash/Paper";
 import { loadPaperFlow, setPaperFlow } from "../src/dash/paperFlow";
-import { blobPath } from "../src/dash/Blob";
 import { en, setLang, zhHant } from "../src/dash/i18n";
 import { getThemeState, setMode } from "../src/dash/theme";
 import { LinksProvider } from "../src/dash/links";
@@ -204,7 +203,7 @@ describe("設定頁", () => {
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && i?.method === "PUT" && i.body === JSON.stringify({ character: "buffalo" }))).toBe(true));
     fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
-    await waitFor(() => expect(document.querySelector(".home form.composer svg.blob path.body")!.getAttribute("d")).toBe(`${blobPath("buffalo")}Z`));
+    await waitFor(() => expect(document.querySelector(".home form.composer svg.fig")!.getAttribute("data-who")).toBe("buffalo"));
   });
 
   it("「預設」只標在選中的那位", async () => {
@@ -460,7 +459,7 @@ describe("設定頁:角色卡", () => {
       expect(zhHant[`card.err.${code}` as keyof typeof zhHant]).toBeTruthy();
       expect(en[`card.err.${code}` as keyof typeof en]).toBeTruthy();
     }
-    for (const code of ["newer-spec", "looks-like-instructions", "ignored-fields", "bad-colors"]) {
+    for (const code of ["newer-spec", "looks-like-instructions", "ignored-fields", "bad-colors", "bad-figure"]) {
       expect(zhHant[`card.warn.${code}` as keyof typeof zhHant]).toBeTruthy();
       expect(en[`card.warn.${code}` as keyof typeof en]).toBeTruthy();
     }

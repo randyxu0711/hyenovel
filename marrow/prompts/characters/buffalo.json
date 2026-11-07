@@ -23,5 +23,105 @@
     }
   },
   "voice": "",
-  "mark": "highlighter"
+  "mark": "highlighter",
+  "figure": {
+    "main": "pine",
+    "second": "bone",
+    "parts": [
+      {
+        "group": "legs",
+        "d": "M35.5 72 L35.5 93 L44.5 93 L44.5 72 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M48.5 73 L48.5 93 L57.5 93 L57.5 73 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M83.5 72 L83.5 92 L92.5 92 L92.5 72 Z",
+        "fill": "main"
+      },
+      {
+        "group": "legs",
+        "d": "M95.5 70 L95.5 91 L104.5 91 L104.5 70 Z",
+        "fill": "main"
+      },
+      {
+        "group": "tail",
+        "d": "M108 54 Q115 62 112 74",
+        "fill": "none"
+      },
+      {
+        "group": "body",
+        "d": "M30 44 C36 28 56 22 72 28 C88 32 104 40 108 54 C111 66 104 77 92 77 L44 77 C34 77 28 69 28 59 C28 53 28 48 30 44 Z",
+        "fill": "main"
+      },
+      {
+        "group": "body",
+        "d": "M50 30 C58 26 70 26 76 30",
+        "fill": "none",
+        "detail": true
+      },
+      {
+        "group": "ears",
+        "d": "M17 39 C8 35 2 26 5 15 C10 24 16 29 25 33 Z",
+        "fill": "second"
+      },
+      {
+        "group": "ears",
+        "d": "M33 37 C41 31 49 28 55 19 C56 30 47 39 37 42 Z",
+        "fill": "second"
+      },
+      {
+        "group": "face",
+        "d": "M8 54 C8 41 18 35 30 37 C41 39 45 49 43 59 C41 69 31 73 21 71 C12 69 8 63 8 54 Z",
+        "fill": "main"
+      },
+      {
+        "group": "face",
+        "d": "M6 63 A8 5.5 0 1 0 22 63 A8 5.5 0 1 0 6 63 Z",
+        "fill": "second"
+      },
+      {
+        "group": "face",
+        "d": "M8.4 62 A1.6 1.4 0 1 0 11.6 62 A1.6 1.4 0 1 0 8.4 62 Z",
+        "fill": "lead",
+        "detail": true
+      },
+      {
+        "group": "face",
+        "d": "M15.4 62 A1.6 1.4 0 1 0 18.6 62 A1.6 1.4 0 1 0 15.4 62 Z",
+        "fill": "lead",
+        "detail": true
+      }
+    ],
+    "eyes": [
+      [
+        19,
+        49
+      ],
+      [
+        31,
+        48
+      ]
+    ],
+    "mouth": [
+      [
+        9,
+        68
+      ],
+      [
+        14,
+        70
+      ],
+      [
+        20,
+        68
+      ]
+    ],
+    "tempo": "slow",
+    "move": "tail-sway"
+  }
 }

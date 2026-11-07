@@ -7,12 +7,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
-from den import candidates, cards
+from den import candidates, cards, figure
 from den import config as den_config
 from den.runner import RunResult
 from den.tests.test_app import _auth
 from den.tests.test_pipeline import ok
 from marrow import db, repo
+
+
+DRAFT = "她把手放在鍋蓋上,像在試溫度。"
+PENS = ("olive", "rust", "slate", "plum")
+TRAIT = {"group": "ears", "d": "M40 30 L46 18 L52 30 Z", "fill": "second"}
+
+
+def _fig(n=1, **kw):
+    return {"pose": "mound", "main": PENS[(n - 1) % len(PENS)], "second": "bark", "traits": [TRAIT],
+            "tempo": "mid", "move": "ears-bob", **kw}
 
 
 def _one(n=1, **kw):
@@ -21,6 +31,7 @@ def _one(n=1, **kw):
             "line": {"zh-Hant": "先聽聲音", "en": "Listens first"},
             "reading": "你聽句子的聲音,在意哪裡換了氣。",
             "sample": f"她把手放在鍋蓋上那一下,我停住了({n})。",
+            "figure": _fig(n),
             **kw}
 
 
@@ -49,8 +60,8 @@ class Script:
         return self.results.pop(0)
 
 
-def _generate(script, seed=7, answers=None, lang="zh-Hant"):
-    return asyncio.run(candidates.generate(script, {"form": "貓"} if answers is None else answers, lang, seed))
+def _generate(script, seed=7, answers=None, lang="zh-Hant", passage=DRAFT):
+    return asyncio.run(candidates.generate(script, {"form": "貓"} if answers is None else answers, passage, lang, seed))
 
 
 @pytest.mark.parametrize("seed", range(50))
@@ -61,19 +72,12 @@ def test_positions_are_three_and_pairwise_differ_on_two_axes(seed):
         assert sum(x != y for x, y in zip(a, b)) >= 2
 
 
-@pytest.mark.parametrize("drop_voice", [False, True])
-def test_every_seed_fills_three_candidates(drop_voice):
+def test_every_seed_fills_three_candidates():
     for seed in range(2000):
-        picked = candidates.positions(seed, drop_voice=drop_voice)
+        picked = candidates.positions(seed)
         assert len(picked) == 3
         for a, b in combinations(picked, 2):
             assert sum(x != y for x, y in zip(a, b)) >= 2
-
-
-def test_drop_voice_leaves_the_voice_axis_out():
-    for pos in candidates.positions(5, drop_voice=True):
-        assert len(pos) == 3
-        assert not {"先聽聲音", "先看結構"} & set(pos)
 
 
 def test_positions_take_one_pole_of_every_axis():
@@ -86,12 +90,13 @@ def test_same_seed_same_positions_different_seeds_vary():
     assert len({tuple(candidates.positions(s)) for s in range(20)}) > 1
 
 
-def test_generate_returns_cards_with_sample_as_mes_example():
+def test_sample_is_shown_but_never_stored_on_the_card_because_it_quotes_the_draft():
     out = _generate(Script(ok(_body())))
     assert out["seed"] == 7
     assert len(out["candidates"]) == 3
     first = out["candidates"][0]
-    assert first["sample"] == first["card"]["data"]["mes_example"]
+    assert first["sample"] == _one()["sample"]
+    assert first["card"]["data"]["mes_example"] == ""
     assert first["axes"] == list(candidates.positions(7)[0])
 
 
@@ -102,7 +107,7 @@ def test_candidate_card_reads_back_through_view_and_passes_scan():
     assert shown["name"]["en"] == "Reader 1"
     assert shown["line"]["zh-Hant"] == "先聽聲音"
     assert shown["reading"] == _one()["reading"]
-    assert shown["colors"] == cards.FALLBACK_COLORS
+    assert shown["colors"] == figure.pen_colors("olive")
 
 
 def test_form_goes_to_the_brief_and_blank_asks_for_mixed_forms():
@@ -111,23 +116,15 @@ def test_form_goes_to_the_brief_and_blank_asks_for_mixed_forms():
     assert "不同類別" not in candidates.brief_from({"form": "一隻貓"})
 
 
-def test_picked_answers_are_marked_as_clues_and_instance_as_not_to_copy():
-    brief = candidates.brief_from({"attention": "停在燈", "returns": "這篇的形狀", "response": "回報", "instance": "朋友的話"})
-    for text in ("線索", "停在燈", "這篇的形狀", "回報"):
-        assert text in brief
-    assert "不要照用:朋友的話" in brief
+def test_wish_goes_to_the_brief_only_when_answered():
+    assert "作者想要它這樣讀:慢慢來" in candidates.brief_from({"wish": "慢慢來"})
+    assert "作者想要" not in candidates.brief_from({"form": "貓"})
 
 
-def test_unpicked_questions_leave_no_trace():
-    assert "線索" not in candidates.brief_from({"form": "貓"})
-    assert "不要照用" not in candidates.brief_from({"form": "貓"})
-
-
-def test_attention_answer_drops_voice_axis_from_positions():
-    out = _generate(Script(ok(_body())), answers={"attention": "停在燈"})
-    assert all(len(c["axes"]) == 3 for c in out["candidates"])
-    out = _generate(Script(ok(_body())), answers={"returns": "一句"})
-    assert all(len(c["axes"]) == 4 for c in out["candidates"])
+def test_opening_takes_the_start_of_the_most_recently_submitted_work():
+    works = [{"submitted_at": 2.0, "latest_text": "新" * 300}, {"submitted_at": 1.0, "latest_text": "舊"}]
+    assert candidates.opening(works) == "新" * candidates.OPENING_CHARS
+    assert candidates.opening([]) is None
 
 
 def test_interface_language_reaches_the_worker():
@@ -145,14 +142,77 @@ def test_prompt_keeps_names_free_of_adjectives_and_adverbs():
     assert "形容詞" in system and "副詞" in system
 
 
-def test_worker_gets_brief_positions_and_shared_passage():
+def test_worker_gets_brief_positions_and_draft_opening():
     script = Script(ok(_body()))
     _generate(script, seed=7, answers={"form": "一隻老貓"})
     _, user = script.calls[0]
     assert "一隻老貓" in user
-    assert candidates.PASSAGE in user
+    assert f"<passage>\n{DRAFT}\n</passage>" in user
     for pos in candidates.positions(7):
         assert "、".join(pos) in user
+
+
+def test_without_a_draft_the_worker_gets_no_passage_and_sample_stays_blank():
+    blank = _body(_one(1, sample=""), _one(2, sample=""), _one(3, sample=""))
+    script = Script(ok(blank))
+    out = _generate(script, passage=None)
+    assert "<passage>" not in script.calls[0][1]
+    assert [c["sample"] for c in out["candidates"]] == ["", "", ""]
+
+
+def test_without_a_draft_an_invented_sample_goes_to_repair():
+    blank = _body(_one(1, sample=""), _one(2, sample=""), _one(3, sample=""))
+    script = Script(ok(_body()), ok(blank))
+    assert _generate(script, passage=None)["candidates"][0]["sample"] == ""
+    assert "沒有 <passage> 時 sample 要留空" in script.calls[1][1]
+
+
+def test_figure_and_name_color_come_from_the_grammar_onto_the_card():
+    out = _generate(Script(ok(_body())))
+    ext = out["candidates"][0]["card"]["data"]["extensions"]["hyenovel"]
+    assert ext["figure"] == {"pose": "mound", "parts": [TRAIT], "main": "olive", "second": "bark",
+                             "tempo": "mid", "move": "ears-bob"}
+    assert ext["colors"] == figure.pen_colors("olive")
+    shown = cards.view(out["candidates"][0]["card"], "x", 1)
+    assert shown["figure"] == ext["figure"] and shown["colors"] == ext["colors"]
+
+
+def test_worker_gets_the_pose_library_and_pens():
+    script = Script(ok(_body()))
+    _generate(script)
+    user = script.calls[0][1]
+    assert "<poses>" in user and '"wisp"' in user and "<pens>" in user and '"apricot"' in user
+
+
+def test_schema_enums_follow_the_grammar():
+    fig = candidates.SCHEMA["$defs"]["figure"]["properties"]
+    assert fig["pose"]["enum"] == list(figure.GRAMMAR["poses"])
+    assert fig["main"]["enum"] == list(figure.GRAMMAR["pens"])
+    assert fig["traits"]["maxItems"] == 2
+    assert fig["tempo"]["enum"] == ["slow", "mid", "quick"] and "tail-sway" in fig["move"]["enum"]
+
+
+@pytest.mark.parametrize("bad_fig, error", [
+    (_fig(1, second="olive"), "main 和 second 要是不同的筆"),
+    (_fig(1, traits=[{**TRAIT, "d": "M10 10 L500 10"}]), "figure parts/0: out-of-bounds"),
+    (_fig(1, traits=[{**TRAIT, "d": "M10 10 l5 5"}]), "figure parts/0: bad-path"),
+])
+def test_undrawable_figure_goes_to_repair_with_the_reason(bad_fig, error):
+    script = Script(ok(_body(_one(1, figure=bad_fig), _one(2), _one(3))), ok(_body()))
+    _generate(script)
+    assert error in script.calls[1][1]
+
+
+def test_three_candidates_need_three_main_pens():
+    script = Script(ok(_body(_one(1), _one(2, figure=_fig(1)), _one(3))), ok(_body()))
+    _generate(script)
+    assert "主色重複" in script.calls[1][1]
+
+
+def test_with_a_draft_a_blank_sample_goes_to_repair():
+    script = Script(ok(_body(_one(1, sample=" "), _one(2), _one(3))), ok(_body()))
+    assert _generate(script)["candidates"][0]["sample"] == _one(1)["sample"]
+    assert "有 <passage> 時 sample 不能空白" in script.calls[1][1]
 
 
 @pytest.mark.parametrize("bad", [
@@ -248,6 +308,10 @@ def api(data):
             client.headers.update(_auth(d))
             client.script = factory.script
             client.db_url = url
+            conn = db.connect(url)
+            with conn:
+                repo.add_source_version(conn, repo.ensure_story(conn, "d01", None, 2.0), DRAFT, 2.0)
+            conn.close()
             yield client
     return make
 
@@ -274,8 +338,7 @@ def test_endpoint_picks_a_seed_when_none_given(api):
 
 @pytest.mark.parametrize("body", [
     {"answers": {"form": "長" * 81}},
-    {"answers": {"attention": "長" * 301}},
-    {"answers": {"instance": "長" * 501}},
+    {"answers": {"wish": "長" * 301}},
     {"lang": "fr"},
 ])
 def test_endpoint_rejects_bad_input_without_spending(api, body):
@@ -286,16 +349,16 @@ def test_endpoint_rejects_bad_input_without_spending(api, body):
 
 def test_endpoint_treats_whitespace_as_unanswered(api):
     with api(ok(_body())) as c:
-        out = _post(c, answers={"form": "  ", "attention": "   "}).json()
-        assert all(len(x["axes"]) == 4 for x in out["candidates"])
+        _post(c, answers={"form": "  ", "wish": "   "})
+        assert "作者想要" not in c.script.calls[0][1]
         assert "不同類別" in c.script.calls[0][1]
 
 
 def test_endpoint_passes_answers_and_language_to_the_worker(api):
     with api(ok(_body())) as c:
-        _post(c, answers={"form": "退潮", "returns": "這篇的形狀"}, lang="en")
+        _post(c, answers={"form": "退潮", "wish": "慢慢來"}, lang="en")
         user = c.script.calls[0][1]
-        assert "形體:退潮" in user and "這篇的形狀" in user and "\nen\n" in user
+        assert "形體:退潮" in user and "慢慢來" in user and "\nen\n" in user and DRAFT in user
 
 
 def test_endpoint_reports_failure_with_reason_and_frees_the_slot(api):
@@ -326,8 +389,8 @@ def _shown(n=1, **kw):
     return {**_one(n, **kw), "axes": ["直說", "讀得快"], "warnings": []}
 
 
-def _revise(script, candidate=None, feedback="名字換一個", lang="zh-Hant"):
-    return asyncio.run(candidates.revise(script, candidate or _shown(), feedback, lang))
+def _revise(script, candidate=None, feedback="名字換一個", lang="zh-Hant", passage=DRAFT):
+    return asyncio.run(candidates.revise(script, candidate or _shown(), feedback, passage, lang))
 
 
 def test_revise_sends_one_candidate_with_feedback_and_keeps_axes():
@@ -335,10 +398,17 @@ def test_revise_sends_one_candidate_with_feedback_and_keeps_axes():
     out = _revise(script)
     _, user = script.calls[0]
     assert "<candidate>" in user and "讀者1" in user and "<feedback>\n名字換一個\n</feedback>" in user
-    assert candidates.PASSAGE in user and "<interface_language>\nzh-Hant\n</interface_language>" in user
+    assert DRAFT in user and "<interface_language>\nzh-Hant\n</interface_language>" in user
     assert out["axes"] == ["直說", "讀得快"]
     assert out["name"]["zh-Hant"] == "讀者9"
-    assert out["card"]["data"]["mes_example"] == out["sample"]
+    assert out["card"]["data"]["mes_example"] == ""
+
+
+def test_revise_without_a_draft_keeps_sample_blank():
+    script = Script(ok(_one(9)), ok(_one(9, sample="")))
+    assert _revise(script, _shown(sample=""), passage=None)["sample"] == ""
+    assert "<passage>" not in script.calls[0][1]
+    assert "沒有 <passage> 時 sample 要留空" in script.calls[1][1]
 
 
 def test_revise_prompt_is_its_own_and_bounds_feedback():
@@ -452,7 +522,7 @@ def test_save_builds_the_card_in_den_and_marks_created(api):
         assert got["origin"] == "created" and got["version"] == 1 and got["id"].startswith("c")
         assert got["reading"] == _one()["reading"]
         data = _row(c, got["id"])["card"]["data"]
-        assert data["name"] == "讀者1" and data["mes_example"] == _one()["sample"]
+        assert data["name"] == "讀者1" and data["mes_example"] == ""
         assert data["extensions"]["hyenovel"]["form"] == _one()["form"]
         assert c.script.calls == []
         assert got["id"] in [x["id"] for x in c.get("/api/characters").json()["characters"]]

@@ -1,3 +1,4 @@
+import type { FigureSpec, Part, Pen, Pose } from "./figure/poses";
 import { sseFetch, type SSEEvent } from "../data/client";
 
 /** 與 den/app.py 的 ERROR_CODES 一致(加 den-down);den/tests/test_app_errors.py 比對兩份。 */
@@ -28,15 +29,17 @@ export type Character = {
   id: string; version: number; origin: "builtin" | "imported" | "created"; archived: boolean;
   name: LText; line: LText;
   avatar: { kind: string; seed: string };
+  figure?: FigureSpec | null;
   colors: { light: ColorPair; dark: ColorPair };
   voice: string;
   mark: "pencil" | "highlighter" | "circle";
   reading: string;
 };
 export type CardDraft = { name: LText; line: LText; reading: string };
-export type CandidateAnswers = { form: string; attention: string; returns: string; response: string; instance: string };
+export type CandidateAnswers = { form: string; wish: string };
 export type Candidate = {
   name: LText; form: LText; line: LText; reading: string; sample: string;
+  figure: { pose: Pose; main: Pen; second: Pen; traits: Part[] };
   axes: string[]; card: unknown; warnings: string[];
 };
 export type ThemeTokens = Record<string, string>;

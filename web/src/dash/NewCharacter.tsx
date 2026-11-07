@@ -1,76 +1,24 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, DashError, type CardDraft, type Candidate, type CandidateAnswers, type Character } from "./api";
-import Blob from "./Blob";
+import Figure from "./Figure";
 import CardEditor, { candidateLimits } from "./CardEditor";
 import CharacterCard from "./CharacterCard";
 import { clock } from "./clock";
 import Icon from "./Icon";
 import { errorMessage, localized, useLang, useT, type MsgKey } from "./i18n";
-import { marked, PASSAGE, QUESTIONS, quotesIn, WORDS, type Question, type QuestionId } from "./questionnaire";
-
-type Pick = { option: number | "own"; text: string };
-type Picks = Partial<Record<QuestionId, Pick>>;
+import type { FigureSpec, Pose } from "./figure/poses";
+import { WORDS } from "./questionnaire";
 
 const GRAY = { fill: "var(--dash-paper-ink-2)", text: "var(--dash-paper-ink-2)" };
-const ghost = (seed: string): Character => ({
-  id: seed, version: 1, origin: "created", archived: false, name: {}, line: {},
-  avatar: { kind: "blob", seed }, colors: { light: GRAY, dark: GRAY }, voice: "", mark: "pencil", reading: "",
+const character = (seed: string, figure: FigureSpec): Character => ({
+  id: seed, version: 1, origin: "created", archived: false, name: {}, line: {}, avatar: { kind: "figure", seed },
+  figure, colors: { light: GRAY, dark: GRAY }, voice: "", mark: "pencil", reading: "",
 });
+const placeholder = (pose: Pose) => character(pose, { pose, parts: [], main: "bone", second: "bone" });
+const look = (c: Candidate): FigureSpec => ({ pose: c.figure.pose, parts: c.figure.traits, main: c.figure.main, second: c.figure.second });
 
-function Passage({ hover }: { hover: string }) {
-  return (
-    <p className="nc-passage">
-      {marked(PASSAGE, quotesIn(hover)).map((part, i) =>
-        part.on ? <span key={i} className="nc-wave">{part.text}</span> : part.text)}
-    </p>
-  );
-}
-
-function Choices({ question, setIdx, pick, onSwap, onPick, onHover }: {
-  question: Question; setIdx: number; pick: Pick | undefined;
-  onSwap: () => void; onPick: (p: Pick | undefined) => void; onHover: (text: string) => void;
-}) {
-  const t = useT();
-  const lang = useLang();
-  const set = question.sets[setIdx];
-  const stem = localized(set.stem, lang);
-  const edit = (label: string) => (
-    <textarea className="nc-edit" rows={2} maxLength={300} aria-label={label} value={pick!.text}
-      onChange={e => onPick({ ...pick!, text: e.target.value })} />
-  );
-  return (
-    <fieldset className="nc-q">
-      <legend>{stem}</legend>
-      <ul className="nc-opts">
-        {set.options.map((option, i) => {
-          const text = localized(option, lang);
-          const on = pick?.option === i;
-          return (
-            <li key={i} data-on={on} onMouseEnter={() => onHover(on ? pick.text : text)} onMouseLeave={() => onHover("")}
-              onFocus={() => onHover(on ? pick.text : text)} onBlur={() => onHover("")}>
-              <button type="button" className="nc-opt" aria-pressed={on} aria-label={on ? t("nc.unpick", { text }) : undefined}
-                onClick={() => onPick(on ? undefined : { option: i, text })}>
-                <span className="nc-mark" aria-hidden="true" />{!on && text}
-              </button>
-              {on && edit(t("nc.tweak"))}
-            </li>
-          );
-        })}
-        <li data-on={pick?.option === "own"}>
-          <button type="button" className="nc-opt nc-own" aria-pressed={pick?.option === "own"}
-            onClick={() => onPick(pick?.option === "own" ? undefined : { option: "own", text: "" })}>
-            <span className="nc-mark" aria-hidden="true" />{pick?.option !== "own" && t("nc.own")}
-          </button>
-          {pick?.option === "own" && edit(t("nc.own"))}
-        </li>
-      </ul>
-      <button type="button" className="nc-swap" onClick={onSwap}><Icon name="swap" />{t("nc.swapSet")}</button>
-    </fieldset>
-  );
-}
-
-function CandidateSlip({ candidate, busy, locked, elapsed, onHover, onRevise, onUse }: {
-  candidate: Candidate; busy: boolean; locked: boolean; elapsed: number; onHover: (text: string) => void;
+function CandidateSlip({ candidate, busy, locked, elapsed, onRevise, onUse }: {
+  candidate: Candidate; busy: boolean; locked: boolean; elapsed: number;
   onRevise: (feedback: string) => Promise<boolean>; onUse: () => void;
 }) {
   const t = useT();
@@ -83,10 +31,8 @@ function CandidateSlip({ candidate, busy, locked, elapsed, onHover, onRevise, on
     if (await onRevise(feedback.trim())) setFeedback("");
   };
   return (
-    <CharacterCard character={ghost(candidate.name["zh-Hant"] ?? name)} name={name} sub={localized(candidate.form, lang)} scanning={busy}
-      onMouseEnter={() => onHover(candidate.sample)} onMouseLeave={() => onHover("")}
-      onFocus={() => onHover(candidate.sample)} onBlur={() => onHover("")}>
-      <p className="nc-sample" tabIndex={0}>{candidate.sample}</p>
+    <CharacterCard character={character(candidate.name["zh-Hant"] ?? name, look(candidate))} name={name} sub={localized(candidate.form, lang)} scanning={busy}>
+      {candidate.sample && <p className="nc-sample">{candidate.sample}</p>}
       <p className="nc-line">{localized(candidate.line, lang)}</p>
       <details>
         <summary>{t("nc.reading")}</summary>
@@ -111,11 +57,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const lang = useLang();
   const [form, setForm] = useState("");
   const [round, setRound] = useState<number | null>(null);
-  const [blankOk, setBlankOk] = useState(false);
-  const [picks, setPicks] = useState<Picks>({});
-  const [sets, setSets] = useState<Record<QuestionId, number>>({ attention: 0, returns: 0, response: 0 });
-  const [instance, setInstance] = useState("");
-  const [hover, setHover] = useState("");
+  const [wish, setWish] = useState("");
   const [phase, setPhase] = useState<"form" | "busy" | "results">("form");
   const [batch, setBatch] = useState<Candidate[] | null>(null);
   const [batchNo, setBatchNo] = useState(0);
@@ -137,12 +79,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   }, [spending]);
   useEffect(() => { if (phase === "results") resultsRef.current?.focus(); }, [phase]);
 
-  const answer = (id: QuestionId) => picks[id]?.text.trim() ?? "";
-  const answers: CandidateAnswers = {
-    form: form.trim(), attention: answer("attention"), returns: answer("returns"),
-    response: answer("response"), instance: instance.trim(),
-  };
-  const ready = blankOk || Object.values(answers).some(Boolean);
+  const answers: CandidateAnswers = { form: form.trim(), wish: wish.trim() };
 
   const failure = (e: unknown): MsgKey => {
     const usage = e instanceof DashError && e.params.reason === "usage-limit";
@@ -150,7 +87,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   };
 
   const generate = async () => {
-    setErr(null); setHover(""); setUsing(null); setPhase("busy");
+    setErr(null); setUsing(null); setPhase("busy");
     try {
       const out = await api.characterCandidates(answers, lang);
       if (!live.current) return;
@@ -196,8 +133,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   if (phase === "busy") {
     return (
       <div className="nc-busy" role="status">
-        <div className="nc-blobs" aria-hidden="true">
-          {["a", "b", "c"].map(seed => <Blob key={seed} character={ghost(seed)} state="scanning" size={56} />)}
+        <div className="nc-figs" aria-hidden="true">
+          {(["perch", "mound", "wisp"] as const).map(pose => <Figure key={pose} character={placeholder(pose)} state="scanning" size={56} />)}
         </div>
         <p>{t("nc.generating")} <span className="dash-dm">{clock(elapsed)}</span></p>
       </div>
@@ -208,19 +145,17 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     return (
       <div className="nc nc-results" ref={resultsRef} tabIndex={-1}>
         {back}
-        <div className="nc-pinned"><Passage hover={hover} /></div>
         <div className="char-cards">
           {batch.map((c, i) => (i === using
             ? <CardEditor key={`${batchNo}-${i}`} draft={c} limits={candidateLimits(lang)}
                 onSave={(draft, confirm) => save(i, draft, confirm)} onCancel={() => setUsing(null)} />
             : <CandidateSlip key={`${batchNo}-${i}`} candidate={c} busy={revising === i} locked={revising !== null} elapsed={elapsed}
-                onHover={setHover} onRevise={feedback => revise(i, feedback)} onUse={() => setUsing(i)} />))}
+                onRevise={feedback => revise(i, feedback)} onUse={() => setUsing(i)} />))}
         </div>
         {alert}
         <div className="nc-foot">
           <button type="button" className="dash-key" disabled={revising !== null} onClick={() => void generate()}><Icon name="swap" />{t("nc.again")}</button>
           <span className="nc-note">{t("nc.costs")}</span>
-          <span className="nc-note">{t("nc.grayNote")}</span>
         </div>
       </div>
     );
@@ -236,7 +171,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
             <input id="nc-form" maxLength={80} autoComplete="off" value={form} aria-describedby="nc-form-hint"
               onChange={e => setForm(e.target.value)} />
             <button type="button" className="nc-idea" aria-pressed={round !== null}
-              onClick={() => { setBlankOk(true); setRound(r => (r === null ? 0 : null)); }}>{t("nc.noIdea")}</button>
+              onClick={() => setRound(r => (r === null ? 0 : null))}>{t("nc.noIdea")}</button>
           </div>
           <p id="nc-form-hint" className="nc-hint">{t("nc.formHint")}</p>
           {round !== null && (
@@ -250,26 +185,15 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
             </div>
           )}
         </div>
-        <div className="nc-group">
-          <div className="nc-pinned"><Passage hover={hover} /></div>
-          {QUESTIONS.map(q => (
-            <Choices key={q.id} question={q} setIdx={sets[q.id]} pick={picks[q.id]} onHover={setHover}
-              onPick={p => setPicks(all => ({ ...all, [q.id]: p }))}
-              onSwap={() => {
-                setSets(s => ({ ...s, [q.id]: (s[q.id] + 1) % q.sets.length }));
-                setPicks(all => ({ ...all, [q.id]: undefined }));
-              }} />
-          ))}
+        <div className="nc-q nc-wish">
+          <label htmlFor="nc-wish">{t("nc.wish")}</label>
+          <textarea id="nc-wish" className="nc-edit" rows={2} maxLength={300} value={wish}
+            onChange={e => setWish(e.target.value)} />
         </div>
-        <details className="nc-q nc-instance">
-          <summary>{t("nc.instance")}</summary>
-          <textarea className="nc-edit" rows={3} maxLength={500} aria-label={t("nc.instance")} value={instance}
-            onChange={e => setInstance(e.target.value)} />
-        </details>
       </div>
       {alert}
       <div className="nc-foot">
-        <button type="button" className="dash-key" disabled={!ready || revising !== null} onClick={() => void generate()}>{t("nc.generate")}</button>
+        <button type="button" className="dash-key" disabled={revising !== null} onClick={() => void generate()}>{t("nc.generate")}</button>
         <span className="nc-note">{t("nc.costs")}</span>
       </div>
     </div>
