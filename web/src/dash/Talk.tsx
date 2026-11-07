@@ -188,12 +188,11 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
         </div>
       )}
       <form className="composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
-        <div className="who"><Figure character={me} size={54} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} /></div>
+        <WhoPick me={me} onPick={talk.setWho} size={54} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} />
         <textarea value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
           placeholder={t("talk.placeholder", { name: nameOf(whoId) })}
           onChange={e => setDraft(e.target.value)} onKeyDown={onKey} />
         <div className="bar">
-          <WhoPick me={me} onPick={talk.setWho} />
           <button type="submit" className="ib send" aria-label={t("talk.send")} title={t("talk.send")}
             disabled={legacy || !draft.trim() || streaming !== null}><Icon name="send" /></button>
         </div>

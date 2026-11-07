@@ -123,6 +123,8 @@
 .dash .composer .bar .send:disabled{cursor:not-allowed; color:var(--dash-ink-2); opacity:.5}
 .dash .composer .who{position:absolute; left:14px; bottom:100%; width:54px; height:48px; margin-bottom:-9px; pointer-events:none}
 .dash .composer .who .fig{width:100%; height:100%}
+.dash .composer .dash-who.who{pointer-events:auto}
+.dash .composer .who .dash-who-key{display:block; width:100%; height:100%; padding:0; border:0; border-radius:12px; background:none; cursor:pointer}
 .dash .composer:focus-within .who .fig .eyes{transform:translate(2px,5px)}
 @media (prefers-reduced-motion:reduce){ .dash .composer, .dash .composer::before{transition:none} .dash .composer:focus-within{transform:none} }
 

@@ -676,6 +676,7 @@ describe("輸入紙與角色狀態", () => {
     expect(key.getAttribute("title")).toBe("陪讀者:鬣狗");
     expect(key.querySelector("svg.fig")).not.toBeNull();
     expect(key.textContent).toBe("");
+    expect(document.querySelectorAll("form.composer svg.fig")).toHaveLength(1);
     fireEvent.click(key);
     const g = screen.getByRole("group", { name: "陪讀者" });
     fireEvent.keyDown(g, { key: "Escape" });
