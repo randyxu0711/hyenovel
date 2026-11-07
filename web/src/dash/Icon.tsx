@@ -5,7 +5,7 @@ const PATHS = {
   panel: <><rect x="2.5" y="3.5" width="13" height="11" rx="2" /><path d="M7 3.5v11" /></>,
   new: <><path d="M4 2.5h7l3 3v10H4z" /><path d="M9 8v5M6.5 10.5h5" /></>,
   find: <><circle cx="8" cy="8" r="4.6" /><path d="M11.5 11.5L15 15" /></>,
-  gear: <><circle cx="9" cy="9" r="2.4" /><path d="M9 1.8v2M9 14.2v2M1.8 9h2M14.2 9h2M3.9 3.9l1.4 1.4M12.7 12.7l1.4 1.4M3.9 14.1l1.4-1.4M12.7 5.3l1.4-1.4" /></>,
+  gear: <><path d="M2.5 4.5h4.2M9.3 4.5h6.2M2.5 9h8.2M13.3 9h2.2M2.5 13.5h2.2M7.3 13.5h8.2" /><circle cx="8" cy="4.5" r="1.3" /><circle cx="12" cy="9" r="1.3" /><circle cx="6" cy="13.5" r="1.3" /></>,
   plus: <path d="M9 4v10M4 9h10" />,
   dots: <><circle cx="4.5" cy="9" r=".9" /><circle cx="9" cy="9" r=".9" /><circle cx="13.5" cy="9" r=".9" /></>,
   talk: <path d="M3 4.5h12v8H8l-3.5 3v-3H3z" />,
@@ -31,7 +31,8 @@ const PATHS = {
   memory: <path d="M5 2.5h8v13l-4-3-4 3z" />,
   copy: <><rect x="6.5" y="6.5" width="8.5" height="8.5" rx="1.5" /><path d="M11.5 3.5H4.5A1.5 1.5 0 0 0 3 5v6.5" /></>,
   edit: <path d="M3.5 14.5l.7-3L12 3.7a1.4 1.4 0 0 1 2 0l.3.3a1.4 1.4 0 0 1 0 2l-7.8 7.8z" />,
-  sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
+  flag: <><path d="M4.5 16V2.5" /><path d="M4.5 3h9l-2.2 3.2 2.2 3.3h-9" /></>,
+  sheet2:<><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;
