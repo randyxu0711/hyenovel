@@ -99,7 +99,7 @@ def resolve(conn, character: str | None, last: str | None) -> dict:
 
 
 def import_card(conn, card: dict, now: float) -> dict:
-    """同一張卡再匯入 = 同一隻角色,封存過就拉回來。呼叫者持 transaction。"""
+    """同一張卡再匯入 = 同一隻角色,封存過就拉回來,編輯過就換回這張。呼叫者持 transaction。"""
     cid = cards.imported_id(card)
     row = repo.latest_character(conn, cid)
     if row is None:
@@ -107,6 +107,8 @@ def import_card(conn, card: dict, now: float) -> dict:
         repo.add_character_version(conn, cid, card, now)
     else:
         repo.unarchive_character(conn, cid)
+        if row["card"] != card:
+            repo.add_character_version(conn, cid, card, now)
     return get(conn, cid)
 
 
@@ -126,7 +128,7 @@ def copy(conn, character_id: str, now: float) -> dict:
 
 def edited_card(conn, character_id: str, name: dict, line: dict, reading: str) -> dict:
     row = repo.latest_character(conn, character_id)
-    if row is None:
+    if row is None or row["archived_at"] is not None:
         raise UnknownCharacter(character_id)
     if row["origin"] == "builtin":
         raise BuiltinCharacter(character_id)

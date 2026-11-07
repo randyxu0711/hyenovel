@@ -301,10 +301,12 @@ describe("設定頁:角色卡", () => {
   let reply: (confirm: boolean) => Response;
   let edits: { name: Record<string, string>; line: Record<string, string>; reading: string; confirm: boolean }[];
   let editReply: (confirm: boolean) => Response;
+  let listFails: boolean;
   const imported = { ...deer, id: "u1", origin: "imported" as const, name: { "zh-Hant": "老讀", en: "Old" } };
   const mountCards = () => {
     const f = vi.fn(async (u: string, init?: RequestInit) => {
       if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
+      if (u === "/api/characters" && listFails) return new Response("{}", { status: 500 });
       if (u === "/api/characters") return json({ characters: list, default: "hyena" });
       if (u === "/api/characters/import") {
         const b = JSON.parse(String(init?.body));
@@ -340,7 +342,7 @@ describe("設定頁:角色卡", () => {
   };
   const open = async () => { setLang("zh-Hant"); await go("陪讀者"); return page(); };
   beforeEach(() => {
-    list = [hyena, imported]; posts = []; edits = [];
+    list = [hyena, imported]; posts = []; edits = []; listFails = false;
     reply = () => json({ imported: true, character: imported, warnings: [] });
     editReply = () => json({ edited: true, character: imported });
   });
@@ -385,6 +387,15 @@ describe("設定頁:角色卡", () => {
     expect(await p.findByRole("radio", { name: /新老讀/ })).toBeTruthy();
     expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, confirm: false }]);
     expect(p.queryByLabelText("讀法")).toBeNull();
+  });
+  it("已經存好但清單重抓失敗時,編輯器仍關掉,不會誘使再存一次", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    listFails = true;
+    fireEvent.click(p.getByRole("button", { name: "存" }));
+    await waitFor(() => expect(p.queryByLabelText("讀法")).toBeNull());
+    expect(edits).toHaveLength(1);
   });
   it("編輯有警告要確認;取消回卡片", async () => {
     editReply = confirm => confirm ? json({ edited: true, character: imported }) : json({ edited: false, warnings: ["looks-like-instructions"] });

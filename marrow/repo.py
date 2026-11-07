@@ -582,7 +582,7 @@ def latest_character(conn, character_id: str) -> dict | None:
 
 
 def latest_characters(conn) -> list[dict]:
-    return [_row(r) for r in conn.execute(_LATEST_CHARACTER + "ORDER BY c.id")]
+    return [_row(r) for r in conn.execute(_LATEST_CHARACTER + "ORDER BY c.created_at, c.id")]
 
 
 def archive_character(conn, character_id: str, now: float) -> None:

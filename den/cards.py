@@ -123,15 +123,24 @@ def _with_ext(card: dict, ext: dict, **fields) -> dict:
 
 
 def edited(card: dict, name: dict, line: dict, reading: str) -> dict:
-    return _with_ext(card, {"name": name, "line": line}, name=name["zh-Hant"], personality=reading, description="",
-                     creator_notes=line["zh-Hant"])
+    """讀法沒改就留原文,{{char}} 才會跟著新名字。"""
+    data = card["data"]
+    fields = {"name": name["zh-Hant"], "creator_notes": line["zh-Hant"]}
+    if reading != _reading(data):
+        fields |= {"personality": reading, "description": ""}
+    if data.get("nickname"):
+        fields["nickname"] = name["zh-Hant"]
+    return _with_ext(card, {"name": name, "line": line}, **fields)
 
 
 def copied(card: dict, character_id: str) -> dict:
-    """avatar 寫死:沒帶 avatar 的卡以角色 id 當種子,不寫死的話副本長相會變。"""
+    """avatar 寫死:沒帶 avatar 的卡以角色 id 當種子,不寫死的話副本長相會變。
+    nickname 留原名:{{char}} 優先取它,「(副本)」才不會進讀法。"""
     shown = view(card, character_id, 0)
+    data = card["data"]
     name = {k: shown["name"][k][:MAX_NAME - len(s)] + s for k, s in _COPY_SUFFIX.items()}
-    return _with_ext(card, {"name": name, "line": shown["line"], "avatar": shown["avatar"]}, name=name["zh-Hant"])
+    return _with_ext(card, {"name": name, "line": shown["line"], "avatar": shown["avatar"]}, name=name["zh-Hant"],
+                     nickname=data.get("nickname") or data["name"])
 
 
 def _newer_spec(spec_version: str) -> bool:

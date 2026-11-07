@@ -569,3 +569,15 @@ def test_copy_endpoint_refuses_unknown_and_archived(api):
         assert c.delete(f"/api/characters/{cid}").status_code == 200
         r = c.post(f"/api/characters/{cid}/copy")
         assert r.status_code == 404 and r.json()["code"] == "unknown-character"
+
+
+def test_same_name_in_both_languages_is_not_a_duplicate():
+    script = Script(ok(_body(_one(1, name={"zh-Hant": "K", "en": "K"}), _one(2), _one(3))))
+    assert len(_generate(script)["candidates"]) == 3
+    assert len(script.calls) == 1
+
+
+def test_unparsable_output_asks_for_a_full_resubmission():
+    script = Script(_unparsed("被截斷的"), ok(_body()))
+    _generate(script)
+    assert "從頭重交" in script.calls[1][1] and "保持不變" not in script.calls[1][1]

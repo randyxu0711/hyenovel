@@ -99,7 +99,8 @@ def _errors(body: dict) -> list[str]:
     if bad:
         return bad
     items = body["candidates"]
-    for label, values in (("名字重複", [c["name"][k].strip() for k in ("zh-Hant", "en") for c in items]),
+    for label, values in (("名字重複", [c["name"]["zh-Hant"].strip() for c in items]),
+                          ("名字重複", [c["name"]["en"].strip() for c in items]),
                           ("試讀重複", [c["sample"].strip() for c in items])):
         if len(set(values)) < len(values):
             bad.append(label)
@@ -119,10 +120,11 @@ def _revise_input(candidate: dict, feedback: str, lang: str) -> str:
             f"<passage>\n{PASSAGE}\n</passage>\n<interface_language>\n{lang}\n</interface_language>")
 
 
-def _repair(first: str, previous: str, errors: list[str]) -> str:
+def _repair(first: str, previous: str, errors: list[str], parsed: bool) -> str:
     listed = "\n".join(f"- {e}" for e in errors)
-    return (f"{first}\n<previous_output>\n{previous}\n</previous_output>\n"
-            f"上一份輸出沒通過驗證,逐條錯誤如下。修正這些問題後重交整份 JSON,其餘內容保持不變:\n{listed}")
+    ask = ("上一份輸出沒通過驗證,逐條錯誤如下。修正這些問題後重交整份 JSON,其餘內容保持不變:" if parsed
+           else "上一份輸出無法解析成單一 JSON 物件(可能被截斷了)。請依輸出格式從頭重交完整的 JSON:")
+    return f"{first}\n<previous_output>\n{previous}\n</previous_output>\n{ask}\n{listed}"
 
 
 async def _attempt(run, system: str, schema: dict, check, prompt: str):
@@ -140,7 +142,7 @@ async def _gated(run, system: str, schema: dict, check, first: str) -> dict:
     body, previous, errors = await _attempt(run, system, schema, check, first)
     if errors:
         log.info("event=candidates-repair errors=%d", len(errors))
-        body, _, errors = await _attempt(run, system, schema, check, _repair(first, previous, errors))
+        body, _, errors = await _attempt(run, system, schema, check, _repair(first, previous, errors, body is not None))
     if errors:
         log.info("event=candidates-failed reason=gate errors=%d", len(errors))
         raise Failed("gate")

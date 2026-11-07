@@ -9,6 +9,7 @@
 import logging
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -103,7 +104,8 @@ def _card_warnings(warnings: list[str]) -> str:
 
 
 def _shown(text: str, hidden: str) -> str:
-    return hidden if cards._INSTRUCTIONS.search(text) else text
+    flat = " ".join(text.split())
+    return hidden if cards._INSTRUCTIONS.search(unicodedata.normalize("NFKC", flat)) else flat
 
 
 def _candidate_lines(n: int, c: dict, lang: str) -> list[str]:
@@ -406,8 +408,8 @@ def build_server(den: DenClient) -> MCPServer:
             now = await _character_now((await resolve_work(work))["slug"], now)
         if not any(c["id"] == now for c in active):
             now = data["default"]
-        return "\n".join(f"{c['id']}:{c['name']['zh-Hant']},{c['line']['zh-Hant']}" + ("(目前)" if c["id"] == now else "")
-                         for c in active)
+        return "\n".join(f"{c['id']}:{_shown(c['name']['zh-Hant'], '這個名字沒顯示')},{_shown(c['line']['zh-Hant'], '這句介紹沒顯示')}"
+                         + ("(目前)" if c["id"] == now else "") for c in active)
 
     async def _set_character(character: str, work: str | None) -> str:
         cs = {c["id"]: c for c in (await call("GET", "/api/characters"))["characters"] if not c["archived"]}
@@ -416,7 +418,7 @@ def build_server(den: DenClient) -> MCPServer:
         w = await resolve_work(work)
         picked[w["slug"]] = character
         current[:] = [w["slug"]]
-        return f"〈{w['title']}〉下一輪由{cs[character]['name']['zh-Hant']}接著讀。"
+        return f"〈{w['title']}〉下一輪由{_shown(cs[character]['name']['zh-Hant'], '這隻角色')}接著讀。"
 
     @server.tool(description=DESC_LIST_CHARACTERS, annotations=_READONLY)
     async def list_characters(work: str | None = None) -> str:
@@ -426,15 +428,18 @@ def build_server(den: DenClient) -> MCPServer:
     async def set_character(character: str, work: str | None = None) -> str:
         return await guarded(_set_character(character, work))
 
-    drafts: dict = {}               # 最後一批候選:{"items": [...], "lang": ...}
+    drafts: dict = {}               # 最後一批候選:{"items": [...], "lang": ..., "saved": {編號}}
+    held: set[tuple] = set()        # 已回過警告的 (編號, 名字):第一次帶 confirm 也要先讓作者看到警告
 
     async def _create_character(answers: dict, lang: str) -> str:
+        drafts.clear()
+        held.clear()
         out = await call("POST", "/api/characters/candidates", {"answers": answers, "lang": lang},
                          timeout=_GENERATE_TIMEOUT,
                          on_status={409: "上一批候選還在生成,等它回來再說。",
                                     422: "答案太長(form 80 字、instance 500 字、其他 300 字),或 lang 不是 zh-Hant / en。",
                                     502: _generation_failed})
-        drafts.update(items=out["candidates"], lang=lang)
+        drafts.update(items=out["candidates"], lang=lang, saved=set())
         lines = [ln for n, c in enumerate(out["candidates"], 1) for ln in _candidate_lines(n, c, lang)]
         return "\n".join(lines + ["把候選照列給作者,由作者選;作者選定後用 save_character。"])
 
@@ -450,15 +455,20 @@ def build_server(den: DenClient) -> MCPServer:
             raise _reject("no-candidates", "這個連線還沒有候選。作者要建角色時先用 create_character。")
         if not 1 <= number <= len(items):
             raise _reject("candidate-number", f"number 只能是 1 到 {len(items)}。")
+        if number in drafts["saved"]:
+            raise _reject("candidate-saved", "這個候選已經存過了。")
         candidate = items[number - 1]
         lang = drafts["lang"]
         if name and name.strip():
             candidate = {**candidate, "name": {**candidate["name"], lang: name.strip()}}
-        out = await call("POST", "/api/characters", {"candidate": candidate, "confirm": confirm},
+        key = (number, candidate["name"][lang])
+        out = await call("POST", "/api/characters", {"candidate": candidate, "confirm": confirm and key in held},
                          on_status={422: "這個候選存不下來:名字太長或空白。"})
         if not out["created"]:
+            held.add(key)
             return (f"還沒存。這個候選{_card_warnings(out['warnings'])}。"
                     "請告訴作者,作者確認要存才帶 confirm=true 再呼叫一次。")
+        drafts["saved"].add(number)
         c = out["character"]
         return f"已存成{_shown(c['name'][lang], '新角色')}(id:{c['id']})。作者要它陪讀時用 set_character。"
 

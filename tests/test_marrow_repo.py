@@ -457,7 +457,7 @@ def test_character_versions_and_latest(conn):
     x = repo.latest_character(conn, "x")
     assert (x["id"], x["origin"], x["archived_at"], x["n"], x["card"]) == ("x", "builtin", None, 2, {"a": 2})
     assert x["sha256"] == hashlib.sha256(repo.canonical_json({"a": 2}).encode()).hexdigest()
-    assert [(r["id"], r["n"]) for r in repo.latest_characters(conn)] == [("w", 1), ("x", 2)]
+    assert [(r["id"], r["n"]) for r in repo.latest_characters(conn)] == [("x", 2), ("w", 1)]
 
 
 def test_archive_keeps_first_time_and_unarchive_clears(conn):

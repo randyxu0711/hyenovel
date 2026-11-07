@@ -236,3 +236,56 @@ def test_copy_refuses_archived_and_unknown(conn):
     for gone in (cid, "nobody"):
         with pytest.raises(characters.UnknownCharacter):
             characters.copy(conn, gone, 3.0)
+
+
+def _macro_card(**data):
+    return {"spec": "chara_card_v3", "spec_version": "3.0",
+            "data": {"name": "老讀", "personality": "你是{{char}}", **data}}
+
+
+def test_reimporting_the_original_restores_it(conn):
+    card = _macro_card()
+    cid = characters.import_card(conn, card, 1.0)["id"]
+    characters.edit(conn, cid, *NEW, 2.0)
+    again = characters.import_card(conn, card, 3.0)
+    assert again["id"] == cid and again["version"] == 3 and again["reading"] == "你是老讀"
+
+
+def test_reimporting_unchanged_adds_no_version(conn):
+    card = _macro_card()
+    characters.import_card(conn, card, 1.0)
+    assert characters.import_card(conn, card, 2.0)["version"] == 1
+
+
+def test_edit_refuses_archived(conn):
+    cid = _imported(conn)
+    characters.archive(conn, cid, 2.0)
+    with pytest.raises(characters.UnknownCharacter):
+        characters.edit(conn, cid, *NEW, 3.0)
+
+
+def test_new_characters_list_after_the_builtins(conn):
+    card = candidates.to_card({"name": NEW[0], "form": NEW[0], "line": NEW[1], "reading": "讀", "sample": "試"})
+    got = characters.create(conn, card, 2.0)
+    assert [c["id"] for c in characters.all_(conn)] == ["buffalo", "deer", "hyena", got["id"]]
+
+
+def test_rename_keeps_macros_when_reading_is_untouched(conn):
+    cid = characters.import_card(conn, _macro_card(), 1.0)["id"]
+    now = characters.get(conn, cid)
+    got = characters.edit(conn, cid, {"zh-Hant": "新名", "en": "New"}, now["line"], now["reading"], 2.0)
+    assert got["reading"] == "你是新名"
+    assert repo.latest_character(conn, cid)["card"]["data"]["personality"] == "你是{{char}}"
+
+
+def test_copy_label_stays_out_of_the_reading(conn):
+    cid = characters.import_card(conn, _macro_card(), 1.0)["id"]
+    got = characters.copy(conn, cid, 2.0)
+    assert got["name"]["zh-Hant"].endswith("(副本)") and got["reading"] == "你是老讀"
+
+
+def test_renaming_a_copy_updates_its_macros(conn):
+    cid = characters.import_card(conn, _macro_card(), 1.0)["id"]
+    got = characters.copy(conn, cid, 2.0)
+    edited = characters.edit(conn, got["id"], {"zh-Hant": "新名", "en": "New"}, got["line"], got["reading"], 3.0)
+    assert edited["reading"] == "你是新名"

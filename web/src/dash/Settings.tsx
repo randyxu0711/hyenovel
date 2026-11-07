@@ -230,19 +230,20 @@ function Companions() {
     setErr(null);
     api.archiveCharacter(id).then(() => chars.reload()).catch(e => setErr(code(e)));
   };
+  const reloadSaved = () => chars.reload().catch(() => {});
   const copy = (id: string) => {
     setErr(null);
-    api.copyCharacter(id).then(() => chars.reload()).catch(e => setErr(code(e)));
+    api.copyCharacter(id).then(reloadSaved).catch(e => setErr(code(e)));
   };
   const saveEdit = async (c: Character, draft: CardDraft, confirm: boolean) => {
     const out = await api.editCharacter(c.id, draft, confirm);
     if (!out.edited) return out.warnings ?? [];
-    await chars.reload();
+    await reloadSaved();
     setEditing(null);
     return [];
   };
   if (creating) {
-    return <NewCharacter onClose={() => setCreating(false)} onSaved={async () => { await chars.reload(); setCreating(false); }} />;
+    return <NewCharacter onClose={() => setCreating(false)} onSaved={async () => { await reloadSaved(); setCreating(false); }} />;
   }
   return (
     <div className="set-rows">
