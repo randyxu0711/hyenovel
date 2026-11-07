@@ -284,7 +284,6 @@
 .dash .dash-settings .dash-h{margin:0 0 14px; font-family:var(--serif); font-size:var(--dash-t-xl)}
 .dash .dash-set-opt{display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--dash-line); border-radius:6px; background:transparent; cursor:pointer; font:inherit; color:var(--dash-ink)}
 .dash .dash-set-opt[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); border-color:var(--dash-accent)}
-.dash .dash-set-chip{width:14px; height:14px; border-radius:50%; border:1px solid var(--dash-line)}
 .dash .dash-set-count{margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .dash-set-archive li{list-style:none; margin:0}
 .dash .dash-set-archive button{display:grid; gap:2px; width:100%; padding:10px 12px; border:0; border-radius:10px; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer}
@@ -468,13 +467,21 @@
 .dash-rail[data-shelf="rail"] .set-nav button{width:30px; height:30px; padding:0; justify-content:center}
 .dash-rail[data-shelf="rail"] .set-nav span{display:none}
 .dash .set-look{display:block}
+.dash .set-look .set-rows{display:grid; grid-template-columns:minmax(6em, max-content) auto; column-gap:16px; row-gap:6px}
+.dash .set-look .set-row{grid-column:1 / -1; grid-template-columns:subgrid}
 .dash .set-rows{display:flex; flex-direction:column; gap:6px}
-.dash .set-row{display:grid; grid-template-columns:6em auto; gap:16px; align-items:center; justify-content:start; padding:10px 0; color:var(--dash-ink)}
-.dash .set-lab{font-weight:500}
+.dash .set-row{display:grid; grid-template-columns:minmax(6em, max-content) auto; gap:16px; align-items:center; justify-content:start; padding:10px 0; color:var(--dash-ink)}
+.dash .set-lab{font-weight:500; white-space:nowrap}
 .dash .set-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-start}
 .dash .set-seg{display:flex; gap:2px; padding:2px; border-radius:9px; background:var(--dash-desk-2)}
 .dash .set-seg button{display:grid; place-items:center; min-width:30px; height:28px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .set-seg button:has(.dash-set-chip){display:inline-flex; gap:7px}
+.dash .set-seg .set-swatch{min-width:0; height:auto; padding:4px}
+.dash .set-scene{display:flex; width:96px; height:52px; border-radius:7px; overflow:hidden; box-shadow:0 0 0 1px var(--dash-line)}
+.dash .set-scene > span{display:flex; flex:1; align-items:flex-end; justify-content:center}
+.dash .set-scene i{display:flex; flex-direction:column; gap:5px; width:34px; height:38px; padding:8px 6px 0; box-sizing:border-box; border-radius:3px 3px 0 0; box-shadow:0 1px 3px color-mix(in srgb, var(--dash-ink) 15%, transparent)}
+.dash .set-scene b{display:block; height:3px; border-radius:2px}
+.dash .set-scene b + b{width:70%; height:6px}
+.dash .set-swatch[aria-pressed="true"] .set-scene{outline:1.5px solid var(--dash-ink-2); outline-offset:2px}
 .dash .set-glyph{font-family:var(--serif); line-height:1}
 .dash .set-glyph[data-size="s"]{font-size:var(--dash-t-xs)}
 .dash .set-glyph[data-size="m"]{font-size:var(--dash-t-md)}

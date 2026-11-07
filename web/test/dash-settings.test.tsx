@@ -91,6 +91,18 @@ describe("設定頁", () => {
     expect(p.getAllByRole("radio")).toHaveLength(3);
     expect(p.getByRole("heading", { level: 1, name: "陪讀者" })).toBeTruthy();
   });
+  it("配色只放色票(亮、暗各半),名字只在 aria-label", async () => {
+    mount();
+    const p = await page();
+    const seg = within(p.getByRole("group", { name: "配色" }));
+    const btns = seg.getAllByRole("button");
+    expect(btns.length).toBeGreaterThan(0);
+    for (const b of btns) {
+      expect(b.textContent).toBe("");
+      expect(b.getAttribute("aria-label")).toBeTruthy();
+      expect(b.querySelectorAll(".set-scene > span")).toHaveLength(2);
+    }
+  });
   it("晝夜是三顆圖示鈕(跟系統/晝/夜),aria-pressed 跟 pref", async () => {
     mount();
     const p = await page();

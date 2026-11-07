@@ -124,7 +124,7 @@ const FLOWS = [
 function Look() {
   const t = useT();
   const lang = useLang();
-  const { themes, theme, pref, mode } = useThemeState();
+  const { themes, theme, pref } = useThemeState();
   const [size, setSize] = useState<PaperSize>(loadPaperSize);
   const flow = usePaperFlow();
   const pickSize = (s: PaperSize) => {
@@ -145,9 +145,15 @@ function Look() {
         <Row label={t("set.palette")}>
           <div className="set-seg" role="group" aria-label={t("set.palette")}>
             {themes.map(th => (
-              <button key={th.id} type="button" aria-pressed={theme?.id === th.id} onClick={() => selectTheme(th.id)}>
-                <span className="dash-set-chip" style={{ background: th[mode].paper }} aria-hidden="true" />
-                {localized(th.name, lang)}
+              <button key={th.id} type="button" className="set-swatch" aria-pressed={theme?.id === th.id}
+                aria-label={localized(th.name, lang)} title={localized(th.name, lang)} onClick={() => selectTheme(th.id)}>
+                <span className="set-scene" aria-hidden="true">
+                  {(["light", "dark"] as const).map(m => (
+                    <span key={m} style={{ background: th[m].desk }}>
+                      <i style={{ background: th[m].paper }}><b style={{ background: th[m].ink }} /><b style={{ background: th[m].accent }} /></i>
+                    </span>
+                  ))}
+                </span>
               </button>
             ))}
           </div>
