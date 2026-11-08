@@ -69,7 +69,7 @@ def test_ingest_rejects_bad_slug(conn):
 
 def test_companion_context_keys_have_no_judgment_layer(conn):
     out = stories.companion_context(conn, "mini")
-    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds", "memory"}
+    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds", "memory", "attachments"}
     assert isinstance(out["analysis"], dict) and out["progress"] == "none"
 
 
@@ -160,3 +160,33 @@ def test_companion_context_loads_only_this_works_memory(conn):
 
 def test_companion_context_no_memory_is_empty_lists(conn):
     assert stories.companion_context(conn, "mini")["memory"] == {"author": [], "work": []}
+
+
+def test_companion_context_without_story(conn):
+    repo.add_memory(conn, "author", "共用", 1.0)
+    out = stories.companion_context(conn, None)
+    assert out == {"slug": None, "title": None, "source": "", "analysis": None, "progress": "none",
+                   "seeds": [], "memory": {"author": ["共用"], "work": []}, "attachments": []}
+
+
+def test_adopted_attachment_not_in_context(conn):
+    d = repo.ensure_discussion(conn, None, "free", "web", None, 0)
+    repo.add_attachment(conn, d, 0, "海", "浪", 1.0)
+    repo.add_attachment(conn, d, 1, "山", "石", 1.0)
+    sv = repo.latest_source_version(conn, repo.story_by_slug(conn, "mini")["id"])["id"]
+    repo.adopt_attachment(conn, d, 1, sv)
+    out = stories.companion_context(conn, None, d)
+    assert out["attachments"] == [{"n": 2, "seq": 1, "name": "山", "text": "石"}]
+
+
+def test_sources_skips_empty_work_source():
+    att = [{"n": 1, "seq": 0, "name": "海", "text": "浪"}]
+    assert stories.sources({"source": "", "attachments": att}) == ["浪"]
+    assert stories.sources({"source": "原文", "attachments": att}) == ["原文", "浪"]
+
+
+def test_memory_load_without_story(conn):
+    from den import memory
+    repo.add_memory(conn, "author", "甲", 1.0)
+    repo.add_memory(conn, "work", "別篇", 1.0, story_id=repo.story_by_slug(conn, "mini")["id"])
+    assert memory.load(conn, None) == {"author": ["甲"], "work": []}

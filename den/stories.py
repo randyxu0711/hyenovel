@@ -34,12 +34,18 @@ def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> 
             "new_version": new, "reused": reused}
 
 
-def companion_context(conn, slug: str) -> dict:
+def companion_context(conn, slug: str | None, discussion_id: int | None = None) -> dict:
     """companion 素材:最新版原文、只在對應最新版時才給的分析與話題種子、最新版的進度。
 
     判斷層只給種子的種類和引文,不帶內文、opinion、feedback、結論(spec §7.4:判斷層的產物進 companion 會被當成自己的閱讀照念)。
     分析與筆記對應舊版時不給:引文會對不上新稿。
     """
+    attachments = [{k: a[k] for k in ("n", "seq", "name", "text")}
+                   for a in (repo.attachments(conn, discussion_id) if discussion_id is not None else ())
+                   if a["source_version_id"] is None]
+    if slug is None:
+        return {"seeds": [], "slug": None, "title": None, "source": "", "analysis": None,
+                "progress": "none", "memory": memory.load(conn, None), "attachments": attachments}
     st = repo.story_by_slug(conn, slug)
     if st is None:
         raise LookupError(slug)
@@ -54,4 +60,9 @@ def companion_context(conn, slug: str) -> dict:
         "analysis": analysis["body"] if analysis and analysis["source_version_id"] == latest["id"] else None,
         "progress": job["state"] if job else "none",
         "memory": memory.load(conn, st["id"]),
+        "attachments": attachments,
     }
+
+
+def sources(ctx: dict) -> list[str]:
+    return [*([ctx["source"]] if ctx["source"].strip() else []), *(a["text"] for a in ctx["attachments"])]

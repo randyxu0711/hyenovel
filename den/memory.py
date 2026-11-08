@@ -25,7 +25,7 @@ class BadSource(Exception):
         self.code = code
 
 
-def load(conn, story_id: int) -> dict:
+def load(conn, story_id: int | None) -> dict:
     return {"author": [m["text"] for m in repo.active_memories(conn, "author")],
             "work": [m["text"] for m in repo.active_memories(conn, "work", story_id)]}
 

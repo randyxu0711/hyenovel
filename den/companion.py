@@ -17,8 +17,10 @@ def _read(rel: str) -> str:
     return (_PROMPTS / rel).read_text(encoding="utf-8")
 
 
-def _persona_layers(reading: str, voice: str) -> tuple[Layer, ...]:
+def _persona_layers(reading: str, voice: str, has_text: bool = True) -> tuple[Layer, ...]:
     out = [Layer("base", _read("companion/base.md").rstrip() + "\n\n"),
+           *([Layer("reading", _read("companion/reading.md").rstrip() + "\n\n")] if has_text else []),
+           Layer("closing", _read("companion/closing.md").rstrip() + "\n\n"),
            Layer("character", reading.rstrip() + "\n\n")]
     if voice.strip():
         out.append(Layer("voice", voice.rstrip() + "\n\n"))
@@ -47,19 +49,24 @@ def _memory_block(memory: dict) -> str:
 
 def assemble(ctx: dict, character: dict) -> Prompt:
     """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子。"""
-    layers = list(_persona_layers(character["reading"], character["voice"]))
+    layers = list(_persona_layers(character["reading"], character["voice"],
+                                  bool(ctx["source"].strip() or ctx["attachments"])))
     if ctx["memory"]["author"] or ctx["memory"]["work"]:
         layers.append(Layer("memory_header", _MEMORY_HEADER))
         layers.append(Layer("memory", _memory_block(ctx["memory"]), material=True))
-    layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
-                                f"{ctx['source'].rstrip()}\n</source>\n", material=True))
+    if ctx["slug"] is not None:
+        layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
+                                    f"{ctx['source'].rstrip()}\n</source>\n", material=True))
+    for att in ctx["attachments"]:
+        layers.append(Layer(f"attachment_{att['n']}", f"---\n# 作者丟進來的稿〈{att['name']}〉\n<source>\n"
+                                                      f"{att['text'].rstrip()}\n</source>\n", material=True))
     a = ctx["analysis"]
     if a is not None:
         layers.append(Layer("analysis_header", "\n## 你讀的時候注意到的結構(私下筆記,不要原樣念給作者)\n"))
         lines = [f"梗概:{a['synopsis']}"] if a.get("synopsis") else []
         lines += [f"- {n['type']} {n['label']}" for n in a.get("nodes") or ()]
         layers.append(Layer("analysis", "".join(x + "\n" for x in lines), material=True))
-    else:   # 有分析時在跑的是 reviewer
+    elif ctx["slug"] is not None:   # 有分析時在跑的是 reviewer
         status = _RUNNING if ctx["progress"] in ("queued", "running") else _IDLE
         layers.append(Layer("status", f"\n## 現在的狀況\n{status}\n"))
     if ctx["seeds"]:
