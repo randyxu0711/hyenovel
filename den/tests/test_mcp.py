@@ -432,7 +432,7 @@ def test_talk_busy_is_tool_error(cden):
 
     def jam(i):
         sid = _discussions(cden)[0]["external_id"]
-        cden.tc.app.state.chat_locks[f"mini/{sid}"] = types.SimpleNamespace(locked=lambda: True)
+        cden.tc.app.state.chat_locks[sid] = types.SimpleNamespace(locked=lambda: True)
     _, r = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
                                      ("talk_to_companion", {"message": "再來"})], between=jam)
     assert r.is_error and "上一輪還在跑" in _text(r)

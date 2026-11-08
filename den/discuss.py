@@ -9,8 +9,9 @@ from collections.abc import Sequence
 from contextlib import aclosing
 
 from den import characters, companion, retrieve, spans, stories
-from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
+from den.config import MAX_ATTACHMENT_CHARS, MAX_ATTACHMENTS, MAX_QUOTE_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES
 from marrow import gate, prompt, repo
+from marrow.ingest import normalize
 
 log = logging.getLogger("hyenovel")
 
@@ -83,8 +84,8 @@ def reaction_target(conn, slug: str, session: str, seq: int) -> int:
     st = repo.story_by_slug(conn, slug)
     if st is None:
         raise LookupError(slug)
-    d = repo.discussion_by_external(conn, st["id"], session)
-    if d is None:
+    d = repo.discussion_by_session(conn, session)
+    if d is None or d["story_id"] != st["id"]:
         raise UnknownSession(session)
     u = repo.utterance(conn, d["id"], seq)
     if u is None:
@@ -110,36 +111,73 @@ class QuoteTooLong(Exception):
     """某段引文超過 MAX_QUOTE_CHARS。"""
 
 
+class TooManyAttachments(Exception):
+    pass
+
+
+class EmptyAttachment(Exception):
+    pass
+
+
+class AttachmentTooLong(Exception):
+    pass
+
+
+class BoundSession(Exception):
+    pass
+
+
 _RECOVERABLE = ("usage-limit", "transient", "timeout")
 
 
-def prepare_turn(conn, slug: str, session_id: str | None, quotes: Sequence[str] = (),
-                 message: str = "") -> dict:
+def _attach(ctx: dict, attach: dict) -> dict:
+    text = normalize(attach["text"])
+    if not text.strip():
+        raise EmptyAttachment()
+    if len(ctx["attachments"]) >= MAX_ATTACHMENTS:
+        raise TooManyAttachments(len(ctx["attachments"]))
+    if (len(text.encode("utf-8")) > MAX_SOURCE_BYTES
+            or sum(len(a["text"]) for a in ctx["attachments"]) + len(text) > MAX_ATTACHMENT_CHARS):
+        raise AttachmentTooLong(len(text))
+    ctx["attachments"].append({"n": len(ctx["attachments"]) + 1, "seq": None, "name": attach["name"], "text": text})
+    return {"name": attach["name"], "text": text}
+
+
+def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequence[str] = (),
+                 message: str = "", attach: dict | None = None) -> dict:
     """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession /
     LegacySession / TooManyQuotes / QuoteNeedsMessage / QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
     沒分析也能聊(素材分層在 companion_context)。新局只發 id,discussion 列等整輪成功才建。"""
-    ctx = stories.companion_context(conn, slug)
-    if len(quotes) > MAX_QUOTES:
-        raise TooManyQuotes(len(quotes))
-    if quotes and not message.strip():
-        raise QuoteNeedsMessage()
-    for q in quotes:
-        if len(q) > MAX_QUOTE_CHARS:
-            raise QuoteTooLong(len(q))
-        if not q.strip() or gate.locate(q, ctx["source"]) is None:
-            raise QuoteNotInSource(q)
-    st = repo.story_by_slug(conn, slug)
-    d = None
+    if slug is not None and repo.story_by_slug(conn, slug) is None:
+        raise LookupError(slug)
+    row = None
     if session_id is not None:
-        row = repo.discussion_by_external(conn, st["id"], session_id)
-        if row is None:
+        row = repo.discussion_by_session(conn, session_id)
+        if row is None or (slug is not None and row["slug"] != slug):
             raise UnknownSession(session_id)
         us = repo.utterances(conn, row["id"])
         if us and not any(u["role"] == "assistant" and u["character"] is not None for u in us):
             raise LegacySession(session_id)   # 空局(還沒有逐字)不算舊局
-        d = row["id"]
-    analysis = repo.current_artifact(conn, st["id"], "analysis")
-    return {"slug": slug, "ctx": ctx, "story_id": st["id"], "discussion_id": d,
+        slug = row["slug"]
+    if attach is not None and slug is not None:
+        raise BoundSession(session_id)
+    ctx = stories.companion_context(conn, slug, row["id"] if row else None)
+    if attach is not None:
+        attach = _attach(ctx, attach)
+    if len(quotes) > MAX_QUOTES:
+        raise TooManyQuotes(len(quotes))
+    if quotes and not message.strip():
+        raise QuoteNeedsMessage()
+    texts = stories.sources(ctx)
+    for q in quotes:
+        if len(q) > MAX_QUOTE_CHARS:
+            raise QuoteTooLong(len(q))
+        if not q.strip() or not any(gate.locate(q, t) is not None for t in texts):
+            raise QuoteNotInSource(q)
+    st = repo.story_by_slug(conn, slug) if slug is not None else None
+    analysis = repo.current_artifact(conn, st["id"], "analysis") if st else None
+    return {"slug": slug, "ctx": ctx, "story_id": st["id"] if st else None,
+            "discussion_id": row["id"] if row else None, "attach": attach,
             "session_id": session_id or uuid.uuid4().hex[:12],
             "analysis_fp": analysis["sha256"] if ctx["analysis"] is not None else None}
 
@@ -163,8 +201,10 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     歷史在這裡(呼叫者已持該局的鎖)才讀,不在 prepare_turn 讀,免得拿到過期的。
     """
     d = turn["discussion_id"]
-    history = repo.utterances(conn, d) if d is not None else []
-    seq = history[-1]["seq"] + 1 if history else 0
+    every = repo.utterances(conn, d) if d is not None else []
+    summary, history = live_history(every)
+    seq = every[-1]["seq"] + 1 if every else 0
+    attach = turn["attach"]
     character = turn["character"]
     user_ts = now()
     result = None
@@ -177,8 +217,10 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                            previous=(last["recipe"] or {}).get("retrieved", ()))
     try:
         async with aclosing(chat(system.text,
-                                 render_turn(history, message or (CONTINUE if history else OPENER), quotes,
-                                             retrieve.render(analysis, picked)),
+                                 render_turn(history, message or (ATTACHED.format(name=attach["name"]) if attach
+                                                                  else CONTINUE if history or summary else OPENER),
+                                             quotes, retrieve.render(analysis, picked), summary,
+                                             [a for a in turn["ctx"]["attachments"] if a["seq"] is not None]),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
@@ -212,6 +254,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
             if d is None:
                 d = repo.ensure_discussion(conn, turn["story_id"], sid, home,
                                            (client or {}).get("name") or home, user_ts)
+            n = None
+            if attach:
+                n = repo.add_attachment(conn, d, seq, attach["name"], attach["text"], user_ts)
             if message:
                 repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
                 seq += 1
@@ -221,7 +266,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                        "character_v": character["version"],
                                        "retrieved": [n["id"] for n in picked]})
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
-            v = repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
+            v = (repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
+                 if turn["story_id"] is not None else None)
     except Exception:
         log.exception("event=discuss-turn-failed slug=%s stage=commit", slug)
         yield {"event": "error", "data": {"where": "discuss", "message": "存檔失敗,這輪沒有存下",
@@ -230,7 +276,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     log.info("event=discuss-turn slug=%s outcome=ok ms=%s", slug, result.duration_ms)
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
                                         "session_id": sid, "seq": seq,
-                                        "character": character["id"], "v": v,
+                                        "character": character["id"], "v": v, "attachment": n,
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)
                                              if gate.locate(q, turn["ctx"]["source"])],

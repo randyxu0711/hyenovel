@@ -23,7 +23,7 @@
                             404 unknown-work / unknown-version;要在 /works/{slug}/{part} 之前註冊)
   GET  /works/{slug}/sessions → {"sessions": [...]}(這篇的局,新到舊)
   GET  /sessions?limit=N    → {"sessions": [...]}(跨作品最近的局;1–100)
-  GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id | 409 ambiguous-session
+  GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id
   PUT  /works/{slug}/sessions/{id}/turns/{seq}/reaction {"mark","comment"?} → {mark, comment}
   DELETE 同路徑              → 204(404 unknown-work / unknown-session / unknown-turn;
                             422 not-assistant-turn / bad-mark / comment-too-long)
@@ -93,7 +93,8 @@ ERROR_CODES: tuple[str, ...] = (
     "nothing-running", "unknown-session", "busy", "quote-not-in-source", "quote-too-long",
     "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
-    "unknown-character", "unknown-session-id", "ambiguous-session",
+    "unknown-character", "unknown-session-id",
+    "bound-session", "too-many-attachments", "empty-attachment", "attachment-too-long",
     "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",
     "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
     "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
@@ -258,7 +259,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 factory, default_chat, ver = _default_factory()
             chat_f = chat_factory or default_chat
             app.state.chat = chat_f() if chat_f else None
-            app.state.chat_locks = {}                   # f"{slug}/{session_id}" → 該局的鎖
+            app.state.chat_locks = {}
             app.state.run_once = factory(None)
             app.state.candidates_busy = False
             app.state.token = load_token(data_dir)

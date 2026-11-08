@@ -74,10 +74,6 @@ def transcript(conn, slug: str) -> list[dict]:
              "anchors": u["anchors"]} for u in repo.discussions_with_utterances(conn, st["id"])]
 
 
-class AmbiguousSession(Exception):
-    """同一個 session id 在不只一篇都有局。"""
-
-
 def _title(conn, story_id: int, slug: str) -> str:
     """與作品清單同口徑:分析標題 > 故事標題 > slug。"""
     ana = repo.current_artifact(conn, story_id, "analysis")
@@ -207,12 +203,9 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
     """單局逐字。每則 turn 帶 spans = 引文在第 v 版(預設最新)原文的位移。
     assistant 的「」只收最新版原文找得到的(其餘是強調或複述,不是引文);再對 v 定位,這版沒有 → None。
     user 用其存下的 quotes。"""
-    found = repo.discussions_by_external(conn, session)
-    if not found:
+    d = repo.discussion_by_session(conn, session)
+    if d is None:
         raise LookupError(session)
-    if len(found) > 1:
-        raise AmbiguousSession(session)
-    d = found[0]
     latest = repo.latest_source_version(conn, d["story_id"])
     shown = latest if v is None else repo.source_version_by_n(conn, d["story_id"], v)
     if shown is None:

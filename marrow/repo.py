@@ -243,13 +243,6 @@ def discussions_with_utterances(conn, story_id: int) -> list[dict]:
         "ORDER BY u.ts, u.seq", (story_id,))]
 
 
-def discussions_by_external(conn, external_id: str) -> list[dict]:
-    """跨篇找局:同一個 external_id 可能在不同篇各有一局。"""
-    return [_row(r) for r in conn.execute(
-        "SELECT d.*, st.slug AS slug FROM discussion d JOIN story st ON st.id = d.story_id "
-        "WHERE d.external_id = ? ORDER BY d.id", (external_id,))]
-
-
 def analysis_versions(conn, story_id: int) -> dict[str, int]:
     """一篇所有 analysis artifact:sha256(= 發言的 analysis_fp)→ 它對的原文版本 n;一次查完。"""
     return {r["sha256"]: r["n"] for r in conn.execute(

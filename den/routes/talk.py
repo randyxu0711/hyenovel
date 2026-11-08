@@ -23,6 +23,11 @@ class ReactionIn(BaseModel):
     comment: str | None = Field(default=None, max_length=MAX_REACTION_CHARS * 8)
 
 
+class AttachIn(BaseModel):
+    name: str = Field(max_length=200)
+    text: str
+
+
 class DiscussIn(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     message: str = Field(default="", max_length=MAX_CHAT_CHARS)   # 空 = companion 先開口
@@ -31,6 +36,7 @@ class DiscussIn(BaseModel):
     character: str | None = Field(default=None, max_length=32)
     home: Literal["web", "mcp"] = "web"
     client: ClientIn | None = None
+    attach: AttachIn | None = None
 
 
 _BUSY = {"event": "error", "data": {"where": "discuss", "message": "這一局還有一輪在跑",
@@ -79,9 +85,6 @@ async def session_turns(session: str, request: Request, v: int | None = Query(No
     except LookupError:
         log.info("event=reject where=session-turns reason=unknown-session-id")
         raise ApiError(404, "unknown-session-id", "沒有這一局") from None
-    except views.AmbiguousSession:
-        log.info("event=reject where=session-turns reason=ambiguous-session")
-        raise ApiError(409, "ambiguous-session", "這個局 id 在不只一篇出現") from None
     except views.UnknownVersion:
         log.info("event=reject where=session-turns reason=unknown-version v=%s", v)
         raise ApiError(404, "unknown-version", "沒有這個版本") from None
@@ -128,16 +131,27 @@ async def delete_reaction(slug: str, session: str, seq: Seq, request: Request):
         repo.clear_reaction(conn, d, seq)
 
 
+@router.post("/discuss")
+async def discuss_free(body: DiscussIn, request: Request):
+    return _discuss(None, body, request)
+
+
 @router.post("/discuss/{slug}")
 async def discuss_turn(slug: str, body: DiscussIn, request: Request):
+    if not valid_slug(slug):
+        log.info("event=reject where=discuss reason=bad-slug")
+        raise ApiError(422, "bad-slug", "bad slug")
+    return _discuss(slug, body, request)
+
+
+def _discuss(slug: str | None, body: DiscussIn, request: Request):
     def reject(status: int, reason: str, detail: str) -> ApiError:
         log.info("event=reject where=discuss reason=%s", reason)
         return ApiError(status, "unknown-work" if reason == "unknown-slug" else reason, detail)
-    if not valid_slug(slug):
-        raise reject(422, "bad-slug", "bad slug")
     state = request.app.state
     try:
-        turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes, body.message)
+        turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes, body.message,
+                                    body.attach.model_dump() if body.attach else None)
     except LookupError:
         raise reject(404, "unknown-slug", "這篇不在 DB") from None
     except discuss.UnknownSession:
@@ -152,9 +166,17 @@ async def discuss_turn(slug: str, body: DiscussIn, request: Request):
         raise reject(422, "quote-too-long", "引文太長") from None
     except discuss.QuoteNotInSource:
         raise reject(422, "quote-not-in-source", "引文不在原文裡") from None
+    except discuss.BoundSession:
+        raise reject(422, "bound-session", "這局已經綁了作品,交新版請用交稿") from None
+    except discuss.TooManyAttachments:
+        raise reject(422, "too-many-attachments", "這局的附件太多份") from None
+    except discuss.EmptyAttachment:
+        raise reject(422, "empty-attachment", "附件是空的") from None
+    except discuss.AttachmentTooLong:
+        raise reject(422, "attachment-too-long", "附件太長") from None
     lock = None
     if body.session_id is not None:   # 新局不會撞:id 這輪才發
-        lock = state.chat_locks.setdefault(f"{slug}/{body.session_id}", asyncio.Lock())
+        lock = state.chat_locks.setdefault(body.session_id, asyncio.Lock())
         if lock.locked():
             raise reject(409, "busy", "這一局還有一輪在跑")
     client = body.client.model_dump() if body.client else None
