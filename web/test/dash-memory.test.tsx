@@ -44,7 +44,7 @@ describe("MemoryPage", () => {
       mem({ id: 3, scope: "work", slug: "d2", title: null, text: "別篇" }),
     ));
     mount();
-    const author = await groupOf("每篇");
+    const author = await groupOf("關於我");
     expect(within(author).getByText("😀寫")).toBeTruthy();
     expect(within(author).getByText("2/800")).toBeTruthy();
     const sea = screen.getByRole("group", { name: "海" });
@@ -140,7 +140,7 @@ describe("MemoryPage", () => {
 
     remember.mockClear();
     fireEvent.change(screen.getByRole("textbox", { name: "新增記憶" }), { target: { value: "關於海" } });
-    fireEvent.click(screen.getByRole("button", { name: "這篇" }));
+    fireEvent.click(screen.getByRole("button", { name: "關於一篇" }));
     expect((screen.getByRole("button", { name: "新增" }) as HTMLButtonElement).disabled).toBe(true);
     const pick = await screen.findByRole("combobox", { name: "哪一篇" });
     await within(pick).findByRole("option", { name: "海" });
@@ -202,11 +202,12 @@ describe("MemoryPage", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("den");
   });
 
-  it("沒有任何記憶時只顯示新增", async () => {
+  it("沒有任何記憶時只顯示提示與新增", async () => {
     mount();
     await screen.findByRole("textbox", { name: "新增記憶" });
     await waitFor(() => expect(memories).toHaveBeenCalled());
-    expect(screen.queryByRole("group", { name: "每篇" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "關於我" })).toBeNull();
+    expect(screen.getByText("對話裡按「記住」,或在這裡寫。")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /已封存/ })).toBeNull();
   });
 });

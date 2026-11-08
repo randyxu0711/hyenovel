@@ -31,11 +31,11 @@ function mount(m: WorkMap | null, state = "ready", on = vi.fn(), error: string |
 beforeEach(() => setLang("zh-Hant"));
 
 describe("筆記分頁", () => {
-  it("開頭只標版本與「陪讀者看不到」;各點有類型、標題、說明、問題", () => {
+  it("開頭只標版本與「讀伴看不到」;各點有類型、標題、說明、問題", () => {
     mount(map({ notes }));
     const meta = document.querySelector(".notes-meta")!;
     expect(meta.querySelector(".dash-dm")!.textContent).toBe("v2");
-    expect(meta.getAttribute("title")).toBe("陪讀者看不到這些筆記");
+    expect(meta.getAttribute("title")).toBe("讀伴看不到這些筆記");
     expect(document.body.textContent).not.toContain("冷讀者");
     expect(screen.getByRole("heading", { name: "鑰匙突然出現" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "泥的溫度" })).toBeTruthy();

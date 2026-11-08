@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, DashError, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
 import Figure from "./Figure";
 import CardEditor, { SAVED_LIMITS } from "./CardEditor";
-import CharacterCard from "./CharacterCard";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import MemoryPage from "./MemoryPage";
@@ -14,6 +13,7 @@ import { speakerChanges } from "./Talk";
 import { selectTheme, setMode, useThemeState, type ModePref } from "./theme";
 import { useCharacters } from "./useCharacters";
 import { companionId, setCompanion } from "./useTalk";
+import { whenLabel } from "./when";
 
 const MODES: { pref: ModePref; key: MsgKey; icon: IconName }[] = [
   { pref: "system", key: "set.mode.system", icon: "auto" }, { pref: "light", key: "set.mode.light", icon: "sun" },
@@ -23,6 +23,17 @@ const SIZES: { size: PaperSize; key: "set.size.s" | "set.size.m" | "set.size.l" 
   { size: "s", key: "set.size.s" }, { size: "m", key: "set.size.m" }, { size: "l", key: "set.size.l" },
 ];
 const LANGS: { lang: Lang; label: string }[] = [{ lang: "zh-Hant", label: "繁體中文" }, { lang: "en", label: "English" }];
+
+function byWork(rows: RecentSession[]) {
+  const groups = new Map<string, { slug: string; title: string; rows: RecentSession[] }>();
+  for (const r of rows) {
+    if (!groups.has(r.slug)) groups.set(r.slug, { slug: r.slug, title: r.title, rows: [] });
+    groups.get(r.slug)!.rows.push(r);
+  }
+  return [...groups.values()];
+}
+
+export const plain = (s: string) => s.replace(/\*\*|__|`/g, "").replace(/^#+\s*/, "");
 
 /** 舊討論封存:唯讀。直接列出,點一局看逐字;沒有輸入框。 */
 function Archive() {
@@ -42,21 +53,27 @@ function Archive() {
   }, []);
   const show = (id: string) => api.session(id).then(setDetail, e => setErr(e instanceof DashError ? e.code : "unknown"));
   const who = speakerChanges(detail?.turns ?? [], chars.byId);
+  const now = Date.now() / 1000;
   return (
     <>
       {err && <p role="alert">{t(errorMessage(err))}</p>}
       {rows && !detail && (
         <div className="dash-set-archive">
           <p className="dash-set-count">{t("set.legacy", { n: rows.length })}</p>
-          <ul>
-            {rows.map(s => (
-              <li key={s.session}>
-                <button type="button" onClick={() => void show(s.session)}>
-                  <b>{s.title}</b><span>{s.preview}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {byWork(rows).map(g => (
+            <section key={g.slug} aria-label={g.title}>
+              <h2>{g.title}<span className="dash-dm">{g.rows.length}</span></h2>
+              <ul>
+                {g.rows.map(s => (
+                  <li key={s.session}>
+                    <button type="button" onClick={() => void show(s.session)}>
+                      <span>{plain(s.preview)}</span><time className="dash-dm">{whenLabel(s.last_at, now, lang)}</time>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
         </div>
       )}
       {detail && (
@@ -81,8 +98,11 @@ function Archive() {
 
 export type SettingsSection = "look" | "companions" | "memory" | "archive";
 const SECTIONS: { id: SettingsSection; key: MsgKey; icon: IconName }[] = [
-  { id: "look", key: "set.look", icon: "look" }, { id: "companions", key: "set.companions", icon: "person" },
-  { id: "memory", key: "set.memory", icon: "memory" }, { id: "archive", key: "set.archive", icon: "box" },
+  { id: "look", key: "set.look", icon: "look" }, { id: "companions", key: "set.companions", icon: "pal" },
+  { id: "memory", key: "set.memory", icon: "memory" }, { id: "archive", key: "set.archive", icon: "talk" },
+];
+const NAV_GROUPS: { key: MsgKey; ids: SettingsSection[] }[] = [
+  { key: "set.nav.pref", ids: ["look", "companions"] }, { key: "set.nav.data", ids: ["memory", "archive"] },
 ];
 
 /** 設定分區:回去鍵 + 各分區。書架在設定頁時畫它;窄螢幕由 Settings 畫在內容上方(橫排)。 */
@@ -96,11 +116,16 @@ export function SettingsNav({ section, onPick, back }: {
       <button type="button" className="set-back" aria-label={back.label} title={back.label} onClick={() => nav(back.to)}>
         <Icon name="back" /><span>{back.label}</span>
       </button>
-      {SECTIONS.map(x => (
-        <button key={x.id} type="button" aria-label={t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
-          onClick={() => onPick(x.id)}>
-          <Icon name={x.icon} /><span>{t(x.key)}</span>
-        </button>
+      {NAV_GROUPS.map(g => (
+        <div key={g.key} className="set-nav-g">
+          <p className="set-nav-h" aria-hidden="true">{t(g.key)}</p>
+          {SECTIONS.filter(x => g.ids.includes(x.id)).map(x => (
+            <button key={x.id} type="button" aria-label={t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
+              onClick={() => onPick(x.id)}>
+              <Icon name={x.icon} /><span>{t(x.key)}</span>
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -133,7 +158,8 @@ function Look() {
   };
   return (
     <div className="set-look">
-      <div className="set-rows">
+      <section className="set-group" aria-label={t("set.group.ui")}>
+        <h2 className="set-group-h">{t("set.group.ui")}</h2>
         <Row label={t("set.mode")}>
           <div className="set-seg" role="group" aria-label={t("set.mode")}>
             {MODES.map(m => (
@@ -165,6 +191,9 @@ function Look() {
             ))}
           </div>
         </Row>
+      </section>
+      <section className="set-group" aria-label={t("set.group.paper")}>
+        <h2 className="set-group-h">{t("set.group.paper")}</h2>
         <Row label={t("set.flow")}>
           <div className="set-seg" role="group" aria-label={t("set.flow")}>
             {FLOWS.map(f => (
@@ -181,14 +210,13 @@ function Look() {
             ))}
           </div>
         </Row>
-      </div>
+      </section>
     </div>
   );
 }
 
 function Companions() {
   const t = useT();
-  const lang = useLang();
   const chars = useCharacters();
   const [who, setWho] = useState(() => companionId(chars));
   const [err, setErr] = useState<string | null>(null);
@@ -196,6 +224,7 @@ function Companions() {
   const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => setWho(companionId(chars)), [chars]);
   const code = (e: unknown) => (e instanceof DashError ? e.code : "unknown");
@@ -242,50 +271,30 @@ function Companions() {
   if (creating) {
     return <NewCharacter onClose={() => setCreating(false)} onSaved={async () => { await reloadSaved(); setCreating(false); }} />;
   }
+  const opened = open ? chars.active.find(c => c.id === open) ?? null : null;
   return (
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
       <div className="char-cards char-lineup">
       {chars.active.map(c => {
-        const name = localized(c.name, lang);
         if (editing === c.id) {
           return <CardEditor key={c.id} draft={c} limits={SAVED_LIMITS}
             onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
         }
-        return (
-          <CharacterCard key={c.id} character={c} name={name} on={who === c.id} size={96}>
-            <p className="char-line">{localized(c.line, lang)}</p>
-            <div className="char-foot">
-            <label className="char-default">
-              <input type="radio" name="default-companion" checked={who === c.id}
-                aria-label={name} title={t("set.makeDefault")} onChange={() => pick(c.id)} />
-              <span className="nc-mark" aria-hidden="true" />{who === c.id && t("set.default")}
-            </label>
-            <span className="char-acts">
-            <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
-              aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
-            <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
-              onClick={() => copy(c.id)}><Icon name="copy" /></button>
-            {c.origin !== "builtin" && (
-              <>
-                <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
-                  onClick={() => setEditing(c.id)}><Icon name="edit" /></button>
-                <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
-                  onClick={() => archive(c.id)}><Icon name="box" /></button>
-              </>
-            )}
-            </span>
-            </div>
-          </CharacterCard>
-        );
+        return <PopCard key={c.id} character={c} on={who === c.id} onOpen={() => setOpen(c.id)} />;
       })}
       <div className="char-new">
         <button type="button" className="char-new-slot" onClick={() => setCreating(true)}><span aria-hidden="true"><Icon name="plus" /></span>{t("set.card.new")}</button>
-        <button type="button" className="ib" aria-label={t("set.card.import")} title={t("set.card.import")} onClick={() => fileInput.current?.click()}><Icon name="up" /></button>
+        <button type="button" className="char-new-imp" aria-label={t("set.card.import")} title={t("set.card.import")} onClick={() => fileInput.current?.click()}><Icon name="up" /><span aria-hidden="true">{t("set.card.import")}</span></button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t("set.card.import")}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void fromFile(f); }} />
       </div>
       </div>
+      {opened && (
+        <CharSheet character={opened} on={who === opened.id} onClose={() => setOpen(null)} onPick={() => pick(opened.id)}
+          onEdit={() => { setOpen(null); setEditing(opened.id); }} onCopy={() => copy(opened.id)}
+          onArchive={() => { setOpen(null); archive(opened.id); }} />
+      )}
       {problems.length > 0 && (
         <ul role="alert">{problems.map(p => <li key={p}>{t(`card.err.${p}` as MsgKey)}</li>)}</ul>
       )}
@@ -296,6 +305,82 @@ function Companions() {
           <button type="button" onClick={() => setHeld(null)}>{t("set.card.cancel")}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 讀伴卡:立體書的紙卡,角色立在摺線上;整張可點,打開資訊面板。 */
+function PopCard({ character: c, on, onOpen }: { character: Character; on: boolean; onOpen: () => void }) {
+  const t = useT();
+  const lang = useLang();
+  const name = localized(c.name, lang);
+  const tilt = (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType !== "mouse") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--rx", `${(0.5 - (e.clientY - r.top) / r.height) * 10}deg`);
+    e.currentTarget.style.setProperty("--ry", `${((e.clientX - r.left) / r.width - 0.5) * 12}deg`);
+  };
+  const flat = (e: PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.removeProperty("--rx");
+    e.currentTarget.style.removeProperty("--ry");
+  };
+  return (
+    <button type="button" className="char-pop" data-on={on} aria-haspopup="dialog" aria-label={t("set.card.open", { name })}
+      onClick={onOpen} onPointerMove={tilt} onPointerLeave={flat}>
+      <span className="char-stage" aria-hidden="true"><Figure character={c} size={96} /></span>
+      <b className="char-name">{name}</b>
+      <span className="char-line">{localized(c.line, lang)}</span>
+      {on && <span className="char-tag">{t("set.default")}</span>}
+    </button>
+  );
+}
+
+/** 資訊面板:角色站起來、名字、讀法、來源;預設與卡片動作都在這裡。Esc 或點外面關。 */
+function CharSheet({ character: c, on, onClose, onPick, onEdit, onCopy, onArchive }: {
+  character: Character; on: boolean; onClose: () => void; onPick: () => void; onEdit: () => void; onCopy: () => void; onArchive: () => void;
+}) {
+  const t = useT();
+  const lang = useLang();
+  const name = localized(c.name, lang);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => before?.focus?.();
+  }, []);
+  return (
+    <div className="char-veil" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={name} className="char-sheet" onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
+        <button ref={closeRef} type="button" className="ib char-sheet-x" aria-label={t("set.card.close")} title={t("set.card.close")} onClick={onClose}><Icon name="close" /></button>
+        <div className="char-sheet-stage" aria-hidden="true"><Figure character={c} size={168} /></div>
+        <h2>{name}</h2>
+        <p className="char-line">{localized(c.line, lang)}</p>
+        <p className="char-meta">{t(`set.card.origin.${c.origin}` as MsgKey)}<span>{t("set.card.ver", { n: c.version })}</span></p>
+        {c.reading && (
+          <section className="char-reading" aria-label={t("card.reading")}>
+            <h3>{t("card.reading")}</h3>
+            <p>{c.reading}</p>
+          </section>
+        )}
+        <div className="char-sheet-foot">
+          <button type="button" className="dash-key" aria-pressed={on} disabled={on} onClick={onPick}>{t(on ? "set.default" : "set.makeDefault")}</button>
+          <span className="char-acts">
+            <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
+              aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
+            <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
+              onClick={onCopy}><Icon name="copy" /></button>
+            {c.origin !== "builtin" && (
+              <>
+                <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
+                  onClick={onEdit}><Icon name="edit" /></button>
+                <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
+                  onClick={onArchive}><Icon name="box" /></button>
+              </>
+            )}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

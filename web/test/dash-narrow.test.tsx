@@ -57,8 +57,8 @@ describe("窄螢幕單窗格", () => {
     const nav = within(region).getByRole("group", { name: "設定分區" });
     expect(region.firstElementChild).toBe(nav);
     expect(within(nav).getByRole("button", { name: "回到進門" })).toBeTruthy();
-    fireEvent.click(within(nav).getByRole("button", { name: "陪讀者" }));
-    expect(within(region).getByRole("heading", { level: 1, name: "陪讀者" })).toBeTruthy();
+    fireEvent.click(within(nav).getByRole("button", { name: "讀伴" }));
+    expect(within(region).getByRole("heading", { level: 1, name: "讀伴" })).toBeTruthy();
   });
   it("寬螢幕:兩邊都見、沒有「稿|對話」切換", async () => {
     narrow(false); mount();

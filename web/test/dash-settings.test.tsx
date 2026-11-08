@@ -52,6 +52,10 @@ function mount(path = "/settings") {
 const page = async () => within(await screen.findByRole("region", { name: "設定" }));
 const shelf = async () => within(await screen.findByRole("navigation"));
 const go = async (name: string) => fireEvent.click((await shelf()).getByRole("button", { name }));
+type Q = ReturnType<typeof within>;
+const card = (p: Q, name: string) => p.getByRole("button", { name: `打開${name}` });
+const isDefault = (p: Q, name: string) => card(p, name).getAttribute("data-on") === "true";
+const sheet = (p: Q, name: string) => { fireEvent.click(card(p, name)); return within(p.getByRole("dialog", { name })); };
 
 describe("設定頁", () => {
   it("在 /settings:書架沒有作品清單與篩選框,有回去鍵與三個分區", async () => {
@@ -60,7 +64,7 @@ describe("設定頁", () => {
     expect(nav.queryByText("舊的")).toBeNull();
     expect(nav.queryByRole("searchbox")).toBeNull();
     const names = within(nav.getByRole("group", { name: "設定分區" })).getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["回到進門", "外觀", "陪讀者", "記憶", "舊討論"]);
+    expect(names).toEqual(["回到進門", "外觀", "讀伴", "記憶", "舊討論"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
   });
   it("記憶分區畫出記憶頁,圖示是記憶專用的", async () => {
@@ -83,13 +87,13 @@ describe("設定頁", () => {
     await go("回到〈舊的〉");
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
   });
-  it("點「陪讀者」→ 內容換成預設陪讀者單選;外觀沒有預覽卡", async () => {
+  it("點「讀伴」→ 內容換成讀伴卡片;外觀沒有預覽卡", async () => {
     mount();
     const p = await page();
     expect(p.queryByRole("figure")).toBeNull();
-    await go("陪讀者");
-    expect(p.getAllByRole("radio")).toHaveLength(3);
-    expect(p.getByRole("heading", { level: 1, name: "陪讀者" })).toBeTruthy();
+    await go("讀伴");
+    expect(p.getAllByRole("button", { name: /^打開/ })).toHaveLength(3);
+    expect(p.getByRole("heading", { level: 1, name: "讀伴" })).toBeTruthy();
   });
   it("配色只放色票(亮、暗各半),名字只在 aria-label", async () => {
     mount();
@@ -174,7 +178,7 @@ describe("設定頁", () => {
     expect(localStorage.getItem("hyenovel.paperSize")).toBe("s");
   });
 
-  it("陪讀者:den 存好預設才讓開著的對話跟著換", async () => {
+  it("讀伴:den 存好預設才讓開著的對話跟著換", async () => {
     const f = mount();
     const base = f.getMockImplementation()!;
     let release = () => {};
@@ -184,13 +188,13 @@ describe("設定頁", () => {
       return (base as (...a: unknown[]) => Promise<Response>)(u, ...rest);
     });
     const p = await page();
-    await go("陪讀者");
-    fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
+    await go("讀伴");
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
     expect(companionId(makeCharacters([hyena, buffalo, deer], "hyena"))).toBe("hyena");
     release();
     await waitFor(() => expect(companionId(makeCharacters([hyena, buffalo, deer], "hyena"))).toBe("buffalo"));
   });
-  it("陪讀者:den 存不下預設時,選取退回原角色並顯示錯誤", async () => {
+  it("讀伴:den 存不下預設時,選取退回原角色並顯示錯誤", async () => {
     const f = mount();
     const base = f.getMockImplementation()!;
     f.mockImplementation(async (u: string, ...rest: unknown[]) =>
@@ -198,18 +202,20 @@ describe("設定頁", () => {
         ? new Response(JSON.stringify({ detail: "x", code: "unknown-character", params: {} }), { status: 422 })
         : (base as (...a: unknown[]) => Promise<Response>)(u, ...rest));
     const p = await page();
-    await go("陪讀者");
-    fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
+    await go("讀伴");
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
     expect(await p.findByRole("alert")).toBeTruthy();
-    expect((p.getByRole("radio", { name: /鬣狗/ }) as HTMLInputElement).checked).toBe(true);
+    expect(isDefault(p, "鬣狗")).toBe(true);
+    expect(isDefault(p, "水牛")).toBe(false);
   });
-  it("陪讀者:每位有名字與 line;選水牛為預設,進門輸入框是水牛", async () => {
+  it("讀伴:每位有名字與 line;選水牛為預設,進門輸入框是水牛", async () => {
     mount();
     const p = await page();
-    await go("陪讀者");
+    await go("讀伴");
     expect(p.getAllByText("一句話")).toHaveLength(3);
-    fireEvent.click(p.getByRole("radio", { name: /水牛/ }));
-    expect((p.getByRole("radio", { name: /水牛/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
+    expect(isDefault(p, "水牛")).toBe(true);
+    fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && i?.method === "PUT" && i.body === JSON.stringify({ character: "buffalo" }))).toBe(true));
     fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
@@ -219,12 +225,13 @@ describe("設定頁", () => {
   it("「預設」只標在選中的那位", async () => {
     mount();
     const p = await page();
-    await go("陪讀者");
-    const tagged = () => p.getAllByRole("radio").filter(r => r.closest("label")!.textContent!.trim() === "預設");
-    expect(tagged()).toHaveLength(1);
-    expect((tagged()[0] as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(p.getByRole("radio", { name: /鹿/ }));
-    expect(tagged()).toEqual([p.getByRole("radio", { name: /鹿/ })]);
+    await go("讀伴");
+    const tagged = () => p.getAllByRole("button", { name: /^打開/ }).filter(b => b.querySelector(".char-tag")?.textContent === "預設");
+    expect(tagged()).toEqual([card(p, "鬣狗")]);
+    const s = sheet(p, "鹿");
+    fireEvent.click(s.getByRole("button", { name: "設為預設" }));
+    expect(tagged()).toEqual([card(p, "鹿")]);
+    expect(s.getByRole("button", { name: "預設" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {
@@ -246,6 +253,31 @@ describe("設定頁", () => {
     expect(p.getByText("預覽old2")).toBeTruthy();
   });
 
+  it("舊討論依作品分組,預覽去掉 markdown 記號", async () => {
+    const f = mount();
+    const base = f.getMockImplementation()!;
+    f.mockImplementation(async (u: string, ...rest: unknown[]) =>
+      u.startsWith("/api/sessions?")
+        ? json({ sessions: [row("a", true), { ...row("b", true), slug: "d2", title: "長夜", preview: "**粗體**與`碼`" }, row("c", true)] })
+        : (base as (...a: unknown[]) => Promise<Response>)(u, ...rest));
+    const p = await page();
+    await go("舊討論");
+    const sea = within(await p.findByRole("region", { name: "舊的" }));
+    expect(sea.getAllByRole("button").map(b => b.querySelector("span")!.textContent)).toEqual(["預覽a", "預覽c"]);
+    expect(within(p.getByRole("region", { name: "長夜" })).getByText("粗體與碼")).toBeTruthy();
+  });
+  it("讀伴面板:點外面關,焦點回到卡片", async () => {
+    mount();
+    const p = await page();
+    await go("讀伴");
+    card(p, "鹿").focus();
+    const s = sheet(p, "鹿");
+    expect(document.activeElement).toBe(s.getByRole("button", { name: "關" }));
+    fireEvent.click(document.querySelector(".char-veil")!);
+    expect(p.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(card(p, "鹿"));
+  });
+
   it("沒有死控制項:每個分區裡沒被選中的 button/radio 點了都改變狀態;不出現未實作項目", async () => {
     mount();
     const p = await page();
@@ -254,7 +286,7 @@ describe("設定頁", () => {
       .filter(el => !["匯入", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
         && !/^(複製|編輯)/.test(el.getAttribute("aria-label") ?? ""));   // 系統檔案視窗不改狀態;新角色、複製、編輯另有測試
     let n = 0;
-    for (const sec of ["陪讀者", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
+    for (const sec of ["讀伴", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
       await go(sec);
       if (sec === "舊討論") await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
       for (let i = 0; i < controls().length; i++, n++) {
@@ -349,7 +381,7 @@ describe("設定頁:角色卡", () => {
     Object.defineProperty(file, "text", { value: async () => content });
     fireEvent.change(input, { target: { files: [file] } });
   };
-  const open = async () => { setLang("zh-Hant"); await go("陪讀者"); return page(); };
+  const open = async () => { setLang("zh-Hant"); await go("讀伴"); return page(); };
   beforeEach(() => {
     list = [hyena, imported]; posts = []; edits = []; listFails = false;
     reply = () => json({ imported: true, character: imported, warnings: [] });
@@ -361,46 +393,53 @@ describe("設定頁:角色卡", () => {
     const p = await open();
     fireEvent.click(p.getByRole("button", { name: "新角色" }));
     expect(p.getByLabelText("陪你讀稿的,是什麼?")).toBeTruthy();
-    fireEvent.click(p.getByRole("button", { name: "回陪讀者" }));
+    fireEvent.click(p.getByRole("button", { name: "回讀伴" }));
     expect(p.getByRole("button", { name: "新角色" })).toBeTruthy();
   });
   it("內建角色沒有封存鈕,匯入的角色有;每位都能匯出", async () => {
     mountCards();
     const p = await open();
-    expect(p.queryByRole("button", { name: "封存鬣狗" })).toBeNull();
-    expect(p.getByRole("button", { name: "封存老讀" })).toBeTruthy();
-    expect(p.getByRole("link", { name: "匯出鬣狗" }).getAttribute("href")).toBe("/api/characters/hyena/card");
+    const h = sheet(p, "鬣狗");
+    expect(h.queryByRole("button", { name: "封存鬣狗" })).toBeNull();
+    expect(h.getByRole("link", { name: "匯出鬣狗" }).getAttribute("href")).toBe("/api/characters/hyena/card");
+    fireEvent.click(h.getByRole("button", { name: "關" }));
+    expect(sheet(p, "老讀").getByRole("button", { name: "封存老讀" })).toBeTruthy();
   });
   it("內建角色沒有編輯鈕但有複製鈕;匯入的兩個都有", async () => {
     mountCards();
     const p = await open();
-    expect(p.queryByRole("button", { name: "編輯鬣狗" })).toBeNull();
-    expect(p.getByRole("button", { name: "複製鬣狗" })).toBeTruthy();
-    expect(p.getByRole("button", { name: "編輯老讀" })).toBeTruthy();
-    expect(p.getByRole("button", { name: "複製老讀" })).toBeTruthy();
+    const h = sheet(p, "鬣狗");
+    expect(h.queryByRole("button", { name: "編輯鬣狗" })).toBeNull();
+    expect(h.getByRole("button", { name: "複製鬣狗" })).toBeTruthy();
+    fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
+    expect(p.queryByRole("dialog")).toBeNull();
+    const o = sheet(p, "老讀");
+    expect(o.getByRole("button", { name: "編輯老讀" })).toBeTruthy();
+    expect(o.getByRole("button", { name: "複製老讀" })).toBeTruthy();
   });
   it("複製後清單多一位副本", async () => {
     mountCards();
     const p = await open();
-    fireEvent.click(p.getByRole("button", { name: "複製鬣狗" }));
+    fireEvent.click(sheet(p, "鬣狗").getByRole("button", { name: "複製鬣狗" }));
     expect(await p.findByText("鬣狗(副本)")).toBeTruthy();
   });
   it("編輯:卡片換成編輯器,只改目前語言,存完清單更新", async () => {
     mountCards();
     const p = await open();
-    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    expect(p.queryByRole("dialog")).toBeNull();
     expect((p.getByLabelText("讀法") as HTMLTextAreaElement).value).toBe(imported.reading);
-    expect(p.queryByRole("radio", { name: /老讀/ })).toBeNull();
+    expect(p.queryByRole("button", { name: "打開老讀" })).toBeNull();
     fireEvent.change(p.getByLabelText("名字"), { target: { value: "新老讀" } });
     fireEvent.click(p.getByRole("button", { name: "存" }));
-    expect(await p.findByRole("radio", { name: /新老讀/ })).toBeTruthy();
+    expect(await p.findByRole("button", { name: "打開新老讀" })).toBeTruthy();
     expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, confirm: false }]);
     expect(p.queryByLabelText("讀法")).toBeNull();
   });
   it("已經存好但清單重抓失敗時,編輯器仍關掉,不會誘使再存一次", async () => {
     mountCards();
     const p = await open();
-    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
     listFails = true;
     fireEvent.click(p.getByRole("button", { name: "存" }));
     await waitFor(() => expect(p.queryByLabelText("讀法")).toBeNull());
@@ -410,14 +449,14 @@ describe("設定頁:角色卡", () => {
     editReply = confirm => confirm ? json({ edited: true, character: imported }) : json({ edited: false, warnings: ["looks-like-instructions"] });
     mountCards();
     const p = await open();
-    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
     fireEvent.click(p.getByRole("button", { name: "存" }));
     fireEvent.click(await p.findByRole("button", { name: "仍要存" }));
     await waitFor(() => expect(edits.map(e => e.confirm)).toEqual([false, true]));
     await waitFor(() => expect(p.queryByLabelText("讀法")).toBeNull());
-    fireEvent.click(p.getByRole("button", { name: "編輯老讀" }));
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
     fireEvent.click(p.getByRole("button", { name: "取消" }));
-    expect(p.getByRole("radio", { name: /老讀/ })).toBeTruthy();
+    expect(card(p, "老讀")).toBeTruthy();
   });
   it("匯入有警告時先列出,確認才送第二次", async () => {
     list = [hyena];
@@ -430,7 +469,7 @@ describe("設定頁:角色卡", () => {
     expect(posts).toEqual([{ card: { spec: "chara_card_v3" }, confirm: false }]);
     list = [hyena, imported];
     fireEvent.click(p.getByRole("button", { name: "仍要匯入" }));
-    expect(await p.findByRole("radio", { name: /老讀/ })).toBeTruthy();
+    expect(await p.findByRole("button", { name: "打開老讀" })).toBeTruthy();
     expect(posts[1].confirm).toBe(true);
     expect(p.queryByText(zhHant["card.warn.ignored-fields"])).toBeNull();
   });
@@ -460,9 +499,10 @@ describe("設定頁:角色卡", () => {
   it("封存後從選單消失", async () => {
     mountCards();
     const p = await open();
-    fireEvent.click(p.getByRole("button", { name: "封存老讀" }));
-    await waitFor(() => expect(p.queryByRole("radio", { name: /老讀/ })).toBeNull());
-    expect(p.getByRole("radio", { name: /鬣狗/ })).toBeTruthy();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "封存老讀" }));
+    expect(p.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(p.queryByRole("button", { name: "打開老讀" })).toBeNull());
+    expect(card(p, "鬣狗")).toBeTruthy();
   });
   it("每個代碼都有中英文案", () => {
     for (const code of ["bad-schema", "too-large", "name-too-long", "reading-too-long", "no-reading", "not-json"]) {

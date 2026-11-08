@@ -11,7 +11,7 @@ const PATHS = {
   talk: <path d="M3 4.5h12v8H8l-3.5 3v-3H3z" />,
   back: <><path d="M7 5L3.5 8.5 7 12" /><path d="M3.5 8.5H11a3.5 3.5 0 0 1 0 7H9" /></>,
   look: <><circle cx="9" cy="9" r="6" /><path d="M9 3v12M3 9h12" opacity=".4" /></>,
-  person: <><circle cx="9" cy="6.5" r="3" /><path d="M3.5 15.5c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5" /></>,
+  pal: <><path d="M2.5 14.5C2.5 9 5.4 4.5 9 4.5s6.5 4.5 6.5 10z" /><circle cx="7" cy="10" r=".8" fill="currentColor" /><circle cx="11" cy="10" r=".8" fill="currentColor" /></>,
   box: <><path d="M2.5 5h13v3h-13zM3.5 8v7h11V8" /><path d="M7.5 11h3" /></>,
   auto: <><circle cx="9" cy="9" r="6" /><path d="M9 3a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" /></>,
   sun: <><circle cx="9" cy="9" r="3.2" /><path d="M9 2v1.6M9 14.4V16M2 9h1.6M14.4 9H16M4 4l1.1 1.1M12.9 12.9L14 14M4 14l1.1-1.1M12.9 5.1L14 4" /></>,

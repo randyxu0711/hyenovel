@@ -88,12 +88,12 @@ function AddForm({ act }: { act: Act }) {
   };
   return (
     <form className="dash-mem-add" onSubmit={e => { e.preventDefault(); if (ready) void add(); }}>
-      <textarea aria-label={t("memory.new")} rows={2} maxLength={MAX_CHAT} value={text} onChange={e => setText(e.target.value)} />
+      <textarea aria-label={t("memory.new")} placeholder={t("memory.new")} rows={2} maxLength={MAX_CHAT} value={text} onChange={e => setText(e.target.value)} />
       <div className="dash-mem-bar">
         <div className="set-seg" role="group" aria-label={t("memory.new")}>
           {(["author", "work"] as const).map(s => (
             <button key={s} type="button" aria-pressed={scope === s} onClick={() => setScope(s)}>
-              {t(s === "author" ? "memory.author" : "memory.work")}
+              {t(s === "author" ? "memory.scope.author" : "memory.scope.work")}
             </button>
           ))}
         </div>
@@ -135,17 +135,21 @@ export default function MemoryPage() {
   };
 
   const chains = data ? chainsOf(data.memories) : [];
-  const groups = data ? groupsOf(chains, data.caps, t("memory.author")) : [];
+  const groups = data ? groupsOf(chains, data.caps, t("memory.scope.author")) : [];
   const archived = chains.filter(c => !c.live);
   return (
     <div className="dash-mem">
       {code && <p role="alert">{t(errorMessage(code))}</p>}
-      {groups.map(g => (
+      {data && groups.length === 0 && <p className="dash-mem-empty">{t("memory.empty")}</p>}
+      {groups.map(g => {
+        const used = g.chains.reduce((n, c) => n + cpLength(c.live!.text), 0);
+        return (
         <div key={g.key} role="group" aria-label={g.name} className="dash-mem-group">
-          <h2>{g.name}<span>{g.chains.reduce((n, c) => n + cpLength(c.live!.text), 0)}/{g.cap}</span></h2>
+          <h2>{g.name}<span className="dash-mem-use"><i style={{ width: `${Math.min(100, (used / g.cap) * 100)}%` }} /></span><span className="dash-dm">{used}/{g.cap}</span></h2>
           <ul>{g.chains.map(c => <Row key={c.rows[0].root} chain={c} act={act} />)}</ul>
         </div>
-      ))}
+        );
+      })}
       <AddForm act={act} />
       {archived.length > 0 && (
         <button type="button" className="dash-set-opt" aria-expanded={showArchived} onClick={() => setShowArchived(s => !s)}>
