@@ -151,6 +151,7 @@
 .dash .slash-menu b{font-weight:600; color:var(--dash-ink); font-variant-numeric:tabular-nums}
 .dash .slash-menu [aria-selected="true"] button, .dash .slash-menu button:hover{background:var(--dash-line)}
 .dash .slash-menu button:disabled{cursor:not-allowed; opacity:.5}
+.dash .slash-menu .slash-note{padding:4px 10px 2px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .composer .bar{display:flex; align-items:center; gap:2px; padding:0 8px 6px}
 .dash .composer .bar .send{margin-left:auto; color:var(--dash-accent)}
 .dash .composer .bar .send:disabled{cursor:not-allowed; color:var(--dash-ink-2); opacity:.5}

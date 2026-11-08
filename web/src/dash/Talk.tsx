@@ -142,8 +142,10 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   ]);
   const [pick, setPick] = useState(0);
   const chosen = commands[Math.min(pick, commands.length - 1)];
+  const usable = !idle && live;
+  const exact = chosen !== undefined && draft.trim().toLowerCase() === `/${chosen.name}`;
   const runCommand = (c: SlashCommand) => {
-    if (idle || !live) return;
+    if (!usable) return;
     setDraft("");
     setPick(0);
     void c.run();
@@ -152,7 +154,10 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const submit = async () => {
     const text = draft.trim();
     if (!text || streaming !== null || legacy) return;
-    if (chosen) { runCommand(chosen); return; }
+    if (chosen) {
+      if (exact) runCommand(chosen); else setDraft(`/${chosen.name}`);
+      return;
+    }
     if (longText && text.length > longText.min) { longText.take(text); setDraft(""); return; }
     if (await talk.send(text, quotes)) onSent();
   };
@@ -300,12 +305,13 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
         {commands.length > 0 && (
           <ul className="slash-menu" role="listbox" aria-label={t("talk.commands")}>
             {commands.map(c => (
-              <li key={c.name} role="option" aria-selected={c === chosen} aria-disabled={idle || !live}>
-                <button type="button" disabled={idle || !live} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c)}>
+              <li key={c.name} role="option" aria-selected={c === chosen} aria-disabled={!usable}>
+                <button type="button" disabled={!usable} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c)}>
                   <b>/{c.name}</b><span>{c.label}</span>
                 </button>
               </li>
             ))}
+            {!usable && <li className="slash-note" role="status">{t(streaming !== null || working ? "err.busy" : "talk.cmdIdle")}</li>}
           </ul>
         )}
         <WhoPick me={me} onPick={talk.setWho} size={whoSize} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} />

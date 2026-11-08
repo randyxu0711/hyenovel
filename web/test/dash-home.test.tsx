@@ -238,6 +238,33 @@ describe("進門聊天", () => {
     expect(screen.queryByText("c1 的話")).toBeNull();
   });
 
+  it("before any chat, /clear explains it has nothing to do and sends nothing", async () => {
+    mount();
+    const b = await box();
+    fireEvent.change(b, { target: { value: "/clear" } });
+    expect(within(screen.getByRole("listbox", { name: "指令" })).getByText("現在沒有對話可以清空或壓縮")).toBeTruthy();
+    fireEvent.keyDown(b, { key: "Enter" });
+    expect((b as HTMLTextAreaElement).value).toBe("/clear");
+    expect(calls.some(c => c.url === "/api/discuss" || c.url.endsWith("/clear"))).toBe(false);
+  });
+
+  it("once the chat has started, a long paste stays a message; over the chat limit it becomes a submit bar", async () => {
+    recent = [free("c1", "聊海")];
+    chat = { c1: detail("c1") };
+    mount("/c/c1");
+    await screen.findByText("c1 的話");
+    const b = await box() as HTMLTextAreaElement;
+    fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(8001) } });
+    expect(await screen.findByText("8001 字")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(confirmBtn()).toBeNull());
+    fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(2001) } });
+    fireEvent.change(b, { target: { value: "字".repeat(2001) } });
+    fireEvent.keyDown(b, { key: "Enter" });
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ session_id: "c1" }));
+    expect(confirmBtn()).toBeNull();
+  });
+
   it("a chat that became a work opens on the work page", async () => {
     chat = { c1: detail("c1", { slug: "d2", title: "海", version: 1 }) };
     mount("/c/c1");
