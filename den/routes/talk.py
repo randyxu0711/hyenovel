@@ -9,10 +9,10 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import characters, discuss, views
+from den import characters, compact, discuss, views
 from den.config import MAX_ANCHORS, MAX_CHAT_CHARS, MAX_QUOTES, MAX_REACTION_CHARS, REACTION_MARKS, valid_slug
 from den.routes.common import ApiError, ClientIn, Seq, slug_ok, sse_line, unknown_work
-from marrow import repo
+from marrow import prompt, repo
 
 log = logging.getLogger("hyenovel")
 router = APIRouter()
@@ -129,6 +129,62 @@ async def delete_reaction(slug: str, session: str, seq: Seq, request: Request):
     conn = request.app.state.mgr.conn
     with conn:
         repo.clear_reaction(conn, d, seq)
+
+
+def _session_or_404(conn, session: str, where: str) -> dict:
+    d = repo.discussion_by_session(conn, session)
+    if d is None:
+        log.info("event=reject where=%s reason=unknown-session", where)
+        raise ApiError(404, "unknown-session", "沒有這一局")
+    return d
+
+
+def _free_lock(state, session: str, where: str) -> asyncio.Lock:
+    lock = state.chat_locks.setdefault(session, asyncio.Lock())
+    if lock.locked():
+        log.info("event=reject where=%s reason=busy", where)
+        raise ApiError(409, "busy", "這一局還有一輪在跑")
+    return lock
+
+
+@router.post("/sessions/{session}/clear", status_code=201)
+async def clear_session(session: str, request: Request):
+    conn = request.app.state.mgr.conn
+    d = _session_or_404(conn, session, "clear")
+    _free_lock(request.app.state, session, "clear")
+    us = repo.utterances(conn, d["id"])
+    summary, live = discuss.live_history(us)
+    if not live and summary is None:
+        log.info("event=reject where=clear reason=nothing-to-clear")
+        raise ApiError(422, "nothing-to-clear", "這局沒有可以清的對話")
+    seq = us[-1]["seq"] + 1
+    with conn:
+        repo.add_utterance(conn, d["id"], seq, "clear", "", time.time(), "den", [], None)
+    return {"seq": seq}
+
+
+@router.post("/sessions/{session}/compact", status_code=201)
+async def compact_session(session: str, request: Request):
+    state = request.app.state
+    conn = state.mgr.conn
+    d = _session_or_404(conn, session, "compact")
+    lock = _free_lock(state, session, "compact")
+    async with lock:
+        us = repo.utterances(conn, d["id"])
+        rows = discuss.since_clear(us)
+        if not any(u["role"] == "assistant" for u in rows) or us[-1]["role"] == "compact":
+            log.info("event=reject where=compact reason=nothing-to-compact")
+            raise ApiError(422, "nothing-to-compact", "這局沒有可以壓縮的對話")
+        try:
+            text, usage = await compact.summarize(state.chat, compact.transcript(rows))
+        except Exception:
+            log.exception("event=compact-failed session=%s", session)
+            raise ApiError(502, "compact-failed", "壓縮失敗,對話沒有改動") from None
+        seq = us[-1]["seq"] + 1
+        with conn:
+            repo.add_utterance(conn, d["id"], seq, "compact", text, time.time(), "den", [], None, usage=usage,
+                               recipe=prompt.recipe(compact.system(), compact.COMPACT_RUN.as_dict()))
+    return {"seq": seq, "text": text}
 
 
 @router.post("/discuss")
