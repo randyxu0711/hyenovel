@@ -78,7 +78,7 @@ describe("鍵盤", () => {
     expect(screen.queryByRole("dialog", { name: "指令框" })).toBeNull();
     expect(document.activeElement).toBe(box);
   });
-  it("選「切換晝夜」→ 晝夜換了;選「設定」→ 導到設定;選陪讀者 → 存成預設", async () => {
+  it("選「切換晝夜」→ 晝夜換了;選「設定」→ 導到設定;選讀伴 → 存成預設", async () => {
     mount("/w/d1");
     await screen.findByLabelText("對話輸入");
     const mode = () => document.querySelector(".dash")!.getAttribute("data-mode");
@@ -88,7 +88,7 @@ describe("鍵盤", () => {
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
     await waitFor(() => expect(mode()).not.toBe(before));
     ctrlK();
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "陪讀者:水牛" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "讀伴:水牛" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && (i as RequestInit)?.method === "PUT")).toBe(true));
     ctrlK();

@@ -55,7 +55,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
 }
 function Where() { const l = useLocation(); return <output data-testid="loc" data-nav={useNavigationType()}>{l.pathname}{l.search}</output>; }
 const loc = () => screen.getByTestId("loc").textContent;
-const whoKey = () => screen.getByRole("button", { name: /^陪讀者:/ });
+const whoKey = () => screen.getByRole("button", { name: /^讀伴:/ });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
   ["token", { text: t.slice(0, 1) }], ["token", { text: t.slice(1) }],
   ["message", { role: "assistant", text: t, session_id: sid, character, spans }], ["done", { ok: true, session_id: sid }]);
@@ -77,8 +77,8 @@ describe("選人", () => {
   it("對話裡換人只影響這一局:不動全域預設,重開回到預設", async () => {
     const { unmount } = mount();
     const pick = async () => {
-      fireEvent.click(await screen.findByRole("button", { name: /^陪讀者:/ }));
-      return within(screen.getByRole("group", { name: "陪讀者" })).getByRole("button", { name: "水牛" });
+      fireEvent.click(await screen.findByRole("button", { name: /^讀伴:/ }));
+      return within(screen.getByRole("group", { name: "讀伴" })).getByRole("button", { name: "水牛" });
     };
     fireEvent.click(await pick());
     expect((await pick()).getAttribute("aria-pressed")).toBe("true");
@@ -117,13 +117,13 @@ describe("選人", () => {
   });
 });
 
-describe("換預設陪讀者在作品頁立即生效", () => {
-  it("作品頁 ⌘K 選「陪讀者:水牛」→ 輸入框旁換成水牛,下一輪送給水牛", async () => {
+describe("換預設讀伴在作品頁立即生效", () => {
+  it("作品頁 ⌘K 選「讀伴:水牛」→ 輸入框旁換成水牛,下一輪送給水牛", async () => {
     mount();
     await screen.findByText("第一段。");
     expect(whoKey().getAttribute("aria-label")).toContain("鬣狗");
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "陪讀者:水牛" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "讀伴:水牛" }));
     await waitFor(() => expect(whoKey().getAttribute("aria-label")).toContain("水牛"));
     say("嗨");
     await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
@@ -134,8 +134,10 @@ describe("換預設陪讀者在作品頁立即生效", () => {
     await screen.findByText("第一段。");
     expect(whoKey().getAttribute("aria-label")).toContain("水牛");
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
-    fireEvent.click(await within(screen.getByRole("navigation")).findByRole("button", { name: "陪讀者" }));
-    fireEvent.click(await screen.findByRole("radio", { name: /鹿/ }));
+    fireEvent.click(await within(screen.getByRole("navigation")).findByRole("button", { name: "讀伴" }));
+    fireEvent.click(await screen.findByRole("button", { name: "打開鹿" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "鹿" })).getByRole("button", { name: "設為預設" }));
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "鹿" }), { key: "Escape" });
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品:海" }));
     await screen.findByText("第一段。");
@@ -508,7 +510,7 @@ describe("邊說邊畫線", () => {
     await (await findLog()).findByRole("button", { name: "「海很藍」" });
     expect(container.querySelector(".is-drawing")).toBeNull();
   });
-  it("看舊版:串流中不畫;message 後以 ?v= 重抓這局,但舊版稿上不畫陪讀者的線(spec §11.5)", async () => {
+  it("看舊版:串流中不畫;message 後以 ?v= 重抓這局,但舊版稿上不畫讀伴的線(spec §11.5)", async () => {
     versions = [1, 2];
     rows = [row("s1")];
     session("s1", [u("先前"), a("嗯", "buffalo")]);
@@ -668,19 +670,19 @@ describe("輸入紙與角色狀態", () => {
     expect(container.querySelector("form.composer svg.fig")!.getAttribute("data-state")).toBe("thinking");
     expect(container.querySelector(".chat-pen")).toBeNull();
   });
-  it("陪讀者鈕只露角色,名字在 aria-label;清單照舊、Esc 關", async () => {
+  it("讀伴鈕只露角色,名字在 aria-label;清單照舊、Esc 關", async () => {
     mount();
     await screen.findByText("第一段。");
     const key = whoKey();
-    expect(key.getAttribute("aria-label")).toBe("陪讀者:鬣狗");
-    expect(key.getAttribute("title")).toBe("陪讀者:鬣狗");
+    expect(key.getAttribute("aria-label")).toBe("讀伴:鬣狗");
+    expect(key.getAttribute("title")).toBe("讀伴:鬣狗");
     expect(key.querySelector("svg.fig")).not.toBeNull();
     expect(key.textContent).toBe("");
     expect(document.querySelectorAll("form.composer svg.fig")).toHaveLength(1);
     fireEvent.click(key);
-    const g = screen.getByRole("group", { name: "陪讀者" });
+    const g = screen.getByRole("group", { name: "讀伴" });
     fireEvent.keyDown(g, { key: "Escape" });
-    expect(screen.queryByRole("group", { name: "陪讀者" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "讀伴" })).toBeNull();
   });
   it("帶進來的引文移除鈕是圖示", async () => {
     mount();

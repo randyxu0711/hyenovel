@@ -70,7 +70,7 @@ describe("結構圖分頁", () => {
     const { container } = mount(map({ beats: [{ id: "b0", label: "x", intensity: 0.5, span: null }] }));
     expect(cols(container)[0].disabled).toBe(true);
   });
-  it("陪讀者提過的段:段號下畫波浪線(跟稿上同一種記號),記最後一個痕跡的角色", () => {
+  it("讀伴提過的段:段號下畫波浪線(跟稿上同一種記號),記最後一個痕跡的角色", () => {
     const marks: Mark[] = [
       { start: 11, end: 13, character: "hyena", id: "a" },
       { start: 12, end: 14, character: "buffalo", id: "b" },

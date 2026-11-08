@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("進門只有一張紙", () => {
-  it("有作品:只有交稿的紙,沒有 chips、讀完那句、陪讀者介紹、送出鈕", async () => {
+  it("有作品:只有交稿的紙,沒有 chips、讀完那句、讀伴介紹、送出鈕", async () => {
     mount();
     await box();
     await waitFor(() => expect(calls.some(c => c.url === "/api/works")).toBe(true));
@@ -62,13 +62,13 @@ describe("進門只有一張紙", () => {
     expect(pick.querySelector("svg.ico")).not.toBeNull();
     expect(screen.queryByRole("group", { name: "聊哪一篇" })).toBeNull();
     expect(screen.queryByText(/讀完了/)).toBeNull();
-    expect(screen.queryByRole("list", { name: "陪讀者" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "讀伴" })).toBeNull();
     expect(screen.queryByRole("button", { name: "送出" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^陪讀者/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^讀伴/ })).toBeNull();
     expect(document.querySelector(".home-first")).toBeNull();
     expect(calls.some(c => c.url.endsWith("/sessions"))).toBe(false);
   });
-  it("紙上的角色是預設陪讀者", async () => {
+  it("紙上的角色是預設讀伴", async () => {
     serverDefault = "deer";
     mount();
     await box();

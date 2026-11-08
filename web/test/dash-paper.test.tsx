@@ -208,7 +208,7 @@ describe("Paper 排法與分頁", () => {
     act(() => links.jumpToPaper({ quote: "五六", start: 4, end: 6 }));
     expect(pages()[1].querySelector("p")!.classList.contains("is-flash")).toBe(true);
   });
-  it("舊版:不畫陪讀者的線、紙有 is-old", () => {
+  it("舊版:不畫讀伴的線、紙有 is-old", () => {
     const { container } = mount("海很深。", [mk(0, 3)], { old: true });
     expect(marks()).toHaveLength(0);
     expect(container.querySelector(".is-old")).not.toBeNull();

@@ -133,7 +133,7 @@ describe("Reaction 標記鈕", () => {
     fireEvent.click(screen.getByRole("button", { name: "標記這則" }));
     expect(screen.getByRole("button", { name: STOP }).textContent).toBe(STOP);
     expect(screen.getByRole("button", { name: MISREAD }).textContent).toBe(MISREAD);
-    expect(screen.getByText("只留著之後調陪讀者用,這局不會變。")).toBeTruthy();
+    expect(screen.getByText("只留著之後調讀伴用,這局不會變。")).toBeTruthy();
   });
 
   it("標過的回覆露出記號膠囊,點它重開選單", () => {

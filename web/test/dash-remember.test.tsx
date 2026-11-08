@@ -171,7 +171,7 @@ describe("Remember", () => {
 
 describe("userSeq", () => {
   it("作者有說話 = 回覆 seq - 1", () => expect(userSeq("嗨", 5)).toBe(4));
-  it("陪讀者先開口的那輪,作者發言沒有 seq", () => {
+  it("讀伴先開口的那輪,作者發言沒有 seq", () => {
     expect(userSeq("", 0)).toBeUndefined();
     expect(userSeq("", 7)).toBeUndefined();
   });
