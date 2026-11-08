@@ -101,7 +101,8 @@ def test_tools_listed(den):
         async with Client(den_mcp.build_server(den.client())) as c:
             return {t.name for t in (await c.list_tools()).tools}
     assert anyio.run(go) == {"submit_work", "talk_to_companion", "find_works", "read_work", "cancel_work",
-                                 "list_characters", "set_character", "create_character", "save_character"}
+                                 "list_characters", "set_character", "create_character", "save_character",
+                                 "manage_chat"}
     assert den.spawns == 0   # 列 tool 不碰 den
 
 
@@ -188,7 +189,7 @@ def test_main_keeps_stdout_clean(tmp_path):
     for ln in lines.queue:                    # 收尾後殘留的也得是 JSON
         if ln.strip():
             json.loads(ln)
-    assert len(listed["result"]["tools"]) == 9
+    assert len(listed["result"]["tools"]) == 10
     assert not (tmp_path / "den.json").exists()   # 沒拉起 den
 
 
@@ -245,12 +246,13 @@ def test_talk_without_work_uses_last_story(cden):
     assert not r2.is_error and len(_discussions(cden)) == 1
 
 
-def test_resolve_none_falls_back_to_den_recent(cden):
-    r = _call(cden.client(), "talk_to_companion", {"message": "嗨"})   # 新 shim、沒聊過
-    assert not r.is_error and ("POST", "/api/discuss/mini") in cden.paths
+def test_no_work_no_session_starts_storyless_chat(cden):
+    r = _call(cden.client(), "talk_to_companion", {"message": "嗨"})   # 新 shim、den 裡一局都沒有
+    assert not r.is_error and ("POST", "/api/discuss") in cden.paths
+    assert _discussions(cden)[0]["story_id"] is None
 
 
-def test_talk_without_any_work_is_tool_error(tmp_path):
+def test_talk_without_any_work_starts_storyless_chat(tmp_path):
     from den.tests.test_app_discuss import FakeChat
     url = f"sqlite:///{tmp_path}/t.db"
     c = db.connect(url)
@@ -259,8 +261,7 @@ def test_talk_without_any_work_is_tool_error(tmp_path):
     d = FakeDen((url, tmp_path), chat=FakeChat())
     try:
         r = _call(d.client(), "talk_to_companion", {"message": "嗨"})
-        assert r.is_error and "還沒有任何作品" in _text(r) and "檔案路徑" in _text(r)
-        assert not any(p.startswith("/api/discuss") for _, p in d.paths)
+        assert not r.is_error and ("POST", "/api/discuss") in d.paths
     finally:
         d.stop()
 
@@ -584,7 +585,7 @@ def test_read_work_bad_part_local_reject(den):
 
 def test_talk_does_not_let_host_pick_character(den):
     tools = {t.name: t for t in _list_tools(den)}
-    assert set(tools["talk_to_companion"].input_schema["properties"]) == {"message", "work"}
+    assert set(tools["talk_to_companion"].input_schema["properties"]) == {"message", "work", "new_chat", "attach_path"}
 
 
 def test_readonly_annotations(den):
@@ -1183,3 +1184,117 @@ def test_edit_keeps_old_utterances_on_their_version(cden):
     finally:
         conn.close()
     assert [json.loads(r[0])["character_v"] for r in rows] == [1, 2]
+
+
+# ── 純聊天、附件、manage_chat ──
+
+def _story_of(den, sid):
+    return next(d["story_id"] for d in _discussions(den) if d["external_id"] == sid)
+
+
+def test_new_chat_posts_to_storyless_route(cden):
+    rs = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                  ("talk_to_companion", {"message": "聊別的", "new_chat": True}),
+                                  ("talk_to_companion", {"message": "再一句", "new_chat": True})])
+    assert not any(r.is_error for r in rs)
+    assert [p for m, p in cden.paths if p.startswith("/api/discuss")] == ["/api/discuss/mini", "/api/discuss", "/api/discuss"]
+    free = [d for d in _discussions(cden) if d["story_id"] is None]
+    assert len(free) == 2
+
+
+def test_no_work_no_current_resumes_latest_session_even_if_storyless(cden):
+    _call(cden.client(), "talk_to_companion", {"work": "mini"})
+    _call(cden.client(), "talk_to_companion", {"message": "純聊", "new_chat": True})
+    r = _call(cden.client(), "talk_to_companion", {"message": "接著"})
+    assert not r.is_error
+    assert len(_discussions(cden)) == 2
+    assert [p for m, p in cden.paths if p.startswith("/api/discuss")][-1] == "/api/discuss"
+
+
+def test_no_current_resumes_latest_work_session(cden):
+    _call(cden.client(), "talk_to_companion", {"work": "mini"})
+    _call(cden.client(), "talk_to_companion", {"message": "接著"})
+    assert len(_discussions(cden)) == 1
+
+
+def test_switch_to_work_then_back_without_work_stays_on_work(cden):
+    rs = _session(cden.client(), [("talk_to_companion", {"message": "純聊", "new_chat": True}),
+                                  ("talk_to_companion", {"message": "聊海", "work": "mini"}),
+                                  ("talk_to_companion", {"message": "然後"})])
+    assert not any(r.is_error for r in rs)
+    assert [p for m, p in cden.paths if p.startswith("/api/discuss")] == ["/api/discuss", "/api/discuss/mini", "/api/discuss/mini"]
+    assert len(_discussions(cden)) == 2
+
+
+def test_attach_path_rejects_non_md_txt_before_den_call(cden, tmp_path):
+    p = tmp_path / "a.pdf"
+    p.write_bytes(b"x")
+    r = _call(cden.client(), "talk_to_companion", {"new_chat": True, "attach_path": str(p)})
+    assert r.is_error and ".md / .txt" in _text(r)
+    assert not any(p.startswith("/api/discuss") for _, p in cden.paths)
+
+
+def test_attach_path_sends_file_and_tells_host(cden, tmp_path):
+    p = _write(tmp_path, "海.md", "浪一層一層打上來。\n")
+    r = _call(cden.client(), "talk_to_companion", {"new_chat": True, "attach_path": str(p)})
+    assert not r.is_error and _text(r).startswith("AB")
+    assert "附件第 1 份" in _text(r) and "manage_chat" in _text(r)
+    assert "浪一層一層打上來" in cden.chat.calls[-1][0]
+
+
+def test_attach_path_on_work_session_rejected(cden, tmp_path):
+    p = _write(tmp_path)
+    rs = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                  ("talk_to_companion", {"attach_path": str(p)})])
+    assert rs[1].is_error and "submit_work" in _text(rs[1])
+    assert len([1 for _, q in cden.paths if q.startswith("/api/discuss")]) == 1
+
+
+def test_manage_chat_adopt_rebinds_current_to_work(cden, tmp_path):
+    p = _write(tmp_path, "海.md", "浪一層一層打上來。\n")
+    rs = _session(cden.client(), [("talk_to_companion", {"new_chat": True, "attach_path": str(p)}),
+                                  ("manage_chat", {"action": "adopt"}),
+                                  ("talk_to_companion", {"message": "這篇呢"})])
+    assert not any(r.is_error for r in rs), [_text(r) for r in rs]
+    assert "〈海〉" in _text(rs[1])
+    paths = [q for _, q in cden.paths if q.startswith("/api/discuss")]
+    assert paths[0] == "/api/discuss" and paths[-1].startswith("/api/discuss/d")
+    assert len(_discussions(cden)) == 1 and _discussions(cden)[0]["story_id"] is not None
+
+
+def test_manage_chat_adopt_lists_when_several(cden, tmp_path):
+    a, b = _write(tmp_path, "海.md", "浪。\n"), _write(tmp_path, "山.md", "石。\n")
+    rs = _session(cden.client(), [("talk_to_companion", {"new_chat": True, "attach_path": str(a)}),
+                                  ("talk_to_companion", {"attach_path": str(b)}),
+                                  ("manage_chat", {"action": "adopt"}),
+                                  ("manage_chat", {"action": "adopt", "attachment": 2})])
+    assert rs[2].is_error and "〈海〉" in _text(rs[2]) and "〈山〉" in _text(rs[2])
+    assert not rs[3].is_error and "〈山〉" in _text(rs[3])
+
+
+def test_manage_chat_clear_and_compact(cden):
+    cden.chat.deltas = ["摘要"]
+    rs = _session(cden.client(), [("talk_to_companion", {"work": "mini"}),
+                                  ("manage_chat", {"action": "compact"}),
+                                  ("manage_chat", {"action": "compact"}),
+                                  ("manage_chat", {"action": "clear"})])
+    assert not rs[1].is_error and "額度" in _text(rs[1]) and "摘要" in _text(rs[1])
+    assert rs[2].is_error and "沒有" in _text(rs[2])
+    assert not rs[3].is_error
+
+
+def test_manage_chat_without_current_session_rejects(cden):
+    r = _call(cden.client(), "manage_chat", {"action": "clear"})
+    assert r.is_error and "還沒有在聊的局" in _text(r)
+    assert not any("/clear" in q for _, q in cden.paths)
+
+
+def test_set_character_applies_to_storyless_session(cden):
+    rs = _session(cden.client(), [("talk_to_companion", {"message": "嗨", "new_chat": True}),
+                                  ("set_character", {"character": "deer"}),
+                                  ("talk_to_companion", {"message": "再來"}),
+                                  ("list_characters", {})])
+    assert not any(r.is_error for r in rs)
+    assert "世界撐開" in cden.chat.calls[-1][0]
+    assert [ln for ln in _text(rs[3]).splitlines() if ln.endswith("(目前)")][0].startswith("deer:")
+    assert [q for _, q in cden.paths if q.startswith("/api/discuss")] == ["/api/discuss", "/api/discuss"]

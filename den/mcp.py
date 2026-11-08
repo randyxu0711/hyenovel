@@ -1,4 +1,4 @@
-"""stdio MCP 轉接器:五個 tool + 兩個 prompt,薄薄一層翻成 den REST。入口 `python -m den.mcp`。
+"""stdio MCP 轉接器:十個 tool + 兩個 prompt,薄薄一層翻成 den REST。入口 `python -m den.mcp`。
 
 - stdout 只屬於 MCP 協定:本模組不 print,logging 只准 stderr(main 明確設)。
 - den.request 是阻塞的(拉起 den 可能等十幾秒)→ 一律丟 anyio.to_thread。
@@ -11,6 +11,7 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode
 
 import anyio
@@ -41,12 +42,19 @@ INSTRUCTIONS = (
     "交稿用 submit_work(只收檔案路徑)、找作品用 find_works、作者自己要看原文或分析用 read_work、"
     "停下分析用 cancel_work。作品用標題或關鍵詞指定,不必記編號。"
     "作者問有哪些陪讀角色、現在是誰時用 list_characters;作者點名要換才用 set_character。"
-    "作者要建新角色時先問作者的想像,再用 create_character;選哪個由作者決定,選定後用 save_character。")
+    "作者要建新角色時先問作者的想像,再用 create_character;選哪個由作者決定,選定後用 save_character。"
+    "作者明說要清空、壓縮對話,或把丟進對話的稿開成作品時用 manage_chat。")
 DESC_TALK = (
     "和陪讀的 companion 說話,回傳它的回覆。把回覆原文轉給作者,不改寫、摘要或補充。"
     "作者對 companion 說的任何話都用這個,包括「好了沒」。交稿或作者自己要看資料時改用 submit_work、read_work。"
     "message 留空 = 讓 companion 先開口。"
-    "work = 作品標題或開頭裡的關鍵詞(例「海」);省略則沿用剛聊的那篇,或最近的一篇。")
+    "work = 作品標題或開頭裡的關鍵詞(例「海」);省略則沿用剛聊的那局,或最近的一局。"
+    "new_chat=true 用在作者說想聊別的、不聊作品:開一局不綁作品的新對話。"
+    "attach_path 用在不綁作品的對話裡作者給了 .md / .txt 檔、但沒說要交稿分析:把稿丟進對話給 companion 讀;要分析改用 submit_work。")
+DESC_MANAGE_CHAT = (
+    "作者明說要清空對話、壓縮對話、或把丟進對話的稿開成作品時才用;不要自己判斷該不該清或壓。"
+    "作用在剛聊的那局。action:clear(清空對話,稿留著)/ compact(把之前的對話壓成摘要,花一次訂閱額度)/"
+    " adopt(把丟進對話的稿開成作品,只存不分析;attachment 是第幾份,只有一份時可省略)。")
 DESC_LIST_CHARACTERS = (
     "列出陪讀角色(id、名字、一句話)並標出這篇目前是誰。作者問有哪些角色、現在是誰時用。"
     "work 用法同 talk_to_companion。")
@@ -86,10 +94,10 @@ _CARD_WARNINGS = {"looks-like-instructions": "有像指令的文字", "newer-spe
                   "ignored-fields": "有不會採用的欄位", "bad-colors": "顏色看不清楚"}
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
 PROMPT_COMPANION = (
-    "我想跟 hyenovel 的 companion 聊我的作品。如果我還沒說要聊哪個檔,先問我稿子的檔案路徑(.md / .txt),"
-    "或我只是想直接聊最近那篇。拿到路徑就用 submit_work 交稿、把回報給我確認;"
-    "然後用 talk_to_companion(message 留空)讓 companion 先開口。companion 的回覆請一字不改地轉給我。")
-PROMPT_CONTINUE = ("接著聊我最近那篇:用 talk_to_companion(message 留空、不給 work)讓 companion 先開口,"
+    "我想跟 hyenovel 的 companion 聊。我給了稿子的檔案路徑(.md / .txt)就用 submit_work 交稿、把回報給我確認,"
+    "再用 talk_to_companion(message 留空)讓 companion 先開口;我沒給路徑也沒指定作品,"
+    "就用 talk_to_companion(new_chat=true、message 留空)直接聊。companion 的回覆請一字不改地轉給我。")
+PROMPT_CONTINUE = ("接著聊最近那局:用 talk_to_companion(message 留空、不給 work)讓 companion 先開口,"
                    "回覆一字不改地轉給我。")
 
 
@@ -215,9 +223,9 @@ def build_server(den: DenClient) -> MCPServer:
             raise ToolError(tail(str(e))) from None
         return tail(text)
 
-    sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug → 對話 id
-    current: list[str] = []         # 最近一次聊的那篇
-    picked: dict[str, str] = {}     # 作者點名、還沒講過話的角色:slug → 角色 id
+    sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug(純聊天 = "")→ 對話 id
+    current: list[str] = []         # 最近一次聊的那局(slug 或 "")
+    picked: dict[str, str] = {}     # 作者點名、還沒講過話的角色:局 key → 角色 id
 
     async def _works(**params) -> list[dict]:
         return (await call("GET", "/api/works?" + urlencode({k: v for k, v in params.items() if v is not None})))["works"]
@@ -333,70 +341,97 @@ def build_server(den: DenClient) -> MCPServer:
         return await guarded(_read(part, work))
     in_flight: set[str] = set()     # 正在跑一輪的篇:首輪還沒局 id、den 的鎖擋不到,由這裡擋(免得付兩次錢)
 
-    def _turn(slug: str, body: dict) -> dict:
+    def _turn(key: str, body: dict) -> dict:
         """收齊一輪 SSE,回 message 事件的 data;error 事件 → ToolError。"""
-        for ev in den.stream("POST", f"/api/discuss/{slug}", body):
+        for ev in den.stream("POST", f"/api/discuss/{key}" if key else "/api/discuss", body):
             if ev["event"] == "message":
                 return ev["data"]
             if ev["event"] == "error":
                 raise ToolError(ev["data"]["message"] + _TALK_FAILED)
         raise ToolError("companion 沒有回應" + _TALK_FAILED)
 
-    async def _talk(message: str, work: str | None, client) -> str:
+    async def resolve_key(work: str | None) -> str:
+        """作者的說法 → 局 key(slug,純聊天 = "")。指定作品 / 剛聊的那局 / den 最近那局 / 新的純聊天。"""
+        if work is not None:
+            return (await resolve_work(work))["slug"]
+        if current:
+            return current[0]
+        rows = (await call("GET", "/api/sessions?limit=1"))["sessions"]
+        if not rows:
+            return ""
+        key = rows[0]["slug"] or ""
+        sessions[key] = rows[0]["session"]
+        return key
+
+    async def _talk(message: str, work: str | None, new_chat: bool, attach_path: str | None, client) -> str:
         if len(message) > MAX_CHAT_CHARS:   # 本地擋:den 的 422 會把整段原文回吐給宿主
             raise _reject("too-long", f"這段話超過 {MAX_CHAT_CHARS} 字,請分段說。")
         try:
-            slug = (await resolve_work(work))["slug"]
+            key = "" if new_chat else await resolve_key(work)
         except ToolError as e:
             raise ToolError(str(e) + _TALK_FAILED) from None
-        if slug in in_flight:
+        attach = None
+        if attach_path is not None:
+            if key:
+                raise _reject("bound-session", "這局是作品的局,不能把稿丟進對話;要交新版請用 submit_work。" + _TALK_FAILED)
+            attach = {"name": Path(attach_path).expanduser().stem, "text": _read_source(attach_path)}
+        if key in in_flight:
             raise _reject("busy", "上一輪還在跑,等它回來再說" + _TALK_FAILED)
-        in_flight.add(slug)
+        in_flight.add(key)
         try:
-            return await _talk_once(slug, message, client)
+            if new_chat:
+                sessions.pop("", None)
+            return await _talk_once(key, message, client, attach)
         finally:
-            in_flight.discard(slug)
+            in_flight.discard(key)
 
-    async def _talk_once(slug: str, message: str, client) -> str:
-        if slug in picked:
+    async def _talk_once(key: str, message: str, client, attach: dict | None = None) -> str:
+        if key in picked:
             cs = (await call("GET", "/api/characters"))["characters"]
-            if not any(c["id"] == picked[slug] and not c["archived"] for c in cs):
-                picked.pop(slug, None)
-        body = {"session_id": sessions.get(slug), "message": message, "anchors": [],
-                "character": picked.get(slug), "home": "mcp", "client": client}
+            if not any(c["id"] == picked[key] and not c["archived"] for c in cs):
+                picked.pop(key, None)
+        body = {"session_id": sessions.get(key), "message": message, "anchors": [],
+                "character": picked.get(key), "home": "mcp", "client": client}
+        if attach is not None:
+            body["attach"] = attach
         try:
             try:
-                data = await anyio.to_thread.run_sync(lambda: _turn(slug, body))
+                data = await anyio.to_thread.run_sync(lambda: _turn(key, body))
             except DenRejected as e:
                 if not (e.status == 404 and e.detail == _NO_SESSION and body["session_id"]):
                     raise
-                sessions.pop(slug, None)      # 局不見了(DB 重建):開新局,拒絕發生在花錢前
+                sessions.pop(key, None)      # 局不見了(DB 重建):開新局,拒絕發生在花錢前
                 body["session_id"] = None
-                data = await anyio.to_thread.run_sync(lambda: _turn(slug, body))
+                data = await anyio.to_thread.run_sync(lambda: _turn(key, body))
         except DenRejected as e:
             if e.status == 404:
-                raise ToolError(f"找不到這篇:{slug}" + _TALK_FAILED) from None
+                raise ToolError(f"找不到這篇:{key}" + _TALK_FAILED) from None
             if e.status == 409:
                 raise ToolError("上一輪還在跑,等它回來再說" + _TALK_FAILED) from None
+            if e.status == 422 and attach is not None:
+                raise ToolError(f"這份稿丟不進對話:{e.detail}" + _TALK_FAILED) from None
             raise ToolError(f"den 回應 {e.status}" + _TALK_FAILED) from None
         except DenUnavailable as e:
             raise ToolError(f"連不上 hyenovel den:{e}{_TALK_FAILED}") from None
-        sessions[slug] = data["session_id"]
-        current[:] = [slug]
-        if picked.get(slug) == body["character"]:
-            picked.pop(slug, None)
+        sessions[key] = data["session_id"]
+        current[:] = [key]
+        if picked.get(key) == body["character"]:
+            picked.pop(key, None)
+        if attach is not None and data.get("attachment"):
+            return data["text"] + f"\n\n(附件第 {data['attachment']} 份已給讀伴看。作者想把它開成作品時用 manage_chat。)"
         return data["text"]
 
     @server.tool(description=DESC_TALK)
-    async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None) -> str:
-        return await guarded(_talk(message, work, client_of(ctx)))
+    async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None,
+                                new_chat: bool = False, attach_path: str | None = None) -> str:
+        return await guarded(_talk(message, work, new_chat, attach_path, client_of(ctx)))
 
-    async def _character_now(slug: str, default: str) -> str:
-        if slug in picked:
-            return picked[slug]
-        if slug not in sessions:
+    async def _character_now(key: str, default: str) -> str:
+        if key in picked:
+            return picked[key]
+        if key not in sessions:
             return default
-        data = await call("GET", f"/api/sessions/{sessions[slug]}", ok_details=("沒有這一局",))
+        data = await call("GET", f"/api/sessions/{sessions[key]}", ok_details=("沒有這一局",))
         said = [t["character"] for t in data.get("turns", ()) if t["role"] == "assistant"]
         return said[-1] if said else default
 
@@ -405,7 +440,7 @@ def build_server(den: DenClient) -> MCPServer:
         active = [c for c in data["characters"] if not c["archived"]]
         now = data["default"]
         if work is not None or current:
-            now = await _character_now((await resolve_work(work))["slug"], now)
+            now = await _character_now(await resolve_key(work), now)
         if not any(c["id"] == now for c in active):
             now = data["default"]
         return "\n".join(f"{c['id']}:{_shown(c['name']['zh-Hant'], '這個名字沒顯示')},{_shown(c['line']['zh-Hant'], '這句介紹沒顯示')}"
@@ -415,10 +450,54 @@ def build_server(den: DenClient) -> MCPServer:
         cs = {c["id"]: c for c in (await call("GET", "/api/characters"))["characters"] if not c["archived"]}
         if character not in cs:
             raise _reject("character", f"沒有這隻角色。可選:{'、'.join(cs)}。")
+        if work is None and current and not current[0]:
+            picked[""] = character
+            return f"這局對話下一輪由{_shown(cs[character]['name']['zh-Hant'], '這隻角色')}接著讀。"
         w = await resolve_work(work)
         picked[w["slug"]] = character
         current[:] = [w["slug"]]
         return f"〈{w['title']}〉下一輪由{_shown(cs[character]['name']['zh-Hant'], '這隻角色')}接著讀。"
+
+    async def _manage(action: str, attachment: int | None) -> str:
+        sid = sessions.get(current[0]) if current else None
+        if sid is None:
+            raise _reject("no-chat", "還沒有在聊的局。先用 talk_to_companion 聊一輪。")
+        key = current[0]
+        base = f"/api/sessions/{sid}"
+        if action == "clear":
+            await call("POST", f"{base}/clear", on_status={409: "上一輪還在跑,等它回來再清。",
+                                                           422: "這局已經是空的,沒有可以清的對話。"})
+            return "這局的對話已清空,丟進來的稿和作品原文都還在。"
+        if action == "compact":
+            r = await call("POST", f"{base}/compact", on_status={
+                409: "上一輪還在跑,等它回來再壓縮。", 422: "這局沒有新的對話可以壓縮。",
+                502: "壓縮沒有成功,對話沒有改動。請照實告訴作者。"})
+            return f"這局之前的對話已壓縮成摘要(花了一次訂閱額度):\n{r['text']}"
+        if key:
+            raise _reject("bound-session", "這局已經是作品的局,不能再開成作品。")
+        if attachment is None:
+            left = [a for a in (await call("GET", base))["attachments"] if not a["adopted"]]
+            if not left:
+                raise _reject("no-attachment", "這局沒有丟進來的稿。")
+            if len(left) > 1:
+                raise _reject("which-attachment", "\n".join(
+                    [f"這局有 {len(left)} 份稿,請問作者要開哪一份(用 attachment 帶編號):"]
+                    + [f"{a['n']}. 〈{a['name']}〉" for a in left]))
+            attachment = left[0]["n"]
+        r = await call("POST", f"{base}/attachments/{attachment}/adopt", on_status={
+            404: "這局沒有這份稿。", 409: "這份稿已經開成作品了,或上一輪還在跑。", 422: "這份稿收不成作品。"})
+        sessions[r["slug"]] = sid
+        sessions.pop("", None)
+        if "" in picked:
+            picked[r["slug"]] = picked.pop("")
+        current[:] = [r["slug"]]
+        same = "這份稿和既有作品一樣,沿用那篇。" if r["reused"] else ""
+        return (f"已把〈{r['title']}〉開成作品,這局之後就是這篇的對話。{same}"
+                "還沒有分析;作者要分析時用 submit_work 交這份檔,或到網頁按「分析這版」。")
+
+    @server.tool(description=DESC_MANAGE_CHAT)
+    async def manage_chat(action: Literal["clear", "compact", "adopt"], attachment: int | None = None) -> str:
+        return await guarded(_manage(action, attachment))
 
     @server.tool(description=DESC_LIST_CHARACTERS, annotations=_READONLY)
     async def list_characters(work: str | None = None) -> str:
