@@ -15,7 +15,7 @@ type Form = { quote: string; text: string; scope: MemoryScope };
 
 /** 作者的一則發言:選一段或整則記成記憶。內容可改,來源引文固定是原話。 */
 export default function Remember({ slug, session, seq, text, initial, onChange }: {
-  slug: string; session: string; seq: number; text: string; initial: TurnMemory[];
+  slug: string | null; session: string; seq: number; text: string; initial: TurnMemory[];
   onChange: (memories: TurnMemory[]) => void;
 }) {
   const t = useT();
@@ -34,7 +34,7 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
 
   const open = () => {
     const quote = selected ?? text;
-    setForm({ quote, text: quote, scope: "work" });
+    setForm({ quote, text: quote, scope: slug ? "work" : "author" });
     setCode(null);
     clear();
   };
@@ -43,7 +43,7 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
     if (!form || busy) return;
     setBusy(true);
     try {
-      const m = await api.remember({ scope: form.scope, text: form.text, slug, session, seq, quote: form.quote });
+      const m = await api.remember({ scope: form.scope, text: form.text, ...(slug ? { slug } : {}), session, seq, quote: form.quote });
       show([...latest.current, { id: m.id, scope: form.scope }]);
       setForm(null); setCode(null);
     } catch (e) { fail(e); } finally { setBusy(false); }
@@ -80,7 +80,7 @@ export default function Remember({ slug, session, seq, text, initial, onChange }
             <textarea aria-label={t("memory.text")} rows={2} maxLength={MAX_CHAT} value={form.text}
               onChange={e => setForm({ ...form, text: e.target.value })} />
             <div className="chat-mem-bar">
-              {LAYERS.map(l => (
+              {LAYERS.filter(l => slug || l.scope !== "work").map(l => (
                 <button key={l.scope} type="button" className="chat-mem-layer" aria-pressed={form.scope === l.scope}
                   onClick={() => setForm({ ...form, scope: l.scope })}>{t(l.label)}</button>
               ))}

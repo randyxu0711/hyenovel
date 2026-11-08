@@ -9,8 +9,8 @@ const MARKS = [
 ] as const;
 const MAX_COMMENT = 500;
 
-export default function Reaction({ slug, session, seq, initial, onChange }: {
-  slug: string; session: string; seq: number; initial: TurnReaction | null;
+export default function Reaction({ session, seq, initial, onChange }: {
+  session: string; seq: number; initial: TurnReaction | null;
   onChange: (reaction: TurnReaction | null) => void;
 }) {
   const t = useT();
@@ -45,8 +45,8 @@ export default function Reaction({ slug, session, seq, initial, onChange }: {
     queue.current = queue.current.then(async () => {
       try {
         await (next
-          ? api.setReaction(slug, session, seq, next.mark, next.comment ?? undefined)
-          : api.clearReaction(slug, session, seq));
+          ? api.setReaction(session, seq, next.mark, next.comment ?? undefined)
+          : api.clearReaction(session, seq));
         confirmed.current = next;
       } catch (e) {
         if (mine !== latest.current) return;

@@ -68,7 +68,7 @@ export type SessionRow = {
   /** 這局發言當下的原文版本範圍 [lo, hi] */
   versions?: [number, number] | null;
 };
-export type RecentSession = Omit<SessionRow, "version"> & { slug: string; title: string };
+export type RecentSession = Omit<SessionRow, "version"> & { slug: string | null; title: string | null };
 export type ReactionMark = "stopped" | "misread";
 export type TurnReaction = { mark: ReactionMark; comment: string | null };
 export type MemoryScope = "author" | "work";
@@ -86,18 +86,26 @@ export type Turn = {
   reaction?: TurnReaction | null;
   memories?: TurnMemory[];
   role: string; text: string; ts: number; character: string | null; quotes: string[]; spans: Span[];
-  /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有 */
-  v?: number;
+  /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有;沒作品的局是 null */
+  v?: number | null;
 };
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {
   role: "assistant"; text: string; session_id: string; seq: number; character: string; spans: Span[];
-  /** 這輪存下當時的最新版(問與答都算這一版) */
-  v?: number;
+  /** 這輪存下當時的最新版(問與答都算這一版);沒作品的局是 null */
+  v?: number | null;
+  /** 這輪帶的附件存成第幾份 */
+  attachment?: number | null;
 };
+export type Attachment = { n: number; seq: number; name: string; chars: number; adopted: boolean };
+export type AttachIn = { name: string; text: string };
+export type Adopted = { slug: string; title: string | null; version: number; reused: boolean };
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
-export type SessionDetail = { session: string; slug: string; title: string; turns: Turn[]; legacy: boolean; version: number };
+export type SessionDetail = {
+  session: string; slug: string | null; title: string | null; turns: Turn[]; legacy: boolean; version: number | null;
+  attachments: Attachment[];
+};
 export type WorkMap = {
   version: number; analysis_version: number | null; notes_version: number | null;
   beats: { id: string; label: string; intensity: number | null; span: Span | null }[];
@@ -141,8 +149,9 @@ async function* stream(url: string, init?: RequestInit): AsyncGenerator<SSEEvent
   }
 }
 
-const reactionUrl = (slug: string, session: string, seq: number) =>
-  `/api/works/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(session)}/turns/${seq}/reaction`;
+const BLANK_TURN: Pick<Turn, "character" | "quotes" | "spans" | "text"> = { character: null, quotes: [], spans: [], text: "" };
+const sessionUrl = (session: string) => `/api/sessions/${encodeURIComponent(session)}`;
+const reactionUrl = (session: string, seq: number) => `${sessionUrl(session)}/turns/${seq}/reaction`;
 const vq = (v?: number) => (v === undefined ? "" : `?v=${v}`);
 
 export const api = {
@@ -152,7 +161,10 @@ export const api = {
   sessions: async (slug: string, opts: { legacy?: boolean } = {}) =>
     (await request<{ sessions: SessionRow[] }>(
       `/api/works/${encodeURIComponent(slug)}/sessions${opts.legacy ? "?legacy=1" : ""}`)).sessions,
-  session: (session: string, v?: number) => request<SessionDetail>(`/api/sessions/${encodeURIComponent(session)}${vq(v)}`),
+  session: async (session: string, v?: number) => {
+    const d = await request<SessionDetail>(`${sessionUrl(session)}${vq(v)}`);
+    return { ...d, attachments: d.attachments ?? [], turns: (d.turns ?? []).map(x => ({ ...BLANK_TURN, ...x })) };
+  },
   recentSessions: async (limit = 20, opts: { legacy?: boolean } = {}) =>
     (await request<{ sessions: RecentSession[] }>(`/api/sessions?limit=${limit}${opts.legacy ? "&legacy=1" : ""}`)).sessions,
   characters: () => request<{ characters: Character[]; default: string }>("/api/characters"),
@@ -190,20 +202,25 @@ export const api = {
   jobEvents: (jobId: number) => stream(`/api/jobs/${jobId}/events`),
   job: (id: number) => request<{ id: number; state: string; step: string | null; created_at: number }>(`/api/jobs/${id}`),
   cancelJob: (id: number) => request<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" }),
-  setReaction: (slug: string, session: string, seq: number, mark: ReactionMark, comment?: string) =>
-    request<TurnReaction>(reactionUrl(slug, session, seq), {
+  setReaction: (session: string, seq: number, mark: ReactionMark, comment?: string) =>
+    request<TurnReaction>(reactionUrl(session, seq), {
       ...post({ mark, comment }), method: "PUT",
     }),
-  clearReaction: (slug: string, session: string, seq: number) =>
-    request<void>(reactionUrl(slug, session, seq), { method: "DELETE" }),
+  clearReaction: (session: string, seq: number) =>
+    request<void>(reactionUrl(session, seq), { method: "DELETE" }),
+  clearSession: (session: string) => request<{ seq: number }>(`${sessionUrl(session)}/clear`, { method: "POST" }),
+  compactSession: (session: string) => request<{ seq: number; text: string }>(`${sessionUrl(session)}/compact`, { method: "POST" }),
+  adoptAttachment: (session: string, n: number) =>
+    request<Adopted>(`${sessionUrl(session)}/attachments/${n}/adopt`, { method: "POST" }),
   memories: () => request<MemoryList>("/api/memory"),
   remember: (body: RememberBody) => request<Memory>("/api/memory", post(body)),
   editMemory: (id: number, text: string) => request<Memory>(`/api/memory/${id}`, { ...post({ text }), method: "PATCH" }),
   archiveMemory: (id: number) => request<void>(`/api/memory/${id}/archive`, { method: "POST" }),
   revertMemory: (id: number) => request<Memory>(`/api/memory/${id}/revert`, { method: "POST" }),
-  /** session 為 null = 開新局(局 id 在 done 事件裡回)。 */
-  talk: (slug: string, body: { session: string | null; message: string; character: string; quotes: string[] }) =>
-    stream(`/api/discuss/${encodeURIComponent(slug)}`, post({
+  /** session 為 null = 開新局(局 id 在 done 事件裡回);slug 為 null = 不帶作品的局。 */
+  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn }) =>
+    stream(slug === null ? "/api/discuss" : `/api/discuss/${encodeURIComponent(slug)}`, post({
       session_id: body.session, message: body.message, character: body.character, quotes: body.quotes,
+      ...(body.attach ? { attach: body.attach } : {}),
     })),
 };

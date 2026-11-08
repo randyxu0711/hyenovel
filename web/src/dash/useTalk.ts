@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, DashError, type SessionRow, type Turn, type TurnMemory, type TurnReaction, type TalkMessage } from "./api";
+import { api, DashError, type Adopted, type AttachIn, type Attachment, type SessionRow, type Turn, type TurnMemory, type TurnReaction, type TalkMessage } from "./api";
 import { cpLength } from "./cp";
 import { liveQuotes } from "./liveQuotes";
 import { DRAW_MS, markId, type Mark } from "./Paper";
@@ -44,6 +44,10 @@ export const MAX_CHAT = 8000;
 export const userSeq = (message: string, replySeq: number): number | undefined => (message ? replySeq - 1 : undefined);
 
 export type Pending = { text: string; quotes: string[] };
+
+/** 能丟進對話的稿:只收 .md / .txt(與 submit_work 同規則)。 */
+export const attachable = (f: File) => /\.(md|txt)$/i.test(f.name);
+const stem = (name: string) => name.replace(/\.(md|txt)$/i, "");
 const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "unknown"));
 
@@ -67,6 +71,10 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const [session, setSession] = useState<string | null>(null);
   const [legacy, setLegacy] = useState(false);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [bound, setBound] = useState<string | null>(slug);   // 這局綁的作品(沒作品的局 = null)
+  const [staged, setStaged] = useState<AttachIn | null>(null);   // 作者打了一半字時丟的稿:隨下一輪送出
+  const [working, setWorking] = useState(false);   // clear / compact / 開成作品進行中
   const [streaming, setStreaming] = useState<string | null>(null);   // null = 沒在串流
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<DashError | null>(null);
@@ -124,6 +132,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     api.session(id, v).then(d => {
       if (epoch.current !== mine) return;
       setTurns(d.turns); setSession(d.session); setLegacy(d.legacy); setSpansV(v);
+      setAttachments(d.attachments); setBound(d.slug);
     }, e => { if (epoch.current === mine) setError(asError(e)); });
   }, [stopDrawing]);
 
@@ -142,7 +151,11 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     stopDrawing();
     setPicked(null);
     setTurns([]); setSession(null); setLegacy(false); setSessions([]); setStreaming(null); setPending(null); setError(null);
-    if (!slug) return;
+    setAttachments([]); setBound(slug); setStaged(null);
+    if (!slug) {
+      if (now.current.wanted) { touched.current = true; load(now.current.wanted); }
+      return;
+    }
     refreshSessions(slug, rows => {
       if (touched.current || !rows.length) return;
       touched.current = true;
@@ -172,15 +185,17 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     stopDrawing();
     setPicked(null);
     setTurns([]); setSession(null); setLegacy(false); setError(null); setSpansV(now.current.version);
+    setAttachments([]); setBound(now.current.slug); setStaged(null);
   }, [stopDrawing]);
 
   /** 回傳這一輪有沒有成功存下(呼叫端據此清掉帶著的引文)。 */
-  const send = useCallback(async (message: string, quotes: string[]): Promise<boolean> => {
-    if (!slug || streaming !== null || legacy) return false;
+  const send = useCallback(async (message: string, quotes: string[], dropped: AttachIn | null = null): Promise<boolean> => {
+    if (streaming !== null || legacy || working) return false;
+    const carried = dropped ?? staged ?? undefined;
     touched.current = true;
     const mine = ++epoch.current;
     const live = () => epoch.current === mine;
-    setError(null); setStreaming(""); setPending({ text: message, quotes });
+    setError(null); setStreaming(""); setPending(message ? { text: message, quotes } : null);
     let acc = "", got = false, ok = false;
     const who = chars.byId(whoId).id;
     // 看舊版時 source 是 null:串流中不畫(位置對不上這張稿)
@@ -189,7 +204,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     const shown = new Set(marksFrom(now.current.turns, chars).map(m => m.id));   // 已在稿上的不重畫
     const fail = (e: DashError) => { if (live()) { setError(e); setDraft(d => d || message); } };
     try {
-      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes })) {
+      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried })) {
         if (!live()) return false;
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") {
@@ -213,9 +228,14 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           setSession(d.session_id);
           if (d.session_id !== session) now.current.onSession?.(d.session_id);
           setTurns(t => [...t,
-            { seq: userSeq(message, d.seq), role: "user", text: message, ts, character: null, quotes, spans: [], v: d.v },
+            ...(message ? [{ seq: userSeq(message, d.seq), role: "user", text: message, ts, character: null, quotes, spans: [], v: d.v }] : []),
             { seq: d.seq, role: "assistant", text: d.text, ts, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
-          markSeen(slug);
+          if (carried && d.attachment != null) {
+            const n = d.attachment;
+            setAttachments(as => [...as, { n, seq: userSeq(message, d.seq) ?? d.seq, name: carried.name, chars: cpLength(carried.text.trim()), adopted: false }]);
+            setStaged(null);
+          }
+          if (slug) markSeen(slug);
           ok = true;
           // 串流中的痕跡交給逐字稿;spans 裡先前沒找到的(如只差標點)此時補畫
           setLiveMarks([]);
@@ -245,11 +265,40 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     if (live()) {
       setStreaming(null); setPending(null);
       if (!ok) setLiveMarks([]);   // 這輪沒存下:串流中畫的痕跡不留
-      if (ok) refreshSessions(slug);
+      if (ok && slug) refreshSessions(slug);
     }
     return ok;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, session, whoId, streaming, legacy, setDraft, refreshSessions, chars, draw]);
+  }, [slug, session, whoId, streaming, legacy, working, staged, setDraft, refreshSessions, chars, draw]);
+
+  /** 純聊天的局丟稿:沒打字就直接送一輪(讀伴先回),打了一半就等下一輪一起送。 */
+  const attach = useCallback(async (file: File): Promise<boolean> => {
+    if (bound !== null || !attachable(file)) return false;
+    const dropped = { name: stem(file.name), text: await file.text() };
+    if (now.current.draft.trim()) { setStaged(dropped); return true; }
+    return send("", [], dropped);
+  }, [bound, send]);
+
+  const act = async <T,>(run: (id: string) => Promise<T>): Promise<T | null> => {
+    if (!session || streaming !== null || working) return null;
+    setWorking(true); setError(null);
+    try { return await run(session); } catch (e) { setError(asError(e)); return null; } finally { setWorking(false); }
+  };
+  const mark = (turn: Turn) => setTurns(ts => [...ts, turn]);
+  const clear = () => act(async id => {
+    const r = await api.clearSession(id);
+    mark({ seq: r.seq, role: "clear", text: "", ts: Date.now() / 1000, character: null, quotes: [], spans: [] });
+  });
+  const compact = () => act(async id => {
+    const r = await api.compactSession(id);
+    mark({ seq: r.seq, role: "compact", text: r.text, ts: Date.now() / 1000, character: null, quotes: [], spans: [] });
+  });
+  const adopt = (n: number): Promise<Adopted | null> => act(async id => {
+    const r = await api.adoptAttachment(id, n);
+    setBound(r.slug);
+    setAttachments(as => as.map(a => (a.n === n ? { ...a, adopted: true } : a)));
+    return r;
+  });
 
   const markTurn = useCallback((forSession: string, seq: number, reaction: TurnReaction | null) => {
     if (forSession !== shownSession.current) return;
@@ -264,6 +313,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   return {
     markTurn, markMemories, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
+    attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, clear, compact, adopt,
   };
 }
 

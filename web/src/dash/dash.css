@@ -78,6 +78,20 @@
   text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
 .dash .chat-ver{display:flex; align-items:center; justify-content:center; gap:4px; margin:2px 0 4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-ver .ico{width:14px; height:14px}
+.dash .chat-tools{display:flex; justify-content:flex-end; gap:2px; padding:6px 16px 0}
+.dash .chat-cut{border-top:1px dashed var(--dash-line); height:0; margin:4px 0}
+.dash .chat-cut.is-compact{height:auto; display:flex; flex-direction:column; align-items:center}
+.dash .chat-cut.is-compact > summary{list-style:none; cursor:pointer; margin-top:-10px; padding:0 6px; background:var(--dash-desk); color:var(--dash-ink-2)}
+.dash .chat-cut.is-compact > summary::-webkit-details-marker{display:none}
+.dash .chat-cut.is-compact > summary .ico{width:14px; height:14px}
+.dash .chat-cut.is-compact > p{margin:6px 0 0; white-space:pre-wrap; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .chat-att{display:flex; align-items:center; gap:6px; box-sizing:border-box; padding:8px 12px; border:1px solid var(--dash-line); border-radius:6px;
+  background:var(--dash-desk-2); box-shadow:var(--dash-sh-raise); font-size:var(--dash-t-sm)}
+.dash .chat-att > span{color:var(--dash-ink-2)}
+.dash .chat-att .ico{width:14px; height:14px}
+.dash .chat-att-adopt{margin-left:auto; display:inline-flex; align-items:center; gap:4px; padding:3px 8px; cursor:pointer; border:1px solid var(--dash-line);
+  border-radius:6px; background:transparent; color:var(--dash-ink); font-size:var(--dash-t-xs)}
+.dash .chat-log > .chat-att{width:auto; max-width:min(30em, 85%); margin-right:max(0px, calc((100% - 36em) / 2)); align-self:flex-end}
 .dash .chat-turn{border-radius:8px; font-family:var(--serif)}
 .dash .chat-text .dash-iq{text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
 .dash .chat-turn.is-flash{animation:dash-flash 1.4s ease-out forwards}

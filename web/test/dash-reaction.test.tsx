@@ -6,7 +6,7 @@ import Reaction from "../src/dash/Reaction";
 
 const STOP = "讓我停下來想", MISREAD = "讀錯了";
 const mount = (initial: { mark: "stopped" | "misread"; comment: string | null } | null = null) => {
-  const r = render(<Reaction slug="s" session="sid" seq={3} initial={initial} onChange={changed} />);
+  const r = render(<Reaction session="sid" seq={3} initial={initial} onChange={changed} />);
   fireEvent.click(screen.getByRole("button", { expanded: false }));
   return r;
 };
@@ -30,10 +30,10 @@ describe("Reaction", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: STOP }));
     expect(pressed(STOP)).toBe("true");
-    await waitFor(() => expect(set).toHaveBeenCalledWith("s", "sid", 3, "stopped", undefined));
+    await waitFor(() => expect(set).toHaveBeenCalledWith("sid", 3, "stopped", undefined));
     fireEvent.click(screen.getByRole("button", { name: STOP }));
     expect(pressed(STOP)).toBe("false");
-    await waitFor(() => expect(clear).toHaveBeenCalledWith("s", "sid", 3));
+    await waitFor(() => expect(clear).toHaveBeenCalledWith("sid", 3));
     expect(changed.mock.calls.map(c => c[0]?.mark ?? null)).toEqual(["stopped", null]);
   });
 
@@ -42,7 +42,7 @@ describe("Reaction", () => {
     fireEvent.click(screen.getByRole("button", { name: MISREAD }));
     expect(pressed(STOP)).toBe("false");
     expect(pressed(MISREAD)).toBe("true");
-    await waitFor(() => expect(set).toHaveBeenCalledWith("s", "sid", 3, "misread", undefined));
+    await waitFor(() => expect(set).toHaveBeenCalledWith("sid", 3, "misread", undefined));
     expect((screen.getByRole("textbox", { name: "補一句" }) as HTMLInputElement).value).toBe("");
   });
 
@@ -59,7 +59,7 @@ describe("Reaction", () => {
     await flush();
     expect(set).not.toHaveBeenCalled();
     fireEvent.keyDown(box, { key: "Enter" });
-    await waitFor(() => expect(set).toHaveBeenCalledWith("s", "sid", 3, "misread", "不是這樣"));
+    await waitFor(() => expect(set).toHaveBeenCalledWith("sid", 3, "misread", "不是這樣"));
   });
 
   it("失焦送出;內容沒變不重送", async () => {
@@ -112,7 +112,7 @@ describe("Reaction", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: STOP }));
     fireEvent.click(screen.getByRole("button", { name: MISREAD }));
-    await waitFor(() => expect(set).toHaveBeenLastCalledWith("s", "sid", 3, "misread", undefined));
+    await waitFor(() => expect(set).toHaveBeenLastCalledWith("sid", 3, "misread", undefined));
     expect(pressed(MISREAD)).toBe("true");
     expect(screen.queryByRole("alert")).toBeNull();
   });
@@ -120,7 +120,7 @@ describe("Reaction", () => {
 
 describe("Reaction 標記鈕", () => {
   const bare = (initial: { mark: "stopped" | "misread"; comment: string | null } | null = null) =>
-    render(<Reaction slug="s" session="sid" seq={3} initial={initial} onChange={changed} />);
+    render(<Reaction session="sid" seq={3} initial={initial} onChange={changed} />);
 
   it("沒標過:只有一顆「標記這則」,選項收著", () => {
     bare();
@@ -160,7 +160,7 @@ describe("Reaction 標記鈕", () => {
     box.focus();
     fireEvent.change(box, { target: { value: "不是這樣" } });
     fireEvent.mouseDown(document.body);
-    await waitFor(() => expect(set).toHaveBeenCalledWith("s", "sid", 3, "misread", "不是這樣"));
+    await waitFor(() => expect(set).toHaveBeenCalledWith("sid", 3, "misread", "不是這樣"));
     expect(screen.queryByRole("textbox", { name: "補一句" })).toBeNull();
   });
 });
@@ -170,8 +170,8 @@ describe("api", () => {
     vi.restoreAllMocks();
     const f = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", f);
-    await expect(api.clearReaction("s", "a b", 3)).resolves.toBeUndefined();
-    expect(f.mock.calls[0]).toEqual(["/api/works/s/sessions/a%20b/turns/3/reaction", { method: "DELETE" }]);
+    await expect(api.clearReaction("a b", 3)).resolves.toBeUndefined();
+    expect(f.mock.calls[0]).toEqual(["/api/sessions/a%20b/turns/3/reaction", { method: "DELETE" }]);
     vi.unstubAllGlobals();
   });
 });
