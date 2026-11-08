@@ -144,6 +144,45 @@ def _free_lock(state, session: str, where: str) -> asyncio.Lock:
     return lock
 
 
+@router.get("/archived-sessions")
+async def archived_sessions(request: Request):
+    rows = repo.archived_discussions(request.app.state.mgr.conn)
+    for r in rows:
+        r["session"] = r.pop("external_id")
+    return {"sessions": rows}
+
+
+@router.post("/sessions/{session}/archive", status_code=204)
+async def archive_session(session: str, request: Request):
+    conn = request.app.state.mgr.conn
+    d = _session_or_404(conn, session, "archive")
+    _free_lock(request.app.state, session, "archive")
+    with conn:
+        repo.archive_discussion(conn, d["id"], time.time())
+
+
+@router.post("/sessions/{session}/unarchive", status_code=204)
+async def unarchive_session(session: str, request: Request):
+    conn = request.app.state.mgr.conn
+    d = _session_or_404(conn, session, "unarchive")
+    with conn:
+        repo.unarchive_discussion(conn, d["id"])
+
+
+@router.delete("/sessions/{session}", status_code=204)
+async def delete_session(session: str, request: Request):
+    conn = request.app.state.mgr.conn
+    d = _session_or_404(conn, session, "delete-session")
+    if d["archived_at"] is None:
+        log.info("event=reject where=delete-session reason=not-archived")
+        raise ApiError(409, "not-archived", "要先封存才能永久刪除")
+    _free_lock(request.app.state, session, "delete-session")
+    with conn:
+        repo.delete_discussion(conn, d["id"])
+    request.app.state.chat_locks.pop(session, None)
+    log.info("event=delete-session")
+
+
 @router.post("/sessions/{session}/clear", status_code=201)
 async def clear_session(session: str, request: Request):
     conn = request.app.state.mgr.conn

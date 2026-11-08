@@ -218,7 +218,7 @@ describe("設定頁", () => {
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && i?.method === "PUT" && i.body === JSON.stringify({ character: "buffalo" }))).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
+    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
     await waitFor(() => expect(document.querySelector(".home form.composer svg.fig")!.getAttribute("data-who")).toBe("buffalo"));
   });
 
@@ -251,6 +251,35 @@ describe("設定頁", () => {
     expect(p.queryByRole("textbox")).toBeNull();
     fireEvent.click(p.getByRole("button", { name: "回清單" }));
     expect(p.getByText("預覽old2")).toBeTruthy();
+  });
+
+  it("封存的局:列在舊討論頁上方,可拉回;永久刪除要再確認一次", async () => {
+    const f = mount();
+    const base = f.getMockImplementation()!;
+    const sent: string[] = [];
+    f.mockImplementation(async (u: string, init?: RequestInit) => {
+      if (u === "/api/archived-sessions") return json({ sessions: [
+        { session: "a1", slug: "d1", title: "舊的", preview: "封存一", last_at: 2, archived_at: 3 },
+        { session: "a2", slug: null, title: null, preview: "封存二", last_at: 2, archived_at: 3 }] });
+      if (init?.method === "POST" || init?.method === "DELETE") { sent.push(`${init.method} ${u}`); return new Response(null, { status: 204 }); }
+      return (base as (u: string, i?: RequestInit) => Promise<Response>)(u, init);
+    });
+    const p = await page();
+    await go("舊討論");
+    const box = within(await p.findByRole("region", { name: "封存的局" }));
+    expect(box.getByText("封存一")).toBeTruthy();
+    expect(p.getByText("改版前的討論")).toBeTruthy();
+    fireEvent.click(box.getAllByRole("button", { name: "拉回" })[0]);
+    await waitFor(() => expect(box.queryByText("封存一")).toBeNull());
+    fireEvent.click(box.getByRole("button", { name: "永久刪除" }));
+    expect(sent).toEqual(["POST /api/sessions/a1/unarchive"]);
+    expect(box.getByText(/確定永久刪除/)).toBeTruthy();
+    fireEvent.click(box.getByRole("button", { name: "取消" }));
+    expect(box.getByText("封存二")).toBeTruthy();
+    fireEvent.click(box.getByRole("button", { name: "永久刪除" }));
+    fireEvent.click(within(box.getByRole("group", { name: "永久刪除" })).getByRole("button", { name: "永久刪除" }));
+    await waitFor(() => expect(p.queryByRole("region", { name: "封存的局" })).toBeNull());
+    expect(sent).toEqual(["POST /api/sessions/a1/unarchive", "DELETE /api/sessions/a2"]);
   });
 
   it("舊討論依作品分組,預覽去掉 markdown 記號", async () => {

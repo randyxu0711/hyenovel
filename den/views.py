@@ -169,7 +169,7 @@ def sessions(conn, slug: str, legacy: bool = False) -> list[dict]:
     st = _story(conn, slug)
     versions = repo.analysis_versions(conn, st["id"])
     by: dict[str, list[dict]] = {}
-    for u in repo.discussions_with_utterances(conn, st["id"]):
+    for u in repo.discussions_with_utterances(conn, st["id"], archived=False):
         by.setdefault(u["external_id"], []).append(u)
     made = [sv["created_at"] for sv in repo.source_versions(conn, st["id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     out = []

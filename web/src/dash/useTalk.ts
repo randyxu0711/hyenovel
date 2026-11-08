@@ -300,6 +300,15 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     return r;
   });
 
+  const archive = async (id: string): Promise<boolean> => {
+    if (streaming !== null || working) return false;
+    setError(null);
+    try { await api.archiveSession(id); } catch (e) { setError(asError(e)); return false; }
+    setSessions(rs => rs.filter(r => r.session !== id));
+    if (id === session) fresh();
+    return true;
+  };
+
   const markTurn = useCallback((forSession: string, seq: number, reaction: TurnReaction | null) => {
     if (forSession !== shownSession.current) return;
     setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, reaction } : x)));
@@ -313,7 +322,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   return {
     markTurn, markMemories, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
-    attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, clear, compact, adopt,
+    attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, clear, compact, adopt, archive,
   };
 }
 

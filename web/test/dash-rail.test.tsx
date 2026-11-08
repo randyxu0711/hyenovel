@@ -63,12 +63,14 @@ describe("Rail(展開)", () => {
       talk={talk} view={o.view ?? "home"} {...p} /></MemoryRouter>);
     return { ...p, ...r, talk };
   };
-  it("頂列:收合、交一篇新稿;底:晝夜、設定;沒有「交一篇新的」文字鈕", () => {
-    const { onToggle, onNew } = mount();
+  it("頂列:收合;開一局聊天只有聊天組那顆 +;底:晝夜、設定", () => {
+    const { onToggle, onNew, onChat } = mount();
     fireEvent.click(screen.getByRole("button", { name: "收合書架" }));
     expect(onToggle).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
-    expect(onNew).toHaveBeenCalled();
+    expect(screen.getAllByRole("button", { name: "開一局聊天" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    expect(onChat).toHaveBeenCalledWith(null);
+    expect(onNew).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "切換晝夜" })).toBeTruthy();
     expect(screen.queryByText("交一篇新的")).toBeNull();
@@ -178,10 +180,10 @@ describe("Rail(窄條)", () => {
       talk={talk} view="work" {...p} /></MemoryRouter>);
     return { ...p, ...r, talk };
   };
-  it("由上而下:展開、交一篇新稿、找作品、目前這篇、晝夜、設定;不列作品標題", () => {
+  it("由上而下:展開、開一局聊天、找作品、目前這篇、晝夜、設定;不列作品標題", () => {
     mount({ current: "d1" });
     const names = screen.getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["展開書架", "交一篇新稿", "找作品", "海", "切換晝夜", "設定"]);
+    expect(names).toEqual(["展開書架", "開一局聊天", "找作品", "海", "切換晝夜", "設定"]);
     for (const t of ["山", "湖"]) expect(screen.queryByText(t)).toBeNull();
   });
   it("目前這篇顯示標題第一個字;沒有 current 就沒有這顆", () => {

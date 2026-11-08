@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Attachment, Turn } from "./api";
 import type { Character } from "./api";
@@ -43,6 +43,14 @@ export function speakerChanges(turns: Turn[], byId: (id: string | null) => Chara
 
 export const REACT_MS = 1800;
 
+export type SlashCommand = { name: string; label: string; run: () => unknown };
+
+export function slashCommands(draft: string, all: SlashCommand[]): SlashCommand[] {
+  const m = /^\/(\S*)$/.exec(draft.trim());
+  if (!m) return [];
+  return all.filter(c => c.name.startsWith(m[1].toLowerCase()));
+}
+
 export function composerState(o: { streaming: string | null; analyzing: boolean; reacting: boolean; typing: boolean }): FigureState {
   if (o.streaming !== null) return o.streaming ? "speaking" : "thinking";
   if (o.reacting) return "reacting";
@@ -66,11 +74,19 @@ export function useReaction(analyzing: boolean): boolean {
 
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
  *  稿上的痕跡被點時,捲到說那句的訊息並閃一下(onReveal 讓右欄切回對話)。 */
-export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal }: {
+export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, onFile, above, inputRef, placeholder, whoSize = 72 }: {
   talk: TalkState; quotes: string[]; analyzing: boolean;
   /** 正在看的版本號(引文對不到時的說明用)。 */
   version: number;
   onDropQuote: (i: number) => void; onSent: () => void; onReveal: () => void;
+  /** 進門用:超過門檻的文字(貼上或按 Enter)交給它,不當聊天送出。 */
+  longText?: { min: number; take: (text: string) => void };
+  /** 進門用:拖進來的檔交給它,不當附件。 */
+  onFile?: (f: File) => void;
+  above?: ReactNode;
+  inputRef?: RefObject<HTMLTextAreaElement>;
+  placeholder?: string;
+  whoSize?: number;
 }) {
   const t = useT();
   const lang = useLang();
@@ -118,21 +134,57 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     log.current?.querySelector(`[data-turn="${flash.i}"]`)?.scrollIntoView?.({ block: "center", behavior: still ? "auto" : "smooth" });
   }, [flash]);
 
+  const live = turns.some(x => x.role === "user" || x.role === "assistant");
+  const idle = !session || streaming !== null || working;
+  const commands = slashCommands(draft, [
+    { name: "clear", label: t("talk.clear"), run: talk.clear },
+    { name: "compact", label: t("talk.compactCost"), run: talk.compact },
+  ]);
+  const [pick, setPick] = useState(0);
+  const chosen = commands[Math.min(pick, commands.length - 1)];
+  const runCommand = (c: SlashCommand) => {
+    if (idle || !live) return;
+    setDraft("");
+    setPick(0);
+    void c.run();
+  };
+
   const submit = async () => {
     const text = draft.trim();
     if (!text || streaming !== null || legacy) return;
+    if (chosen) { runCommand(chosen); return; }
+    if (longText && text.length > longText.min) { longText.take(text); setDraft(""); return; }
     if (await talk.send(text, quotes)) onSent();
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(); }
+    if (e.nativeEvent.isComposing) return;
+    if (commands.length > 0) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        setPick(i => (Math.min(i, commands.length - 1) + step + commands.length) % commands.length);
+        return;
+      }
+      if (e.key === "Tab") { e.preventDefault(); setDraft(`/${chosen.name}`); return; }
+      if (e.key === "Escape") { e.preventDefault(); setDraft(""); return; }
+    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(); }
   };
 
   const adopt = async (n: number) => {
     const r = await talk.adopt(n);
     if (r && session) navigate(`/w/${encodeURIComponent(r.slug)}?s=${encodeURIComponent(session)}`);
   };
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    if (longText && pasted.trim().length > longText.min) { e.preventDefault(); longText.take(pasted); }
+  };
   const drop = (files: FileList | null) => { const f = files?.[0]; if (f) void talk.attach(f); };
-  const onDrop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); drop(e.dataTransfer.files); };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const f = e.dataTransfer.files[0];
+    if (f && onFile) onFile(f); else drop(e.dataTransfer.files);
+  };
   const bySeq = new Map<number, Attachment[]>();
   for (const a of attachments) bySeq.set(a.seq, [...(bySeq.get(a.seq) ?? []), a]);
   const card = (a: Attachment) => (
@@ -154,13 +206,13 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const breaks = versionBreaks(turns);
   const who = speakerChanges(turns, chars.byId);
   const whoLine = (c: Character) => (
-    <p className="chat-who"><Figure character={c} size={22} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
+    <p className="chat-who"><Figure character={c} size={36} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
   );
   let lastId: string | null = null;
   const rows = turns.map((turn: Turn, i) => {
     const brk = breaks.has(i) && <div key={`v${i}`} className="chat-ver"><Icon name="sheet2" /><span>{t("talk.versionBreak", { n: turn.v! })}</span></div>;
     if (turn.role === "clear") {
-      return [<div key={i} className="chat-cut" role="separator" title={t("talk.cleared")} aria-label={t("talk.cleared")} />];
+      return [<div key={i} className="chat-cut" role="separator" title={t("talk.cleared")} aria-label={t("talk.cleared")}><Icon name="wipe" /></div>];
     }
     if (turn.role === "compact") {
       return [
@@ -197,10 +249,8 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     ];
   });
 
-  const live = turns.some(x => x.role === "user" || x.role === "assistant");
-  const idle = !session || streaming !== null || working;
   return (
-    <div className="chat" onDragOver={free ? e => e.preventDefault() : undefined} onDrop={free ? onDrop : undefined}>
+    <div className="chat" onDragOver={free || onFile ? e => e.preventDefault() : undefined} onDrop={free || onFile ? onDrop : undefined}>
       {session && (
         <div className="chat-tools">
           <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.clear")} title={t("talk.clear")}
@@ -245,11 +295,23 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
           ))}
         </div>
       )}
+      {above}
       <form className="composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
-        <WhoPick me={me} onPick={talk.setWho} size={54} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} />
-        <textarea value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
-          placeholder={t("talk.placeholder", { name: nameOf(whoId) })}
-          onChange={e => setDraft(e.target.value)} onKeyDown={onKey} />
+        {commands.length > 0 && (
+          <ul className="slash-menu" role="listbox" aria-label={t("talk.commands")}>
+            {commands.map(c => (
+              <li key={c.name} role="option" aria-selected={c === chosen} aria-disabled={idle || !live}>
+                <button type="button" disabled={idle || !live} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c)}>
+                  <b>/{c.name}</b><span>{c.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <WhoPick me={me} onPick={talk.setWho} size={whoSize} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} />
+        <textarea ref={inputRef} value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
+          placeholder={placeholder ?? t("talk.placeholder", { name: nameOf(whoId) })}
+          onChange={e => { setDraft(e.target.value); setPick(0); }} onKeyDown={onKey} onPaste={onPaste} />
         <div className="bar">
           {free && (
             <>

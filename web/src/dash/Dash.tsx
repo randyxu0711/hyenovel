@@ -79,9 +79,9 @@ function Shell({ chars }: { chars: Characters }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, routeSession]);
   useEffect(() => {
-    if (view === "home" && talk.bound && talk.session)
+    if (view === "home" && talk.bound && talk.session && talk.session === (routeSession ?? null))
       nav(`/w/${encodeURIComponent(talk.bound)}?s=${encodeURIComponent(talk.session)}`, { replace: true });
-  }, [view, talk.bound, talk.session, nav]);
+  }, [view, talk.bound, talk.session, routeSession, nav]);
   const me = chars.byId(talk.whoId);
   const { markSeen } = useSeen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,7 +177,7 @@ function Shell({ chars }: { chars: Characters }) {
         </div>
       )}
       <Rail mode={shelf.mode} onToggle={shelf.toggle} works={works} current={slug} talk={talk} view={view}
-        onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => nav(id ? `/c/${encodeURIComponent(id)}` : "/")}
+        onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => { if (id) nav(`/c/${encodeURIComponent(id)}`); else goHome(); }}
         settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}

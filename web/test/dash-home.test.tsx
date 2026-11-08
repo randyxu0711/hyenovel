@@ -56,7 +56,7 @@ function mount(path = "/") {
   );
   render(tree);
 }
-const box = () => screen.findByRole("textbox", { name: "貼上或拖進一篇稿" });
+const box = () => screen.findByRole("textbox", { name: "對話輸入" });
 const confirmBtn = () => screen.queryByRole("button", { name: "分析" });
 
 beforeEach(() => {
@@ -65,61 +65,43 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("進門只有一張紙", () => {
-  it("有作品:紙上只有交稿,沒有 chips、讀完那句、讀伴介紹、送出鈕", async () => {
+describe("進門只有一欄聊天", () => {
+  it("只有一個輸入框、只有一隻讀伴,沒有交稿紙", async () => {
     mount();
     await box();
     await waitFor(() => expect(calls.some(c => c.url === "/api/works")).toBe(true));
-    const paper = document.querySelector(".home form.composer")!;
-    expect(paper).not.toBeNull();
-    const pick = within(paper as HTMLElement).getByRole("button", { name: "交稿" });
-    expect(pick.querySelector("svg.ico")).not.toBeNull();
-    expect(screen.queryByRole("group", { name: "聊哪一篇" })).toBeNull();
-    expect(screen.queryByText(/讀完了/)).toBeNull();
-    expect(screen.queryByRole("list", { name: "讀伴" })).toBeNull();
-    const inner = within(document.querySelector(".home-inner") as HTMLElement);
-    expect(inner.queryByRole("button", { name: "送出" })).toBeNull();
-    expect(inner.queryByRole("button", { name: /^讀伴/ })).toBeNull();
-    expect(document.querySelector(".home-first")).toBeNull();
+    expect(document.querySelectorAll(".home textarea").length).toBe(1);
+    expect(document.querySelectorAll(".home svg.fig").length).toBe(1);
+    expect(document.querySelector(".home-inner")).toBeNull();
     expect(calls.some(c => c.url.endsWith("/sessions"))).toBe(false);
   });
-  it("紙上的角色是預設讀伴", async () => {
+  it("輸入框上的角色是預設讀伴,placeholder 說可以貼稿", async () => {
     serverDefault = "deer";
     mount();
-    await box();
-    expect(document.querySelector(".home form.composer svg.fig")!.getAttribute("data-who")).toBe("deer");
+    const b = await box();
+    await waitFor(() => expect(document.querySelector(".home svg.fig")!.getAttribute("data-who")).toBe("deer"));
+    await waitFor(() => expect(b.getAttribute("placeholder")).toMatch(/貼上一篇稿/));
   });
-  it("打很長的字按 Enter → 交稿確認條;短字按 Enter 什麼都不發生;組字中不觸發", async () => {
+  it("打很長的字按 Enter → 交稿確認條,不送聊天;短字按 Enter 照常聊天;組字中不觸發", async () => {
     mount();
     const b = await box();
-    fireEvent.change(b, { target: { value: "短短五個字" } });
-    fireEvent.keyDown(b, { key: "Enter" });
-    expect(confirmBtn()).toBeNull();
-    expect(screen.getByTestId("loc").textContent).toBe("/");
     fireEvent.change(b, { target: { value: "字".repeat(2001) } });
     fireEvent.keyDown(b, { key: "Enter", isComposing: true });
     expect(confirmBtn()).toBeNull();
     fireEvent.keyDown(b, { key: "Enter" });
     expect(await screen.findByText("2001 字")).toBeTruthy();
     expect(confirmBtn()).not.toBeNull();
+    expect(calls.some(c => c.url === "/api/discuss")).toBe(false);
+    fireEvent.change(b, { target: { value: "短短五個字" } });
+    fireEvent.keyDown(b, { key: "Enter" });
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ message: "短短五個字" }));
   });
-  it("交稿鈕開檔案選擇(只收 .md/.txt),選了檔進確認條", async () => {
-    mount();
-    await box();
-    const input = document.querySelector('.home input[type=file]') as HTMLInputElement;
-    expect(input.accept).toBe(".md,.txt");
-    const click = vi.spyOn(input, "click").mockImplementation(() => {});
-    fireEvent.click(screen.getByRole("button", { name: "交稿" }));
-    expect(click).toHaveBeenCalled();
-    fireEvent.change(input, { target: { files: [new File(["x"], "海.md")] } });
-    expect(await screen.findByText("4 字")).toBeTruthy();
-  });
-  it("交新稿:從作品頁回到 / 並把游標放進紙裡", async () => {
+  it("交新稿:從作品頁回到 / 並把游標放進輸入框", async () => {
     localStorage.setItem("hyenovel.shelf", "open");
     mount();
     fireEvent.click(within(await screen.findByRole("navigation")).getByRole("button", { name: /^海/ }));
     await screen.findByText("內文一行");
-    fireEvent.click(screen.getByRole("button", { name: "交一篇新稿" }));
+    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
     const b = await box();
     await waitFor(() => expect(document.activeElement).toBe(b));
@@ -128,12 +110,7 @@ describe("進門只有一張紙", () => {
 
 describe("沒有作品", () => {
   beforeEach(() => { works = []; });
-  it("紙上方不多一句提示(placeholder 已經說了)", async () => {
-    mount();
-    await box();
-    expect(document.querySelector(".home-first")).toBeNull();
-  });
-  it("拖 .md 檔:原地出現預估與「交稿」確認鈕,確認後打 /api/stories 並導到新作品", async () => {
+  it("拖 .md 檔:輸入框上方出現字數與「分析」確認鈕,確認後打 /api/stories 並導到新作品", async () => {
     mount();
     await box();
     const home = document.querySelector(".home")!;
@@ -141,12 +118,20 @@ describe("沒有作品", () => {
     expect(await screen.findByText("4 字")).toBeTruthy();
     expect(screen.queryByText(/預估/)).toBeNull();
     expect(screen.getByText("會花額度")).toBeTruthy();
+    expect(document.querySelector(".chat-att")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "分析" }));
     await waitFor(() => expect(calls.some(c => c.url === "/api/stories")).toBe(true));
     expect(calls.find(c => c.url === "/api/stories")!.body).toMatchObject({ text: "檔案內容", title: "海" });
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d9"));
   });
-  it("貼上 > 2000 字進交稿確認,不進紙;短文字照常留在紙上", async () => {
+  it("拖到對話區上也是交稿確認,不是附件", async () => {
+    mount();
+    await box();
+    fireEvent.drop(document.querySelector(".home .chat")!, { dataTransfer: { files: [new File(["x"], "海.md")] } });
+    expect(await screen.findByText("4 字")).toBeTruthy();
+    expect(calls.some(c => c.url.includes("/attach"))).toBe(false);
+  });
+  it("貼上 > 2000 字進交稿確認,不進輸入框;短文字照常留在輸入框", async () => {
     mount();
     const b = await box() as HTMLTextAreaElement;
     fireEvent.paste(b, { clipboardData: { getData: () => "短短的" } });
@@ -154,8 +139,9 @@ describe("沒有作品", () => {
     fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(2001) } });
     expect(await screen.findByText("2001 字")).toBeTruthy();
     expect(await screen.findByText("約 5 分")).toBeTruthy();
-    expect(document.querySelector(".home-draft.composer")).not.toBeNull();
+    expect(b.value).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(confirmBtn()).toBeNull());
     expect(await box()).toBeTruthy();
   });
 });
@@ -213,6 +199,43 @@ describe("進門聊天", () => {
     fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
     await waitFor(() => expect(screen.queryByText("c1 的話")).toBeNull());
+  });
+
+  it("chat + on a work page goes to an empty home chat and stays there", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    sessionRows = [{ session: "w1", started_at: 1, last_at: 2, turns: 1, character: "hyena", preview: "進度如何", legacy: false }];
+    chat = { w1: { ...detail("w1"), slug: "d2", title: "海", version: 1 } };
+    mount("/w/d2?s=w1");
+    await screen.findByText("w1 的話");
+    fireEvent.click(within(screen.getByRole("region", { name: "聊天" })).getByRole("button", { name: "開一局聊天" }));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("對話輸入")));
+    await new Promise(r => setTimeout(r, 50));
+    expect(screen.getByTestId("loc").textContent).toBe("/");
+    expect(screen.queryByText("w1 的話")).toBeNull();
+  });
+
+  it("brand goes home from a work page", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    mount("/w/d2");
+    await screen.findByText("內文一行");
+    fireEvent.click(screen.getByRole("link", { name: /Hyenovel/ }));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
+  });
+
+  it("archiving the open chat from the shelf drops the row and starts a fresh chat", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    recent = [free("c1", "聊海")];
+    chat = { c1: detail("c1") };
+    mount("/c/c1");
+    await screen.findByText("c1 的話");
+    const group = within(screen.getByRole("region", { name: "聊天" }));
+    await group.findByText("聊海");
+    fireEvent.click(group.getByRole("button", { name: "封存這局" }));
+    await waitFor(() => expect(group.queryByText("聊海")).toBeNull());
+    expect(calls.some(c => c.url === "/api/sessions/c1/archive")).toBe(true);
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
+    expect(screen.queryByText("c1 的話")).toBeNull();
   });
 
   it("a chat that became a work opens on the work page", async () => {

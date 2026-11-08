@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, type RecentSession, type SessionRow, type Work } from "./api";
 import { toggleDayNight, useThemeState } from "./theme";
 import Icon, { type IconName } from "./Icon";
@@ -37,6 +37,7 @@ function Sessions({ talk, onDone }: { talk: TalkState; onDone?: () => void }) {
             onClick={() => { talk.open(r.session); onDone?.(); }}>
             <Icon name="talk" /><span className="shelf-st">{r.preview}</span><span className="shelf-vr">{span(r.versions)}</span>
           </button>
+          <IB icon="box" label={t("session.archive")} className="ib shelf-x" disabled={busy} onClick={() => void talk.archive(r.session)} />
         </li>
       ))}
       {more > 0 && (
@@ -75,6 +76,8 @@ function Chats({ talk, onChat }: { talk: TalkState; onChat: (id: string | null) 
               <Icon name="talk" /><span className="shelf-st">{r.preview}</span>
               <span className="shelf-vr">{whenLabel(r.last_at, now, lang)}</span>
             </button>
+            <IB icon="box" label={t("session.archive")} className="ib shelf-x" disabled={busy}
+              onClick={() => void talk.archive(r.session).then(ok => { if (ok) setRows(rs => rs.filter(x => x.session !== r.session)); })} />
           </li>
         ))}
       </ul>
@@ -118,8 +121,8 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
     <nav className="dash-rail" aria-label={t("rail.works")} data-shelf={mode} hidden={hidden}>
       <div className="shelf-top">
         <IB icon="panel" label={t(open ? "shelf.collapse" : "shelf.expand")} aria-expanded={open} onClick={onToggle} />
-        {open && <b className="shelf-brand"><Logo />{t("brand")}</b>}
-        <IB icon="new" label={t("shelf.new")} onClick={onNew} />
+        {open && <Link to="/" className="shelf-brand"><Logo />{t("brand")}</Link>}
+        {(!open || settingsNav) && <IB icon="plus" label={t("shelf.newChat")} onClick={onNew} />}
         {!open && (
           <IB icon="find" label={t("shelf.find")} onClick={onFind}>
             {news && <span className="rail-dot rail-news" data-state="fresh" role="img" aria-label={t("rail.fresh")} />}

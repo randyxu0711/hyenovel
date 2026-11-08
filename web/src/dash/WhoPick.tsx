@@ -27,7 +27,7 @@ export default function WhoPick({ me, onPick, size = 22, state }: {
             <button key={c.id} type="button" className="dash-who-item" aria-pressed={c.id === me.id}
               autoFocus={c.id === me.id}
               onClick={() => { onPick(c.id); setOpen(false); toggle.current?.focus(); }}>
-              <Figure character={c} size={22} />{localized(c.name, lang)}
+              <Figure character={c} size={48} /><span className="dash-who-name">{localized(c.name, lang)}</span>
             </button>
           ))}
         </div>

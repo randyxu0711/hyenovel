@@ -227,14 +227,15 @@ def utterances(conn, discussion_id: int) -> list[dict]:
         "SELECT * FROM utterance WHERE discussion_id = ? ORDER BY seq", (discussion_id,))]
 
 
-def discussions_with_utterances(conn, story_id: int) -> list[dict]:
-    """一篇所有討論局的逐字,依 ts, seq 排;一次查完。"""
+def discussions_with_utterances(conn, story_id: int, archived: bool = True) -> list[dict]:
+    """一篇所有討論局的逐字,依 ts, seq 排;一次查完。archived=False 不含封存的局。"""
+    hide = "" if archived else "AND d.archived_at IS NULL "
     return [_row(r) for r in conn.execute(
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
         "u.ts AS ts, u.anchors AS anchors, u.character AS character, "
         "u.quotes AS quotes, u.analysis_fp AS analysis_fp FROM utterance u JOIN discussion d "
         "ON d.id = u.discussion_id WHERE d.story_id = ? AND u.role IN ('user', 'assistant') "
-        "ORDER BY u.ts, u.seq", (story_id,))]
+        + hide + "ORDER BY u.ts, u.seq", (story_id,))]
 
 
 def analysis_versions(conn, story_id: int) -> dict[str, int]:
@@ -266,7 +267,7 @@ def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
             f"{last.format(c='character')} AS character, "
             f"{last.format(c='text')} AS preview "
             "FROM discussion d LEFT JOIN story st ON st.id = d.story_id "
-            "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
+            "WHERE d.archived_at IS NULL AND EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
             f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
             "AND role = 'assistant' AND character IS NOT NULL) "
             "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
@@ -274,6 +275,40 @@ def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
         row["preview"] = (row["preview"] or "")[:60]
         out.append(row)
     return out
+
+
+def archive_discussion(conn, discussion_id: int, now: float) -> None:
+    conn.execute("UPDATE discussion SET archived_at = ? WHERE id = ? AND archived_at IS NULL", (now, discussion_id))
+
+
+def unarchive_discussion(conn, discussion_id: int) -> None:
+    conn.execute("UPDATE discussion SET archived_at = NULL WHERE id = ?", (discussion_id,))
+
+
+def archived_discussions(conn) -> list[dict]:
+    """封存的局,新封存的在上;preview = 第一句話前 60 字。"""
+    out = []
+    for r in conn.execute(
+            "SELECT d.external_id AS external_id, st.slug AS slug, st.title AS title, d.archived_at AS archived_at, "
+            "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
+            "(SELECT text FROM utterance WHERE discussion_id = d.id AND role IN ('user', 'assistant') "
+            "ORDER BY seq LIMIT 1) AS preview "
+            "FROM discussion d LEFT JOIN story st ON st.id = d.story_id "
+            "WHERE d.archived_at IS NOT NULL ORDER BY d.archived_at DESC, d.id DESC"):
+        row = _row(r)
+        row["preview"] = (row["preview"] or "")[:60]
+        out.append(row)
+    return out
+
+
+def delete_discussion(conn, discussion_id: int) -> None:
+    """永久刪掉一局:逐字、附件、回饋記號、收束紀錄;記憶與結論留著,只斷開來源。"""
+    conn.execute("UPDATE memory SET quote = NULL, discussion_id = NULL, seq = NULL WHERE discussion_id = ?",
+                 (discussion_id,))
+    conn.execute("UPDATE conclusion SET discussion_id = NULL WHERE discussion_id = ?", (discussion_id,))
+    for table in ("reaction", "attachment", "settlement", "utterance"):
+        conn.execute(f"DELETE FROM {table} WHERE discussion_id = ?", (discussion_id,))
+    conn.execute("DELETE FROM discussion WHERE id = ?", (discussion_id,))
 
 
 # ── conclusion / settlement ──
