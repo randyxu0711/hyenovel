@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import type { SessionRow, Work } from "./api";
+import { api, type RecentSession, type SessionRow, type Work } from "./api";
 import { toggleDayNight, useThemeState } from "./theme";
 import Icon, { type IconName } from "./Icon";
 import Logo from "./Logo";
@@ -49,13 +49,46 @@ function Sessions({ talk, onDone }: { talk: TalkState; onDone?: () => void }) {
   );
 }
 
+/** 沒綁作品的局:最近的在上;+ 開一局新的純聊天。 */
+function Chats({ talk, onChat }: { talk: TalkState; onChat: (id: string | null) => void }) {
+  const t = useT();
+  const lang = useLang();
+  const [rows, setRows] = useState<RecentSession[]>([]);
+  const busy = talk.streaming !== null;
+  useEffect(() => {
+    let live = true;
+    api.recentSessions(20).then(rs => { if (live) setRows(rs.filter(r => r.slug === null)); }, () => {});
+    return () => { live = false; };
+  }, [talk.session, talk.turns.length]);
+  const now = Date.now() / 1000;
+  return (
+    <section className="shelf-chats" aria-label={t("shelf.chats")}>
+      <div className="shelf-chats-h">
+        <b>{t("shelf.chats")}</b>
+        <IB icon="plus" label={t("shelf.newChat")} disabled={busy} onClick={() => onChat(null)} />
+      </div>
+      <ul className="shelf-sess">
+        {rows.map(r => (
+          <li key={r.session}>
+            <button type="button" disabled={busy} aria-current={r.session === talk.session ? "true" : undefined}
+              onClick={() => onChat(r.session)}>
+              <Icon name="talk" /><span className="shelf-st">{r.preview}</span>
+              <span className="shelf-vr">{whenLabel(r.last_at, now, lang)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** 圖示鈕:可及名稱與 title 同字。 */
 function IB({ icon, label, children, ...rest }: { icon: IconName; label: string; children?: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type="button" className="ib" aria-label={label} title={label} {...rest}><Icon name={icon} />{children}</button>;
 }
 
 /** 書架。展開:作品(依更新新到舊)→ 目前這篇的局;窄條:工具在上、目前這篇(標題第一個字)在下。 */
-export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, settingsNav = null, hidden = false }: {
+export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, onChat, settingsNav = null, hidden = false }: {
   mode: ShelfMode; onToggle: () => void;
   works: Work[]; current: string | null; talk: TalkState;
   view: "home" | "work" | "settings";
@@ -64,6 +97,8 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   onNew: () => void;
   /** 找作品(開 ⌘K 指令框)。 */
   onFind: () => void;
+  /** 開一局純聊天(id = null 開新的)。 */
+  onChat: (id: string | null) => void;
   /** 在設定頁:書架換成設定分區(不列作品)。 */
   settingsNav?: ReactNode;
   hidden?: boolean;
@@ -93,6 +128,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
         {!open && cur && <CurrentInitial work={cur} talk={talk} />}
       </div>
       {settingsNav}
+      {open && !settingsNav && <Chats talk={talk} onChat={onChat} />}
       {open && !settingsNav && works.length >= FILTER_FROM && (
         <label className="shelf-find">
           <Icon name="find" />

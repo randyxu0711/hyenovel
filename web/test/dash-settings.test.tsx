@@ -64,7 +64,7 @@ describe("設定頁", () => {
     expect(nav.queryByText("舊的")).toBeNull();
     expect(nav.queryByRole("searchbox")).toBeNull();
     const names = within(nav.getByRole("group", { name: "設定分區" })).getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["回到進門", "外觀", "讀伴", "記憶", "舊討論"]);
+    expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "舊討論"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
   });
   it("記憶分區畫出記憶頁,圖示是記憶專用的", async () => {
@@ -76,15 +76,15 @@ describe("設定頁", () => {
     expect(key.getAttribute("aria-current")).toBe("true");
     expect(document.querySelector(".dash-settings")!.getAttribute("data-section")).toBe("memory");
   });
-  it("沒開過作品 → 「回到進門」到 /;開過〈舊的〉→「回到〈舊的〉」到 /w/d1", async () => {
+  it("settings back button reads 返回:沒開過作品到 /,開過〈舊的〉回 /w/d1", async () => {
     mount();
-    await go("回到進門");
+    await go("返回");
     expect(screen.getByTestId("loc").textContent).toBe("/");
     await go("展開書架");
     fireEvent.click((await shelf()).getByRole("button", { name: /^舊的/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
     await go("設定");
-    await go("回到〈舊的〉");
+    await go("返回");
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");
   });
   it("點「讀伴」→ 內容換成讀伴卡片;外觀沒有預覽卡", async () => {

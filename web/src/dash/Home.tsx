@@ -5,17 +5,19 @@ import Figure from "./Figure";
 import Icon from "./Icon";
 import { errorMessage, useT } from "./i18n";
 import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
+import Talk, { composerState } from "./Talk";
 import { useCharacters } from "./useCharacters";
-import { companionId } from "./useTalk";
+import { attachable, companionId, type Talk as TalkState } from "./useTalk";
 
-/** 進門:只有一張交稿的紙。貼長文、拖檔、交稿鈕開檔都進確認條。 */
-export default function Home({ works: loaded, error: listError = null, onSubmitted }: {
+/** 進門:左邊是交稿的紙(貼長文、拖檔、交稿鈕開檔都進確認條),旁邊是不綁作品的聊天。 */
+export default function Home({ works: loaded, error: listError = null, onSubmitted, talk }: {
   /** null = 清單還沒到或抓不到(這時不說「沒有作品」)。 */
   works: Work[] | null;
   /** 清單抓不到的 den 錯誤碼。 */
   error?: string | null;
   /** 交稿完成(含已存在的同稿)。existing = 沒有開新 job。 */
   onSubmitted: (slug: string, existing: boolean) => void;
+  talk: TalkState;
 }) {
   const t = useT();
   const loc = useLocation();
@@ -41,8 +43,11 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f && !busy) void fromFile(f);
+    if (!f) return;
+    if (talk.session && talk.bound === null && attachable(f)) void talk.attach(f);
+    else if (!busy) void fromFile(f);
   };
+  const talker = chars.byId(talk.whoId);
   const submitDraft = async () => {
     const r: SubmitResult | null = await confirm();
     if (r) onSubmitted(r.slug, r.reused);
@@ -87,6 +92,13 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
           ? <p role="alert" className="home-msg">{t(errorMessage(listError))}</p>
           : <p className="home-msg" role="status">{t("loading")}</p>)}
       </div>
+      <section className="home-talk" aria-label={t("home.chat")}>
+        <div className="home-talk-who" aria-hidden="true">
+          <Figure character={talker} size={150}
+            state={composerState({ streaming: talk.streaming, analyzing: false, reacting: false, typing: talk.draft.trim() !== "" })} />
+        </div>
+        <Talk talk={talk} version={0} quotes={[]} analyzing={false} onDropQuote={() => {}} onSent={() => {}} onReveal={() => {}} />
+      </section>
     </div>
   );
 }

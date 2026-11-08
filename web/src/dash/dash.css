@@ -151,12 +151,20 @@
 .dash-notice{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:6; margin:0; padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .dash-notice button{margin-left:10px; border:0; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-size:var(--dash-t-md)}
 /* 進門 */
-.dash .home{min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px}
+.dash .home{min-height:100%; display:flex; align-items:center; justify-content:center; gap:40px; padding:24px; box-sizing:border-box}
+.dash .home-talk{flex:1; align-self:stretch; min-width:0; max-width:560px; display:flex; flex-direction:column; min-height:min(640px, calc(100vh - 48px))}
+.dash .home-talk-who{display:flex; justify-content:center; padding-top:8px}
+.dash .home-talk > .chat{flex:1}
+@media (max-width:1100px){
+  .dash .home{flex-direction:column; align-items:stretch; padding:16px}
+  .dash .home-inner{align-self:center}
+  .dash .home-talk{max-width:none; min-height:480px}
+}
 .dash .home-inner{width:min(560px,100%); display:flex; flex-direction:column; align-items:center; gap:56px}
-.dash .home .composer{width:min(560px,100%); margin:0}
-.dash .home .composer .who{width:92px; height:82px; margin-bottom:-14px; left:22px}
-.dash .home .composer textarea{min-height:104px; font-size:var(--dash-t-md); padding:16px 18px 4px}
-.dash .home .composer::before{inset:16px 18px 44px}
+.dash .home-inner .composer{width:min(560px,100%); margin:0}
+.dash .home-inner .composer .who{width:92px; height:82px; margin-bottom:-14px; left:22px}
+.dash .home-inner .composer textarea{min-height:104px; font-size:var(--dash-t-md); padding:16px 18px 4px}
+.dash .home-inner .composer::before{inset:16px 18px 44px}
 .dash .home-draft{display:flex; flex-direction:column; gap:8px; padding:20px 18px 10px}
 .dash .home-box{display:flex; flex-direction:column; gap:8px; padding:10px 12px}
 .dash .home-box textarea{border:0; background:none; resize:none; font:inherit; color:var(--dash-ink); min-height:44px; outline:none}
