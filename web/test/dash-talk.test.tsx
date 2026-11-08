@@ -708,7 +708,7 @@ describe("輸入紙與角色狀態", () => {
     fireEvent.click(await screen.findByRole("button", { name: "標記這則" }));
     fireEvent.click(screen.getByRole("button", { name: "讀錯了" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]: any) =>
-      u === "/api/works/d1/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
+      u === "/api/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
   });
 
   it("記號在切分頁和閃一下之後都還在", async () => {
@@ -725,5 +725,14 @@ describe("輸入紙與角色狀態", () => {
     fireEvent.click(container.querySelector(".dash-mark")!);
     expect(container.querySelector(".chat-turn.is-flash")).toBeTruthy();
     expect(pill()).toBeTruthy();
+  });
+});
+
+describe("作品頁的附件入口", () => {
+  it("work page has no attach entry", async () => {
+    mount();
+    await screen.findByLabelText("對話輸入");
+    expect(screen.queryByLabelText("丟一份稿進來", { selector: "input" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "丟一份稿進來" })).toBeNull();
   });
 });

@@ -25,7 +25,7 @@ class BadSource(Exception):
         self.code = code
 
 
-def load(conn, story_id: int) -> dict:
+def load(conn, story_id: int | None) -> dict:
     return {"author": [m["text"] for m in repo.active_memories(conn, "author")],
             "work": [m["text"] for m in repo.active_memories(conn, "work", story_id)]}
 
@@ -39,16 +39,18 @@ def _check_cap(conn, scope: str, story_id: int | None, added: str, replaced: str
         raise MemoryFull(scope)
 
 
-def _resolve_source(conn, story_id: int | None, source: dict) -> dict:
-    d = repo.discussion_by_external(conn, story_id, source["session"])
+def _resolve_source(conn, source: dict) -> tuple[dict, dict]:
+    d = repo.discussion_by_session(conn, source["session"])
     if d is None:
         raise BadSource("unknown-session")
     u = repo.utterance(conn, d["id"], source["seq"])
     if u is None:
         raise BadSource("unknown-turn")
+    if u["role"] not in ("user", "assistant"):
+        raise BadSource("not-a-turn")
     if gate.gate_utterance_quote(source["quote"], u):
         raise BadSource("quote-not-in-turn")
-    return u
+    return d, u
 
 
 def _row_or_raise(conn, memory_id: int) -> dict:
@@ -80,7 +82,9 @@ def remember(conn, scope: str, text: str, now: float, *, story_id: int | None = 
              source: dict | None = None) -> int:
     row_story = story_id if scope == "work" else None
     with conn:
-        u = _resolve_source(conn, story_id, source) if source else None
+        d, u = _resolve_source(conn, source) if source else (None, None)
+        if d is not None and scope == "work" and d["story_id"] != story_id:
+            raise BadSource("session-not-of-work")
         _check_cap(conn, scope, row_story, text)
         if u is None:
             return repo.add_memory(conn, scope, text, now, story_id=row_story)

@@ -27,8 +27,9 @@ const LANGS: { lang: Lang; label: string }[] = [{ lang: "zh-Hant", label: "ÁπÅÈ´
 function byWork(rows: RecentSession[]) {
   const groups = new Map<string, { slug: string; title: string; rows: RecentSession[] }>();
   for (const r of rows) {
-    if (!groups.has(r.slug)) groups.set(r.slug, { slug: r.slug, title: r.title, rows: [] });
-    groups.get(r.slug)!.rows.push(r);
+    const slug = r.slug ?? "";
+    if (!groups.has(slug)) groups.set(slug, { slug, title: r.title ?? "", rows: [] });
+    groups.get(slug)!.rows.push(r);
   }
   return [...groups.values()];
 }

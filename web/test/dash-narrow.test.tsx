@@ -56,7 +56,7 @@ describe("窄螢幕單窗格", () => {
     const region = await screen.findByRole("region", { name: "設定" });
     const nav = within(region).getByRole("group", { name: "設定分區" });
     expect(region.firstElementChild).toBe(nav);
-    expect(within(nav).getByRole("button", { name: "回到進門" })).toBeTruthy();
+    expect(within(nav).getByRole("button", { name: "返回" })).toBeTruthy();
     fireEvent.click(within(nav).getByRole("button", { name: "讀伴" }));
     expect(within(region).getByRole("heading", { level: 1, name: "讀伴" })).toBeTruthy();
   });

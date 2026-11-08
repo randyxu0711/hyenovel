@@ -25,7 +25,7 @@ function Shell({ chars }: { chars: Characters }) {
   const t = useT();
   const { mode } = useThemeState();
   const nav = useNavigate();
-  const { slug: routeSlug } = useParams();
+  const { slug: routeSlug, session: routeSession } = useParams();
   const { pathname } = useLocation();
   const [search, setSearch] = useSearchParams();
   const view: View = pathname === "/settings" ? "settings" : routeSlug ? "work" : "home";
@@ -58,13 +58,30 @@ function Shell({ chars }: { chars: Characters }) {
   // 目前這局記在網址的 ?s=(重新整理回到同一局);只換網址不進歷史。
   const setSearchRef = useRef(setSearch);
   setSearchRef.current = setSearch;
-  const onSession = useCallback((id: string | null) => setSearchRef.current(prev => {
-    const p = new URLSearchParams(prev);
-    if (id) p.set("s", id); else p.delete("s");
-    return p;
-  }, { replace: true }), []);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const onSession = useCallback((id: string | null) => {
+    if (viewRef.current === "home") { nav(id ? `/c/${encodeURIComponent(id)}` : "/", { replace: true }); return; }
+    setSearchRef.current(prev => {
+      const p = new URLSearchParams(prev);
+      if (id) p.set("s", id); else p.delete("s");
+      return p;
+    }, { replace: true });
+  }, [nav]);
   const [talkReload, setTalkReload] = useState(0);   // 交了新版:目前這局的逐字稿重抓(畫線位置對到新稿)
-  const talk = useTalk(slug, version, source, search.get("s"), onSession, talkReload);
+  const talk = useTalk(slug, version, source, slug ? search.get("s") : routeSession ?? null, onSession, talkReload);
+  const shownRoute = useRef(routeSession);
+  useEffect(() => {
+    if (view !== "home" || shownRoute.current === routeSession) return;
+    shownRoute.current = routeSession;
+    if (talk.streaming !== null || (routeSession ?? null) === talk.session) return;
+    if (routeSession) talk.open(routeSession); else talk.fresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, routeSession]);
+  useEffect(() => {
+    if (view === "home" && talk.bound && talk.session)
+      nav(`/w/${encodeURIComponent(talk.bound)}?s=${encodeURIComponent(talk.session)}`, { replace: true });
+  }, [view, talk.bound, talk.session, nav]);
   const me = chars.byId(talk.whoId);
   const { markSeen } = useSeen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,9 +113,8 @@ function Shell({ chars }: { chars: Characters }) {
   const [last, setLast] = useState<string | null>(null);
   useEffect(() => { if (slug) setLast(slug); }, [slug]);
   const [section, setSection] = useState<SettingsSection>("look");
-  const lastTitle = last ? works.find(w => w.slug === last)?.title ?? last : null;
   const setNav = <SettingsNav section={section} onPick={setSection}
-    back={last ? { label: t("set.backTo", { title: lastTitle! }), to: `/w/${encodeURIComponent(last)}` } : { label: t("set.backHome"), to: "/" }} />;
+    back={{ label: t("set.back.page"), to: last ? `/w/${encodeURIComponent(last)}` : "/" }} />;
   const shelf = useShelf();
   const split = useSplit(SHELF_W[shelf.mode]);
   const narrow = useNarrow();
@@ -161,7 +177,7 @@ function Shell({ chars }: { chars: Characters }) {
         </div>
       )}
       <Rail mode={shelf.mode} onToggle={shelf.toggle} works={works} current={slug} talk={talk} view={view}
-        onOpen={open} onNew={goHome} onFind={() => setPalette(true)}
+        onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => nav(id ? `/c/${encodeURIComponent(id)}` : "/")}
         settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
@@ -172,7 +188,7 @@ function Shell({ chars }: { chars: Characters }) {
             setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
             if (narrow) setPane("side");
           }} />}
-        {view === "home" && <Home works={loaded} error={worksErr} onSubmitted={submitted} />}
+        {view === "home" && <Home works={loaded} error={worksErr} onSubmitted={submitted} talk={talk} />}
         {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
       </main>
       {notice && (

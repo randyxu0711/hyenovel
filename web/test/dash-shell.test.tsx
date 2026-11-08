@@ -80,7 +80,7 @@ describe("Dash 殼與路由", () => {
     fireEvent.click(await rail.findByRole("button", { name: "設定" }));
     expect(screen.getByTestId("loc").textContent).toBe("/settings");
     expect(dash().dataset.shelf).toBe("open");
-    fireEvent.click(await rail.findByRole("button", { name: "回到〈最近的〉" }));
+    fireEvent.click(await rail.findByRole("button", { name: "返回" }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d2");
     fireEvent.click(await rail.findByRole("button", { name: /^舊的/ }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1");

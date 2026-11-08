@@ -15,8 +15,17 @@ let sessionRows: object[];
 let calls: { url: string; body?: any }[];
 let worksFetch: (() => Promise<Response>) | null;
 
-function Where() { const l = useLocation(); return <output data-testid="loc">{l.pathname}</output>; }
-function mount() {
+function Where() { const l = useLocation(); return <output data-testid="loc">{l.pathname}{l.search}</output>; }
+let recent: object[];
+let chat: Record<string, object>;
+const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
+  start(c) {
+    const enc = new TextEncoder();
+    for (const [event, data] of evs) c.enqueue(enc.encode(`data: ${JSON.stringify({ event, data })}\n\n`));
+    c.close();
+  },
+}));
+function mount(path = "/") {
   const f = vi.fn(async (u: string, init?: RequestInit) => {
     calls.push({ url: u, body: init?.body && typeof init.body === "string" ? JSON.parse(init.body) : undefined });
     if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
@@ -27,15 +36,20 @@ function mount() {
     if (u === "/api/stories") return json({ slug: "d9", title: "海", version: 1, new_version: true, reused: false });
     if (u === "/api/jobs") return json({ job_id: 5 });
     if (u.endsWith("/sessions")) return json({ sessions: sessionRows });
+    if (u.startsWith("/api/sessions?")) return json({ sessions: recent });
+    if (u === "/api/discuss") return sse(["message", { role: "assistant", text: "嗨,你好", session_id: "c1", seq: 1, character: "hyena", spans: [], v: null, attachment: null }],
+      ["done", { ok: true, session_id: "c1" }]);
+    if (u.startsWith("/api/sessions/")) return json(chat[decodeURIComponent(u.split("/").pop()!)] ?? {});
     if (u.startsWith("/api/works/")) return json({ slug: "d2", title: "海", version: 1, text: "內文一行", state: "ready", job_id: null, notes_ready: false, versions: [1] });
     return json({});
   });
   vi.stubGlobal("fetch", f);
   const tree = (
-    <MemoryRouter initialEntries={["/"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Where />
       <Routes>
         <Route path="/" element={<Dash />} />
+        <Route path="/c/:session" element={<Dash />} />
         <Route path="/w/:slug" element={<Dash />} />
       </Routes>
     </MemoryRouter>
@@ -47,12 +61,12 @@ const confirmBtn = () => screen.queryByRole("button", { name: "分析" });
 
 beforeEach(() => {
   setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; calls = [];
-  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null;
+  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null; recent = []; chat = {};
 });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("進門只有一張紙", () => {
-  it("有作品:只有交稿的紙,沒有 chips、讀完那句、讀伴介紹、送出鈕", async () => {
+  it("有作品:紙上只有交稿,沒有 chips、讀完那句、讀伴介紹、送出鈕", async () => {
     mount();
     await box();
     await waitFor(() => expect(calls.some(c => c.url === "/api/works")).toBe(true));
@@ -63,8 +77,9 @@ describe("進門只有一張紙", () => {
     expect(screen.queryByRole("group", { name: "聊哪一篇" })).toBeNull();
     expect(screen.queryByText(/讀完了/)).toBeNull();
     expect(screen.queryByRole("list", { name: "讀伴" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "送出" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^讀伴/ })).toBeNull();
+    const inner = within(document.querySelector(".home-inner") as HTMLElement);
+    expect(inner.queryByRole("button", { name: "送出" })).toBeNull();
+    expect(inner.queryByRole("button", { name: /^讀伴/ })).toBeNull();
     expect(document.querySelector(".home-first")).toBeNull();
     expect(calls.some(c => c.url.endsWith("/sessions"))).toBe(false);
   });
@@ -157,5 +172,52 @@ describe("作品清單還沒到 / 抓不到", () => {
     mount();
     expect(await screen.findByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toBe("連不上本機的 den,請確認它有在跑。");
+  });
+});
+
+
+const free = (session: string, preview: string) =>
+  ({ session, slug: null, title: null, started_at: 1, last_at: 2, turns: 1, character: "hyena", preview, legacy: false });
+const detail = (session: string, over: object = {}) => ({ session, slug: null, title: null, legacy: false, version: null, attachments: [],
+  turns: [{ seq: 0, role: "assistant", text: `${session} 的話`, ts: 1, character: "hyena", quotes: [], spans: [], v: null }], ...over });
+
+describe("進門聊天", () => {
+  it("home first turn moves url to /c/:session", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    mount();
+    const talk = within(await screen.findByRole("region", { name: "對話" }));
+    fireEvent.change(talk.getByLabelText("對話輸入"), { target: { value: "隨便聊聊" } });
+    fireEvent.click(talk.getByRole("button", { name: "送出" }));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/c/c1"));
+    expect(calls.find(c => c.url === "/api/discuss")!.body).toMatchObject({ session_id: null, message: "隨便聊聊" });
+    expect(await talk.findByText("嗨,你好")).toBeTruthy();
+  });
+
+  it("shelf lists storyless sessions under chat group", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    recent = [free("c1", "聊海"), { ...free("w1", "作品局"), slug: "d2", title: "海" }];
+    chat = { c1: detail("c1") };
+    mount();
+    const group = within(await screen.findByRole("region", { name: "聊天" }));
+    fireEvent.click(await group.findByRole("button", { name: /聊海/ }));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/c/c1"));
+    expect(group.queryByRole("button", { name: /作品局/ })).toBeNull();
+    expect(await screen.findByText("c1 的話")).toBeTruthy();
+  });
+
+  it("plus on chat group opens empty chat", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    chat = { c1: detail("c1") };
+    mount("/c/c1");
+    expect(await screen.findByText("c1 的話")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
+    await waitFor(() => expect(screen.queryByText("c1 的話")).toBeNull());
+  });
+
+  it("a chat that became a work opens on the work page", async () => {
+    chat = { c1: detail("c1", { slug: "d2", title: "海", version: 1 }) };
+    mount("/c/c1");
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d2?s=c1"));
   });
 });

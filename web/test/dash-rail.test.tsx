@@ -52,12 +52,12 @@ describe("useSeen", () => {
 type Sess = { session: string; preview: string; versions?: [number, number] | null };
 const fakeTalk = (sessions: Sess[] = [], extra: Record<string, unknown> = {}) => ({
   sessions: sessions.map(x => ({ started_at: 1, last_at: 1, turns: 1, character: null, version: null, legacy: false, ...x })),
-  session: null as string | null, streaming: null as string | null, open: vi.fn(), fresh: vi.fn(), ...extra,
+  session: null as string | null, streaming: null as string | null, turns: [], open: vi.fn(), fresh: vi.fn(), ...extra,
 }) as unknown as Talk;
 
 describe("Rail(展開)", () => {
   const mount = (o: { current?: string | null; works?: Work[]; talk?: Talk; view?: "home" | "work" | "settings" } = {}) => {
-    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onToggle: vi.fn() };
+    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onChat: vi.fn(), onToggle: vi.fn() };
     const talk = o.talk ?? fakeTalk();
     const r = render(<MemoryRouter><Where /><Rail mode="open" works={o.works ?? WORKS} current={o.current ?? null}
       talk={talk} view={o.view ?? "home"} {...p} /></MemoryRouter>);
@@ -94,7 +94,7 @@ describe("Rail(展開)", () => {
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
       if (n.parentElement!.closest("button, output") === null) texts.push(n.textContent!.trim());
     }
-    expect(texts.filter(Boolean)).toEqual(["Hyenovel"]);
+    expect(texts.filter(Boolean)).toEqual(["Hyenovel", "聊天"]);
   });
   it("作品 ≤ 6 沒有篩選框;7 篇才有,輸入「山」只剩含「山」的", () => {
     const { unmount } = mount({ works: WORKS.concat([w("d4", "a"), w("d5", "b"), w("d6", "c")]) });
@@ -172,7 +172,7 @@ describe("Rail(展開)", () => {
 
 describe("Rail(窄條)", () => {
   const mount = (o: { current?: string | null; works?: Work[]; talk?: Talk } = {}) => {
-    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onToggle: vi.fn() };
+    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onChat: vi.fn(), onToggle: vi.fn() };
     const talk = o.talk ?? fakeTalk();
     const r = render(<MemoryRouter><Where /><Rail mode="rail" works={o.works ?? WORKS} current={o.current ?? null}
       talk={talk} view="work" {...p} /></MemoryRouter>);
