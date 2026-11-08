@@ -98,7 +98,7 @@ ERROR_CODES: tuple[str, ...] = (
     "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
     "unknown-character", "unknown-session-id",
     "bound-session", "too-many-attachments", "empty-attachment", "attachment-too-long",
-    "nothing-to-clear", "nothing-to-compact", "compact-failed",
+    "nothing-to-clear", "nothing-to-compact", "compact-failed", "not-archived",
     "unknown-attachment", "already-adopted",
     "session-not-of-work", "not-a-turn",
     "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",

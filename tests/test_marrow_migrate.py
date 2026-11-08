@@ -27,7 +27,7 @@ def _close_all():
 
 def test_fresh_db_gets_all_tables_and_version():
     conn = _mem()
-    assert db.migrate(conn, None) == 14
+    assert db.migrate(conn, None) == 15
     names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert TABLES <= names
 
@@ -35,7 +35,7 @@ def test_fresh_db_gets_all_tables_and_version():
 def test_migrate_is_idempotent():
     conn = _mem()
     db.migrate(conn, None)
-    assert db.migrate(conn, None) == 14
+    assert db.migrate(conn, None) == 15
 
 
 def test_upgrade_backs_up_first(tmp_path):
@@ -76,7 +76,7 @@ def test_unique_settlement_per_discussion():   # #15 的洞由 DB 約束擋
     conn = _mem()
     db.migrate(conn, None)
     conn.execute("INSERT INTO story VALUES (1,'s','t',0)")
-    conn.execute("INSERT INTO discussion VALUES (1,1,'x','web',NULL,0,NULL)")
+    conn.execute("INSERT INTO discussion (id, story_id, external_id, home, client, started_at, ended_at) VALUES (1,1,'x','web',NULL,0,NULL)")
     conn.execute("INSERT INTO settlement VALUES (1,0,1)")
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO settlement VALUES (1,1,1)")
@@ -133,7 +133,7 @@ def test_v2_db_upgrades_to_prompt_sha_with_backup(tmp_path):     # Task 9e
     conn.execute("INSERT INTO attempt (job_id, step, n, runner, created_at) "
                  "VALUES (1,'analyst',0,'cli',0)")
     conn.commit()
-    assert db.migrate(conn, p) == 14
+    assert db.migrate(conn, p) == 15
     assert "prompt_sha" in _cols(conn, "attempt")
     assert conn.execute("SELECT prompt_sha FROM attempt").fetchone()[0] is None
     assert (tmp_path / "h.db.bak-v2").exists()
@@ -186,7 +186,7 @@ def test_0014_keeps_every_discussion_reference(tmp_path):
     """)
     tables = ("discussion", "utterance", "reaction", "memory", "conclusion", "settlement")
     before = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
-    assert db.migrate(conn, None) == 14
+    assert db.migrate(conn, None) == 15
     assert {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables} == before
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     assert [tuple(r) for r in conn.execute("SELECT id, story_id FROM discussion ORDER BY id")] == [(5, 1), (7, 1), (9, 2)]
@@ -196,6 +196,6 @@ def test_0014_session_id_is_global_and_story_optional():
     conn = _mem()
     db.migrate(conn, None)
     conn.execute("INSERT INTO story VALUES (1,'s','t',0), (2,'u','t',0)")
-    conn.execute("INSERT INTO discussion VALUES (1,NULL,'x','web',NULL,0,NULL)")
+    conn.execute("INSERT INTO discussion (id, story_id, external_id, home, client, started_at, ended_at) VALUES (1,NULL,'x','web',NULL,0,NULL)")
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO discussion VALUES (2,2,'x','web',NULL,0,NULL)")
+        conn.execute("INSERT INTO discussion (id, story_id, external_id, home, client, started_at, ended_at) VALUES (2,2,'x','web',NULL,0,NULL)")
