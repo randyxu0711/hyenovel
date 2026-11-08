@@ -143,10 +143,26 @@ describe("純聊天的附件", () => {
     fireEvent.change(box, { target: { value: "/cl" } });
     expect(within(screen.getByRole("listbox", { name: "指令" })).getAllByRole("option")).toHaveLength(1);
     fireEvent.keyDown(box, { key: "Enter" });
+    expect((box as HTMLTextAreaElement).value).toBe("/clear");
+    expect(posts).toEqual([]);
+    fireEvent.keyDown(box, { key: "Enter" });
     await screen.findByRole("separator", { name: "對話清空" });
     expect(posts).toEqual(["/api/sessions/c1/clear"]);
     expect((box as HTMLTextAreaElement).value).toBe("");
     expect(screen.queryByRole("listbox", { name: "指令" })).toBeNull();
+  });
+
+  it("a prefix never spends: /co + Enter only completes to /compact", async () => {
+    mount();
+    await screen.findByText("嗨");
+    const box = screen.getByLabelText("對話輸入");
+    fireEvent.change(box, { target: { value: "/co" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.change(box, { target: { value: "/" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect((box as HTMLTextAreaElement).value).toBe("/clear");
+    await new Promise(r => setTimeout(r, 20));
+    expect(posts).toEqual([]);
   });
 
   it("slash menu: arrows pick, Esc closes, unknown command is sent as text", async () => {

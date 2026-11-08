@@ -5,7 +5,7 @@ import { errorMessage, localized, useLang, useT } from "./i18n";
 import { DRAFT_MIN_CHARS, useSubmitDraft } from "./useSubmitDraft";
 import Talk from "./Talk";
 import { useCharacters } from "./useCharacters";
-import type { Talk as TalkState } from "./useTalk";
+import { MAX_CHAT, type Talk as TalkState } from "./useTalk";
 
 /** 進門:一欄置中的純聊天;貼長文、拖檔進來就在輸入框上方出交稿確認條。 */
 export default function Home({ works: loaded, error: listError = null, onSubmitted, talk }: {
@@ -61,7 +61,7 @@ export default function Home({ works: loaded, error: listError = null, onSubmitt
     <div className="home" onDragOver={e => e.preventDefault()} onDrop={onDrop}>
       <section className="home-talk" aria-label={t("home.chat")} data-live={live ? "" : undefined}>
         <Talk talk={talk} version={0} quotes={[]} analyzing={false} onDropQuote={() => {}} onSent={() => {}} onReveal={() => {}}
-          longText={{ min: DRAFT_MIN_CHARS, take: fromText }} onFile={f => { if (!busy) void fromFile(f); }}
+          longText={{ min: live ? MAX_CHAT : DRAFT_MIN_CHARS, take: fromText }} onFile={f => { if (!busy) void fromFile(f); }}
           above={card} inputRef={area} whoSize={172}
           placeholder={t("home.say", { name: localized(chars.byId(talk.whoId).name, lang) })} />
       </section>
