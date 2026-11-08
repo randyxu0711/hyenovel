@@ -1,6 +1,8 @@
 """marrow.repo:冪等寫入與 current 指標。repo 不 commit,transaction 由呼叫者擁有。"""
 import hashlib
 
+import pytest
+
 from marrow import repo
 
 
@@ -300,15 +302,6 @@ def test_recent_discussions_orders_by_last_activity_and_limits(conn):
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["A"]
 
 
-def test_discussions_by_external_spans_stories(conn):
-    s, _ = _story(conn)
-    s2 = repo.ensure_story(conn, "s2", None, 0)
-    repo.ensure_discussion(conn, s, "X", "web", None, 1.0)
-    repo.ensure_discussion(conn, s2, "X", "web", None, 1.0)
-    assert [d["slug"] for d in repo.discussions_by_external(conn, "X")] == ["s1", "s2"]
-    assert repo.discussions_by_external(conn, "nope") == []
-
-
 def test_analysis_versions_maps_fp_to_source_version_n(conn):
     s, v1 = _story(conn)
     v2, _ = repo.add_source_version(conn, s, "乙", 7.0)
@@ -344,16 +337,6 @@ def test_add_utterance_usage_defaults_null(conn):
     assert repo.utterances(conn, d)[0]["usage"] is None
     assert conn.execute("SELECT usage FROM utterance WHERE discussion_id = ?",
                         (d,)).fetchone()[0] is None      # 真的是 SQL NULL,不是字串 "null"
-
-
-def test_discussion_by_external_scoped_to_story(conn):
-    s1 = repo.ensure_story(conn, "s1", None, 0)
-    s2 = repo.ensure_story(conn, "s2", None, 0)
-    d1 = repo.ensure_discussion(conn, s1, "x", "web", None, 0)
-    repo.ensure_discussion(conn, s2, "x", "web", None, 0)
-    assert repo.discussion_by_external(conn, s1, "x")["id"] == d1
-    assert repo.discussion_by_external(conn, s1, "x")["story_id"] == s1
-    assert repo.discussion_by_external(conn, s1, "nope") is None
 
 
 def test_latest_job_picks_highest_id_of_that_version(conn):
@@ -475,3 +458,75 @@ def test_setting_upsert(conn):
     repo.set_setting(conn, "k", "a")
     repo.set_setting(conn, "k", "b")
     assert repo.get_setting(conn, "k") == "b"
+
+
+def test_discussion_without_story(conn):
+    d = repo.ensure_discussion(conn, None, "abc", "web", None, 1.0)
+    row = repo.discussion_by_session(conn, "abc")
+    assert (row["id"], row["story_id"], row["slug"]) == (d, None, None)
+    assert repo.discussion_by_session(conn, "nope") is None
+
+
+def test_session_id_is_global(conn):
+    s, d = _disc(conn)
+    other = repo.ensure_story(conn, "s2", None, 0)
+    with pytest.raises(ValueError):
+        repo.ensure_discussion(conn, other, "sess", "web", None, 1.0)
+    assert repo.ensure_discussion(conn, s, "sess", "web", None, 2.0) == d
+    assert conn.execute("SELECT COUNT(*) FROM discussion").fetchone()[0] == 1
+    assert repo.discussion_by_session(conn, "sess")["slug"] == "s1"
+
+
+def test_bind_only_unbound(conn):
+    a = repo.ensure_story(conn, "a", None, 0)
+    b = repo.ensure_story(conn, "b", None, 0)
+    d = repo.ensure_discussion(conn, None, "x", "web", None, 0)
+    repo.bind_discussion(conn, d, a)
+    repo.bind_discussion(conn, d, b)
+    assert repo.discussion_by_session(conn, "x")["story_id"] == a
+
+
+def test_attachments_numbered_in_order(conn):
+    d = repo.ensure_discussion(conn, None, "x", "web", None, 0)
+    assert repo.add_attachment(conn, d, 0, "海", "浪", 1.0) == 1
+    assert repo.add_attachment(conn, d, 3, "山", "石", 2.0) == 2
+    got = repo.attachments(conn, d)
+    assert [(a["n"], a["seq"], a["name"], a["text"], a["source_version_id"]) for a in got] == [
+        (1, 0, "海", "浪", None), (2, 3, "山", "石", None)]
+    assert got[0]["sha256"] == repo.sha256_text("浪") and got[1]["added_at"] == 2.0
+
+
+def test_adopt_sets_source_version(conn):
+    s, v = _story(conn)
+    d = repo.ensure_discussion(conn, None, "x", "web", None, 0)
+    repo.add_attachment(conn, d, 0, "海", "甲", 1.0)
+    repo.add_attachment(conn, d, 1, "山", "乙", 1.0)
+    repo.adopt_attachment(conn, d, 1, v)
+    assert [a["source_version_id"] for a in repo.attachments(conn, d)] == [v, None]
+
+
+def test_recent_includes_storyless_and_skips_marks(conn):
+    d = repo.ensure_discussion(conn, None, "free", "web", None, 1.0)
+    repo.add_utterance(conn, d, 0, "assistant", "嗨", 1.0, "den", [], None, character="hyena")
+    repo.add_utterance(conn, d, 1, "compact", "摘要", 2.0, "den", [], None)
+    repo.add_utterance(conn, d, 2, "clear", "", 3.0, "den", [], None)
+    got = repo.recent_discussions(conn, 5)
+    assert [(g["external_id"], g["slug"], g["title"], g["turns"], g["preview"]) for g in got] == [
+        ("free", None, None, 1, "嗨")]
+
+
+def test_story_transcript_skips_marks(conn):
+    s, d = _disc(conn)
+    repo.add_utterance(conn, d, 0, "user", "問", 1.0, "den", [], None)
+    repo.add_utterance(conn, d, 1, "compact", "摘要", 2.0, "den", [], None)
+    repo.add_utterance(conn, d, 2, "clear", "", 3.0, "den", [], None)
+    repo.add_utterance(conn, d, 3, "assistant", "答", 4.0, "den", [], None)
+    assert [u["text"] for u in repo.discussions_with_utterances(conn, s)] == ["問", "答"]
+
+
+def test_activity_times_ignores_storyless(conn):
+    s, d = _disc(conn)
+    free = repo.ensure_discussion(conn, None, "free", "web", None, 0)
+    repo.add_utterance(conn, d, 0, "assistant", "答", 4.0, "den", [], None)
+    repo.add_utterance(conn, free, 0, "assistant", "答", 9.0, "den", [], None)
+    assert repo.activity_times(conn) == {s: 4.0}

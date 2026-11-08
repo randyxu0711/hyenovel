@@ -135,19 +135,49 @@ def current_artifact(conn, story_id: int, kind: str) -> dict | None:
 
 # ── discussion / utterance ──
 
-def ensure_discussion(conn, story_id: int, external_id: str, home: str, client: str | None,
+def ensure_discussion(conn, story_id: int | None, external_id: str, home: str, client: str | None,
                       started_at: float) -> int:
     conn.execute("INSERT INTO discussion (story_id, external_id, home, client, started_at) "
-                 "VALUES (?, ?, ?, ?, ?) ON CONFLICT (story_id, external_id) DO NOTHING",
+                 "VALUES (?, ?, ?, ?, ?) ON CONFLICT (external_id) DO NOTHING",
                  (story_id, external_id, home, client, started_at))
-    return _id(conn, "SELECT id FROM discussion WHERE story_id = ? AND external_id = ?",
-               (story_id, external_id))
+    row = conn.execute("SELECT id, story_id FROM discussion WHERE external_id = ?", (external_id,)).fetchone()
+    if row["story_id"] != story_id:
+        raise ValueError(f"session {external_id} belongs to another story")
+    return row["id"]
+
+
+def discussion_by_session(conn, external_id: str) -> dict | None:
+    return _row(conn.execute("SELECT d.*, st.slug AS slug FROM discussion d LEFT JOIN story st "
+                             "ON st.id = d.story_id WHERE d.external_id = ?", (external_id,)).fetchone())
 
 
 def discussion_by_external(conn, story_id: int, external_id: str) -> dict | None:
     """依 (story, external_id) 找局;web 聊天端靠它把 session id 對回既有的局。"""
     return _row(conn.execute("SELECT * FROM discussion WHERE story_id = ? AND external_id = ?",
                              (story_id, external_id)).fetchone())
+
+
+def bind_discussion(conn, discussion_id: int, story_id: int) -> None:
+    conn.execute("UPDATE discussion SET story_id = ? WHERE id = ? AND story_id IS NULL",
+                 (story_id, discussion_id))
+
+
+def add_attachment(conn, discussion_id: int, seq: int, name: str, text: str, now: float) -> int:
+    n = conn.execute("SELECT COUNT(*) FROM attachment WHERE discussion_id = ?", (discussion_id,)).fetchone()[0] + 1
+    conn.execute("INSERT INTO attachment (discussion_id, n, seq, name, text, sha256, added_at) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?)", (discussion_id, n, seq, name, text, sha256_text(text), now))
+    return n
+
+
+def attachments(conn, discussion_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT n, seq, name, text, sha256, added_at, source_version_id FROM attachment "
+        "WHERE discussion_id = ? ORDER BY n", (discussion_id,))]
+
+
+def adopt_attachment(conn, discussion_id: int, n: int, source_version_id: int) -> None:
+    conn.execute("UPDATE attachment SET source_version_id = ? WHERE discussion_id = ? AND n = ?",
+                 (source_version_id, discussion_id, n))
 
 
 def close_discussion(conn, discussion_id: int, ended_at: float) -> None:
@@ -209,7 +239,8 @@ def discussions_with_utterances(conn, story_id: int) -> list[dict]:
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
         "u.ts AS ts, u.anchors AS anchors, u.character AS character, "
         "u.quotes AS quotes, u.analysis_fp AS analysis_fp FROM utterance u JOIN discussion d "
-        "ON d.id = u.discussion_id WHERE d.story_id = ? ORDER BY u.ts, u.seq", (story_id,))]
+        "ON d.id = u.discussion_id WHERE d.story_id = ? AND u.role IN ('user', 'assistant') "
+        "ORDER BY u.ts, u.seq", (story_id,))]
 
 
 def discussions_by_external(conn, external_id: str) -> list[dict]:
@@ -247,7 +278,7 @@ def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
             "(SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'assistant') AS turns, "
             f"{last.format(c='character')} AS character, "
             f"{last.format(c='text')} AS preview "
-            "FROM discussion d JOIN story st ON st.id = d.story_id "
+            "FROM discussion d LEFT JOIN story st ON st.id = d.story_id "
             "WHERE EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
             f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
             "AND role = 'assistant' AND character IS NOT NULL) "
@@ -366,7 +397,8 @@ def activity_times(conn) -> dict[int, float]:
         out[r["story_id"]] = r["t"]
     for r in conn.execute(
             "SELECT d.story_id AS story_id, MAX(u.ts) AS t FROM utterance u "
-            "JOIN discussion d ON d.id = u.discussion_id WHERE u.role = 'assistant' GROUP BY d.story_id"):
+            "JOIN discussion d ON d.id = u.discussion_id WHERE u.role = 'assistant' AND d.story_id IS NOT NULL "
+            "GROUP BY d.story_id"):
         out[r["story_id"]] = max(out.get(r["story_id"], 0.0), r["t"])
     return out
 

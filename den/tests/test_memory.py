@@ -25,7 +25,7 @@ def world(conn):
     with conn:
         s1 = repo.ensure_story(conn, "s1", None, 0)
         s2 = repo.ensure_story(conn, "s2", None, 0)
-        for sid, session, words in ((s1, "abc", "我不寫結局,真的"), (s1, "same", "只在甲局"), (s2, "same", "乙局的話")):
+        for sid, session, words in ((s1, "abc", "我不寫結局,真的"), (s1, "same", "只在甲局"), (s2, "other", "乙局的話")):
             d = repo.ensure_discussion(conn, sid, session, "/h", None, 0)
             repo.add_utterance(conn, d, 0, "user", words, USER_TS, "web", [], None)
             repo.add_utterance(conn, d, 1, "assistant", "陪讀者不寫結局", USER_TS + 1, "web", [], None)
@@ -58,7 +58,7 @@ def test_source_session_is_scoped_to_the_given_work(conn, world):
     with pytest.raises(memory.BadSource) as e:
         memory.remember(conn, "author", "只在甲局", 9.0, story_id=world["s2"],
                         source=_src("same", 0, "只在甲局"))
-    assert e.value.code == "quote-not-in-turn"
+    assert e.value.code == "unknown-session"
     assert memory.remember(conn, "author", "只在甲局", 9.0, story_id=world["s1"],
                            source=_src("same", 0, "只在甲局"))
 

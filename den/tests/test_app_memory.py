@@ -26,7 +26,7 @@ def c(data):
         repo.add_utterance(conn, solo, 1, "assistant", "回", 6.0, "web", [], None)
         longest = repo.ensure_discussion(conn, mini, "long", "web", None, 1.0)
         repo.add_utterance(conn, longest, 0, "user", "長" * MAX_CHAT_CHARS, 5.0, "web", [], None)
-        o = repo.ensure_discussion(conn, other, "same", "web", None, 1.0)
+        o = repo.ensure_discussion(conn, other, "elsewhere", "web", None, 1.0)
         repo.add_utterance(conn, o, 0, "user", "別篇的話", 5.0, "web", [], None)
     conn.close()
     with TestClient(den_app.create_app(url, d, run_factory=Run()), base_url="http://127.0.0.1") as client:
@@ -59,7 +59,7 @@ def _assert_err(r, status, code):
     ({"slug": "mini", "session": "same", "seq": 9, "quote": "x"}, 404, "unknown-turn"),
     ({"slug": "mini", "session": "same", "seq": 0, "quote": "我要寫結局"}, 422, "quote-not-in-turn"),
     ({"slug": "mini", "session": "same", "seq": 1, "quote": "不寫結局"}, 422, "quote-not-in-turn"),
-    ({"slug": "other", "session": "same", "seq": 0, "quote": "不寫結局"}, 422, "quote-not-in-turn"),
+    ({"slug": "other", "session": "elsewhere", "seq": 0, "quote": "不寫結局"}, 422, "quote-not-in-turn"),
     ({"text": "字" * 801}, 422, "memory-full"),
 ])
 def test_post_rejections(c, caplog, body, status, code):
@@ -100,7 +100,7 @@ def test_post_work_scope(c):
 
 
 def test_same_session_id_in_other_work_writes_to_the_named_one(c):
-    row = _post(c, slug="other", session="same", seq=0, quote="別篇").json()
+    row = _post(c, slug="other", session="elsewhere", seq=0, quote="別篇").json()
     assert row["slug"] == "other"
 
 

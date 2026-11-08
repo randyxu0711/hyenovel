@@ -124,7 +124,7 @@ def test_sessions_without_assistant_turn(c):
     assert s["legacy"] is True
 
 
-def test_session_turns_unknown_and_ambiguous(c):
+def test_session_turns_unknown(c):
     sid, _ = _story(c)
     d = repo.ensure_discussion(c, sid, "s", "web", None, 1.0)
     _say(c, d, 0, "user", "問", 1.0, quotes=["原"])
@@ -137,10 +137,6 @@ def test_session_turns_unknown_and_ambiguous(c):
          "quotes": [], "spans": [], "v": 1}]}
     with pytest.raises(LookupError):
         views.session_turns(c, "nope")
-    sid2, _ = _story(c, "x2")
-    repo.ensure_discussion(c, sid2, "s", "web", None, 1.0)
-    with pytest.raises(views.AmbiguousSession):
-        views.session_turns(c, "s")
 
 
 def test_session_title_prefers_analysis_title(c):

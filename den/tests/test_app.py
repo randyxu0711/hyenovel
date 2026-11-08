@@ -969,19 +969,6 @@ def test_dashboard_read_routes_errors(data, caplog):
     assert "where=session-turns reason=unknown-session-id" in caplog.text
 
 
-def test_session_ambiguous_409(data):
-    conn = db.connect(data[0])
-    with conn:
-        other = repo.ensure_story(conn, "other", "乙", 0)
-        repo.add_source_version(conn, other, "x", 0)
-    conn.close()
-    _seed_session(data)
-    _seed_session(data, "other")
-    with _client(data) as c:
-        r = c.get("/api/sessions/sess1", headers=_auth(data[1]))
-        assert r.status_code == 409 and r.json()["code"] == "ambiguous-session"
-
-
 def test_estimate_route_null_without_history(data):
     with _client(data) as c:
         r = c.get("/api/estimate", params={"chars": 1000}, headers=_auth(data[1]))
