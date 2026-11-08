@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import characters, compact, discuss, views
+from den import characters, compact, discuss, stories, views
 from den.config import MAX_ANCHORS, MAX_CHAT_CHARS, MAX_QUOTES, MAX_REACTION_CHARS, REACTION_MARKS, valid_slug
 from den.routes.common import ApiError, ClientIn, Seq, slug_ok, sse_line, unknown_work
 from marrow import prompt, repo
@@ -187,6 +187,27 @@ async def compact_session(session: str, request: Request):
     return {"seq": seq, "text": text}
 
 
+@router.post("/sessions/{session}/attachments/{n}/adopt", status_code=201)
+async def adopt_attachment(session: str, n: int, request: Request):
+    def reject(status: int, code: str, detail: str) -> ApiError:
+        log.info("event=reject where=adopt reason=%s", code)
+        return ApiError(status, code, detail)
+    conn = request.app.state.mgr.conn
+    d = _session_or_404(conn, session, "adopt")
+    _free_lock(request.app.state, session, "adopt")
+    try:
+        with conn:
+            return stories.adopt(conn, d, n, time.time())
+    except stories.UnknownAttachment:
+        raise reject(404, "unknown-attachment", "這局沒有這份附件") from None
+    except stories.AlreadyAdopted:
+        raise reject(409, "already-adopted", "這份附件已經開成作品") from None
+    except stories.BoundSession:
+        raise reject(422, "bound-session", "這局已經綁了作品") from None
+    except ValueError:
+        raise reject(422, "bad-source", "這份稿收不成作品") from None
+
+
 @router.post("/discuss")
 async def discuss_free(body: DiscussIn, request: Request):
     return _discuss(None, body, request)
@@ -222,7 +243,7 @@ def _discuss(slug: str | None, body: DiscussIn, request: Request):
         raise reject(422, "quote-too-long", "引文太長") from None
     except discuss.QuoteNotInSource:
         raise reject(422, "quote-not-in-source", "引文不在原文裡") from None
-    except discuss.BoundSession:
+    except stories.BoundSession:
         raise reject(422, "bound-session", "這局已經綁了作品,交新版請用交稿") from None
     except discuss.TooManyAttachments:
         raise reject(422, "too-many-attachments", "這局的附件太多份") from None

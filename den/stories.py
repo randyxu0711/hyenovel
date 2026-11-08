@@ -4,6 +4,33 @@ from marrow import ingest as marrow_ingest
 from marrow import repo
 
 
+class BoundSession(Exception):
+    pass
+
+
+class UnknownAttachment(Exception):
+    pass
+
+
+class AlreadyAdopted(Exception):
+    pass
+
+
+def adopt(conn, discussion: dict, n: int, now: float) -> dict:
+    att = next((a for a in repo.attachments(conn, discussion["id"]) if a["n"] == n), None)
+    if att is None:
+        raise UnknownAttachment(n)
+    if att["source_version_id"] is not None:
+        raise AlreadyAdopted(n)
+    if discussion["story_id"] is not None:
+        raise BoundSession(discussion["external_id"])
+    out = ingest(conn, att["text"], att["name"], None, now)
+    st = repo.story_by_slug(conn, out["slug"])
+    repo.bind_discussion(conn, discussion["id"], st["id"])
+    repo.adopt_attachment(conn, discussion["id"], n, repo.latest_source_version(conn, st["id"])["id"])
+    return {"slug": out["slug"], "title": out["title"], "version": out["version"], "reused": out["reused"]}
+
+
 def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> dict:
     text = marrow_ingest.normalize(text)
     if not text.strip():

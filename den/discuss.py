@@ -123,10 +123,6 @@ class AttachmentTooLong(Exception):
     pass
 
 
-class BoundSession(Exception):
-    pass
-
-
 _RECOVERABLE = ("usage-limit", "transient", "timeout")
 
 
@@ -160,7 +156,7 @@ def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequenc
             raise LegacySession(session_id)   # 空局(還沒有逐字)不算舊局
         slug = row["slug"]
     if attach is not None and slug is not None:
-        raise BoundSession(session_id)
+        raise stories.BoundSession(session_id)
     ctx = stories.companion_context(conn, slug, row["id"] if row else None)
     if attach is not None:
         attach = _attach(ctx, attach)
