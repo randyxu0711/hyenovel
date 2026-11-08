@@ -202,23 +202,37 @@ def _span(made: list[float], us: list[dict]) -> list[int]:
 def session_turns(conn, session: str, v: int | None = None) -> dict:
     """單局逐字。每則 turn 帶 spans = 引文在第 v 版(預設最新)原文的位移。
     assistant 的「」只收最新版原文找得到的(其餘是強調或複述,不是引文);再對 v 定位,這版沒有 → None。
-    user 用其存下的 quotes。"""
+    user 用其存下的 quotes。沒作品的局沒有 spans。"""
     d = repo.discussion_by_session(conn, session)
     if d is None:
         raise LookupError(session)
-    latest = repo.latest_source_version(conn, d["story_id"])
-    shown = latest if v is None else repo.source_version_by_n(conn, d["story_id"], v)
-    if shown is None:
-        raise UnknownVersion(v)
+    if d["story_id"] is None:
+        if v is not None:
+            raise UnknownVersion(v)
+        latest = shown = None
+        made: list[float] = []
+    else:
+        latest = repo.latest_source_version(conn, d["story_id"])
+        shown = latest if v is None else repo.source_version_by_n(conn, d["story_id"], v)
+        if shown is None:
+            raise UnknownVersion(v)
+        made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     us = repo.utterances(conn, d["id"])
-    made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     marked = repo.reactions(conn, d["id"])
     remembered: dict[int, list[dict]] = {}
     for m in repo.memories_of_discussion(conn, d["id"]):
         remembered.setdefault(m["seq"], []).append({"id": m["id"], "scope": m["scope"]})
     turns = []
     for u in us:
-        if u["role"] == "assistant":
+        if u["role"] == "clear":
+            turns.append({"seq": u["seq"], "role": "clear", "ts": u["ts"]})
+            continue
+        if u["role"] == "compact":
+            turns.append({"seq": u["seq"], "role": "compact", "text": u["text"], "ts": u["ts"]})
+            continue
+        if latest is None:
+            qs = []
+        elif u["role"] == "assistant":
             qs = [q for q in spans.quotes_in(u["text"]) if gate.locate(q, latest["text"])]
         else:
             qs = u["quotes"] or []
@@ -226,11 +240,15 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
                       "memories": remembered.get(u["seq"], []),
                       "role": u["role"], "text": u["text"], "ts": u["ts"],
                       "character": u["character"], "quotes": u["quotes"] or [],
-                      "spans": spans.locate_all(qs, shown["text"]),
-                      "v": _at(made, u["ts"])})   # 說話當時的版本
-    return {"session": session, "slug": d["slug"], "title": _title(conn, d["story_id"], d["slug"]),
+                      "spans": spans.locate_all(qs, shown["text"]) if shown else [],
+                      "v": _at(made, u["ts"]) if made else None})   # 說話當時的版本
+    return {"session": session, "slug": d["slug"],
+            "title": _title(conn, d["story_id"], d["slug"]) if d["story_id"] is not None else None,
             "legacy": not any(u["role"] == "assistant" and u["character"] is not None for u in us),
-            "version": shown["n"], "turns": turns}
+            "version": shown["n"] if shown else None, "turns": turns,
+            "attachments": [{"n": a["n"], "seq": a["seq"], "name": a["name"], "chars": len(a["text"].strip()),
+                             "adopted": a["source_version_id"] is not None}
+                            for a in repo.attachments(conn, d["id"])]}
 
 
 def memory_row(conn, row: dict) -> dict:
@@ -254,7 +272,8 @@ def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:
               for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
     for d in out:
-        d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
+        if d["slug"] is not None:
+            d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
         d["session"] = d.pop("external_id")   # 與 session_rows 同名,前端只認 session
         d["legacy"] = legacy
     return out

@@ -47,7 +47,7 @@ def _memory_errors():
     except LookupError:
         raise _memory_reject(404, "unknown-memory", "沒有這條記憶") from None
     except memory.BadSource as e:
-        status = 422 if e.code == "quote-not-in-turn" else 404
+        status = 404 if e.code in ("unknown-session", "unknown-turn") else 422
         raise _memory_reject(status, e.code, "來源對不上") from None
     except memory.MemoryFull:
         raise _memory_reject(422, "memory-full", "超過這層的字數上限") from None
@@ -70,7 +70,7 @@ async def add_memory(body: MemoryIn, request: Request):
     given = [x is not None for x in (body.session, body.seq, body.quote)]
     if any(given) and not all(given):
         raise _memory_reject(422, "bad-source", "來源要給齊")
-    if body.slug is None and (body.scope == "work" or any(given)):
+    if body.slug is None and body.scope == "work":
         raise _memory_reject(422, "slug-required", "要指定作品")
     conn = request.app.state.mgr.conn
     story_id = None

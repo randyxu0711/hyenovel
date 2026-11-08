@@ -50,7 +50,8 @@ def _assert_err(r, status, code):
     ({"scope": "亂寫"}, 422, "bad-scope"),
     ({"text": " \n "}, 422, "blank-memory"),
     ({"scope": "work"}, 422, "slug-required"),
-    ({"session": "same", "seq": 0, "quote": "不寫結局"}, 422, "slug-required"),
+    ({"scope": "work", "session": "same", "seq": 0, "quote": "不寫結局"}, 422, "slug-required"),
+    ({"scope": "work", "slug": "other", "session": "same", "seq": 0, "quote": "不寫結局"}, 422, "session-not-of-work"),
     ({"slug": "nope"}, 404, "unknown-work"),
     ({"slug": "BAD SLUG!"}, 400, "bad-slug"),
     ({"slug": "mini", "session": "same"}, 422, "bad-source"),
@@ -207,3 +208,34 @@ def test_title_follows_the_rest_of_the_dashboard(data):
         row = _post(client, scope="work", slug="untitled").json()
         assert row["title"] == "分析給的題"
         assert client.get("/api/memory").json()["memories"][0]["title"] == "分析給的題"
+
+
+def test_author_memory_from_session_needs_no_slug(c):
+    row = _post(c, session="same", seq=0, quote="不寫結局").json()
+    assert (row["slug"], row["session"]) == ("mini", "same")
+
+
+def _storyless(c):
+    def seed(conn):
+        with conn:
+            d = repo.ensure_discussion(conn, None, "free", "web", None, 1.0)
+            repo.add_utterance(conn, d, 0, "user", "我想寫海", 5.0, "web", [], None)
+            repo.add_utterance(conn, d, 1, "compact", "作者想寫海", 6.0, "den", [], None)
+    c.portal.call(lambda: seed(c.app.state.mgr.conn))
+
+
+def test_storyless_session_work_memory_needs_slug(c):
+    _storyless(c)
+    _assert_err(_post(c, scope="work", session="free", seq=0, quote="想寫海"), 422, "slug-required")
+    _assert_err(_post(c, scope="work", slug="mini", session="free", seq=0, quote="想寫海"), 422, "session-not-of-work")
+
+
+def test_storyless_session_author_memory_ok(c):
+    _storyless(c)
+    row = _post(c, session="free", seq=0, quote="想寫海").json()
+    assert (row["scope"], row["slug"], row["session"]) == ("author", None, "free")
+
+
+def test_memory_from_compact_mark_rejected(c):
+    _storyless(c)
+    _assert_err(_post(c, session="free", seq=1, quote="想寫海"), 422, "not-a-turn")

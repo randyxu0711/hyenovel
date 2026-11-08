@@ -699,8 +699,8 @@ def test_unanchored_turn_records_empty_retrieved(c, fake_chat):
     assert "這輪可能用得上" not in fake_chat.calls[-1][1]
 
 
-def _reaction_url(sid, seq, slug="mini"):
-    return f"/api/works/{slug}/sessions/{sid}/turns/{seq}/reaction"
+def _reaction_url(sid, seq):
+    return f"/api/sessions/{sid}/turns/{seq}/reaction"
 
 
 def _turn(c, sid, seq):
@@ -722,12 +722,10 @@ def test_reaction_put_replace_delete(c):
 
 def test_reaction_rejects(c):
     sid = first_turn(c)
-    other = first_turn(c, "other")
+    c.post(f"/api/sessions/{sid}/clear")
     for url, body, status, code in (
-        (_reaction_url(sid, 1, "nope"), {"mark": "stopped"}, 404, "unknown-work"),
-        (_reaction_url(sid, 1, "BAD!"), {"mark": "stopped"}, 400, "bad-slug"),
         (_reaction_url("missing", 1), {"mark": "stopped"}, 404, "unknown-session"),
-        (_reaction_url(other, 1), {"mark": "stopped"}, 404, "unknown-session"),
+        (_reaction_url(sid, 2), {"mark": "stopped"}, 422, "not-assistant-turn"),
         (_reaction_url(sid, 9), {"mark": "stopped"}, 404, "unknown-turn"),
         (_reaction_url(sid, 0), {"mark": "stopped"}, 422, "not-assistant-turn"),
         (_reaction_url(sid, 1), {"mark": "liked"}, 422, "bad-mark"),
@@ -941,3 +939,40 @@ def test_lock_is_per_session_across_routes(c, fake_chat):
     finally:
         fake_chat.release.set()
     t.join(5)
+
+
+def test_reaction_on_storyless_session(c):
+    sid = events(free(c))[-1]["data"]["session_id"]
+    assert c.put(_reaction_url(sid, 1), json={"mark": "stopped"}).status_code == 200
+    assert _turn(c, sid, 1)["reaction"] == {"mark": "stopped", "comment": None}
+
+
+def test_storyless_session_turns(c, fake_chat):
+    sid = events(free(c, attach={"name": "海", "text": SEA}))[-1]["data"]["session_id"]
+    fake_chat.deltas = ["「她站在堤上沒有動」"]
+    events(free(c, sid, "這句?", quotes=["她站在堤上沒有動"]))
+    c.post(f"/api/sessions/{sid}/compact")
+    c.post(f"/api/sessions/{sid}/clear")
+    got = c.get(f"/api/sessions/{sid}").json()
+    assert (got["slug"], got["title"], got["version"]) == (None, None, None)
+    assert got["attachments"] == [{"n": 1, "seq": 0, "name": "海", "chars": len(SEA), "adopted": False}]
+    assert [t["role"] for t in got["turns"]] == ["user", "assistant", "user", "assistant", "compact", "clear"]
+    assert all(t["spans"] == [] for t in got["turns"][:4])
+    assert got["turns"][4] == {"seq": 4, "role": "compact", "text": "「她站在堤上沒有動」", "ts": got["turns"][4]["ts"]}
+    assert got["turns"][5] == {"seq": 5, "role": "clear", "ts": got["turns"][5]["ts"]}
+    r = c.get(f"/api/sessions/{sid}?v=1")
+    assert (r.status_code, r.json()["code"]) == (404, "unknown-version")
+
+
+def test_bound_session_turns_list_adopted_attachment(c):
+    sid = events(free(c, attach={"name": "海", "text": SEA}))[-1]["data"]["session_id"]
+    slug = c.post(f"/api/sessions/{sid}/attachments/1/adopt").json()["slug"]
+    got = c.get(f"/api/sessions/{sid}").json()
+    assert got["slug"] == slug and got["version"] == 1 and got["attachments"][0]["adopted"] is True
+
+
+def test_recent_sessions_lists_storyless(c):
+    sid = events(free(c))[-1]["data"]["session_id"]
+    c.post(f"/api/sessions/{sid}/clear")
+    got = c.get("/api/sessions?limit=1").json()["sessions"][0]
+    assert (got["session"], got["slug"], got["title"], got["turns"], got["preview"]) == (sid, None, None, 1, "AB")

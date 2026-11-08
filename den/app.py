@@ -16,6 +16,7 @@
   POST /extract             multipart `file` → {filename, text, chars} | 413 超限 | 400 抽字失敗
   GET  /stories/{slug}/discussion → 200 討論素材 | 404 | 409 未分析
   POST /discuss/{slug}      {"session_id"?, "message", "anchors"} → SSE token* → message + done | error
+  POST /discuss             同上,不帶作品;可帶 attach {name, text}(只在沒綁作品的局)
                             (串流前判:422 slug/body、404 無此篇/非此篇的局、409 未分析/該局有一輪在跑)
   GET  /works?q=&limit=N    → {"works": [...]}(標題/開頭比對,最近活動在前;limit 預設 20,1–50)
   GET  /works/{slug}        → 作品詳情(views.work_detail)| 404 unknown-work
@@ -23,8 +24,10 @@
                             404 unknown-work / unknown-version;要在 /works/{slug}/{part} 之前註冊)
   GET  /works/{slug}/sessions → {"sessions": [...]}(這篇的局,新到舊)
   GET  /sessions?limit=N    → {"sessions": [...]}(跨作品最近的局;1–100)
-  GET  /sessions/{id}       → {session, slug, title, turns} | 404 unknown-session-id
-  PUT  /works/{slug}/sessions/{id}/turns/{seq}/reaction {"mark","comment"?} → {mark, comment}
+  GET  /sessions/{id}       → {session, slug, title, turns, attachments} | 404 unknown-session-id
+  POST /sessions/{id}/clear → 201 {seq};POST /sessions/{id}/compact → 201 {seq, text}
+  POST /sessions/{id}/attachments/{n}/adopt → 201 {slug, title, version, reused}
+  PUT  /sessions/{id}/turns/{seq}/reaction {"mark","comment"?} → {mark, comment}
   DELETE 同路徑              → 204(404 unknown-work / unknown-session / unknown-turn;
                             422 not-assistant-turn / bad-mark / comment-too-long)
   GET  /memory              → {"memories": [...], "caps": {author, work}}
@@ -97,6 +100,7 @@ ERROR_CODES: tuple[str, ...] = (
     "bound-session", "too-many-attachments", "empty-attachment", "attachment-too-long",
     "nothing-to-clear", "nothing-to-compact", "compact-failed",
     "unknown-attachment", "already-adopted",
+    "session-not-of-work", "not-a-turn",
     "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session",
     "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
     "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",

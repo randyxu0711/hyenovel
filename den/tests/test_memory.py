@@ -41,7 +41,7 @@ def test_remember_records_source_and_utterance_time(conn, world):
     m = repo.memory(conn, mid)
     assert m["quote"] == "不寫結局" and m["learned_at"] == 9.0 and m["valid_from"] == USER_TS
     assert m["story_id"] is None and m["scope"] == "author"
-    assert (m["seq"], m["discussion_id"]) == (0, repo.discussion_by_external(conn, world["s1"], "abc")["id"])
+    assert (m["seq"], m["discussion_id"]) == (0, repo.discussion_by_session(conn, "abc")["id"])
 
 
 def test_remember_work_scope_keeps_story_on_the_row(conn, world):
@@ -54,13 +54,12 @@ def test_remember_typed_uses_now_and_has_no_source(conn, world):
     assert m["valid_from"] == 9.0 and m["quote"] is None and m["discussion_id"] is None
 
 
-def test_source_session_is_scoped_to_the_given_work(conn, world):
+def test_work_memory_from_other_works_session_rejected(conn, world):
     with pytest.raises(memory.BadSource) as e:
-        memory.remember(conn, "author", "只在甲局", 9.0, story_id=world["s2"],
-                        source=_src("same", 0, "只在甲局"))
-    assert e.value.code == "unknown-session"
-    assert memory.remember(conn, "author", "只在甲局", 9.0, story_id=world["s1"],
-                           source=_src("same", 0, "只在甲局"))
+        memory.remember(conn, "work", "只在甲局", 9.0, story_id=world["s2"], source=_src("same", 0, "只在甲局"))
+    assert e.value.code == "session-not-of-work"
+    assert memory.remember(conn, "author", "只在甲局", 9.0, story_id=world["s2"], source=_src("same", 0, "只在甲局"))
+    assert memory.remember(conn, "work", "只在甲局", 9.0, story_id=world["s1"], source=_src("same", 0, "只在甲局"))
 
 
 @pytest.mark.parametrize("source,code", [
@@ -76,10 +75,9 @@ def test_bad_source_codes_and_nothing_written(conn, world, source, code):
     assert repo.all_memories(conn) == []
 
 
-def test_source_without_story_is_unknown_session(conn, world):
-    with pytest.raises(memory.BadSource) as e:
-        memory.remember(conn, "author", "x", 9.0, source=_src())
-    assert e.value.code == "unknown-session"
+def test_author_source_needs_no_story(conn, world):
+    mid = memory.remember(conn, "author", "x", 9.0, source=_src(quote="不寫結局"))
+    assert repo.memory(conn, mid)["story_id"] is None
 
 
 def test_cap_counts_active_rows_per_scope(conn, world):

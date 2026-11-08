@@ -79,13 +79,10 @@ class NotAssistantTurn(Exception):
     """回饋記號只標在 assistant 的回覆上。"""
 
 
-def reaction_target(conn, slug: str, session: str, seq: int) -> int:
-    """回 discussion id。LookupError 無此篇 / UnknownSession / UnknownTurn / NotAssistantTurn。"""
-    st = repo.story_by_slug(conn, slug)
-    if st is None:
-        raise LookupError(slug)
+def reaction_target(conn, session: str, seq: int) -> int:
+    """回 discussion id。UnknownSession / UnknownTurn / NotAssistantTurn。"""
     d = repo.discussion_by_session(conn, session)
-    if d is None or d["story_id"] != st["id"]:
+    if d is None:
         raise UnknownSession(session)
     u = repo.utterance(conn, d["id"], seq)
     if u is None:

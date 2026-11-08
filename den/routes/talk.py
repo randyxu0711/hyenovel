@@ -90,26 +90,23 @@ async def session_turns(session: str, request: Request, v: int | None = Query(No
         raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
 
-def _reaction_target(request: Request, slug: str, session: str, seq: int) -> int:
+def _reaction_target(request: Request, session: str, seq: int) -> int:
     def reject(status: int, code: str, detail: str) -> ApiError:
         log.info("event=reject where=reaction reason=%s", code)
         return ApiError(status, code, detail)
-    slug_ok(slug, "reaction")
     try:
-        return discuss.reaction_target(request.app.state.mgr.conn, slug, session, seq)
-    except LookupError:
-        raise unknown_work("reaction") from None
+        return discuss.reaction_target(request.app.state.mgr.conn, session, seq)
     except discuss.UnknownSession:
-        raise reject(404, "unknown-session", "這篇沒有這一局") from None
+        raise reject(404, "unknown-session", "沒有這一局") from None
     except discuss.UnknownTurn:
         raise reject(404, "unknown-turn", "這一局沒有這則發言") from None
     except discuss.NotAssistantTurn:
         raise reject(422, "not-assistant-turn", "只能標陪讀者的回覆") from None
 
 
-@router.put("/works/{slug}/sessions/{session}/turns/{seq}/reaction")
-async def put_reaction(slug: str, session: str, seq: Seq, body: ReactionIn, request: Request):
-    d = _reaction_target(request, slug, session, seq)
+@router.put("/sessions/{session}/turns/{seq}/reaction")
+async def put_reaction(session: str, seq: Seq, body: ReactionIn, request: Request):
+    d = _reaction_target(request, session, seq)
     if body.mark not in REACTION_MARKS:
         log.info("event=reject where=reaction reason=bad-mark")
         raise ApiError(422, "bad-mark", "沒有這種記號")
@@ -123,9 +120,9 @@ async def put_reaction(slug: str, session: str, seq: Seq, body: ReactionIn, requ
     return {"mark": body.mark, "comment": comment}
 
 
-@router.delete("/works/{slug}/sessions/{session}/turns/{seq}/reaction", status_code=204)
-async def delete_reaction(slug: str, session: str, seq: Seq, request: Request):
-    d = _reaction_target(request, slug, session, seq)
+@router.delete("/sessions/{session}/turns/{seq}/reaction", status_code=204)
+async def delete_reaction(session: str, seq: Seq, request: Request):
+    d = _reaction_target(request, session, seq)
     conn = request.app.state.mgr.conn
     with conn:
         repo.clear_reaction(conn, d, seq)

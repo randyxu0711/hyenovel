@@ -151,12 +151,6 @@ def discussion_by_session(conn, external_id: str) -> dict | None:
                              "ON st.id = d.story_id WHERE d.external_id = ?", (external_id,)).fetchone())
 
 
-def discussion_by_external(conn, story_id: int, external_id: str) -> dict | None:
-    """依 (story, external_id) 找局;web 聊天端靠它把 session id 對回既有的局。"""
-    return _row(conn.execute("SELECT * FROM discussion WHERE story_id = ? AND external_id = ?",
-                             (story_id, external_id)).fetchone())
-
-
 def bind_discussion(conn, discussion_id: int, story_id: int) -> None:
     conn.execute("UPDATE discussion SET story_id = ? WHERE id = ? AND story_id IS NULL",
                  (story_id, discussion_id))
