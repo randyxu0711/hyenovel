@@ -7,6 +7,7 @@ const PATHS = {
   find: <><circle cx="8" cy="8" r="4.6" /><path d="M11.5 11.5L15 15" /></>,
   gear: <><path d="M2.5 4.5h4.2M9.3 4.5h6.2M2.5 9h8.2M13.3 9h2.2M2.5 13.5h2.2M7.3 13.5h8.2" /><circle cx="8" cy="4.5" r="1.3" /><circle cx="12" cy="9" r="1.3" /><circle cx="6" cy="13.5" r="1.3" /></>,
   plus: <path d="M9 4v10M4 9h10" />,
+  trash: <><path d="M3 5h12M7 5V3.5h4V5" /><path d="M4.5 5l.8 10h7.4l.8-10" /><path d="M7.5 8v4.5M10.5 8v4.5" /></>,
   dots: <><circle cx="4.5" cy="9" r=".9" /><circle cx="9" cy="9" r=".9" /><circle cx="13.5" cy="9" r=".9" /></>,
   talk: <path d="M3 4.5h12v8H8l-3.5 3v-3H3z" />,
   back: <><path d="M7 5L3.5 8.5 7 12" /><path d="M3.5 8.5H11a3.5 3.5 0 0 1 0 7H9" /></>,

@@ -69,22 +69,30 @@
 .dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 28px; display:flex; flex-direction:column; gap:18px}
 .dash .chat-log > *{width:100%; max-width:36em; margin-inline:auto}
 .dash .chat-wait{margin:0; color:var(--dash-ink-2); font-size:var(--dash-t-sm)}
-.dash .chat-who{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--dash-t-sm)}
+.dash .chat-who{display:flex; align-items:flex-end; gap:8px; margin:0 0 6px; font-size:var(--dash-t-sm)}
+.dash .chat-who .fig{flex:none; margin-left:-4px}
 .dash .chat-text{margin:0; white-space:pre-wrap; line-height:1.8}
-.dash .chat-me{box-sizing:border-box; padding:8px 14px; border-radius:10px; background:var(--dash-desk-2)}
+.dash .chat-me{position:relative; box-sizing:border-box; padding:8px 14px; border-radius:10px; background:var(--dash-desk-2)}
+.dash .chat-me .chat-mem:has(> .chat-mem-open:only-child){position:absolute; right:100%; top:50%; margin:0 4px 0 0; transform:translateY(-50%)}
 .dash .chat-log > .chat-me{width:auto; max-width:min(30em, 85%); margin-right:max(0px, calc((100% - 36em) / 2)); align-self:flex-end}
 .dash .chat-me p{margin:0; white-space:pre-wrap}
 .dash .chat-quote{margin:0 0 6px; font-family:var(--serif); font-size:var(--dash-t-sm); color:var(--dash-ink-2);
   text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
 .dash .chat-ver{display:flex; align-items:center; justify-content:center; gap:4px; margin:2px 0 4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-ver .ico{width:14px; height:14px}
-.dash .chat-tools{display:flex; justify-content:flex-end; gap:2px; padding:6px 16px 0}
-.dash .chat-cut{border-top:1px dashed var(--dash-line); height:0; margin:4px 0}
-.dash .chat-cut.is-compact{height:auto; display:flex; flex-direction:column; align-items:center}
-.dash .chat-cut.is-compact > summary{list-style:none; cursor:pointer; margin-top:-10px; padding:0 6px; background:var(--dash-desk); color:var(--dash-ink-2)}
+.dash .chat-tools{box-sizing:border-box; display:flex; justify-content:flex-end; gap:2px; width:calc(100% - 32px); max-width:36em; margin:0 auto; padding:6px 0 0; color:var(--dash-ink-2)}
+.dash .chat-cut{display:flex; align-items:center; gap:10px; margin-block:6px; color:var(--dash-ink-2)}
+.dash .chat-cut::before, .dash .chat-cut::after{content:""; flex:1; height:1px; background:color-mix(in srgb, var(--dash-ink-2) 40%, transparent)}
+.dash .chat-cut > .ico{width:14px; height:14px; opacity:.7}
+.dash .chat-cut.is-compact{display:block}
+.dash .chat-cut.is-compact::before, .dash .chat-cut.is-compact::after{content:none}
+.dash .chat-cut.is-compact > summary{display:flex; align-items:center; gap:10px; list-style:none; cursor:pointer; color:var(--dash-ink-2)}
+.dash .chat-cut.is-compact > summary::before, .dash .chat-cut.is-compact > summary::after{content:""; flex:1; height:1px; background:color-mix(in srgb, var(--dash-ink-2) 40%, transparent)}
+.dash .chat-cut.is-compact > summary:hover{color:var(--dash-ink)}
+.dash .chat-cut.is-compact > summary:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px; border-radius:4px}
 .dash .chat-cut.is-compact > summary::-webkit-details-marker{display:none}
 .dash .chat-cut.is-compact > summary .ico{width:14px; height:14px}
-.dash .chat-cut.is-compact > p{margin:6px 0 0; white-space:pre-wrap; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .chat-cut.is-compact > p{margin:8px 0 0; padding-left:12px; border-left:1px solid color-mix(in srgb, var(--dash-ink-2) 40%, transparent); white-space:pre-wrap; font-family:var(--serif); font-size:var(--dash-t-sm); line-height:1.7; color:var(--dash-ink-2)}
 .dash .chat-att{display:flex; align-items:center; gap:6px; box-sizing:border-box; padding:8px 12px; border:1px solid var(--dash-line); border-radius:6px;
   background:var(--dash-desk-2); box-shadow:var(--dash-sh-raise); font-size:var(--dash-t-sm)}
 .dash .chat-att > span{color:var(--dash-ink-2)}
@@ -124,12 +132,13 @@
 .dash .chat-mem-err{flex-basis:100%; margin:0}
 .dash .chat-wait{display:flex; align-items:center; gap:10px}
 @media (prefers-reduced-motion:reduce){ .dash .chat-turn.is-flash{animation:none} }
-.dash .chat-error{margin:0; padding:6px 16px; font-size:var(--dash-t-sm); color:var(--dash-ink)}
-.dash .chat-carries{display:flex; flex-direction:column; gap:4px; margin:4px 20px 0}
+.dash .chat-error{box-sizing:border-box; width:calc(100% - 32px); max-width:36em; margin:0 auto; padding:6px 0 0; text-align:center; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .chat-error[role="alert"]{color:var(--dash-ink)}
+.dash .chat-carries{display:flex; flex-direction:column; gap:4px; margin-top:4px}
 .dash .chat-carry{display:flex; align-items:flex-start; gap:6px}
 .dash .chat-carry .chat-quote{flex:1; margin:0}
 /* 輸入=一張小紙;角色坐在上緣;點進去紙浮起、浮出淡橫線 */
-.dash .composer{position:relative; margin:34px 16px 16px; background:var(--dash-paper); border-radius:10px; box-shadow:var(--dash-sh-raise); transition:box-shadow .3s, transform .3s cubic-bezier(.3,.7,.2,1)}
+.dash .composer{position:relative; margin:50px 16px 16px; background:var(--dash-paper); border-radius:10px; box-shadow:var(--dash-sh-raise); transition:box-shadow .3s, transform .3s cubic-bezier(.3,.7,.2,1)}
 .dash .composer::before{content:""; position:absolute; inset:10px 14px 44px; opacity:0; transition:opacity .35s; pointer-events:none;
   background-image:repeating-linear-gradient(transparent 0 25px, var(--dash-line) 25px 26px)}
 .dash .composer:focus-within{box-shadow:var(--dash-sh-float); transform:translateY(-2px)}
@@ -137,10 +146,15 @@
 .dash .composer textarea{position:relative; display:block; box-sizing:border-box; width:100%; border:0; background:none; resize:none; font:inherit; font-family:var(--serif); line-height:26px; color:var(--dash-paper-ink); outline:none; padding:10px 14px 2px; min-height:40px}
 .dash .composer textarea::placeholder{color:var(--dash-ink-2); opacity:.6}
 .dash .composer textarea:disabled{cursor:not-allowed}
+.dash .slash-menu{position:absolute; right:0; bottom:calc(100% + 8px); z-index:6; min-width:220px; margin:0; padding:4px; list-style:none; background:var(--dash-paper); border-radius:8px; box-shadow:var(--dash-sh-float)}
+.dash .slash-menu button{display:flex; align-items:baseline; gap:10px; width:100%; padding:6px 10px; border:0; border-radius:6px; background:none; text-align:left; font:inherit; font-size:var(--dash-t-sm); color:var(--dash-ink-2); cursor:pointer}
+.dash .slash-menu b{font-weight:600; color:var(--dash-ink); font-variant-numeric:tabular-nums}
+.dash .slash-menu [aria-selected="true"] button, .dash .slash-menu button:hover{background:var(--dash-line)}
+.dash .slash-menu button:disabled{cursor:not-allowed; opacity:.5}
 .dash .composer .bar{display:flex; align-items:center; gap:2px; padding:0 8px 6px}
 .dash .composer .bar .send{margin-left:auto; color:var(--dash-accent)}
 .dash .composer .bar .send:disabled{cursor:not-allowed; color:var(--dash-ink-2); opacity:.5}
-.dash .composer .who{position:absolute; left:14px; bottom:100%; width:54px; height:48px; margin-bottom:-9px; pointer-events:none}
+.dash .composer .who{position:absolute; left:14px; bottom:100%; width:72px; height:64px; margin-bottom:-12px; pointer-events:none}
 .dash .composer .who .fig{width:100%; height:100%}
 .dash .composer .dash-who.who{pointer-events:auto}
 .dash .composer .who .dash-who-key{display:block; width:100%; height:100%; padding:0; border:0; border-radius:12px; background:none; cursor:pointer}
@@ -151,21 +165,24 @@
 .dash-notice{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:6; margin:0; padding:8px 14px; border:1px solid var(--dash-line); border-radius:8px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-sm)}
 .dash .dash-notice button{margin-left:10px; border:0; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-size:var(--dash-t-md)}
 /* 進門 */
-.dash .home{min-height:100%; display:flex; align-items:center; justify-content:center; gap:40px; padding:24px; box-sizing:border-box}
-.dash .home-talk{flex:1; align-self:stretch; min-width:0; max-width:560px; display:flex; flex-direction:column; min-height:min(640px, calc(100vh - 48px))}
-.dash .home-talk-who{display:flex; justify-content:center; padding-top:8px}
-.dash .home-talk > .chat{flex:1}
-@media (max-width:1100px){
-  .dash .home{flex-direction:column; align-items:stretch; padding:16px}
-  .dash .home-inner{align-self:center}
-  .dash .home-talk{max-width:none; min-height:480px}
+.dash .home{height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; box-sizing:border-box}
+.dash .home-talk{width:min(720px,100%); min-height:0; display:flex; flex-direction:column}
+.dash .home-talk[data-live]{flex:1}
+.dash .home-talk > .chat{flex:1; min-height:0}
+.dash .home-talk:not([data-live]) .chat-log{display:none}
+.dash .home-talk:not([data-live]) .composer{margin-bottom:12vh}
+.dash .home-talk .composer{margin-top:136px}
+.dash .home-talk .composer > .who{width:172px; height:152px; margin-bottom:-26px; left:-44px}
+.dash .home-talk .composer textarea{min-height:78px; font-size:var(--dash-t-md); padding:14px 16px 4px}
+.dash .home-draft{display:flex; flex-direction:column; gap:8px; margin:0 16px; padding:14px 18px 10px; background:var(--dash-paper); border-radius:10px; box-shadow:var(--dash-sh-float)}
+.dash .home-draft-msg{margin:0 16px}
+@media (max-width:860px){
+  .dash .home-talk .composer{margin-top:100px}
+  .dash .home-talk .composer > .who{width:120px; height:106px; margin-bottom:-18px; left:10px}
 }
-.dash .home-inner{width:min(560px,100%); display:flex; flex-direction:column; align-items:center; gap:56px}
-.dash .home-inner .composer{width:min(560px,100%); margin:0}
-.dash .home-inner .composer .who{width:92px; height:82px; margin-bottom:-14px; left:22px}
-.dash .home-inner .composer textarea{min-height:104px; font-size:var(--dash-t-md); padding:16px 18px 4px}
-.dash .home-inner .composer::before{inset:16px 18px 44px}
-.dash .home-draft{display:flex; flex-direction:column; gap:8px; padding:20px 18px 10px}
+@media (max-width:700px){
+  .dash .home{padding:12px 0}
+}
 .dash .home-box{display:flex; flex-direction:column; gap:8px; padding:10px 12px}
 .dash .home-box textarea{border:0; background:none; resize:none; font:inherit; color:var(--dash-ink); min-height:44px; outline:none}
 .dash .home-box textarea:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:4px}
@@ -175,9 +192,14 @@
 .dash .home-meta{display:flex; gap:14px; margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .home-msg{margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .dash-who{position:relative}
-.dash .dash-who-menu{position:absolute; left:0; bottom:calc(100% + 6px); z-index:5; display:flex; flex-direction:column; gap:2px; padding:6px; min-width:140px}
-.dash .dash-who-item{display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:6px; background:transparent; cursor:pointer; color:var(--dash-ink); text-align:left}
-.dash .dash-who-item[aria-pressed="true"]{background:var(--dash-desk-2); font-weight:600}
+.dash .dash-who-menu{position:absolute; left:0; bottom:calc(100% + 6px); z-index:5; display:flex; flex-wrap:wrap; align-items:flex-end; gap:4px; width:max-content; max-width:min(400px, calc(100vw - 32px)); padding:8px 8px 6px}
+.dash .dash-who-item{display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 8px 4px; border:0; border-radius:8px; background:transparent; cursor:pointer; color:var(--dash-ink-2); font-family:var(--serif); font-size:var(--dash-t-sm); white-space:nowrap}
+.dash .dash-who-menu .dash-who-item .fig{width:48px; height:40px}
+.dash .dash-who-item:hover{background:var(--dash-line); color:var(--dash-ink)}
+.dash .dash-who-item:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:1px}
+.dash .dash-who-item[aria-pressed="true"]{color:var(--dash-ink)}
+.dash .dash-who-name{padding:0 2px 1px; border-bottom:1px solid transparent}
+.dash .dash-who-item[aria-pressed="true"] .dash-who-name{border-bottom-color:currentColor}
 /* 稿窗格:頂列(標題 ▾、版本、狀態)+ 紙。紙約 34 個全形字/行,多的寬度變成兩側留白。 */
 .dash .reader{padding:0 24px}
 .dash .paper-top{position:sticky; top:0; z-index:2; display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px; min-height:54px; padding:8px 0; background:var(--dash-desk)}
@@ -311,9 +333,22 @@
 .dash .dash-set-count{margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .dash-set-archive section{margin:0 0 26px}
 .dash .dash-set-archive .dash-set-count{margin:-16px 0 24px}
+.dash .dash-set-archive > .set-group-h + .dash-set-count{margin:0 0 20px}
 .dash .dash-set-archive h2{font-size:var(--dash-t-sm); letter-spacing:0; color:var(--dash-ink)}
 .dash .dash-set-archive h2 .dash-dm{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .dash-set-archive li{list-style:none; margin:0}
+.dash .dash-set-archived{margin:0 0 32px}
+.dash .dash-set-archived ul{margin:0; padding:0}
+.dash .dash-set-archived li{list-style:none; display:flex; align-items:center; gap:2px; margin:0}
+.dash .dash-set-archived .arch-open{flex:1; min-width:0; display:flex; align-items:baseline; gap:10px; padding:8px 10px; margin-left:-10px; border:0; border-radius:8px; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer}
+.dash .dash-set-archived .arch-open:hover{background:var(--dash-desk-2)}
+.dash .dash-set-archived .arch-open:focus-visible{outline:2px solid var(--dash-accent); outline-offset:-2px}
+.dash .dash-set-archived .arch-open b{flex:none; font-weight:500; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .dash-set-archived .arch-open span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .dash-set-archived .arch-open time{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .dash-set-archived .arch-sure{flex:1; display:flex; align-items:center; gap:6px; margin:0; padding:6px 0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .dash-set-archived .arch-sure span{flex:1}
+.dash .dash-set-archived .arch-kill{color:var(--dash-accent)}
 .dash .dash-set-archive button{display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:baseline; gap:16px; width:100%; margin:0 -10px; padding:8px 10px; box-sizing:content-box; border:0; border-radius:8px; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer}
 .dash .dash-set-archive button:hover{background:var(--dash-desk-2)}
 .dash .dash-set-archive button:focus-visible{outline:2px solid var(--dash-accent); outline-offset:-2px}
@@ -349,20 +384,31 @@
 }
 .dash .ib:hover{background:var(--dash-line); color:var(--dash-ink)}
 .dash .ib[aria-pressed="true"], .dash .ib[aria-current]{background:var(--dash-paper); color:var(--dash-ink); box-shadow:var(--dash-sh-raise)}
-.dash, .dash *{scrollbar-width:thin; scrollbar-color:var(--dash-line) transparent}
-.dash ::-webkit-scrollbar{width:8px; height:8px}
-.dash ::-webkit-scrollbar-thumb{background:var(--dash-line); border-radius:8px}
-.dash ::-webkit-scrollbar-thumb:hover{background:var(--dash-accent)}
+@supports not selector(::-webkit-scrollbar){
+  .dash, .dash *{scrollbar-width:thin; scrollbar-color:var(--dash-line) transparent}
+  .dash :hover{scrollbar-color:var(--dash-ink-2) transparent}
+}
+.dash ::-webkit-scrollbar{width:10px; height:10px; background:transparent}
+.dash ::-webkit-scrollbar-button, .dash ::-webkit-scrollbar-corner{display:none; background:transparent}
 .dash ::-webkit-scrollbar-track{background:transparent}
+.dash ::-webkit-scrollbar-thumb{background:var(--dash-line); background-clip:content-box; border:4px solid transparent; border-radius:10px; min-height:40px}
+.dash :hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb, var(--dash-ink-2) 55%, transparent)}
+.dash ::-webkit-scrollbar-thumb:hover, .dash ::-webkit-scrollbar-thumb:active{background-color:var(--dash-ink-2); border-width:3px}
 
 /* ── 書架(第 2 輪 §4):展開 244px / 窄條 56px ── */
 .dash-rail{display:flex; flex-direction:column; min-height:0; overflow:hidden; background:var(--dash-desk-2)}
 .dash .shelf-top{display:flex; align-items:center; gap:2px; padding:14px 10px 8px 12px}
 .dash-rail[data-shelf="rail"] .shelf-top{flex-direction:column; padding:12px 0; gap:6px}
 .dash .shelf-brand{display:inline-flex; align-items:center; gap:7px; margin-right:auto; padding-left:6px; font-family:var(--serif); font-weight:600; font-size:var(--dash-t-lg)}
+.dash a.shelf-brand{color:inherit; text-decoration:none; border-radius:6px}
+.dash a.shelf-brand:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .shelf-find{display:flex; align-items:center; gap:6px; margin:0 10px 6px; padding:0 8px; border-radius:8px; color:var(--dash-ink-2)}
 .dash .shelf-find:focus-within{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .shelf-find input{flex:1; min-width:0; border:0; background:none; padding:6px 0; font:inherit; font-size:var(--dash-t-sm); color:var(--dash-ink); outline:none}
+.dash .shelf-chats{padding:0 8px 6px; margin-bottom:6px; border-bottom:1px solid var(--dash-line)}
+.dash .shelf-chats-h{display:flex; align-items:center; justify-content:space-between; padding:2px 0 2px 8px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .shelf-chats-h b{font-weight:500}
+.dash .shelf-chats .shelf-sess{margin:0; max-height:9.5em; overflow:auto}
 .dash .shelf-works{list-style:none; margin:0; padding:2px 8px 16px; overflow:auto; flex:1 1 auto; min-height:0}
 .dash .shelf-work > button{
   display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px; width:100%; padding:8px 8px 6px; cursor:pointer;
@@ -384,6 +430,10 @@
 .dash .shelf-sess button:hover{background:var(--dash-line); color:var(--dash-ink)}
 .dash .shelf-sess button[aria-current="true"]{background:var(--dash-line); color:var(--dash-ink)}
 .dash .shelf-sess button:disabled{cursor:not-allowed}
+.dash .shelf-sess li{position:relative}
+.dash .shelf-sess .shelf-x{position:absolute; right:2px; top:50%; transform:translateY(-50%); width:24px; height:24px; padding:0; opacity:0; background:var(--dash-line)}
+.dash .shelf-sess li:hover .shelf-x, .dash .shelf-sess .shelf-x:focus-visible{opacity:1}
+.dash .shelf-sess li:hover .shelf-vr{visibility:hidden}
 .dash .shelf-sess .ico{width:14px; height:14px}
 .dash .shelf-st{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .dash .shelf-vr{flex:none; font-size:var(--dash-t-xs); font-variant-numeric:tabular-nums; opacity:.75}

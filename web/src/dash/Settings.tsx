@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, DashError, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
+import { api, DashError, type ArchivedSession, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
 import Figure from "./Figure";
 import CardEditor, { SAVED_LIMITS } from "./CardEditor";
 import Icon, { type IconName } from "./Icon";
@@ -52,14 +52,57 @@ function Archive() {
       e => { if (live) setErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
   }, []);
-  const show = (id: string) => api.session(id).then(setDetail, e => setErr(e instanceof DashError ? e.code : "unknown"));
+  const [archived, setArchived] = useState<ArchivedSession[]>([]);
+  const [sure, setSure] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.archivedSessions().then(r => { if (live) setArchived(r); }, () => {});
+    return () => { live = false; };
+  }, []);
+  const fail = (e: unknown) => setErr(e instanceof DashError ? e.code : "unknown");
+  const drop = (id: string) => { setArchived(rs => rs.filter(r => r.session !== id)); setSure(null); };
+  const restore = (id: string) => api.unarchiveSession(id).then(() => drop(id), fail);
+  const remove = (id: string) => api.deleteSession(id).then(() => drop(id), fail);
+  const show = (id: string) => api.session(id).then(setDetail, fail);
   const who = speakerChanges(detail?.turns ?? [], chars.byId);
   const now = Date.now() / 1000;
   return (
     <>
       {err && <p role="alert">{t(errorMessage(err))}</p>}
+      {archived.length > 0 && !detail && (
+        <section className="dash-set-archived" aria-label={t("set.archived")}>
+          <h2 className="set-group-h">{t("set.archived")}<span className="dash-dm">{archived.length}</span></h2>
+          <ul>
+            {archived.map(s => (
+              <li key={s.session}>
+                {sure === s.session ? (
+                  <p className="arch-sure" role="group" aria-label={t("session.delete")}>
+                    <span>{t("session.deleteSure")}</span>
+                    <button type="button" className="ib arch-kill" aria-label={t("session.delete")} title={t("session.delete")}
+                      onClick={() => void remove(s.session)}><Icon name="trash" /></button>
+                    <button type="button" className="ib" aria-label={t("memory.cancel")} title={t("memory.cancel")}
+                      onClick={() => setSure(null)}><Icon name="close" /></button>
+                  </p>
+                ) : (
+                  <>
+                    <button type="button" className="arch-open" onClick={() => void show(s.session)}>
+                      {s.title && <b>{s.title}</b>}<span>{plain(s.preview)}</span>
+                      <time className="dash-dm">{whenLabel(s.archived_at, now, lang)}</time>
+                    </button>
+                    <button type="button" className="ib" aria-label={t("session.restore")} title={t("session.restore")}
+                      onClick={() => void restore(s.session)}><Icon name="back" /></button>
+                    <button type="button" className="ib" aria-label={t("session.delete")} title={t("session.delete")}
+                      onClick={() => setSure(s.session)}><Icon name="trash" /></button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {rows && !detail && (
         <div className="dash-set-archive">
+          {archived.length > 0 && <h2 className="set-group-h">{t("set.legacyHead")}</h2>}
           <p className="dash-set-count">{t("set.legacy", { n: rows.length })}</p>
           {byWork(rows).map(g => (
             <section key={g.slug} aria-label={g.title}>

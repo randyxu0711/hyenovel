@@ -133,6 +133,36 @@ describe("純聊天的附件", () => {
     expect(posts).toEqual(["/api/sessions/c1/compact", "/api/sessions/c1/clear"]);
   });
 
+  it("typing / lists commands; /clear + Enter clears instead of sending", async () => {
+    mount();
+    await screen.findByText("嗨");
+    const box = screen.getByLabelText("對話輸入");
+    fireEvent.change(box, { target: { value: "/" } });
+    const menu = screen.getByRole("listbox", { name: "指令" });
+    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話(花一次額度)"]);
+    fireEvent.change(box, { target: { value: "/cl" } });
+    expect(within(screen.getByRole("listbox", { name: "指令" })).getAllByRole("option")).toHaveLength(1);
+    fireEvent.keyDown(box, { key: "Enter" });
+    await screen.findByRole("separator", { name: "對話清空" });
+    expect(posts).toEqual(["/api/sessions/c1/clear"]);
+    expect((box as HTMLTextAreaElement).value).toBe("");
+    expect(screen.queryByRole("listbox", { name: "指令" })).toBeNull();
+  });
+
+  it("slash menu: arrows pick, Esc closes, unknown command is sent as text", async () => {
+    mount();
+    await screen.findByText("嗨");
+    const box = screen.getByLabelText("對話輸入");
+    fireEvent.change(box, { target: { value: "/" } });
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+    const opts = within(screen.getByRole("listbox", { name: "指令" })).getAllByRole("option");
+    expect(opts[1].getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(screen.queryByRole("listbox", { name: "指令" })).toBeNull();
+    fireEvent.change(box, { target: { value: "/海 是什麼" } });
+    expect(screen.queryByRole("listbox", { name: "指令" })).toBeNull();
+  });
+
   it("remember on storyless session hides work scope", async () => {
     mount();
     const me = await screen.findByText("嗨");

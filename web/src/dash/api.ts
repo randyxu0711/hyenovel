@@ -10,7 +10,7 @@ export const DEN_ERROR_CODES = [
   "no-runner", "nothing-to-resume", "bad-host", "bad-origin", "bad-token", "bad-launch-code",
   "unknown-character", "unknown-session-id",
   "bound-session", "too-many-attachments", "empty-attachment", "attachment-too-long",
-  "nothing-to-clear", "nothing-to-compact", "compact-failed",
+  "nothing-to-clear", "nothing-to-compact", "compact-failed", "not-archived",
   "unknown-attachment", "already-adopted",
   "session-not-of-work", "not-a-turn",
   "quote-needs-message", "too-many-quotes", "unknown-version", "legacy-session", "usage-limit", "no-response", "commit-failed", "chat-failed",
@@ -71,6 +71,7 @@ export type SessionRow = {
 export type RecentSession = Omit<SessionRow, "version"> & { slug: string | null; title: string | null };
 export type ReactionMark = "stopped" | "misread";
 export type TurnReaction = { mark: ReactionMark; comment: string | null };
+export type ArchivedSession = { session: string; slug: string | null; title: string | null; preview: string; last_at: number | null; archived_at: number };
 export type MemoryScope = "author" | "work";
 export type TurnMemory = { id: number; scope: MemoryScope };
 export type Memory = {
@@ -210,6 +211,10 @@ export const api = {
     request<void>(reactionUrl(session, seq), { method: "DELETE" }),
   clearSession: (session: string) => request<{ seq: number }>(`${sessionUrl(session)}/clear`, { method: "POST" }),
   compactSession: (session: string) => request<{ seq: number; text: string }>(`${sessionUrl(session)}/compact`, { method: "POST" }),
+  archiveSession: (session: string) => request<void>(`${sessionUrl(session)}/archive`, { method: "POST" }),
+  unarchiveSession: (session: string) => request<void>(`${sessionUrl(session)}/unarchive`, { method: "POST" }),
+  deleteSession: (session: string) => request<void>(sessionUrl(session), { method: "DELETE" }),
+  archivedSessions: () => request<{ sessions: ArchivedSession[] }>("/api/archived-sessions").then(r => r.sessions),
   adoptAttachment: (session: string, n: number) =>
     request<Adopted>(`${sessionUrl(session)}/attachments/${n}/adopt`, { method: "POST" }),
   memories: () => request<MemoryList>("/api/memory"),

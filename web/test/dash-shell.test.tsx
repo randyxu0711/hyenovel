@@ -99,7 +99,7 @@ describe("Dash 殼與路由", () => {
   });
   it("交新稿鈕回到 /", async () => {
     mount("/w/d2");
-    fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: "開一局聊天" }));
     expect(screen.getByTestId("loc").textContent).toBe("/");
     expect(dash().dataset.view).toBe("home");
   });
@@ -114,14 +114,15 @@ describe("Dash 殼與路由", () => {
   });
   it("沒有作品時 home 邀請把稿拖進來", async () => {
     mount("/", []);
-    expect(((await screen.findByRole("textbox", { name: "貼上或拖進一篇稿" })) as HTMLTextAreaElement).placeholder).toBe("貼上或拖進一篇稿");
+    const box = await screen.findByRole("textbox", { name: "對話輸入" });
+    await waitFor(() => expect((box as HTMLTextAreaElement).placeholder).toMatch(/貼上一篇稿/));
   });
 });
 
 describe("Dash 交稿後", () => {
   const draft = async () => {
-    fireEvent.click(within(await nav()).getByRole("button", { name: "交一篇新稿" }));
-    await screen.findByRole("textbox", { name: "貼上或拖進一篇稿" });   // 交新稿回到進門畫面
+    fireEvent.click(within(await nav()).getByRole("button", { name: "開一局聊天" }));
+    await screen.findByRole("textbox", { name: "對話輸入" });
     fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [new File(["x"], "最近的.md")] } });
     fireEvent.click(await screen.findByRole("button", { name: "分析" }));
   };
