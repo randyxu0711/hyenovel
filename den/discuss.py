@@ -18,22 +18,48 @@ log = logging.getLogger("hyenovel")
 _ROLE = {"user": "作者", "assistant": "你"}
 OPENER = "(作者還沒說話。你先開口。)"
 CONTINUE = "(作者這次沒說話,等你接著說。)"
+ATTACHED = "(作者丟進來一份稿〈{name}〉。)"
 
 
 def _quotes_block(quotes) -> list[str]:
     return ["作者指著原文的這幾段:", *[f"「{q}」" for q in quotes]] if quotes else []
 
 
-def render_turn(history: list[dict], message: str, quotes=(), notes: str = "") -> str:
+def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
+                summary: str | None = None, attached: Sequence[dict] = ()) -> str:
     """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
     作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。
     notes 是這輪檢索到的細節,只存在這輪,不進歷史。"""
     block = [*([notes] if notes else []), *_quotes_block(quotes)]
+    head = [f"之前的對話摘要:\n<summary>\n{summary}\n</summary>", ""] if summary else []
     if not history:
-        return "\n".join([*block, "", "作者這一輪說:", message]) if block else message
-    lines = [x for h in history for x in (*_quotes_block(h.get("quotes")), f"{_ROLE[h['role']]}:{h['text']}")]
-    return "\n".join(["以下是這一局到目前為止的對話(作者 = 使用者):",
+        if not head:
+            return "\n".join([*block, "", "作者這一輪說:", message]) if block else message
+        return "\n".join([*head, *block, *([""] if block else []), "作者這一輪說:", message])
+    dropped = {a["seq"]: a["name"] for a in attached}
+    lines = [x for h in history for x in (
+        *([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
+        *_quotes_block(h.get("quotes")), f"{_ROLE[h['role']]}:{h['text']}")]
+    return "\n".join([*head, "以下是這一局到目前為止的對話(作者 = 使用者):",
                       "<history>", *lines, "</history>", "", *block, "作者這一輪說:", message])
+
+
+_TURNS = ("user", "assistant")
+_MARKS = ("clear", "compact")
+
+
+def live_history(utterances: list[dict]) -> tuple[str | None, list[dict]]:
+    last = max((i for i, u in enumerate(utterances) if u["role"] in _MARKS), default=None)
+    if last is None:
+        return None, [u for u in utterances if u["role"] in _TURNS]
+    mark = utterances[last]
+    return (mark["text"] if mark["role"] == "compact" else None,
+            [u for u in utterances[last + 1:] if u["role"] in _TURNS])
+
+
+def since_clear(utterances: list[dict]) -> list[dict]:
+    last = max((i for i, u in enumerate(utterances) if u["role"] == "clear"), default=-1)
+    return [u for u in utterances[last + 1:] if u["role"] in _TURNS]
 
 
 class UnknownSession(Exception):
