@@ -13,6 +13,15 @@ def test_render_turn_wraps_history_and_marks_new_message():
     assert "作者:A" in out and "你:B" in out
 
 
+def test_render_turn_labels_other_characters_replies_by_name():
+    out = render_turn([{"role": "user", "text": "A"},
+                       {"role": "assistant", "text": "B", "character": "hyena"},
+                       {"role": "assistant", "text": "C", "character": "deer"}], "D",
+                      others={"hyena": "鬣狗"})
+    assert "另一位讀伴(鬣狗):B" in out and "你:C" in out
+    assert "你:B" not in out
+
+
 def test_render_turn_includes_quotes_block():
     out = render_turn([], "這句怎麼樣?", ["整條街只有他那盞燈還亮著", "他把燈關了"])
     assert out.index("作者指著原文的這幾段:") < out.index("「整條街只有他那盞燈還亮著」") \

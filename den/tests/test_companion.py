@@ -9,7 +9,7 @@ def render(ctx, character):
     return companion.assemble(ctx, character).text
 
 
-READS = {"hyena": "照閱讀的順序", "buffalo": "最強的感覺", "deer": "世界撐開"}
+READS = {"hyena": "嘴最壞的那個", "buffalo": "落下一個判斷", "deer": "畫面外面"}
 
 
 def _reading(character_id):
@@ -37,7 +37,7 @@ def test_persona_text_is_channel_agnostic():   # spec §4:人格不提管道
 def test_no_character_asks_consent_before_disagreeing():   # spike v1:先徵詢會變閃躲
     for cid in READS:
         assert "想聽嗎" not in persona(_reading(cid))
-        assert "老實講你讀到的" in persona(_reading(cid))
+        assert "不假裝讀懂" in persona(_reading(cid))
 
 
 # ── assemble ──
@@ -52,7 +52,7 @@ def _ctx(**kw):
 
 def test_assemble_source_only_mentions_no_structure():
     out = render(_ctx(progress="running"), _c("hyena"))
-    assert "她把傘收進門縫。" in out and "你讀的時候注意到的結構" not in out
+    assert "她把傘收進門縫。" in out and "這篇的結構資料" not in out
     assert "還在背景跑" in out and READS["hyena"] in out
 
 
@@ -83,17 +83,15 @@ def test_running_hint_only_without_analysis():
 
 
 _PERSONA_HEAD = "".join(_read(f"companion/{n}.md").rstrip() + "\n\n" for n in ("base", "reading", "closing"))
+_BOUNDARY = "".join(_read(f"companion/{n}.md").rstrip() + "\n\n" for n in ("base", "reading"))
 
 
 def _legacy_render(ctx, character):
-    persona_text = _PERSONA_HEAD + _read(f"characters/{character['id']}.md").rstrip() + "\n"
-    if character["voice"].strip():
-        persona_text += "\n" + character["voice"].rstrip() + "\n"
-    out = [persona_text.rstrip(), "", "---", f"# 《{ctx['title'] or ctx['slug']}》",
+    out = [_BOUNDARY.rstrip("\n"), "", "---", f"# 《{ctx['title'] or ctx['slug']}》",
            "## 原文", "<source>", ctx["source"].rstrip(), "</source>"]
     a = ctx["analysis"]
     if a is not None:
-        out += ["", "## 你讀的時候注意到的結構(私下筆記,不要原樣念給作者)"]
+        out += ["", "## 這篇的結構資料(背景,不是你的讀法;不要原樣念給作者)"]
         if a.get("synopsis"):
             out.append(f"梗概:{a['synopsis']}")
         out += [f"- {n['type']} {n['label']}" for n in a.get("nodes") or ()]
@@ -101,6 +99,10 @@ def _legacy_render(ctx, character):
         out += ["", "## 現在的狀況", companion._RUNNING]
     elif a is None:
         out += ["", "## 現在的狀況", companion._IDLE]
+    out += ["", "---", "## 你這個讀者", _read("companion/closing.md").rstrip(), "",
+            _read(f"characters/{character['id']}.md").rstrip()]
+    if character["voice"].strip():
+        out += ["", character["voice"].rstrip()]
     return "\n".join(out) + "\n"
 
 
@@ -148,13 +150,13 @@ def test_seeds_show_kind_and_quotes_only_moved_shows_position_only():
     seeds = [{"kind": "confused", "quotes": ["卡句"]}, {"kind": "wondering", "quotes": ["甲句", "乙句"]},
              {"kind": "moved", "quotes": ["動句"]}]
     out = render(_ctx(seeds=seeds), _c("hyena"))
-    assert "- 讀到卡住:「卡句」\n" in out
-    assert "- 看不出作用:「甲句」「乙句」\n" in out
+    assert "- 有人讀不懂:「卡句」\n" in out
+    assert "- 有人看不出作用:「甲句」「乙句」\n" in out
     assert "- 「動句」\n" in out and "打動" not in out
 
 
 def test_no_seeds_no_section():
-    assert "可以聊的地方" not in render(_ctx(), _c("hyena"))
+    assert "別的讀者標過的地方" not in render(_ctx(), _c("hyena"))
 
 
 def test_seed_header_is_instruction_and_lines_are_material():
@@ -167,7 +169,7 @@ def test_seed_header_is_instruction_and_lines_are_material():
 def test_memory_layer_sits_between_persona_and_work():
     p = companion.assemble(_ctx(memory={"author": ["我不寫結局"], "work": ["想寫海"]}), _c("hyena", "聲音"))
     names = [x.name for x in p.layers]
-    assert names.index("voice") < names.index("memory_header") < names.index("memory") < names.index("work")
+    assert names.index("memory_header") < names.index("memory") < names.index("work") < names.index("character") < names.index("voice")
     assert "關於作者:\n- 我不寫結局\n" in p.text and "關於這篇:\n- 想寫海\n" in p.text
 
 
@@ -209,7 +211,7 @@ def _names(ctx, voice=""):
 
 
 def test_assemble_storyless_has_no_reading_layer():
-    assert _names(_FREE, "聲") == ["base", "closing", "character", "voice"]
+    assert _names(_FREE, "聲") == ["base", "character_header", "closing", "character", "voice"]
     assert "剛讀完" not in companion.assemble(_FREE, _c("hyena")).text
 
 
@@ -218,19 +220,40 @@ def test_assemble_attachment_only_adds_reading_and_attachment():
                                     {"n": 3, "seq": 2, "name": "山", "text": "石頭。"}]}
     p = companion.assemble(ctx, _c("hyena"))
     names = [x.name for x in p.layers]
-    assert names == ["base", "reading", "closing", "character", "attachment_1", "attachment_3"]
+    assert names == ["base", "reading", "attachment_1", "attachment_3", "character_header", "closing", "character"]
     assert "---\n# 作者丟進來的稿〈海〉\n<source>\n浪打上來。\n</source>\n" in p.text
     assert "attachment_1" in p.fingerprint()["material"]
 
 
-def test_assemble_work_has_reading_before_character():
+def test_assemble_puts_boundaries_first_and_character_last():
     names = _names(_ctx(memory={"author": ["x"], "work": []}), "聲")
-    assert names[:5] == ["base", "reading", "closing", "character", "voice"]
-    assert names.index("memory") < names.index("work") < names.index("status")
+    assert names[:2] == ["base", "reading"]
+    assert names[-4:] == ["character_header", "closing", "character", "voice"]
+    assert names.index("memory") < names.index("work") < names.index("status") < names.index("character")
 
 
 def test_base_and_reading_split():
     base, reading = _read("companion/base.md"), _read("companion/reading.md")
-    assert base.startswith("你是作者的朋友。") and "剛讀完" not in base and "沒稿就用中文" in base
-    assert reading.startswith("你剛讀完作者的稿。") and "逐字引" in reading
+    assert base.startswith("你是作者的朋友,") and "剛讀完" not in base and "沒稿就用中文" in base
+    assert reading.startswith("你剛讀完作者的稿。") and "逐字照抄" in reading
     assert "接下來寫的是你這個讀者怎麼讀" not in base + reading
+
+
+def test_examples_come_last_with_header_and_count_as_instructions():
+    c = {**_c("hyena", "聲"), "examples": "<example>\n鬣狗:嗯哼\n</example>\n"}
+    p = companion.assemble(_ctx(), c)
+    assert [x.name for x in p.layers][-3:] == ["character", "voice", "examples"]
+    assert p.text.endswith("\n" + _read("companion/examples.md").rstrip() + "\n\n<example>\n鬣狗:嗯哼\n</example>\n")
+    fp = p.fingerprint()
+    assert "examples" in fp["layers"] and "examples" not in fp["material"]
+
+
+def test_blank_examples_add_no_layer():
+    assert "examples" not in _names(_ctx()) and "<example>" not in render(_ctx(), {**_c("hyena"), "examples": "  \n"}) and "## 你平常怎麼說話" not in render(_ctx(), {**_c("hyena"), "examples": "  \n"})
+
+
+def test_every_builtin_example_names_speaker_by_macro():
+    for c in characters.builtins():
+        ex = _read(f"characters/{c['id']}.examples.md")
+        assert ex.count("<example>") == ex.count("</example>") >= 4
+        assert "\n{{char}}:" in ex and f"\n{c['name']['zh-Hant']}:" not in ex

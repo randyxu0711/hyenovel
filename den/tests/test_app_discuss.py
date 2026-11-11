@@ -439,7 +439,7 @@ def test_unanalyzed_story_can_chat_with_source_only(c, fake_chat):
     evs = post_discuss(c, slug, None, "你覺得呢")
     assert evs[-1]["event"] == "done"
     system = fake_chat.calls[-1][0]
-    assert "未分析的稿。" in system and "你讀的時候注意到的結構" not in system
+    assert "未分析的稿。" in system and "這篇的結構資料" not in system
     sid = evs[-1]["data"]["session_id"]
     us = in_loop(c, lambda conn: _session_rows(conn, sid, slug))[1]
     assert {u["analysis_fp"] for u in us} == {None}
@@ -453,7 +453,7 @@ def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
     fb, concl = in_loop(c, judged)
     first_turn(c)
     system = fake_chat.calls[-1][0]
-    assert "你讀的時候注意到的結構" in system
+    assert "這篇的結構資料" in system
     assert "編輯回饋" not in system and "已留下的結論" not in system
     for text in concl:
         assert text not in system
@@ -464,7 +464,7 @@ def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
 
 def test_character_defaults_to_hyena_and_is_recorded(c, fake_chat):
     sid = first_turn(c)
-    assert "照閱讀的順序" in fake_chat.calls[-1][0]
+    assert "嘴最壞的那個" in fake_chat.calls[-1][0]
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert (user["character"], asst["character"]) == (None, "hyena")
 
@@ -528,7 +528,16 @@ def test_character_carries_over_and_overrides(c, fake_chat):
     assert _last_assistant(c, evs)["character"] == "deer"
     post_discuss(c, "mini", sid, "然後")
     assert _last_assistant(c, evs)["character"] == "deer"
-    assert "世界撐開" in fake_chat.calls[-1][0]
+    assert "畫面外面" in fake_chat.calls[-1][0]
+
+
+def test_switched_character_sees_previous_replies_as_another_companion(c, fake_chat):
+    evs = [json.loads(line[6:]) for line in _post(c, {"character": "deer"}).text.splitlines()
+           if line.startswith("data: ")]
+    sid = evs[-1]["data"]["session_id"]
+    c.post("/api/discuss/mini", json={"session_id": sid, "message": "換你", "character": "buffalo"})
+    history = fake_chat.calls[-1][1]
+    assert "另一位讀伴(鹿):AB" in history and "你:AB" not in history
 
 
 

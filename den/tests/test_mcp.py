@@ -363,7 +363,7 @@ def test_set_character_applies_to_next_turn_and_session_keeps_it(cden):
                    ("list_characters", {}))
     assert "鹿" in _text(rs[0])
     assert "deer:" in [ln for ln in _text(rs[1]).splitlines() if ln.endswith("(目前)")][0]
-    assert all("世界撐開" in call[0] for call in cden.chat.calls[-2:])
+    assert all("畫面外面" in call[0] for call in cden.chat.calls[-2:])
     assert "deer:" in [ln for ln in _text(rs[4]).splitlines() if ln.endswith("(目前)")][0]
 
 
@@ -379,8 +379,8 @@ def test_set_character_during_a_running_turn_survives_it(cden):
                 cden.chat.release.set()
             await c.call_tool("talk_to_companion", {"message": "二"})
     anyio.run(go)
-    assert "世界撐開" not in cden.chat.calls[0][0]
-    assert "世界撐開" in cden.chat.calls[1][0]
+    assert "畫面外面" not in cden.chat.calls[0][0]
+    assert "畫面外面" in cden.chat.calls[1][0]
 
 
 def test_list_characters_falls_back_when_session_is_gone(cden):
@@ -406,7 +406,7 @@ def test_set_character_only_affects_that_work(cden):
     rs = _call_all(cden.client(),
                    ("set_character", {"character": "deer", "work": "mini"}),
                    ("talk_to_companion", {"message": "一", "work": "海"}))
-    assert not rs[1].is_error and "照閱讀的順序" in cden.chat.calls[-1][0]
+    assert not rs[1].is_error and "嘴最壞的那個" in cden.chat.calls[-1][0]
 
 
 def test_set_unknown_character_rejected_before_any_turn(cden):
@@ -419,7 +419,7 @@ def test_talk_records_home_mcp_and_client_name(cden):
     _call(cden.client(), "talk_to_companion", {"work": "mini"})
     (d,) = _discussions(cden)
     assert (d["home"], d["client"]) == ("mcp", "claude-code")
-    assert "照閱讀的順序" in cden.chat.calls[-1][0]
+    assert "嘴最壞的那個" in cden.chat.calls[-1][0]
 
 
 def test_talk_worker_error_tells_host_to_report_failure(cden):
@@ -1295,6 +1295,6 @@ def test_set_character_applies_to_storyless_session(cden):
                                   ("talk_to_companion", {"message": "再來"}),
                                   ("list_characters", {})])
     assert not any(r.is_error for r in rs)
-    assert "世界撐開" in cden.chat.calls[-1][0]
+    assert "畫面外面" in cden.chat.calls[-1][0]
     assert [ln for ln in _text(rs[3]).splitlines() if ln.endswith("(目前)")][0].startswith("deer:")
     assert [q for _, q in cden.paths if q.startswith("/api/discuss")] == ["/api/discuss", "/api/discuss"]

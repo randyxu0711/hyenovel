@@ -57,8 +57,10 @@ def test_resolve_unknown_character(conn):
 def test_persona_appends_voice_only_when_present(conn):
     hyena = characters.get(conn, "hyena")
     base = characters.persona(hyena)
-    assert base == companion.persona(hyena["reading"])
-    assert characters.persona({**hyena, "voice": "角色層一句"}).endswith("\n角色層一句\n")
+    assert base == companion.persona(hyena["reading"], "", hyena["examples"])
+    voiced = characters.persona({**hyena, "voice": "角色層一句"})
+    assert "\n角色層一句\n" in voiced and voiced.index("角色層一句") < voiced.index("<example>")
+    assert characters.persona({**hyena, "voice": "角色層一句", "examples": ""}).endswith("\n角色層一句\n")
 
 
 def test_default_pointing_at_missing_character_falls_back(conn):
@@ -88,6 +90,28 @@ def test_sync_is_idempotent(conn):
 def test_db_reading_matches_file_bytes(conn):
     for c in characters.all_(conn):
         assert c["reading"] == (characters._DIR / f"{c['id']}.md").read_text(encoding="utf-8")
+        raw = (characters._DIR / f"{c['id']}.examples.md").read_text(encoding="utf-8")
+        assert c["examples"] == raw.replace("{{char}}", c["name"]["zh-Hant"])
+
+
+def test_examples_file_is_optional_and_versions_on_change(tmp_path, monkeypatch):
+    profile = (characters._DIR / "hyena.json").read_text(encoding="utf-8")
+    monkeypatch.setattr(characters, "_DIR", tmp_path)
+    characters._load.cache_clear()
+    (tmp_path / "hyena.json").write_text(profile, encoding="utf-8")
+    (tmp_path / "hyena.md").write_text("讀法", encoding="utf-8")
+    c = db.connect("sqlite:///:memory:")
+    try:
+        db.migrate(c, None)
+        characters.sync_builtins(c, 1.0)
+        assert characters.get(c, "hyena")["examples"] == ""
+        (tmp_path / "hyena.examples.md").write_text("<example>\n{{char}}:嗯哼\n</example>\n", encoding="utf-8")
+        characters.sync_builtins(c, 2.0)
+        now = characters.get(c, "hyena")
+        assert now["version"] == 2 and now["examples"] == "<example>\n鬣狗:嗯哼\n</example>\n"
+    finally:
+        c.close()
+        characters._load.cache_clear()
 
 
 def test_sync_appends_version_when_file_changes(tmp_path, monkeypatch):
