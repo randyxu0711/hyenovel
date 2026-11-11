@@ -11,6 +11,7 @@ from marrow.repo import canonical_json, sha256_text
 
 MAX_CARD_BYTES = 262144
 MAX_READING = 6000
+MAX_EXAMPLES = 3000
 MAX_NAME = 64
 MAX_LINE = 200
 _FOREIGN_LINE = 40
@@ -74,11 +75,11 @@ def _voice(ext: dict) -> str:
     return ext["voice"] if isinstance(ext.get("voice"), str) else ""
 
 
-def from_builtin(profile: dict, reading: str) -> dict:
-    """內建角色(.json 的內容 + 讀法原文)→ CCv3 卡。"""
+def from_builtin(profile: dict, reading: str, examples: str = "") -> dict:
+    """內建角色(.json 的內容 + 讀法原文 + 範例對話)→ CCv3 卡。"""
     return {"spec": "chara_card_v3", "spec_version": "3.0", "data": {
         "name": profile["name"]["zh-Hant"], "description": "", "tags": [], "creator": "hyenovel",
-        "character_version": "", "mes_example": "", "system_prompt": "", "post_history_instructions": "",
+        "character_version": "", "mes_example": examples, "system_prompt": "", "post_history_instructions": "",
         "first_mes": "", "alternate_greetings": [], "group_only_greetings": [], "personality": reading,
         "scenario": "", "creator_notes": profile["line"]["zh-Hant"],
         "extensions": {"hyenovel": {k: profile[k] for k in ("name", "line", "avatar", "colors", "voice", "mark", "figure")}},
@@ -94,6 +95,11 @@ def _avatar(value, character_id: str) -> dict:
 def _expand(text: str, data: dict) -> str:
     who = {"char": data.get("nickname") or data["name"], "user": "作者"}
     return _MACRO.sub(lambda m: who[m[1].lower()], text)
+
+
+def _examples(data: dict) -> str:
+    text = data.get("mes_example")
+    return _expand(text, data) if isinstance(text, str) and len(text) <= MAX_EXAMPLES else ""
 
 
 def _reading(data: dict) -> str:
@@ -114,6 +120,7 @@ def view(card: dict, character_id: str, version: int) -> dict:
         "voice": _expand(_voice(ext), data),
         "mark": ext.get("mark") if ext.get("mark") in MARKS else "pencil",
         "reading": _reading(data),
+        "examples": _examples(data),
     }
 
 
@@ -162,7 +169,7 @@ def scan(card) -> dict:
     ext = _ext(data)
     personality, description = data.get("personality", ""), data.get("description", "")
     shown = view(card, "", 0)
-    reading, voice = shown["reading"], shown["voice"]
+    reading, voice, examples = shown["reading"], shown["voice"], shown["examples"]
     errors = []
     if size > MAX_CARD_BYTES:
         errors.append("too-large")
@@ -177,7 +184,7 @@ def scan(card) -> dict:
     warnings = []
     if _newer_spec(card["spec_version"]):
         warnings.append("newer-spec")
-    host_sees = (reading, voice, data["name"], data.get("nickname", ""), data.get("creator_notes", ""),
+    host_sees = (reading, voice, examples, data["name"], data.get("nickname", ""), data.get("creator_notes", ""),
                  *shown["name"].values(), *shown["line"].values())
     if any(_INSTRUCTIONS.search(x) for x in host_sees):
         warnings.append("looks-like-instructions")

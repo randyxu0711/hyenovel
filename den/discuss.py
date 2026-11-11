@@ -26,8 +26,15 @@ def _quotes_block(quotes) -> list[str]:
     return ["作者指著原文的這幾段:", *[f"「{q}」" for q in quotes]] if quotes else []
 
 
+def _speaker(h: dict, others: dict[str, str]) -> str:
+    if h["role"] == "assistant" and h.get("character") in others:
+        return f"另一位讀伴({others[h['character']]})"
+    return _ROLE[h["role"]]
+
+
 def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
-                summary: str | None = None, attached: Sequence[dict] = ()) -> str:
+                summary: str | None = None, attached: Sequence[dict] = (),
+                others: dict[str, str] | None = None) -> str:
     """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
     作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。
     notes 是這輪檢索到的細節,只存在這輪,不進歷史。"""
@@ -40,7 +47,7 @@ def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
     dropped = {a["seq"]: a["name"] for a in attached}
     lines = [x for h in history for x in (
         *([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
-        *_quotes_block(h.get("quotes")), f"{_ROLE[h['role']]}:{h['text']}")]
+        *_quotes_block(h.get("quotes")), f"{_speaker(h, others or {})}:{h['text']}")]
     return "\n".join([*head, "以下是這一局到目前為止的對話(作者 = 使用者):",
                       "<history>", *lines, "</history>", "", *block, "作者這一輪說:", message])
 
@@ -183,6 +190,11 @@ def pick_character(conn, turn: dict, character: str | None) -> None:
     turn["character"] = characters.resolve(conn, character, last)
 
 
+def _others(conn, history: list[dict], me: str) -> dict[str, str]:
+    ids = {h.get("character") for h in history if h["role"] == "assistant"} - {None, me}
+    return {cid: (found["name"]["zh-Hant"] if (found := characters.get(conn, cid)) else cid) for cid in ids}
+
+
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                    home: str = "web", client: dict | None = None, now=time.time,
                    quotes: Sequence[str] = ()):
@@ -213,7 +225,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                  render_turn(history, message or (ATTACHED.format(name=attach["name"]) if attach
                                                                   else CONTINUE if history or summary else OPENER),
                                              quotes, retrieve.render(analysis, picked), summary,
-                                             [a for a in turn["ctx"]["attachments"] if a["seq"] is not None]),
+                                             [a for a in turn["ctx"]["attachments"] if a["seq"] is not None],
+                                             _others(conn, history, character["id"])),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
