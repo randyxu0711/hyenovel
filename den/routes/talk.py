@@ -128,6 +128,39 @@ async def delete_reaction(session: str, seq: Seq, request: Request):
         repo.clear_reaction(conn, d, seq)
 
 
+def _reply_target(request: Request, session: str, seq: int, *, last: bool, where: str) -> dict:
+    def reject(status: int, code: str, detail: str) -> ApiError:
+        log.info("event=reject where=%s reason=%s", where, code)
+        return ApiError(status, code, detail)
+    try:
+        return discuss.reply_target(request.app.state.mgr.conn, session, seq, last=last)
+    except discuss.UnknownSession:
+        raise reject(404, "unknown-session", "沒有這一局") from None
+    except discuss.UnknownTurn:
+        raise reject(404, "unknown-turn", "這一局沒有這則發言") from None
+    except discuss.NotAssistantTurn:
+        raise reject(422, "not-assistant-turn", "只能改陪讀者的回覆") from None
+    except discuss.LegacySession:
+        raise reject(409, "legacy-session", "這是改版前的舊討論,只能看") from None
+    except discuss.NotLastTurn:
+        raise reject(409, "not-last-turn", "只有最後一則可以重說") from None
+
+
+@router.post("/sessions/{session}/turns/{seq}/regenerate")
+async def regenerate(session: str, seq: Seq, request: Request):
+    state = request.app.state
+    _reply_target(request, session, seq, last=True, where="regenerate")
+    lock = _free_lock(state, session, "regenerate")
+    try:
+        turn = discuss.prepare_redo(state.mgr.conn, session, seq)
+    except characters.UnknownCharacter:
+        log.info("event=reject where=regenerate reason=unknown-character")
+        raise ApiError(422, "unknown-character", "沒有這隻角色") from None
+    events = discuss.run_turn(state.mgr.conn, state.chat, turn, "", [])
+    return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 def _session_or_404(conn, session: str, where: str) -> dict:
     d = repo.discussion_by_session(conn, session)
     if d is None:

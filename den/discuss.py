@@ -99,6 +99,46 @@ def reaction_target(conn, session: str, seq: int) -> int:
     return d["id"]
 
 
+class NotLastTurn(Exception):
+    """重說、挑版只對這局最後一列。"""
+
+
+def _legacy(us: list[dict]) -> bool:
+    return bool(us) and not any(u["role"] == "assistant" and u["character"] is not None for u in us)
+
+
+def reply_target(conn, session: str, seq: int, *, last: bool) -> dict:
+    """重說 / 挑版 / 編輯的定位,回 discussion 列。UnknownSession / UnknownTurn / NotAssistantTurn /
+    LegacySession / NotLastTurn(last=True 時)。"""
+    d = repo.discussion_by_session(conn, session)
+    if d is None:
+        raise UnknownSession(session)
+    us = repo.utterances(conn, d["id"])
+    u = next((x for x in us if x["seq"] == seq), None)
+    if u is None:
+        raise UnknownTurn(seq)
+    if u["role"] != "assistant":
+        raise NotAssistantTurn(seq)
+    if _legacy(us):
+        raise LegacySession(session)
+    if last and us[-1]["seq"] != seq:
+        raise NotLastTurn(seq)
+    return d
+
+
+def prepare_redo(conn, session: str, seq: int) -> dict:
+    """重說第 seq 則:定位同 reply_target(last=True);角色固定是那則的,已封存 → characters.UnknownCharacter。"""
+    d = reply_target(conn, session, seq, last=True)
+    turn = {"slug": d["slug"], "ctx": stories.companion_context(conn, d["slug"], d["id"]),
+            "story_id": d["story_id"], "discussion_id": d["id"], "attach": None, "session_id": session,
+            "redo": seq}
+    st = repo.story_by_slug(conn, d["slug"]) if d["slug"] is not None else None
+    analysis = repo.current_artifact(conn, st["id"], "analysis") if st else None
+    turn["analysis_fp"] = analysis["sha256"] if turn["ctx"]["analysis"] is not None else None
+    turn["character"] = characters.resolve(conn, repo.utterance(conn, d["id"], seq)["character"], None)
+    return turn
+
+
 class QuoteNotInSource(Exception):
     """帶的引文在最新版原文找不到(幻覺或過期)。"""
 
@@ -155,8 +195,7 @@ def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequenc
         row = repo.discussion_by_session(conn, session_id)
         if row is None or (slug is not None and row["slug"] != slug):
             raise UnknownSession(session_id)
-        us = repo.utterances(conn, row["id"])
-        if us and not any(u["role"] == "assistant" and u["character"] is not None for u in us):
+        if _legacy(repo.utterances(conn, row["id"])):
             raise LegacySession(session_id)   # 空局(還沒有逐字)不算舊局
         slug = row["slug"]
     if attach is not None and slug is not None:
@@ -207,9 +246,21 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     """
     d = turn["discussion_id"]
     every = repo.utterances(conn, d) if d is not None else []
+    redo = turn.get("redo")
+    if redo is not None:
+        if every[-1]["seq"] != redo:
+            yield {"event": "error", "data": {"where": "discuss", "message": "這則已經不是最後一則",
+                                              "recoverable": False, "code": "not-last-turn"}}
+            return
+        asked = every[-2] if len(every) > 1 and every[-2]["role"] == "user" else None
+        first = asked["seq"] if asked else redo
+        message, anchors, quotes = ((asked["text"], asked["anchors"], asked["quotes"] or ()) if asked
+                                    else ("", every[-1]["anchors"], ()))
+        dropped = next((a for a in turn["ctx"]["attachments"] if a["seq"] == first), None)
+        every = [u for u in every if u["seq"] < first]
     summary, history = live_history(every)
     seq = every[-1]["seq"] + 1 if every else 0
-    attach = turn["attach"]
+    attach = turn["attach"] if redo is None else dropped
     character = turn["character"]
     user_ts = now()
     result = None
@@ -255,22 +306,27 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     end = now()
     usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
     fp = turn["analysis_fp"]
+    recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
+              "retrieved": [n["id"] for n in picked]}
+    variant = None
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫
-            if d is None:
-                d = repo.ensure_discussion(conn, turn["story_id"], sid, home,
-                                           (client or {}).get("name") or home, user_ts)
             n = None
-            if attach:
-                n = repo.add_attachment(conn, d, seq, attach["name"], attach["text"], user_ts)
-            if message:
-                repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
-                seq += 1
-            repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
-                               usage=usage, character=character["id"],
-                               recipe={**prompt.recipe(system, companion.CHAT_RUN.as_dict()),
-                                       "character_v": character["version"],
-                                       "retrieved": [n["id"] for n in picked]})
+            if redo is not None:
+                seq = redo
+                variant = repo.replace_reply(conn, d, seq, text=result.text, ts=end, usage=usage,
+                                             recipe=recipe, analysis_fp=fp)
+            else:
+                if d is None:
+                    d = repo.ensure_discussion(conn, turn["story_id"], sid, home,
+                                               (client or {}).get("name") or home, user_ts)
+                if attach:
+                    n = repo.add_attachment(conn, d, seq, attach["name"], attach["text"], user_ts)
+                if message:
+                    repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
+                    seq += 1
+                repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
+                                   usage=usage, character=character["id"], recipe=recipe)
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = (repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
                  if turn["story_id"] is not None else None)
@@ -283,6 +339,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     yield {"event": "message", "data": {"role": "assistant", "text": result.text,
                                         "session_id": sid, "seq": seq,
                                         "character": character["id"], "v": v, "attachment": n,
+                                        **({} if variant is None else {
+                                            "variant": variant,
+                                            "variants": repo.variant_counts(conn, d).get(seq, 1)}),
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)
                                              if gate.locate(q, turn["ctx"]["source"])],
