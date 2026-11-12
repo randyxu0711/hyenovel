@@ -8,6 +8,7 @@ import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
 import Reaction from "./Reaction";
 import Remember from "./Remember";
+import Voice from "./Voice";
 import { useLinks } from "./links";
 import { bare } from "./Paper";
 import { useThemeState } from "./theme";
@@ -95,7 +96,9 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const { registerTalk } = useLinks();
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
-  const { markTurn, markMemories, redoing, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy,
+  const [editing, setEditing] = useState<{ seq: number; text: string } | null>(null);
+  useEffect(() => setEditing(null), [talk.session]);
+  const { markTurn, markMemories, markVoice, redoing, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy,
     attachments, bound, staged, working } = talk;
   const navigate = useNavigate();
   const picker = useRef<HTMLInputElement>(null);
@@ -208,6 +211,51 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     return bySeq.get(turn.seq)?.map(card) ?? null;
   };
 
+  const saveEdit = async (turn: Turn) => {
+    if (!editing) return;
+    if (editing.text.trim() === turn.text.trim()) { setEditing(null); return; }
+    const r = await talk.editReply(editing.seq, editing.text);
+    if (r !== null) setEditing(null);
+  };
+  const onEditKey = (e: KeyboardEvent<HTMLTextAreaElement>, turn: Turn) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setEditing(null); }
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void saveEdit(turn); }
+  };
+  const still = legacy || streaming !== null || working;
+  const lastTurn = turns[turns.length - 1];
+  const acts = (turn: Turn) => {
+    if (!session || turn.seq === undefined) return null;
+    const seq = turn.seq;
+    const n = turn.variant?.n ?? 1;
+    const total = turn.variant?.total ?? 1;
+    const last = lastTurn === turn;
+    return (
+      <div className="chat-acts">
+        <Reaction key={`${session}-${seq}-${n}`} session={session} seq={seq} initial={turn.reaction ?? null}
+          onChange={r => markTurn(session, seq, r)} />
+        <Voice key={`v-${session}-${seq}-${n}`} session={session} seq={seq} initial={!!turn.voice}
+          onChange={v => markVoice(session, seq, v)} />
+        <button type="button" className="chat-act" aria-label={t("reply.edit")} title={t("reply.edit")} disabled={still}
+          onClick={() => setEditing({ seq, text: turn.text })}><Icon name="edit" /></button>
+        {last && (
+          <button type="button" className="chat-act" aria-label={t("reply.redo")} title={t("reply.redo")} disabled={still}
+            onClick={() => { setEditing(null); void talk.regenerate(seq); }}><Icon name="again" /></button>
+        )}
+        {last && total > 1 && (
+          <span className="chat-flip" role="group" aria-label={t("reply.variant", { n, total })}>
+            <button type="button" className="chat-act" aria-label={t("reply.prev")} title={t("reply.prev")} disabled={still || n <= 1}
+              onClick={() => void talk.pickVariant(seq, n - 1)}><Icon name="prev" /></button>
+            <span className="chat-flip-n">{n}/{total}</span>
+            <button type="button" className="chat-act" aria-label={t("reply.next")} title={t("reply.next")} disabled={still || n >= total}
+              onClick={() => void talk.pickVariant(seq, n + 1)}><Icon name="next" /></button>
+          </span>
+        )}
+        {turn.edited && <span className="chat-edited" title={t("reply.editedNote")}>{t("reply.edited")}</span>}
+      </div>
+    );
+  };
+
   const breaks = versionBreaks(turns);
   const who = speakerChanges(turns, chars.byId);
   const whoLine = (c: Character) => (
@@ -242,17 +290,28 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const c = chars.byId(turn.character);
     lastId = c.id;
     const lit = flash?.i === i;
+    const redo = redoing !== null && turn.seq === redoing;
+    const open = editing !== null && editing.seq === turn.seq;
     return [brk, att,
       <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
         {who.has(i) && whoLine(c)}
-        {redoing !== null && turn.seq === redoing
+        {redo
           ? (streaming ? <p className="chat-text">{streaming}</p>
             : <p className="chat-wait" role="status">{t("talk.waiting", { name: nameOf(c.id) })}</p>)
-          : <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>}
-        {session && turn.seq !== undefined && (
-          <Reaction key={`${session}-${turn.seq}-${turn.variant?.n ?? 1}`} session={session} seq={turn.seq} initial={turn.reaction ?? null}
-            onChange={r => markTurn(session, turn.seq!, r)} />
-        )}
+          : open
+            ? (
+              <div className="chat-edit">
+                <textarea autoFocus aria-label={t("reply.editBox")} value={editing.text}
+                  onChange={e => setEditing({ seq: turn.seq!, text: e.target.value })} onKeyDown={e => onEditKey(e, turn)} />
+                <div className="chat-edit-bar">
+                  <button type="button" className="chat-edit-btn" onClick={() => setEditing(null)}>{t("reply.cancel")}</button>
+                  <button type="button" className="chat-edit-btn is-save" disabled={still || !editing.text.trim()}
+                    onClick={() => void saveEdit(turn)}>{t("reply.save")}</button>
+                </div>
+              </div>
+            )
+            : <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>}
+        {!redo && !open && acts(turn)}
       </div>,
     ];
   });

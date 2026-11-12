@@ -103,7 +103,27 @@
 .dash .chat-turn{border-radius:8px; font-family:var(--serif)}
 .dash .chat-text .dash-iq{text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
 .dash .chat-turn.is-flash{animation:dash-flash 1.4s ease-out forwards}
-.dash .chat-react{position:relative; display:flex; align-items:center; margin-top:4px}
+.dash .chat-acts{display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-top:4px; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
+.dash .chat-react{position:relative; display:flex; align-items:center}
+.dash .chat-act{display:inline-flex; align-items:center; padding:3px; border:0; border-radius:6px; background:none; color:var(--dash-paper-ink-2); cursor:pointer; opacity:0; transition:opacity .15s, color .15s}
+.dash .chat-act:hover:not(:disabled){color:var(--dash-paper-ink)}
+.dash .chat-act:disabled{cursor:default}
+.dash .chat-turn:hover .chat-act, .dash .chat-act:focus-visible{opacity:1}
+.dash .chat-turn:hover .chat-act:disabled{opacity:.35}
+@media (hover:none){ .dash .chat-act{opacity:.6} .dash .chat-act:disabled{opacity:.3} }
+.dash .chat-voice.is-on{opacity:1; color:var(--dash-paper-ink)}
+.dash .chat-flip{display:inline-flex; align-items:center; margin-left:6px}
+.dash .chat-flip .chat-act{opacity:1}
+.dash .chat-flip .chat-act:disabled{opacity:.3}
+.dash .chat-flip-n{min-width:2.6em; text-align:center; font-variant-numeric:tabular-nums; color:var(--dash-paper-ink)}
+.dash .chat-edited{margin-left:6px; font-family:var(--serif); color:var(--dash-paper-ink-2); cursor:default}
+.dash .chat-edit{display:flex; flex-direction:column; gap:4px}
+.dash .chat-edit textarea{box-sizing:border-box; width:100%; min-height:5.4em; field-sizing:content; padding:4px 8px; border:0; border-left:2px solid var(--dash-paper-ink-2); border-radius:0;
+  background:color-mix(in srgb, var(--dash-paper-ink-2) 6%, transparent); color:var(--dash-paper-ink); font:inherit; font-family:var(--serif); line-height:1.8; white-space:pre-wrap; resize:vertical}
+.dash .chat-edit-bar{display:flex; justify-content:flex-end; gap:4px; font-family:var(--sans); font-size:var(--dash-t-sm)}
+.dash .chat-edit-btn{padding:2px 8px; border:0; border-radius:6px; background:none; color:var(--dash-paper-ink-2); font:inherit; cursor:pointer}
+.dash .chat-edit-btn.is-save{color:var(--dash-paper-ink); background:color-mix(in srgb, var(--dash-paper-ink-2) 14%, transparent)}
+.dash .chat-edit-btn:disabled{opacity:.45; cursor:default}
 .dash .chat-react-key{display:inline-flex; align-items:center; gap:4px; padding:3px 6px 3px 3px; border:0; border-radius:999px; background:none; color:var(--dash-paper-ink-2); font:inherit; font-family:var(--sans); font-size:var(--dash-t-xs); cursor:pointer; opacity:0; transition:opacity .15s}
 .dash .chat-turn:hover .chat-react-key, .dash .chat-react-key:focus-visible, .dash .chat-react-key[aria-expanded="true"], .dash .chat-react.is-marked .chat-react-key{opacity:1}
 @media (hover:none){ .dash .chat-react-key{opacity:.6} }
