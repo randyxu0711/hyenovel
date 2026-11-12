@@ -20,7 +20,8 @@
           "line",
           "reading",
           "sample",
-          "figure"
+          "figure",
+          "examples"
         ],
         "properties": {
           "name": {
@@ -45,6 +46,9 @@
           },
           "figure": {
             "$ref": "#/$defs/figure"
+          },
+          "examples": {
+            "$ref": "#/$defs/examples"
           }
         }
       }
@@ -172,6 +176,39 @@
         "move": {
           "type": "string",
           "description": "閒著時的招牌小動作:部位×動作。"
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "三段範例對話,依序對應 <example_situations> 的三個情境,聊的是 <example_story>。",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 4,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "who",
+            "text"
+          ],
+          "properties": {
+            "who": {
+              "type": "string",
+              "enum": [
+                "author",
+                "char"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "pattern": "\\S",
+              "maxLength": 160
+            }
+          }
         }
       }
     }

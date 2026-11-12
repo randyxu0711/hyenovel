@@ -45,6 +45,7 @@ export type Candidate = {
   name: LText; form: LText; line: LText; reading: string; sample: string;
   figure: { pose: Pose; main: Pen; second: Pen; traits: Part[] };
   axes: string[]; card: unknown; warnings: string[];
+  examples: { who: "author" | "char"; text: string }[][];
 };
 export type ThemeTokens = Record<string, string>;
 export type Theme = { id: string; name: LText; source: string; light: ThemeTokens; dark: ThemeTokens };

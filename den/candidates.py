@@ -32,6 +32,10 @@ _FIG["traits"]["maxItems"] = figure.LIMITS["traits"]
 _FIG["traits"]["items"]["properties"]["group"]["enum"] = figure.GRAMMAR["groups"]
 _FIG["traits"]["items"]["properties"]["fill"]["enum"] = figure.GRAMMAR["fills"]
 ONE = {**SCHEMA["properties"]["candidates"]["items"], "$defs": SCHEMA["$defs"]}
+STORY = (_ROOT / "prompts" / "example_story.md").read_text(encoding="utf-8").strip()
+STORY_HEADER = f"那幾段聊的是{STORY}"
+SITUATIONS = ("讀伴先開口,說讀到的一處反應。", "作者對自己的某個寫法沒把握。", "作者想加一段或改一段。")
+_SPEAKER = {"author": "{{user}}", "char": "{{char}}"}
 
 
 class Failed(Exception):
@@ -87,10 +91,16 @@ def _figure_error(candidate: dict) -> list[str]:
     return same + [f"figure {e}" for e in figure.errors(spec(fig))]
 
 
+def mes_example(examples: list[list[dict]]) -> str:
+    blocks = ["<example>\n" + "\n".join(f"{_SPEAKER[t['who']]}:{t['text'].strip()}" for t in turns) + "\n</example>"
+              for turns in examples]
+    return "\n\n".join([STORY_HEADER, *blocks]) + "\n"
+
+
 def to_card(candidate: dict) -> dict:
     return {"spec": "chara_card_v3", "spec_version": "3.0", "data": {
         "name": candidate["name"]["zh-Hant"], "description": "", "tags": [], "creator": "hyenovel",
-        "character_version": "", "mes_example": "", "system_prompt": "",
+        "character_version": "", "mes_example": mes_example(candidate["examples"]), "system_prompt": "",
         "post_history_instructions": "", "first_mes": "", "alternate_greetings": [],
         "group_only_greetings": [], "personality": candidate["reading"], "scenario": "",
         "creator_notes": candidate["line"]["zh-Hant"],
@@ -120,8 +130,19 @@ def _sample_error(candidate: dict, passage: str | None) -> list[str]:
     return []
 
 
+def _examples_error(candidate: dict) -> list[str]:
+    bad = []
+    for i, turns in enumerate(candidate["examples"], 1):
+        if not any(t["who"] == "char" for t in turns):
+            bad.append(f"examples 第 {i} 段沒有 char 說的話")
+        if any("<example" in t["text"] or "</example" in t["text"] for t in turns):
+            bad.append(f"examples 第 {i} 段的 text 不能含 <example> 標籤")
+    return bad
+
+
 def _one_errors(body: dict, passage: str | None) -> list[str]:
-    return _schema_errors(ONE, body) or _sample_error(body, passage) or _figure_error(body) or cards.scan(to_card(body))["errors"]
+    return (_schema_errors(ONE, body) or _sample_error(body, passage) + _examples_error(body) or _figure_error(body)
+            or cards.scan(to_card(body))["errors"])
 
 
 def _errors(body: dict, passage: str | None) -> list[str]:
@@ -136,7 +157,8 @@ def _errors(body: dict, passage: str | None) -> list[str]:
         if len(set(values)) < len(values):
             bad.append(label)
     for i, c in enumerate(items, 1):
-        bad += [f"候選 {i}: {code}" for code in _sample_error(c, passage) + _figure_error(c) + cards.scan(to_card(c))["errors"]]
+        bad += [f"候選 {i}: {code}" for code in
+                _sample_error(c, passage) + _examples_error(c) + _figure_error(c) + cards.scan(to_card(c))["errors"]]
     return bad
 
 
@@ -145,19 +167,24 @@ def _library() -> str:
     return f"<poses>\n{canonical_json(figure.GRAMMAR['poses'])}\n</poses>\n<pens>\n{canonical_json(pens)}\n</pens>\n"
 
 
+def _story_block() -> str:
+    lines = "\n".join(f"{i}. {s}" for i, s in enumerate(SITUATIONS, 1))
+    return f"<example_story>\n{STORY}\n</example_story>\n<example_situations>\n{lines}\n</example_situations>\n"
+
+
 def _passage_block(passage: str | None) -> str:
     return f"<passage>\n{passage}\n</passage>\n" if passage else ""
 
 
 def _input(brief: str, picked: list[tuple[str, ...]], passage: str | None, lang: str) -> str:
     lines = "\n".join(f"候選 {i}:{'、'.join(pos)}" for i, pos in enumerate(picked, 1))
-    return (f"<brief>\n{brief}\n</brief>\n<positions>\n{lines}\n</positions>\n{_library()}{_passage_block(passage)}"
+    return (f"<brief>\n{brief}\n</brief>\n<positions>\n{lines}\n</positions>\n{_library()}{_story_block()}{_passage_block(passage)}"
             f"<interface_language>\n{lang}\n</interface_language>")
 
 
 def _revise_input(candidate: dict, feedback: str, passage: str | None, lang: str) -> str:
     return (f"<candidate>\n{canonical_json(candidate)}\n</candidate>\n<feedback>\n{feedback}\n</feedback>\n"
-            f"{_library()}{_passage_block(passage)}<interface_language>\n{lang}\n</interface_language>")
+            f"{_library()}{_story_block()}{_passage_block(passage)}<interface_language>\n{lang}\n</interface_language>")
 
 
 def _repair(first: str, previous: str, errors: list[str], parsed: bool) -> str:

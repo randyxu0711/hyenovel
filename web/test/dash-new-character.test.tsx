@@ -10,6 +10,7 @@ const candidate = (n: number, warnings: string[] = []) => ({
   figure: { pose: "wisp", main: (["olive", "rust", "slate"] as const)[(n - 1) % 3], second: "bark",
     traits: [{ group: "ears", d: "M40 30 L46 18 L52 30 Z", fill: "second" }] },
   axes: [], card: {}, warnings,
+  examples: [1, 2, 3].map(k => [{ who: "char", text: `菜脯${n}-${k}` }, { who: "author", text: `作者${n}-${k}` }]),
 });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -46,7 +47,7 @@ describe("作答", () => {
     mount();
     expect(go().disabled).toBe(false);
     fireEvent.click(go());
-    await screen.findByText("門縫1");
+    await screen.findByRole("heading", { name: /^門縫1/ });
     expect(bodies[0]).toEqual({ answers: { form: "", wish: "" }, lang: "zh-Hant" });
   });
   it("送出兩題的答案,去掉前後空白", async () => {
@@ -54,7 +55,7 @@ describe("作答", () => {
     fireEvent.change(screen.getByLabelText("陪你讀稿的,是什麼?"), { target: { value: " 退潮 " } });
     fireEvent.change(screen.getByLabelText("你想要它怎麼讀?"), { target: { value: " 慢慢來 " } });
     fireEvent.click(go());
-    await screen.findByText("門縫1");
+    await screen.findByRole("heading", { name: /^門縫1/ });
     expect(bodies[0].answers).toEqual({ form: "退潮", wish: "慢慢來" });
   });
   it("開放題不放例子", () => {
@@ -80,13 +81,13 @@ describe("候選", () => {
     mount();
     fireEvent.change(screen.getByLabelText("陪你讀稿的,是什麼?"), { target: { value: "門縫" } });
     fireEvent.click(go());
-    await screen.findByText("門縫1");
+    await screen.findByRole("heading", { name: /^門縫1/ });
   };
   const toResults2 = async () => {
     mount();
     fireEvent.change(screen.getByLabelText("陪你讀稿的,是什麼?"), { target: { value: "門縫" } });
     fireEvent.click(go());
-    await screen.findByText("門縫2");
+    await screen.findByRole("heading", { name: /^門縫2/ });
   };
   it("生成時顯示狀態和已跑時間,不是假進度", async () => {
     mount();
@@ -94,7 +95,7 @@ describe("候選", () => {
     fireEvent.click(go());
     expect(screen.getByRole("status").textContent).toContain("0:00");
     expect(screen.queryByRole("progressbar")).toBeNull();
-    await screen.findByText("門縫1");
+    await screen.findByRole("heading", { name: /^門縫1/ });
   });
   it("列三個候選,像指令的文字要顯示警告", async () => {
     await toResults();
@@ -122,10 +123,40 @@ describe("候選", () => {
     expect(same.querySelector("small")).toBeNull();
     expect(other.querySelector("small")?.textContent).toBe("門縫");
   });
+  it("範例對話逐輪顯示,作者標作者、讀伴標候選名", async () => {
+    await toResults();
+    const [first] = screen.getAllByRole("article");
+    const turns = within(first).getAllByRole("listitem");
+    expect(turns.map(li => li.querySelector(".nc-who")!.textContent)).toEqual(["門縫1", "作者"]);
+    expect(turns.map(li => li.querySelector("p")!.textContent)).toEqual(["菜脯1-1", "作者1-1"]);
+  });
+  it("切情境時三張一起換到同一段", async () => {
+    await toResults();
+    fireEvent.click(screen.getByRole("button", { name: "想改一段" }));
+    expect(screen.getByRole("button", { name: "想改一段" }).getAttribute("aria-pressed")).toBe("true");
+    for (const [i, card] of screen.getAllByRole("article").entries()) {
+      expect(within(card).getByText(`菜脯${i + 1}-3`)).toBeTruthy();
+      expect(within(card).queryByText(`菜脯${i + 1}-1`)).toBeNull();
+    }
+  });
+  it("英文介面讀伴用英文名", async () => {
+    setLang("en");
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Generate candidates" }));
+    await screen.findByRole("heading", { name: /^Crack 1/ });
+    const turns = within(screen.getAllByRole("article")[0]).getAllByRole("listitem");
+    expect(turns.map(li => li.querySelector(".nc-who")!.textContent)).toEqual(["Crack 1", "Author"]);
+  });
+  it("沒有範例就不顯示情境切換", async () => {
+    replies = [json({ seed: 1, candidates: [1, 2, 3].map(n => ({ ...candidate(n), examples: [] })) })];
+    await toResults();
+    expect(screen.queryByRole("group", { name: "範例對話" })).toBeNull();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  });
   it("換一批用同樣答案重打、不帶 seed", async () => {
     await toResults();
     fireEvent.click(screen.getByRole("button", { name: "換一批" }));
-    await screen.findByText("門縫4");
+    await screen.findByRole("heading", { name: /^門縫4/ });
     expect(bodies[1].answers).toEqual(bodies[0].answers);
     expect(bodies[1]).not.toHaveProperty("seed");
   });
@@ -154,7 +185,7 @@ describe("候選", () => {
     replies = [json({ code: "candidates-busy" }, 409)];
     fireEvent.click(screen.getByRole("button", { name: "換一批" }));
     await screen.findByRole("alert");
-    expect(screen.getByText("門縫1")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^門縫1/ })).toBeTruthy();
   });
 });
 
@@ -163,7 +194,7 @@ describe("改候選與存卡", () => {
     mount();
     fireEvent.change(screen.getByLabelText("陪你讀稿的,是什麼?"), { target: { value: "門縫" } });
     fireEvent.click(go());
-    await screen.findByText("門縫1");
+    await screen.findByRole("heading", { name: /^門縫1/ });
     return screen.getAllByRole("article").map(a => within(a));
   };
   const revise = (card: ReturnType<typeof within>, text = "再冷一點") => {
@@ -185,13 +216,13 @@ describe("改候選與存卡", () => {
     const [, second] = await toResults();
     replies = [json(candidate(9))];
     revise(second);
-    await screen.findByText("門縫9");
+    await screen.findByRole("heading", { name: /^門縫9/ });
     expect(urls[urls.length - 1]).toBe("/api/characters/candidates/revise");
     expect(last().feedback).toBe("再冷一點");
     expect(last().candidate.name["zh-Hant"]).toBe("門縫2");
-    expect(screen.getByText("門縫1")).toBeTruthy();
-    expect(screen.getByText("門縫3")).toBeTruthy();
-    expect(screen.queryByText("門縫2")).toBeNull();
+    expect(screen.getByRole("heading", { name: /^門縫1/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^門縫3/ })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /^門縫2/ })).toBeNull();
     expect((screen.getAllByLabelText("想改哪裡?")[1] as HTMLInputElement).value).toBe("");
   });
   it("改的時候只有這張掃描,其他花額度的按鈕都停用", async () => {
@@ -216,7 +247,7 @@ describe("改候選與存卡", () => {
     revise(card);
     await screen.findByRole("alert");
     expect(screen.getByRole("alert").textContent).not.toContain("再試一次");
-    expect(screen.getByText("門縫1")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^門縫1/ })).toBeTruthy();
     expect((card.getByLabelText("想改哪裡?") as HTMLInputElement).value).toBe("再冷一點");
   });
   it("存之前可改名字,改過的會送出,存完回清單", async () => {

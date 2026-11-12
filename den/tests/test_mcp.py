@@ -919,7 +919,8 @@ def _candidate(n=1, **kw):
             "line": {"zh-Hant": f"先聽{n}", "en": f"Listens {n}"}, "reading": f"秘密讀法{n}",
             "sample": f"讀到「暗暗紅紅」我停住了({n})。",
             "figure": {"pose": "wisp", "main": ("olive", "rust", "slate")[(n - 1) % 3], "second": "bark", "traits": [],
-                       "tempo": "mid", "move": "tail-sway"}, **kw}
+                       "tempo": "mid", "move": "tail-sway"},
+            "examples": [[{"who": "char", "text": f"門縫那一下({n})"}, {"who": "author", "text": "嗯"}]] * 3, **kw}
 
 
 def _batch(*items):

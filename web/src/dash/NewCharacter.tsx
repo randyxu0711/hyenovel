@@ -17,8 +17,10 @@ const character = (seed: string, figure: FigureSpec): Character => ({
 const placeholder = (pose: Pose) => character(pose, { pose, parts: [], main: "bone", second: "bone" });
 const look = (c: Candidate): FigureSpec => ({ pose: c.figure.pose, parts: c.figure.traits, main: c.figure.main, second: c.figure.second });
 
-function CandidateSlip({ candidate, busy, locked, elapsed, onRevise, onUse }: {
-  candidate: Candidate; busy: boolean; locked: boolean; elapsed: number;
+const SCENES = [0, 1, 2] as const;
+
+function CandidateSlip({ candidate, scene, busy, locked, elapsed, onRevise, onUse }: {
+  candidate: Candidate; scene: number; busy: boolean; locked: boolean; elapsed: number;
   onRevise: (feedback: string) => Promise<boolean>; onUse: () => void;
 }) {
   const t = useT();
@@ -34,6 +36,16 @@ function CandidateSlip({ candidate, busy, locked, elapsed, onRevise, onUse }: {
     <CharacterCard character={character(candidate.name["zh-Hant"] ?? name, look(candidate))} name={name} sub={localized(candidate.form, lang)} scanning={busy}>
       {candidate.sample && <p className="nc-sample">{candidate.sample}</p>}
       <p className="nc-line">{localized(candidate.line, lang)}</p>
+      {candidate.examples[scene] && (
+        <ol className="nc-talk" aria-label={t(`nc.scene.${scene}` as MsgKey)}>
+          {candidate.examples[scene].map((turn, i) => (
+            <li key={i} data-who={turn.who}>
+              <span className="nc-who">{turn.who === "char" ? name : t("nc.author")}</span>
+              <p>{turn.text}</p>
+            </li>
+          ))}
+        </ol>
+      )}
       <details>
         <summary>{t("nc.reading")}</summary>
         <p>{candidate.reading}</p>
@@ -63,6 +75,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const [batchNo, setBatchNo] = useState(0);
   const [revising, setRevising] = useState<number | null>(null);
   const [using, setUsing] = useState<number | null>(null);
+  const [scene, setScene] = useState(0);
   const [err, setErr] = useState<MsgKey | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const live = useRef(true);
@@ -145,11 +158,18 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     return (
       <div className="nc nc-results" ref={resultsRef} tabIndex={-1}>
         {back}
+        {batch.some(c => c.examples.length > 0) && (
+          <div className="nc-scenes" role="group" aria-label={t("nc.scenes")}>
+            {SCENES.map(i => (
+              <button key={i} type="button" aria-pressed={scene === i} onClick={() => setScene(i)}>{t(`nc.scene.${i}` as MsgKey)}</button>
+            ))}
+          </div>
+        )}
         <div className="char-cards">
           {batch.map((c, i) => (i === using
             ? <CardEditor key={`${batchNo}-${i}`} draft={c} limits={candidateLimits(lang)}
                 onSave={(draft, confirm) => save(i, draft, confirm)} onCancel={() => setUsing(null)} />
-            : <CandidateSlip key={`${batchNo}-${i}`} candidate={c} busy={revising === i} locked={revising !== null} elapsed={elapsed}
+            : <CandidateSlip key={`${batchNo}-${i}`} candidate={c} scene={scene} busy={revising === i} locked={revising !== null} elapsed={elapsed}
                 onRevise={feedback => revise(i, feedback)} onUse={() => setUsing(i)} />))}
         </div>
         {alert}
