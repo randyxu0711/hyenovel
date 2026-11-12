@@ -24,7 +24,7 @@ _SPEC_VERSION = re.compile(r"(\d+)\.(\d+)")
 _MACRO = re.compile(r"\{\{(char|user)\}\}", re.IGNORECASE)
 _INSTRUCTIONS = re.compile(r"ignore (all |any )?(previous|prior)|system prompt|忽略.{0,8}(指示|指令|規則)"
                            r"|無視.{0,8}(指示|指令|規則)|不要遵守|you are now", re.IGNORECASE)
-_IGNORED = ("system_prompt", "post_history_instructions", "character_book", "first_mes")
+_IGNORED = ("system_prompt", "post_history_instructions", "character_book", "first_mes", "scenario")
 _COPY_SUFFIX = {"zh-Hant": "(副本)", "en": " (copy)"}
 
 
