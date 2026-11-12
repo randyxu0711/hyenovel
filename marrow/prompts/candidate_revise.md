@@ -10,9 +10,9 @@
 
 改 `examples` 時,三段仍依序照 `<example_situations>`、聊 `<example_story>`,不提 `<passage>`;`char` 的話聽得出改過的讀法,但讀法遇到才用,不必每句都演;不以問句收尾;`text` 裡不叫這個讀者的名字。
 
-`name` 用名字或名詞,不帶形容詞、副詞,因為讀法已經由 `line` 和 `reading` 說了。`name`、`form`、`line` 改動時,中英兩份一起改。
+`name` 用名字或名詞,不帶形容詞、副詞,因為讀法已經由 `line` 和 `reading` 說了。`form` 改動時仍是看得見、摸得到的具體東西,因為抽象的東西畫不出認得出的長相。`name`、`form`、`line` 改動時,中英兩份一起改。
 
-`<feedback>` 提到長相或顏色時改 `figure`,規則照舊:`pose` 從 `<poses>` 挑,`main`、`second` 從 `<pens>` 挑兩支不同的,`traits` 最多兩個,`d` 只用絕對座標指令 M、L、C、Q、A、Z,數字在 −10 到 130 之間,因為閘門只收這種長相。
+`<feedback>` 提到長相或顏色時改 `figure`,規則照舊:整隻自己畫,`parts` 最多 8 個且至少一個 `body`,`eyes`、`mouth` 落在頭或身體裡,`main`、`second` 從 `<pens>` 挑兩支不同的,`d` 只用絕對座標指令 M、L、C、Q、A、Z,數字在 −10 到 130 之間,每條最多 24 個指令、全部加起來最多 80 個,因為閘門只收這種長相。畫成繪本裡的符號,不畫寫實細節。改 `figure` 時保留原本的輪廓取法(姿勢、角度、取捨),只改 `<feedback>` 提到的地方,除非它要改輪廓,因為作者是挑中這個輪廓才來改這張。
 
 `reading`、`sample`、`examples` 維持 `<candidate>` 原本的語言,`<feedback>` 要求換語言才換;看不出語言時用 `<interface_language>`。
 

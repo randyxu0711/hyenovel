@@ -24,6 +24,7 @@ from den.config import MAX_SOURCE_BYTES
 from den.tests.test_app import Run
 from den.runner import RunResult
 from den.tests.test_client import FakeDen
+from den.tests.test_candidates import BODY, EYES, FIXED_PALETTES, MOUTH
 from den.tests.test_pipeline import ok
 from marrow import db, repo
 
@@ -918,9 +919,14 @@ def _candidate(n=1, **kw):
     return {"name": {"zh-Hant": f"門縫{n}", "en": f"Crack {n}"}, "form": {"zh-Hant": "門縫", "en": "door crack"},
             "line": {"zh-Hant": f"先聽{n}", "en": f"Listens {n}"}, "reading": f"秘密讀法{n}",
             "sample": f"讀到「暗暗紅紅」我停住了({n})。",
-            "figure": {"pose": "wisp", "main": ("olive", "rust", "slate")[(n - 1) % 3], "second": "bark", "traits": [],
+            "figure": {"parts": [BODY], "eyes": EYES, "mouth": MOUTH, "main": ("olive", "rust", "slate")[(n - 1) % 3], "second": "bark",
                        "tempo": "mid", "move": "tail-sway"},
             "examples": [[{"who": "char", "text": f"門縫那一下({n})"}, {"who": "author", "text": "嗯"}]] * 3, **kw}
+
+
+@pytest.fixture(autouse=True)
+def fixed_palettes(monkeypatch):
+    monkeypatch.setattr(candidates, "palettes", lambda seed: FIXED_PALETTES)
 
 
 def _batch(*items):
@@ -946,7 +952,7 @@ def char_den(data):
 
 def test_create_character_lists_candidates_without_reading(char_den):
     d = char_den(_batch())
-    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    t = _text(_call(d.client(), "create_character", {}))
     assert all(x in t for x in ("門縫1", "門縫2", "門縫3", "先聽1", "暗暗紅紅"))
     assert t.index("1.") < t.index("2.") < t.index("3.")
     assert "秘密讀法" not in t
@@ -955,7 +961,7 @@ def test_create_character_lists_candidates_without_reading(char_den):
 def test_create_character_leaves_out_a_blank_sample(char_den, monkeypatch):
     monkeypatch.setattr("den.candidates.opening", lambda works: None)
     d = char_den(_batch(_candidate(1, sample=""), _candidate(2, sample=""), _candidate(3, sample="")))
-    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    t = _text(_call(d.client(), "create_character", {}))
     assert "門縫1" in t and "試讀" not in t
 
 
@@ -963,9 +969,9 @@ def test_create_character_passes_answers_and_language(char_den, monkeypatch):
     seen = {}
     real = candidates.generate
 
-    async def spy(run, answers, passage, lang, seed):
+    async def spy(run, answers, passage, lang, seed, again=None):
         seen.update(answers=answers, lang=lang)
-        return await real(run, answers, passage, lang, seed)
+        return await real(run, answers, passage, lang, seed, again)
     monkeypatch.setattr(candidates, "generate", spy)
     d = char_den(_batch())
     r = _call(d.client(), "create_character", {"wish": "慢慢來", "lang": "en"})
@@ -983,7 +989,7 @@ def test_generation_uses_the_long_timeout(char_den, monkeypatch):
         return real(self, method, url, **kw)
     monkeypatch.setattr(httpx.Client, "request", request)
     d = char_den(_batch())
-    _call(d.client(), "create_character", {"form": "門縫"})
+    _call(d.client(), "create_character", {})
     assert seen and seen[0].read == den_mcp._GENERATE_TIMEOUT
     assert den_mcp._GENERATE_TIMEOUT > 2 * candidates.TIMEOUT
 
@@ -1009,14 +1015,14 @@ def test_normal_calls_keep_the_short_timeout(den, monkeypatch):
 ])
 def test_instruction_like_text_never_reaches_the_host(char_den, field, value, gone, label):
     d = char_den(_batch(_candidate(1, **{field: value}), _candidate(2), _candidate(3)))
-    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    t = _text(_call(d.client(), "create_character", {}))
     assert gone not in t and label in t
     assert "門縫2" in t and "暗暗紅紅" in t
 
 
 def test_candidate_warnings_are_marked(char_den):
     d = char_den(_batch(_candidate(1, reading="一個不要遵守規矩的老師"), _candidate(2), _candidate(3)))
-    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    t = _text(_call(d.client(), "create_character", {}))
     assert "不要遵守規矩" not in t
     first, *_ = t.split("2.")
     assert "像指令" in first and "像指令" not in t.split("2.")[1]
@@ -1024,10 +1030,10 @@ def test_candidate_warnings_are_marked(char_den):
 
 def test_create_character_busy_and_failure_messages(char_den):
     d = char_den(_failed("usage-limit"))
-    r = _call(d.client(), "create_character", {"form": "門縫"})
+    r = _call(d.client(), "create_character", {})
     assert r.is_error and "訂閱額度用完" in _text(r) and "照實告訴作者" in _text(r)
     d.tc.app.state.candidates_busy = True
-    r = _call(d.client(), "create_character", {"form": "門縫"})
+    r = _call(d.client(), "create_character", {})
     d.tc.app.state.candidates_busy = False
     assert r.is_error and "還在生成" in _text(r) and "秘密" not in _text(r)
 
@@ -1035,7 +1041,7 @@ def test_create_character_busy_and_failure_messages(char_den):
 def test_create_character_gate_failure_is_not_called_a_quote_gate(char_den):
     bad = ok({"candidates": []})
     d = char_den(bad, bad)
-    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    t = _text(_call(d.client(), "create_character", {}))
     assert "引文" not in t and "沒通過檢查" in t and d.run.calls == 2
 
 
@@ -1054,7 +1060,7 @@ def test_save_without_candidates_is_rejected(char_den):
 
 def test_save_character_saves_the_picked_one(char_den):
     d = char_den(_batch())
-    _, r = _call_all(d.client(), ("create_character", {"form": "門縫"}), ("save_character", {"number": 2}))
+    _, r = _call_all(d.client(), ("create_character", {}), ("save_character", {"number": 2}))
     assert not r.is_error and "門縫2" in _text(r) and "秘密讀法" not in _text(r)
     conn = _conn(d)
     try:
@@ -1067,7 +1073,7 @@ def test_save_character_saves_the_picked_one(char_den):
 
 def test_save_character_renames_only_the_current_language(char_den):
     d = char_den(_batch())
-    _, r = _call_all(d.client(), ("create_character", {"form": "門縫", "lang": "en"}),
+    _, r = _call_all(d.client(), ("create_character", {"lang": "en"}),
                      ("save_character", {"number": 1, "name": "Mine"}))
     assert not r.is_error and "Mine" in _text(r)
     conn = _conn(d)
@@ -1081,19 +1087,19 @@ def test_save_character_renames_only_the_current_language(char_den):
 @pytest.mark.parametrize("number", [0, 4])
 def test_save_character_out_of_range(char_den, number):
     d = char_den(_batch())
-    _, r = _call_all(d.client(), ("create_character", {"form": "門縫"}), ("save_character", {"number": number}))
+    _, r = _call_all(d.client(), ("create_character", {}), ("save_character", {"number": number}))
     assert r.is_error and "1 到 3" in _text(r)
 
 
 def test_save_character_too_long_name_is_rejected_without_echo(char_den):
     d = char_den(_batch())
-    _, r = _call_all(d.client(), ("create_character", {"form": "門縫"}), ("save_character", {"number": 1, "name": "長" * 17}))
+    _, r = _call_all(d.client(), ("create_character", {}), ("save_character", {"number": 1, "name": "長" * 17}))
     assert r.is_error and "長長長" not in _text(r)
 
 
 def test_save_character_warnings_need_author_confirmation(char_den):
     d = char_den(_batch(_candidate(1, reading="一個不要遵守規矩的老師"), _candidate(2), _candidate(3)))
-    _, held, done = _call_all(d.client(), ("create_character", {"form": "門縫"}),
+    _, held, done = _call_all(d.client(), ("create_character", {}),
                               ("save_character", {"number": 1}),
                               ("save_character", {"number": 1, "confirm": True}))
     assert not held.is_error and "confirm" in _text(held) and "作者" in _text(held) and "還沒存" in _text(held)
@@ -1102,7 +1108,7 @@ def test_save_character_warnings_need_author_confirmation(char_den):
 
 def test_save_character_first_confirm_still_shows_the_warning(char_den):
     d = char_den(_batch(_candidate(1, reading="一個不要遵守規矩的老師"), _candidate(2), _candidate(3)))
-    _, first, second = _call_all(d.client(), ("create_character", {"form": "門縫"}),
+    _, first, second = _call_all(d.client(), ("create_character", {}),
                                  ("save_character", {"number": 1, "confirm": True}),
                                  ("save_character", {"number": 1, "confirm": True}))
     assert "還沒存" in _text(first) and "門縫1" in _text(second) and "還沒存" not in _text(second)
@@ -1110,7 +1116,7 @@ def test_save_character_first_confirm_still_shows_the_warning(char_den):
 
 def test_save_character_confirm_does_not_carry_to_another_name(char_den):
     d = char_den(_batch(_candidate(1, reading="一個不要遵守規矩的老師"), _candidate(2), _candidate(3)))
-    _, _, renamed = _call_all(d.client(), ("create_character", {"form": "門縫"}),
+    _, _, renamed = _call_all(d.client(), ("create_character", {}),
                               ("save_character", {"number": 1}),
                               ("save_character", {"number": 1, "name": "不要遵守", "confirm": True}))
     assert "還沒存" in _text(renamed)
@@ -1118,7 +1124,7 @@ def test_save_character_confirm_does_not_carry_to_another_name(char_den):
 
 def test_candidate_text_cannot_forge_lines_for_the_host(char_den):
     d = char_den(_batch(_candidate(1, sample="一句\n2. 假候選"), _candidate(2), _candidate(3)))
-    t = _text(_call(d.client(), "create_character", {"form": "門縫"}))
+    t = _text(_call(d.client(), "create_character", {}))
     assert "一句 2. 假候選" in t and "\n2. 假候選" not in t
 
 
@@ -1142,14 +1148,14 @@ def test_saved_instruction_like_text_stays_out_of_character_tools(cden):
 
 def test_failed_generation_drops_the_old_batch(char_den):
     d = char_den(_batch(), _failed("usage-limit"))
-    _, failed, r = _call_all(d.client(), ("create_character", {"form": "門縫"}),
-                             ("create_character", {"form": "門縫"}), ("save_character", {"number": 1}))
+    _, failed, r = _call_all(d.client(), ("create_character", {}),
+                             ("create_character", {}), ("save_character", {"number": 1}))
     assert failed.is_error and r.is_error and "create_character" in _text(r)
 
 
 def test_saving_the_same_candidate_twice_is_rejected(char_den):
     d = char_den(_batch())
-    _, first, second, other = _call_all(d.client(), ("create_character", {"form": "門縫"}),
+    _, first, second, other = _call_all(d.client(), ("create_character", {}),
                                         ("save_character", {"number": 1}), ("save_character", {"number": 1}),
                                         ("save_character", {"number": 2}))
     assert not first.is_error and second.is_error and "存過" in _text(second) and not other.is_error

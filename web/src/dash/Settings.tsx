@@ -6,7 +6,7 @@ import CardEditor, { SAVED_LIMITS } from "./CardEditor";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import MemoryPage from "./MemoryPage";
-import NewCharacter from "./NewCharacter";
+import NewCharacter, { NewSlot } from "./NewCharacter";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
 import { speakerChanges } from "./Talk";
@@ -267,6 +267,7 @@ function Companions() {
   const [problems, setProblems] = useState<string[]>([]);
   const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [fresh, setFresh] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -313,7 +314,7 @@ function Companions() {
     return [];
   };
   if (creating) {
-    return <NewCharacter onClose={() => setCreating(false)} onSaved={async () => { await reloadSaved(); setCreating(false); }} />;
+    return <NewCharacter onClose={() => setCreating(false)} onSaved={async id => { await reloadSaved(); setFresh(id ?? null); setCreating(false); }} />;
   }
   const opened = open ? chars.active.find(c => c.id === open) ?? null : null;
   return (
@@ -325,10 +326,10 @@ function Companions() {
           return <CardEditor key={c.id} draft={c} limits={SAVED_LIMITS}
             onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
         }
-        return <PopCard key={c.id} character={c} on={who === c.id} onOpen={() => setOpen(c.id)} />;
+        return <PopCard key={c.id} character={c} on={who === c.id} fresh={fresh === c.id} onOpen={() => setOpen(c.id)} />;
       })}
       <div className="char-new">
-        <button type="button" className="char-new-slot" onClick={() => setCreating(true)}><span aria-hidden="true"><Icon name="plus" /></span>{t("set.card.new")}</button>
+        <NewSlot onOpen={() => setCreating(true)} />
         <button type="button" className="char-new-imp" aria-label={t("set.card.import")} title={t("set.card.import")} onClick={() => fileInput.current?.click()}><Icon name="up" /><span aria-hidden="true">{t("set.card.import")}</span></button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t("set.card.import")}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void fromFile(f); }} />
@@ -354,9 +355,11 @@ function Companions() {
 }
 
 /** 讀伴卡:立體書的紙卡,角色立在摺線上;整張可點,打開資訊面板。 */
-function PopCard({ character: c, on, onOpen }: { character: Character; on: boolean; onOpen: () => void }) {
+function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on: boolean; fresh: boolean; onOpen: () => void }) {
   const t = useT();
   const lang = useLang();
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (fresh) ref.current?.focus(); }, [fresh]);
   const name = localized(c.name, lang);
   const tilt = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.pointerType !== "mouse") return;
@@ -369,7 +372,7 @@ function PopCard({ character: c, on, onOpen }: { character: Character; on: boole
     e.currentTarget.style.removeProperty("--ry");
   };
   return (
-    <button type="button" className="char-pop" data-on={on} aria-haspopup="dialog" aria-label={t("set.card.open", { name })}
+    <button type="button" ref={ref} className="char-pop" data-on={on} data-fresh={fresh || undefined} aria-haspopup="dialog" aria-label={t("set.card.open", { name })}
       onClick={onOpen} onPointerMove={tilt} onPointerLeave={flat}>
       <span className="char-stage" aria-hidden="true"><Figure character={c} size={96} /></span>
       <b className="char-name">{name}</b>

@@ -7,11 +7,12 @@ export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000 };
 export const candidateLimits = (lang: Lang): CardLimits =>
   lang === "en" ? { name: 32, line: 80, reading: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, lineRequired: true };
 
-export default function CardEditor({ draft, limits, onSave, onCancel }: {
+export default function CardEditor({ draft, limits, onSave, onCancel, onChange }: {
   draft: CardDraft; limits: CardLimits;
   /** 回傳要作者確認的 warnings;空陣列 = 存好了。 */
   onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
   onCancel: () => void;
+  onChange?: (card: { name: string; line: string }) => void;
 }) {
   const t = useT();
   const lang = useLang();
@@ -44,10 +45,10 @@ export default function CardEditor({ draft, limits, onSave, onCancel }: {
   return (
     <form className="char-card char-edit" onSubmit={e => void save(e)}>
       <label>{t("card.name")}
-        <input className="nc-edit" maxLength={limits.name} autoComplete="off" value={name} onChange={e => edit(setName)(e.target.value)} />
+        <input className="nc-edit" maxLength={limits.name} autoComplete="off" value={name} onChange={e => { edit(setName)(e.target.value); onChange?.({ name: e.target.value, line }); }} />
       </label>
       <label>{t("card.line")}
-        <input className="nc-edit" maxLength={limits.line} autoComplete="off" value={line} onChange={e => edit(setLine)(e.target.value)} />
+        <input className="nc-edit" maxLength={limits.line} autoComplete="off" value={line} onChange={e => { edit(setLine)(e.target.value); onChange?.({ name, line: e.target.value }); }} />
       </label>
       <label>{t("card.reading")}
         <textarea className="nc-edit" rows={4} maxLength={limits.reading} value={reading} onChange={e => edit(setReading)(e.target.value)} />

@@ -50,6 +50,63 @@ def path_errors(d) -> list[str]:
     return ["too-many-commands"] if commands > LIMITS["commands"] else []
 
 
+def command_count(d: str) -> int:
+    return sum(t in _ARGS for t in _TOKEN.findall(d))
+
+
+def bbox(d: str) -> tuple[float, float, float, float]:
+    """路徑的外框;A 以終點加減半徑估,寧大不小。只收過了 path_errors 的路徑。"""
+    tokens, xs, ys, i = _TOKEN.findall(d), [], [], 0
+    while i < len(tokens):
+        cmd, i = tokens[i], i + 1
+        nums = [float(a) for a in tokens[i:i + _ARGS[cmd]]]
+        i += _ARGS[cmd]
+        if cmd == "A":
+            rx, ry, *_, x, y = nums
+            xs += [x - rx, x + rx]
+            ys += [y - ry, y + ry]
+        else:
+            xs += nums[0::2]
+            ys += nums[1::2]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+FRAME = (8, 14, 112, 93)
+
+
+def _map_path(d: str, at, k: float) -> str:
+    tokens, out, i = _TOKEN.findall(d), [], 0
+    while i < len(tokens):
+        cmd, i = tokens[i], i + 1
+        nums = [float(a) for a in tokens[i:i + _ARGS[cmd]]]
+        i += _ARGS[cmd]
+        if cmd == "A":
+            rx, ry, rot, large, sweep, x, y = nums
+            out.append(f"A{_r(rx * k)} {_r(ry * k)} {_r(rot)} {int(large)} {int(sweep)} {' '.join(map(_r, at(x, y)))}")
+        else:
+            pts = [_r(v) for j in range(0, len(nums), 2) for v in at(nums[j], nums[j + 1])]
+            out.append(cmd + " ".join(pts))
+    return " ".join(out)
+
+
+def _r(v: float) -> str:
+    return f"{round(v, 1):g}"
+
+
+def fit(fig: dict) -> dict:
+    """等比例縮放平移到 FRAME:水平置中、底貼地面。只收過了 errors 的 parts/eyes/mouth。"""
+    boxes = [bbox(p["d"]) for p in fig["parts"]]
+    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    fx0, fy0, fx1, fy1 = FRAME
+    k = min((fx1 - fx0) / max(x1 - x0, 1), (fy1 - fy0) / max(y1 - y0, 1))
+    cx, mid = (x0 + x1) / 2, (fx0 + fx1) / 2
+    at = lambda x, y: (mid + (x - cx) * k, fy1 - (y1 - y) * k)
+    point = lambda p: [round(v, 1) for v in at(*p)]
+    return {**fig, "parts": [{**p, "d": _map_path(p["d"], at, k)} for p in fig["parts"]],
+            "eyes": [point(p) for p in fig["eyes"]], "mouth": [point(p) for p in fig["mouth"]]}
+
+
 def _one_of(value, allowed) -> bool:
     return isinstance(value, str) and value in allowed
 

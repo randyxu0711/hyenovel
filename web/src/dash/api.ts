@@ -1,4 +1,4 @@
-import type { FigureSpec, Part, Pen, Pose } from "./figure/poses";
+import type { FigureSpec, Part, Pen, Pt } from "./figure/poses";
 import { sseFetch, type SSEEvent } from "../data/client";
 
 /** 與 den/app.py 的 ERROR_CODES 一致(加 den-down);den/tests/test_app_errors.py 比對兩份。 */
@@ -41,9 +41,10 @@ export type Character = {
 };
 export type CardDraft = { name: LText; line: LText; reading: string };
 export type CandidateAnswers = { form: string; wish: string };
+export type CandidateAgain = { reaction: string; previous: { name: string; line: string }[] };
 export type Candidate = {
   name: LText; form: LText; line: LText; reading: string; sample: string;
-  figure: { pose: Pose; main: Pen; second: Pen; traits: Part[] };
+  figure: { parts: Part[]; eyes: [Pt, Pt]; mouth: [Pt, Pt, Pt]; main: Pen; second: Pen };
   axes: string[]; card: unknown; warnings: string[];
   examples: { who: "author" | "char"; text: string }[][];
 };
@@ -175,8 +176,8 @@ export const api = {
   importCharacter: (card: unknown, confirm: boolean) =>
     request<{ imported: boolean; warnings: string[]; character?: Character }>("/api/characters/import", post({ card, confirm })),
   characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
-  characterCandidates: (answers: CandidateAnswers, lang: string) =>
-    request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", post({ answers, lang })),
+  characterCandidates: (answers: CandidateAnswers, lang: string, again?: CandidateAgain) =>
+    request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", post({ answers, lang, ...again })),
   reviseCandidate: (candidate: Candidate, feedback: string, lang: string) =>
     request<Candidate>("/api/characters/candidates/revise", post({ candidate, feedback, lang })),
   createCharacter: (candidate: Candidate, confirm: boolean) =>
