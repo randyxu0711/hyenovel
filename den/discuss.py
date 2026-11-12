@@ -248,7 +248,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     every = repo.utterances(conn, d) if d is not None else []
     redo = turn.get("redo")
     if redo is not None:
-        if every[-1]["seq"] != redo:
+        if not every or every[-1]["seq"] != redo:
             yield {"event": "error", "data": {"where": "discuss", "message": "這則已經不是最後一則",
                                               "recoverable": False, "code": "not-last-turn"}}
             return

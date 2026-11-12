@@ -53,12 +53,15 @@ def test_pick_only_on_the_last_row(c, fake_chat):
 
 def test_edit_overwrites_and_marks_voice(c, fake_chat):
     sid = _session(c)
+    before = rows(c, sid)[1]
     assert edit(c, sid, 1, "  我改的字  ").json() == {"edited": True}
     t = turn(c, sid, 1)
     assert (t["text"], t["edited"], t["voice"], t["variant"]["n"]) == ("我改的字", True, True, 1)
     assert "AB" not in every_text(c)
-    u = rows(c, sid)[1]
-    assert u["recipe"] is not None and u["usage"] is not None and u["edited_at"] is not None
+    after = rows(c, sid)[1]
+    assert after["edited_at"] is not None
+    assert {k: after[k] for k in ("recipe", "usage", "ts", "variant", "analysis_fp")} == \
+        {k: before[k] for k in ("recipe", "usage", "ts", "variant", "analysis_fp")}
 
 
 def test_edit_same_text_writes_nothing(c, fake_chat):

@@ -90,9 +90,9 @@ async def session_turns(session: str, request: Request, v: int | None = Query(No
         raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
 
-def _reaction_target(request: Request, session: str, seq: int) -> int:
+def _reaction_target(request: Request, session: str, seq: int, where: str = "reaction") -> int:
     def reject(status: int, code: str, detail: str) -> ApiError:
-        log.info("event=reject where=reaction reason=%s", code)
+        log.info("event=reject where=%s reason=%s", where, code)
         return ApiError(status, code, detail)
     try:
         return discuss.reaction_target(request.app.state.mgr.conn, session, seq)
@@ -206,7 +206,7 @@ async def edit_reply(session: str, seq: Seq, body: ReplyTextIn, request: Request
 
 @router.put("/sessions/{session}/turns/{seq}/voice", status_code=204)
 async def put_voice(session: str, seq: Seq, request: Request):
-    d = _reaction_target(request, session, seq)
+    d = _reaction_target(request, session, seq, "voice")
     conn = request.app.state.mgr.conn
     with conn:
         repo.set_voice(conn, d, seq, time.time())
@@ -214,7 +214,7 @@ async def put_voice(session: str, seq: Seq, request: Request):
 
 @router.delete("/sessions/{session}/turns/{seq}/voice", status_code=204)
 async def delete_voice(session: str, seq: Seq, request: Request):
-    d = _reaction_target(request, session, seq)
+    d = _reaction_target(request, session, seq, "voice")
     conn = request.app.state.mgr.conn
     with conn:
         repo.clear_voice(conn, d, seq)

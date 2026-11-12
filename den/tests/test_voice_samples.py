@@ -2,11 +2,12 @@ import json
 
 import pytest
 
-from den import companion
+from den import characters, companion, stories
 from den.config import MAX_VOICE_SAMPLE_CHARS, MAX_VOICE_SAMPLES
 from den.tests.test_app_discuss import c, events, fake_chat, in_loop  # noqa: F401
 from den.tests.test_regenerate import regen_events
 from den.tests.test_reply_edit import edit
+from marrow import repo
 
 
 def _say(c, message="結尾太快?", sid=None, character=None):
@@ -16,6 +17,14 @@ def _say(c, message="結尾太快?", sid=None, character=None):
 
 def voice(c, sid, seq=1):
     assert c.put(f"/api/sessions/{sid}/turns/{seq}/voice").status_code == 204
+
+
+def fake_chat_prompt(c):
+    def build(conn):
+        ctx = stories.companion_context(conn, "mini", None)
+        hy = characters.resolve(conn, "hyena", None)
+        return companion.assemble(ctx, hy, companion.pick_samples(repo.voice_samples(conn, "hyena", None))).layers
+    return in_loop(c, build)
 
 
 def system(fake_chat):
@@ -35,7 +44,8 @@ def test_marked_reply_reaches_other_sessions_after_examples(c, fake_chat):
     _say(c)
     s = system(fake_chat)
     assert "<example>\n作者:燈呢\n鬣狗:像它的那句\n</example>\n" in s
-    assert s.index("你平常怎麼說話") < s.index("這位作者認得的你") < s.index("像它的那句")
+    layers = [x.name for x in fake_chat_prompt(c)]
+    assert layers[-3:] == ["examples", "samples_header", "samples"]
 
 
 def test_samples_are_material_not_instructions(c, fake_chat):

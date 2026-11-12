@@ -3,6 +3,7 @@ import threading
 
 import pytest
 
+from den import discuss
 from den.tests.test_app_discuss import SEA, c, events, fake_chat, free, in_loop, post_discuss  # noqa: F401
 from marrow import repo
 
@@ -172,3 +173,74 @@ def test_turn_while_redo_runs_is_busy(c, fake_chat):
     finally:
         fake_chat.release.set()
     t.join(5)
+
+
+@pytest.mark.parametrize("sneak", ["clear", "user", "deleted"])
+def test_redo_rechecks_the_last_row_after_taking_the_lock(c, fake_chat, sneak):
+    sid = post_discuss(c, "mini", None, "結尾太快?", ["b3"])[-1]["data"]["session_id"]
+    n = len(fake_chat.calls)
+
+    async def drive():
+        conn = c.app.state.mgr.conn
+        turn = discuss.prepare_redo(conn, sid, 1)
+        with conn:
+            if sneak == "deleted":
+                repo.delete_discussion(conn, turn["discussion_id"])
+            else:
+                repo.add_utterance(conn, turn["discussion_id"], 2, sneak, "插", 9.0, "den", [], None)
+        return [ev async for ev in discuss.run_turn(conn, c.app.state.chat, turn, "", [])]
+    evs = c.portal.call(drive)
+    assert [e["event"] for e in evs] == ["error"] and evs[0]["data"]["code"] == "not-last-turn"
+    assert len(fake_chat.calls) == n
+
+
+def test_redo_after_compact_is_not_last(c, fake_chat):
+    sid = post_discuss(c, "mini", None, "結尾太快?", ["b3"])[-1]["data"]["session_id"]
+    c.post(f"/api/sessions/{sid}/compact")
+    assert regen(c, sid, 1).json()["code"] == "not-last-turn"
+
+
+def test_next_turn_retrieval_uses_the_kept_versions_recipe(c, fake_chat, monkeypatch):
+    sid = post_discuss(c, "mini", None, "結尾太快?", ["b3"])[-1]["data"]["session_id"]
+    regen_events(c, sid, 1)
+    kept = rows(c, sid)[1]["recipe"]["retrieved"]
+    in_loop(c, lambda conn: (conn.execute("UPDATE utterance_variant SET recipe = ?",
+                                          ('{"retrieved": ["shelved-only"]}',)), conn.commit()))
+    recipe = json.dumps({**rows(c, sid)[1]["recipe"], "retrieved": ["kept-only"]})
+    in_loop(c, lambda conn: (conn.execute("UPDATE utterance SET recipe = ? WHERE seq = 1", (recipe,)), conn.commit()))
+    seen = {}
+    real = discuss.retrieve.pick
+
+    def spy(*a, **k):
+        seen["previous"] = list(k["previous"])
+        return real(*a, **k)
+    monkeypatch.setattr(discuss.retrieve, "pick", spy)
+    post_discuss(c, "mini", sid, "然後", [])
+    assert kept is not None and seen["previous"] == ["kept-only"]
+
+
+def test_everything_else_is_busy_while_redo_runs(c, fake_chat):
+    sid = post_discuss(c, "mini", None, "結尾太快?", ["b3"])[-1]["data"]["session_id"]
+    fake_chat.hang = True
+    t = threading.Thread(target=regen, args=(c, sid, 1), daemon=True)
+    t.start()
+    try:
+        assert fake_chat.started.wait(5)
+        assert c.post(f"/api/sessions/{sid}/compact").json()["code"] == "busy"
+        assert c.put(f"/api/sessions/{sid}/turns/1/variant", json={"n": 1}).json()["code"] == "busy"
+        assert c.put(f"/api/sessions/{sid}/turns/1/text", json={"text": "x"}).json()["code"] == "busy"
+        assert regen(c, sid, 1).json()["code"] == "busy"
+    finally:
+        fake_chat.release.set()
+    t.join(5)
+
+
+def test_pick_and_edit_reject_legacy_session(c, fake_chat):
+    def legacy(conn):
+        st = repo.story_by_slug(conn, "mini")
+        d = repo.ensure_discussion(conn, st["id"], "old", "web", None, 0)
+        repo.add_utterance(conn, d, 0, "assistant", "舊", 1.0, "den", [], None)
+        conn.commit()
+    in_loop(c, legacy)
+    assert c.put("/api/sessions/old/turns/0/variant", json={"n": 1}).json()["code"] == "legacy-session"
+    assert c.put("/api/sessions/old/turns/0/text", json={"text": "x"}).json()["code"] == "legacy-session"
