@@ -95,7 +95,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const { registerTalk } = useLinks();
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
-  const { markTurn, markMemories, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy,
+  const { markTurn, markMemories, redoing, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy,
     attachments, bound, staged, working } = talk;
   const navigate = useNavigate();
   const picker = useRef<HTMLInputElement>(null);
@@ -245,9 +245,12 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     return [brk, att,
       <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
         {who.has(i) && whoLine(c)}
-        <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>
+        {redoing !== null && turn.seq === redoing
+          ? (streaming ? <p className="chat-text">{streaming}</p>
+            : <p className="chat-wait" role="status">{t("talk.waiting", { name: nameOf(c.id) })}</p>)
+          : <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>}
         {session && turn.seq !== undefined && (
-          <Reaction key={`${session}-${turn.seq}`} session={session} seq={turn.seq} initial={turn.reaction ?? null}
+          <Reaction key={`${session}-${turn.seq}-${turn.variant?.n ?? 1}`} session={session} seq={turn.seq} initial={turn.reaction ?? null}
             onChange={r => markTurn(session, turn.seq!, r)} />
         )}
       </div>,
@@ -272,7 +275,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
             <p>{pending.text}</p>
           </div>
         )}
-        {streaming !== null && (
+        {streaming !== null && redoing === null && (
           <div className="chat-turn">
             {lastId !== me.id && whoLine(me)}
             {streaming ? <p className="chat-text">{streaming}</p>
