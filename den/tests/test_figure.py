@@ -124,3 +124,43 @@ def test_card_without_figure_shows_none_and_bad_figure_is_a_warning():
     broken = cards._with_ext(card, {"figure": _with(main="gold")})
     assert cards.view(broken, "x", 1)["figure"] is None
     assert "bad-figure" in cards.scan(broken)["warnings"]
+
+
+def test_command_count_counts_commands_not_numbers():
+    assert figure.command_count("M10 10 L20 20 C1 2 3 4 5 6 Z") == 4
+
+
+def test_bbox_spans_every_point_including_control_points():
+    assert figure.bbox("M20 90 C20 50 40 30 60 30 Q100 40 100 90 Z") == (20, 30, 100, 90)
+
+
+def test_bbox_widens_arcs_by_their_radius():
+    assert figure.bbox("M10 66 A10 16 0 1 0 30 66") == (10, 50, 40, 82)
+
+
+def _fitted(parts, eyes=([0, 0], [0, 0]), mouth=([0, 0], [0, 0], [0, 0])):
+    return figure.fit({"parts": parts, "eyes": list(eyes), "mouth": list(mouth), "main": "olive"})
+
+
+def test_fit_scales_a_tiny_drawing_up_to_the_frame_and_onto_the_ground():
+    out = _fitted([{"group": "body", "d": "M50 50 L60 50 L60 55 L50 55 Z", "fill": "main"}],
+                  eyes=([52, 52], [58, 52]))
+    assert figure.bbox(out["parts"][0]["d"]) == (8, 41, 112, 93)
+    assert out["eyes"] == [[28.8, 61.8], [91.2, 61.8]] and out["main"] == "olive"
+
+
+def test_fit_limits_by_the_tighter_side_and_centers():
+    out = _fitted([{"group": "body", "d": "M0 0 L10 0 L10 100 L0 100 Z", "fill": "main"}])
+    x0, y0, x1, y1 = figure.bbox(out["parts"][0]["d"])
+    assert (y0, y1) == (14, 93) and (x0 + x1) / 2 == 60
+
+
+def test_fit_scales_arc_radii_and_keeps_flags():
+    out = _fitted([{"group": "body", "d": "M10 50 A10 10 0 1 0 30 50", "fill": "main"}])
+    assert out["parts"][0]["d"].split(" A")[1].split(" ")[2:5] == ["0", "1", "0"]
+    assert figure.path_errors(out["parts"][0]["d"]) == []
+
+
+def test_fit_is_stable_when_run_twice():
+    once = _fitted([{"group": "body", "d": "M20 90 C20 50 40 30 60 30 C80 30 100 50 100 90 Z", "fill": "main"}])
+    assert figure.fit(once)["parts"] == once["parts"]

@@ -30,10 +30,17 @@ class AnswersIn(BaseModel):
     wish: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
 
 
+class PreviousIn(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=cards.MAX_NAME)]
+    line: Annotated[str, StringConstraints(strip_whitespace=True, max_length=cards.MAX_LINE)] = ""
+
+
 class CandidatesIn(BaseModel):
     answers: AnswersIn = AnswersIn()
     lang: Literal["zh-Hant", "en"] = "zh-Hant"
     seed: int | None = Field(default=None, ge=0, lt=2**31)
+    reaction: Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] = ""
+    previous: list[PreviousIn] = Field(default=[], max_length=candidates.COUNT)
 
 
 class ReviseIn(BaseModel):
@@ -125,7 +132,9 @@ async def character_candidates(body: CandidatesIn, request: Request):
     state = request.app.state
     seed = secrets.randbelow(2**31) if body.seed is None else body.seed
     passage = candidates.opening(repo.works(state.mgr.conn))
-    return await _spending(state, lambda: candidates.generate(state.run_once, body.answers.model_dump(), passage, body.lang, seed))
+    again = {"reaction": body.reaction, "previous": [p.model_dump() for p in body.previous]}
+    return await _spending(state, lambda: candidates.generate(state.run_once, body.answers.model_dump(), passage,
+                                                              body.lang, seed, again))
 
 
 @router.post("/characters/candidates/revise")
@@ -137,6 +146,12 @@ async def revise_candidate(body: ReviseIn, request: Request):
     return await _spending(state, lambda: candidates.revise(state.run_once, body.candidate, body.feedback, passage, body.lang))
 
 
+def _name_taken(conn, name: dict) -> bool:
+    mine = {v.strip().casefold() for v in name.values()}
+    return any(v.strip().casefold() in mine
+               for c in characters.all_(conn) if not c["archived"] for v in c["name"].values())
+
+
 @router.post("/characters")
 async def create_character(body: CandidateSaveIn, request: Request):
     candidate = candidates.core(body.candidate)
@@ -146,9 +161,10 @@ async def create_character(body: CandidateSaveIn, request: Request):
     scanned = cards.scan(card)
     if scanned["errors"]:
         raise _bad_card("character-create", scanned["errors"])
-    if scanned["warnings"] and not body.confirm:
-        return {"created": False, "warnings": scanned["warnings"]}
     conn = request.app.state.mgr.conn
+    warnings = scanned["warnings"] + (["name-taken"] if _name_taken(conn, candidate["name"]) else [])
+    if warnings and not body.confirm:
+        return {"created": False, "warnings": warnings}
     with conn:
         character = characters.create(conn, card, time.time())
     return JSONResponse({"created": True, "character": character}, status_code=201)

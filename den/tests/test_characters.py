@@ -227,8 +227,11 @@ def test_edit_refuses_builtin_and_unknown(conn):
 
 def test_create_is_origin_created_with_a_fresh_id(conn):
     card = candidates.to_card({"name": NEW[0], "form": NEW[0], "line": NEW[1], "reading": "讀", "sample": "試",
-                              "figure": {"pose": "wisp", "main": "olive", "second": "bark", "traits": [],
-                                         "tempo": "mid", "move": "tail-sway"}})
+                              "figure": {"parts": [{"group": "body", "d": "M20 90 L60 30 L100 90 Z", "fill": "main"}],
+                                         "eyes": [[50, 70], [70, 70]], "mouth": [[54, 80], [60, 82], [66, 80]],
+                                         "main": "olive", "second": "bark",
+                                         "tempo": "mid", "move": "tail-sway"},
+                              "examples": [[{"who": "char", "text": "嗯"}]] * 3})
     a, b = characters.create(conn, card, 2.0), characters.create(conn, card, 2.0)
     assert a["id"] != b["id"] and a["origin"] == "created" and a["id"][0] == "c" and len(a["id"]) == 17
 
@@ -292,8 +295,11 @@ def test_edit_refuses_archived(conn):
 
 def test_new_characters_list_after_the_builtins(conn):
     card = candidates.to_card({"name": NEW[0], "form": NEW[0], "line": NEW[1], "reading": "讀", "sample": "試",
-                              "figure": {"pose": "wisp", "main": "olive", "second": "bark", "traits": [],
-                                         "tempo": "mid", "move": "tail-sway"}})
+                              "figure": {"parts": [{"group": "body", "d": "M20 90 L60 30 L100 90 Z", "fill": "main"}],
+                                         "eyes": [[50, 70], [70, 70]], "mouth": [[54, 80], [60, 82], [66, 80]],
+                                         "main": "olive", "second": "bark",
+                                         "tempo": "mid", "move": "tail-sway"},
+                              "examples": [[{"who": "char", "text": "嗯"}]] * 3})
     got = characters.create(conn, card, 2.0)
     assert [c["id"] for c in characters.all_(conn)] == ["buffalo", "deer", "hyena", got["id"]]
 

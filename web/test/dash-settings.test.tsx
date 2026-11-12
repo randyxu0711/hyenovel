@@ -8,7 +8,8 @@ import { en, setLang, zhHant } from "../src/dash/i18n";
 import { getThemeState, setMode } from "../src/dash/theme";
 import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
-import type { Character } from "../src/dash/api";
+import type { Candidate, Character } from "../src/dash/api";
+import { drop, keep, start } from "../src/dash/newCharacterDraft";
 import { companionId } from "../src/dash/useTalk";
 import { olive, grass, hyena, buffalo, deer } from "./dash-fixtures";
 
@@ -377,6 +378,10 @@ describe("設定頁:角色卡", () => {
     const f = vi.fn(async (u: string, init?: RequestInit) => {
       if (u === "/api/themes") return json({ themes: [olive], default: "olive" });
       if (u === "/api/characters" && listFails) return new Response("{}", { status: 500 });
+      if (u === "/api/characters" && init?.method === "POST") {
+        list = [...list, { ...deer, id: "n1", origin: "created", name: { "zh-Hant": "門縫" } }];
+        return json({ created: true, character: list[list.length - 1] });
+      }
       if (u === "/api/characters") return json({ characters: list, default: "hyena" });
       if (u === "/api/characters/import") {
         const b = JSON.parse(String(init?.body));
@@ -424,6 +429,71 @@ describe("設定頁:角色卡", () => {
     expect(p.getByLabelText("陪你讀稿的,是什麼?")).toBeTruthy();
     fireEvent.click(p.getByRole("button", { name: "回讀伴" }));
     expect(p.getByRole("button", { name: "新角色" })).toBeTruthy();
+  });
+  const kept = (line: string) => ({
+    name: { "zh-Hant": "門縫" }, form: { "zh-Hant": "門縫" }, line: { "zh-Hant": line }, reading: "讀", sample: "",
+    figure: { parts: [{ group: "body", d: "M20 90 C20 50 40 30 60 30 C80 30 100 50 100 90 Z", fill: "main" }],
+      eyes: [[50, 58], [70, 58]], mouth: [[54, 70], [60, 73], [66, 70]], main: "olive", second: "bark" }, axes: [], card: {}, warnings: [], examples: [],
+  }) as unknown as Candidate;
+  const seed = () => keep({ form: "門縫", wish: "", batch: ["聽1", "聽2", "聽3"].map(kept), batchNo: 1, revealed: 1, scene: 0, reaction: "" });
+  it("有沒存的候選時,新角色那格換成三隻迷你圖,字在 aria-label/title;點進去就是那批", async () => {
+    seed();
+    try {
+      mountCards();
+      const p = await open();
+      const slot = p.getByRole("button", { name: "新角色,上次的候選還在" });
+      expect(slot.getAttribute("title")).toBe("新角色,上次的候選還在");
+      expect(slot.querySelectorAll(".nc-mini svg.fig")).toHaveLength(3);
+      expect(slot.querySelector(".nc-mini svg.fig")?.getAttribute("width")).toBe("28");
+      expect(p.queryByText("上次的候選還在")).toBeNull();
+      fireEvent.click(slot);
+      expect(p.getAllByRole("tab").map(t => t.textContent)).toEqual(["聽1", "聽2", "聽3"]);
+    } finally {
+      drop();
+    }
+  });
+  it("候選生成中,新角色那格是小素描加已跑時間;好了換成三隻", async () => {
+    let finish = () => {};
+    const job = start("generate", null, () => new Promise(r => { finish = () => r(d => ({ ...d, batch: ["聽1", "聽2", "聽3"].map(kept), batchNo: 1 })); }));
+    try {
+      mountCards();
+      const p = await open();
+      const slot = p.getByRole("button", { name: "新角色,候選還在生成" });
+      expect(slot.querySelector(".nc-mini.nc-ghost svg.fig")).toBeTruthy();
+      expect(slot.querySelector(".dash-dm")?.textContent).toBe("0:00");
+      finish();
+      await job.done;
+      await waitFor(() => expect(p.getByRole("button", { name: "新角色,上次的候選還在" }).querySelectorAll(".nc-mini svg.fig")).toHaveLength(3));
+    } finally {
+      finish();
+      await job.done.catch(() => {});
+      drop();
+    }
+  });
+  it("沒有候選時新角色那格是加號,沒有額外的字", async () => {
+    mountCards();
+    const p = await open();
+    const slot = p.getByRole("button", { name: "新角色" });
+    expect(slot.getAttribute("aria-label")).toBeNull();
+    expect(slot.querySelector(".nc-mini")).toBeNull();
+  });
+  it("存好之後回清單,新卡站起來一次並拿到焦點", async () => {
+    seed();
+    try {
+      mountCards();
+      const p = await open();
+      fireEvent.click(p.getByRole("button", { name: "新角色,上次的候選還在" }));
+      fireEvent.click(p.getByRole("tab", { name: "聽1" }));
+      fireEvent.click(p.getByRole("button", { name: "用這個" }));
+      fireEvent.click(p.getByRole("button", { name: "存" }));
+      const fresh = await p.findByRole("button", { name: "打開門縫" });
+      expect(fresh.getAttribute("data-fresh")).toBe("true");
+      expect(document.activeElement).toBe(fresh);
+      expect(p.getByRole("button", { name: "打開鬣狗" }).hasAttribute("data-fresh")).toBe(false);
+      expect(p.getByRole("button", { name: "新角色" })).toBeTruthy();
+    } finally {
+      drop();
+    }
   });
   it("內建角色沒有封存鈕,匯入的角色有;每位都能匯出", async () => {
     mountCards();

@@ -448,12 +448,11 @@
 
 /* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
 /* 建角色:短文是唯一的亮點,其餘安靜;波浪 = 陪讀者提到,跟稿上同一個意思 */
-.dash .dash-settings:has(.nc-results){max-width:64em}
-.dash .dash-settings:has(.nc, .nc-busy) > .dash-h{display:none}
-.dash .nc-results{outline:0}
+.dash .dash-settings:has(.nc){max-width:64em}
+.dash .dash-settings:has(.nc) > .dash-h{display:none}
 .dash .nc-back{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:4px 8px 4px 2px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .nc-back:hover{color:var(--dash-ink)}
-.dash .nc-sheet{max-width:40em; padding:32px 36px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .nc-sheet{position:relative; max-width:40em; padding:32px 36px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .nc-q{margin:0 0 36px; padding:0; border:0; min-width:0}
 .dash .nc-q legend, .dash .nc-q > label{display:block; padding:0; margin:0 0 10px; font-family:var(--serif); font-size:var(--dash-t-lg); line-height:1.6}
 .dash .nc-form > label{font-size:var(--dash-t-xl)}
@@ -473,11 +472,7 @@
 .dash .nc-foot .dash-key:disabled{cursor:not-allowed; color:var(--dash-ink-2); box-shadow:none; transform:none}
 .dash .nc-note{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .nc-err{margin:14px 0 0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
-.dash .nc-busy{display:grid; justify-items:center; gap:18px; padding:72px 0; color:var(--dash-ink-2)}
-.dash .nc-busy p{margin:0; display:flex; align-items:baseline; gap:10px}
-.dash .nc-busy .dash-dm{font-size:var(--dash-t-lg); color:var(--dash-ink)}
-.dash :is(.char-card, .nc-busy, .char-pop, .char-sheet) .fig{--dash-ink:var(--dash-paper-ink)}
-.dash .nc-figs{display:flex; gap:28px}
+.dash :is(.char-card, .char-pop, .char-sheet) .fig{--dash-ink:var(--dash-paper-ink)}
 .dash .char-cards{display:grid; grid-auto-flow:dense; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:start}
 .dash .char-card{display:flex; flex-direction:column; padding:18px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .char-card[data-on="true"]{box-shadow:var(--dash-sh-raise), 0 0 0 1.5px var(--dash-accent)}
@@ -495,23 +490,134 @@
 .dash .char-card header{display:flex; align-items:center; gap:10px; margin-bottom:14px}
 .dash .char-card h2{margin:0; font-family:var(--serif); font-size:var(--dash-t-lg); font-weight:500; line-height:1.3}
 .dash .char-card h2 small{display:block; font-family:var(--sans); font-size:var(--dash-t-xs); font-weight:400; color:var(--dash-paper-ink-2)}
-.dash .nc-sample{margin:0 0 14px; font-family:var(--serif); line-height:1.9}
-.dash .nc-line{margin:0 0 10px; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
-.dash .char-card details{font-size:var(--dash-t-sm)}
-.dash .char-card summary{cursor:pointer; color:var(--dash-paper-ink-2)}
-.dash .char-card details p{margin:8px 0 0; white-space:pre-wrap}
+.dash .nc-scenes{display:flex; flex-wrap:wrap; gap:2px; width:fit-content; margin:0; padding:2px; border-radius:8px; background:var(--dash-desk-2)}
+.dash .nc-scenes button{padding:3px 14px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .nc-scenes button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .nc-scenes button:focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
 .dash .nc-warn{margin:10px 0 0; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
 .dash .nc :is(button, summary):focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
-.dash .nc-revise{margin-top:14px; padding-top:12px; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
-.dash .nc-revise input{width:100%; padding:4px 0; border:0; border-bottom:1px solid var(--dash-paper-ink-2); outline:0; border-radius:0; background:none; font-size:var(--dash-t-sm); color:inherit}
-.dash .nc-revise input:focus{border-bottom-color:var(--dash-accent)}
+.dash .nc-revise{display:flex; align-items:baseline; gap:10px; margin-top:14px; border-bottom:1px solid var(--dash-paper-ink-2)}
+.dash .nc-revise:focus-within{border-bottom-color:var(--dash-accent)}
+.dash .nc-revise input{flex:1; min-width:0; padding:5px 0; border:0; outline:0; border-radius:0; background:none; font-size:var(--dash-t-sm); color:inherit}
 .dash .nc-revise input::placeholder{color:var(--dash-paper-ink-2)}
-.dash .nc-revise-foot{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:6px}
-.dash .nc-revise-foot button, .dash .nc-use{padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
-.dash .nc-revise-foot button:disabled, .dash .nc-use:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
-.dash .nc-revise-foot button:not(:disabled):hover, .dash .nc-use:not(:disabled):hover{text-decoration:underline; text-underline-offset:.3em}
-.dash .char-card .nc-note{color:var(--dash-paper-ink-2); font-variant-numeric:tabular-nums}
-.dash .nc-use{align-self:flex-start; margin-top:10px; font-weight:500}
+.dash .nc-revise button, .dash .nc-use{flex:none; padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
+.dash .nc-revise button:disabled, .dash .nc-use:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
+.dash .nc-revise button:not(:disabled):hover, .dash .nc-use:not(:disabled):hover{text-decoration:underline; text-underline-offset:.3em}
+/* 生成中:三張空白紙上,鉛筆一筆筆試畫長相;畫完擱一下、淡掉、換一個再試。只說「還在想長什麼樣」,不說畫到幾成 */
+.dash .nc-state{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:flex-end; gap:2px 10px; margin:0; color:var(--dash-paper-ink)}
+.dash .nc-state .dash-dm{font-size:var(--dash-t-lg)}
+.dash .nc-state .nc-note{color:var(--dash-paper-ink-2)}
+.dash .nc-ghost .fig{--fig-lead:var(--dash-paper-ink-2)}
+.dash .nc-ghost .fig .lid{animation:none}
+.dash .nc-ghost-fig{animation:nc-hold 4.2s linear both}
+.dash .nc-ghost .fig[data-state] .shape{animation:none}
+.dash .nc-ghost .fig path{stroke-dasharray:320; stroke-dashoffset:320; animation:nc-sketch 1.5s cubic-bezier(.4,0,.3,1) both; animation-delay:calc(var(--nc-d, 0s) + var(--nc-g, 0s))}
+.dash :is(.nc-ghost, .nc-tab[data-draw]) .fig .tail{--nc-g:.2s}
+.dash :is(.nc-ghost, .nc-tab[data-draw]) .fig .body{--nc-g:.35s}
+.dash :is(.nc-ghost, .nc-tab[data-draw]) .fig .ears{--nc-g:.7s}
+.dash :is(.nc-ghost, .nc-tab[data-draw]) .fig .face{--nc-g:.85s}
+.dash :is(.nc-ghost, .nc-tab[data-draw]) .fig :is(.eyes, .lips){--nc-g:1.2s}
+.dash .nc-ghost .fig path:not([fill="none"]){animation-name:nc-fill}
+.dash .nc-tab[data-draw] .fig .v0 path{stroke-dasharray:320; stroke-dashoffset:320; animation:nc-sketch 1.5s cubic-bezier(.4,0,.3,1) both, nc-fill .6s ease-out both; animation-delay:calc(var(--nc-d, 0s) + var(--nc-g, 0s)), calc(var(--nc-d, 0s) + var(--nc-g, 0s) + 1s)}
+.dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:nc-in .5s ease-out both; animation-delay:calc(var(--nc-d, 0s) + 1.6s)}
+@keyframes nc-sketch{to{stroke-dashoffset:0}}
+@keyframes nc-fill{from{fill-opacity:0}}
+@keyframes nc-hold{0%,82%{opacity:1} 100%{opacity:0}}
+@keyframes nc-in{from{opacity:0}}
+@keyframes nc-fold{from{opacity:0; transform:perspective(700px) rotateX(-70deg)}}
+@keyframes nc-open{from{opacity:0; transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){
+  .dash .nc-ghost-fig, .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path, .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:none}
+  .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path{stroke-dasharray:none; stroke-dashoffset:0}
+}
+.dash .nc-use{font-weight:500}
+.dash .nc-againline{flex:1 1 22em; display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--dash-paper-ink-2)}
+.dash .nc-againline:focus-within{border-bottom-color:var(--dash-accent); box-shadow:0 1px 0 var(--dash-accent)}
+.dash .nc-againline input{flex:1; min-width:0; padding:6px 0; border:0; outline:0; background:none; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
+.dash .nc-againline input::placeholder{color:var(--dash-paper-ink-2)}
+.dash .nc-againline kbd{flex:none; padding:0 5px; border:1px solid var(--dash-line); border-radius:3px; font-family:inherit; font-size:var(--dash-t-xs); color:var(--dash-ink-2); opacity:0; transition:opacity .15s}
+.dash .nc-againline:focus-within kbd{opacity:1}
+.dash .nc-again-foot{display:flex; align-items:center; gap:12px}
+.dash .nc-again .dash-key:disabled{cursor:not-allowed; color:var(--dash-ink-2); box-shadow:none; transform:none}
+@media (prefers-reduced-motion:reduce){ .dash .nc-againline kbd{transition:none} }
+.dash .nc{container-type:inline-size}
+.dash .nc-home{--nc-fig:168px; --nc-gap:16px; max-width:816px}
+.dash .nc-strip{display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin:0 0 22px; padding:12px 12px 12px 20px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink);
+  box-shadow:var(--dash-sh-raise), 0 3px 0 -1px var(--dash-paper), 0 3px 0 0 var(--dash-line); transform-origin:50% 0}
+.dash .nc-strip[data-anim="fold"], .dash .nc-ans[data-anim="unfold"] .nc-sheet{animation:nc-fold .3s ease-out both; transform-origin:50% 0}
+.dash .nc-ans{margin:0 0 22px}
+.dash .nc-fold{position:absolute; top:10px; right:10px; color:var(--dash-paper-ink-2)}
+.dash .nc-asked{display:flex; flex:1 1 14em; align-items:baseline; gap:4px 14px; min-width:0; margin:0}
+.dash .nc-asked b{flex:none; font-family:var(--serif); font-size:var(--dash-t-lg); font-weight:500}
+.dash .nc-asked span{min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .nc-strip-acts{display:flex; align-items:center; gap:4px; margin-left:auto}
+.dash .nc-strip .ib{color:var(--dash-paper-ink-2)}
+.dash .nc-swap{display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border:0; border-radius:8px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
+.dash .nc-swap:hover{background:var(--dash-desk-2)}
+.dash .nc-swap:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2); background:none}
+.dash .nc-again{flex-basis:100%; display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 20px; padding-top:12px; border-top:1px dashed color-mix(in srgb, var(--dash-paper-ink) 24%, transparent)}
+.dash .nc-again .nc-note, .dash .nc-strip .nc-note{color:var(--dash-paper-ink-2)}
+.dash .nc-strip .nc-err{flex-basis:100%; margin:0; color:var(--dash-paper-ink)}
+.dash .nc-strip :is(button, input):focus-visible, .dash .nc-ans :is(button, input, textarea):focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
+.dash .nc-lineup{transition:opacity .3s}
+.dash .nc-lineup[data-stale]{opacity:.4}
+.dash .nc-tabs{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:18px; padding-bottom:var(--nc-gap)}
+.dash .nc-card{--lift:0px; position:relative; display:flex; flex-direction:column; align-items:center; min-width:0; padding:0 0 18px; border:0; border-radius:4px;
+  background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise); font:inherit; text-align:center}
+.dash .nc-card .char-stage{align-self:stretch}
+.dash .nc-card .fig{width:var(--nc-fig); height:auto}
+.dash .nc-tab{cursor:pointer; transform:translateY(var(--lift)); transition:transform .25s ease-out, box-shadow .25s}
+.dash .nc-tab:hover{--lift:-3px; box-shadow:var(--dash-sh-float)}
+.dash .nc-tab:focus-visible{outline:2px solid var(--dash-accent); outline-offset:3px}
+.dash .nc-tab[aria-selected="true"]{--lift:-6px; z-index:1; margin-bottom:calc(var(--lift) - var(--nc-gap) - 1px); padding-bottom:calc(19px + var(--nc-gap) - var(--lift));
+  border-radius:4px 4px 0 0; box-shadow:var(--dash-sh-float); clip-path:inset(-40px -40px 0 -40px)}
+.dash .nc-name{max-width:100%; box-sizing:border-box; margin:14px 0 2px; padding:0 14px; font-family:var(--serif); font-size:var(--dash-t-xl); font-weight:500; line-height:1.3; overflow-wrap:anywhere}
+.dash .nc-name[data-lined]{font-size:var(--dash-t-lg); line-height:1.5; text-wrap:balance; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden}
+.dash .nc-line{max-width:100%; box-sizing:border-box; padding:0 14px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:var(--dash-t-sm); color:var(--dash-paper-ink-2)}
+.dash .nc-blank{height:calc(var(--dash-t-xl) * 1.3 + var(--dash-t-sm) * 1.6 + 16px)}
+.dash .nc-ghost{animation:nc-in .4s ease-out both}
+.dash .nc-panel{position:relative; padding:22px 28px 22px; border-radius:4px; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-float)}
+.dash .nc-panel[data-at="0"]{border-top-left-radius:0}
+.dash .nc-panel[data-at="2"]{border-top-right-radius:0}
+.dash .nc-panel > *{max-width:36em; margin-inline:auto}
+.dash .nc-panel-body{animation:nc-open .2s ease-out both}
+.dash .nc-panel-body[data-fresh]{animation:nc-in .6s ease-out both}
+.dash .nc-panel .nc-scenes{flex-wrap:nowrap; max-width:100%; overflow-x:auto; scrollbar-width:none}
+.dash .nc-panel .nc-scenes button{flex:none; white-space:nowrap}
+.dash .nc-talk{display:flex; flex-direction:column; gap:12px; margin:18px 0 0; padding:0; list-style:none}
+.dash .nc-talk p{margin:0; white-space:pre-wrap}
+.dash .nc-talk [data-who="char"] p{font-family:var(--serif); line-height:1.9}
+.dash .nc-talk .chat-me{align-self:flex-end; max-width:85%; font-size:var(--dash-t-sm)}
+.dash .nc-how{margin-top:18px; font-size:var(--dash-t-sm)}
+.dash .nc-how summary{width:fit-content; cursor:pointer; color:var(--dash-paper-ink-2)}
+.dash .nc-how p{margin:8px 0 0; white-space:pre-wrap}
+.dash .nc-sample{padding-left:12px; border-left:1px solid var(--dash-paper-ink-2); font-family:var(--serif); font-size:var(--dash-t-md); line-height:1.9}
+.dash .nc-acts{margin-top:20px; padding-top:4px; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 12%, transparent)}
+.dash .nc-acts .nc-err{margin:8px 0 0; color:var(--dash-paper-ink)}
+.dash .nc-acts-row{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:10px}
+.dash .nc-acts-row .nc-note{color:var(--dash-paper-ink-2)}
+.dash .nc-revise .dash-dm{font-size:var(--dash-t-sm)}
+.dash .nc-revise input:read-only{color:var(--dash-paper-ink-2)}
+.dash .nc-panel .char-edit{padding:0; background:none; box-shadow:none}
+.dash .char-new-slot > .nc-mini{display:flex; align-items:flex-end; justify-content:center; gap:2px; width:auto; height:64px; border:0; border-radius:0}
+.dash .nc-mini .dash-dm{align-self:center; margin-left:4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .char-pop[data-fresh="true"] .char-stage .fig{animation:char-standup .6s cubic-bezier(.2, .9, .3, 1.2) both}
+@container (max-width:639px){
+  .dash .nc-home{--nc-fig:96px}
+  .dash .nc-tabs{gap:8px}
+  .dash .nc-name{margin-top:10px; padding:0 8px; font-size:var(--dash-t-md)}
+  .dash .nc-name[data-lined]{font-size:var(--dash-t-xs); line-height:1.5}
+  .dash .nc-line{padding:0 8px; white-space:normal; font-size:var(--dash-t-xs); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2}
+  .dash .nc-blank{height:calc(var(--dash-t-md) * 1.3 + var(--dash-t-xs) * 3 + 12px)}
+  .dash .nc-panel{padding:18px 16px}
+  .dash .nc-strip{padding-left:14px}
+}
+@media (prefers-reduced-motion:reduce){
+  .dash .nc-tab, .dash .nc-tab:hover, .dash .nc-tab[aria-selected="true"]{--lift:0px; transition:none}
+  .dash .nc-tab[aria-selected="true"]{clip-path:none}
+  .dash .nc-strip[data-anim="fold"], .dash .nc-ans[data-anim="unfold"] .nc-sheet, .dash .nc-ghost, .dash .nc-panel-body, .dash .nc-panel-body[data-fresh], .dash .char-pop[data-fresh="true"] .char-stage .fig{animation:none}
+  .dash .nc-lineup{transition:none}
+}
 .dash .char-acts{display:flex; justify-content:center; gap:2px}
 .dash .char-lineup{grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:18px; align-items:stretch}
 .dash .char-pop{

@@ -91,7 +91,8 @@ _READONLY = ToolAnnotations(readOnlyHint=True)
 _GENERATE_TIMEOUT = 400   # 每次最長 180 秒、含修補兩次
 _CANDIDATE_REASONS = {**_REASONS, "gate": "候選沒通過檢查"}
 _CARD_WARNINGS = {"looks-like-instructions": "有像指令的文字", "newer-spec": "規格版本比較新",
-                  "ignored-fields": "有不會採用的欄位", "bad-colors": "顏色看不清楚"}
+                  "ignored-fields": "有不會採用的欄位", "bad-colors": "顏色看不清楚",
+                  "name-taken": "和現有的讀伴同名,可以請作者換個名字(帶 name)"}
 # prompts 不收參數:Claude Code 以空白切參數,含空白的路徑會斷(spec §11)
 PROMPT_COMPANION = (
     "我想跟 hyenovel 的 companion 聊。我給了稿子的檔案路徑(.md / .txt)就用 submit_work 交稿、把回報給我確認,"
