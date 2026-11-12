@@ -90,9 +90,9 @@ async def session_turns(session: str, request: Request, v: int | None = Query(No
         raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
 
-def _reaction_target(request: Request, session: str, seq: int) -> int:
+def _reaction_target(request: Request, session: str, seq: int, where: str = "reaction") -> int:
     def reject(status: int, code: str, detail: str) -> ApiError:
-        log.info("event=reject where=reaction reason=%s", code)
+        log.info("event=reject where=%s reason=%s", where, code)
         return ApiError(status, code, detail)
     try:
         return discuss.reaction_target(request.app.state.mgr.conn, session, seq)
@@ -126,6 +126,98 @@ async def delete_reaction(session: str, seq: Seq, request: Request):
     conn = request.app.state.mgr.conn
     with conn:
         repo.clear_reaction(conn, d, seq)
+
+
+def _reply_target(request: Request, session: str, seq: int, *, last: bool, where: str) -> dict:
+    def reject(status: int, code: str, detail: str) -> ApiError:
+        log.info("event=reject where=%s reason=%s", where, code)
+        return ApiError(status, code, detail)
+    try:
+        return discuss.reply_target(request.app.state.mgr.conn, session, seq, last=last)
+    except discuss.UnknownSession:
+        raise reject(404, "unknown-session", "沒有這一局") from None
+    except discuss.UnknownTurn:
+        raise reject(404, "unknown-turn", "這一局沒有這則發言") from None
+    except discuss.NotAssistantTurn:
+        raise reject(422, "not-assistant-turn", "只能改陪讀者的回覆") from None
+    except discuss.LegacySession:
+        raise reject(409, "legacy-session", "這是改版前的舊討論,只能看") from None
+    except discuss.NotLastTurn:
+        raise reject(409, "not-last-turn", "只有最後一則可以重說") from None
+
+
+@router.post("/sessions/{session}/turns/{seq}/regenerate")
+async def regenerate(session: str, seq: Seq, request: Request):
+    state = request.app.state
+    _reply_target(request, session, seq, last=True, where="regenerate")
+    lock = _free_lock(state, session, "regenerate")
+    try:
+        turn = discuss.prepare_redo(state.mgr.conn, session, seq)
+    except characters.UnknownCharacter:
+        log.info("event=reject where=regenerate reason=unknown-character")
+        raise ApiError(422, "unknown-character", "沒有這隻角色") from None
+    events = discuss.run_turn(state.mgr.conn, state.chat, turn, "", [])
+    return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class VariantIn(BaseModel):
+    n: int = Field(ge=1, le=2**63 - 1)
+
+
+class ReplyTextIn(BaseModel):
+    text: str = Field(max_length=MAX_CHAT_CHARS * 8)
+
+
+@router.put("/sessions/{session}/turns/{seq}/variant")
+async def pick_variant(session: str, seq: Seq, body: VariantIn, request: Request):
+    state = request.app.state
+    d = _reply_target(request, session, seq, last=True, where="variant")
+    _free_lock(state, session, "variant")
+    conn = state.mgr.conn
+    with conn:
+        found = repo.pick_reply(conn, d["id"], seq, body.n)
+    if not found:
+        log.info("event=reject where=variant reason=unknown-variant")
+        raise ApiError(404, "unknown-variant", "沒有這一版")
+    return {"variant": body.n, "variants": repo.variant_counts(conn, d["id"]).get(seq, 1)}
+
+
+@router.put("/sessions/{session}/turns/{seq}/text")
+async def edit_reply(session: str, seq: Seq, body: ReplyTextIn, request: Request):
+    state = request.app.state
+    d = _reply_target(request, session, seq, last=False, where="edit-reply")
+    _free_lock(state, session, "edit-reply")
+    text = body.text.strip()
+    if not text:
+        log.info("event=reject where=edit-reply reason=blank-reply")
+        raise ApiError(422, "blank-reply", "回覆不能是空的")
+    if len(text) > MAX_CHAT_CHARS:
+        log.info("event=reject where=edit-reply reason=reply-too-long")
+        raise ApiError(422, "reply-too-long", "回覆太長")
+    conn = state.mgr.conn
+    now = time.time()
+    with conn:
+        edited = repo.edit_reply(conn, d["id"], seq, text, now)
+        if edited:
+            repo.set_voice(conn, d["id"], seq, now)
+    return {"edited": edited}
+
+
+@router.put("/sessions/{session}/turns/{seq}/voice", status_code=204)
+async def put_voice(session: str, seq: Seq, request: Request):
+    d = _reaction_target(request, session, seq, "voice")
+    conn = request.app.state.mgr.conn
+    with conn:
+        repo.set_voice(conn, d, seq, time.time())
+
+
+@router.delete("/sessions/{session}/turns/{seq}/voice", status_code=204)
+async def delete_voice(session: str, seq: Seq, request: Request):
+    d = _reaction_target(request, session, seq, "voice")
+    conn = request.app.state.mgr.conn
+    with conn:
+        repo.clear_voice(conn, d, seq)
 
 
 def _session_or_404(conn, session: str, where: str) -> dict:

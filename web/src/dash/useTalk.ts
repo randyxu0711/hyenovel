@@ -76,6 +76,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const [staged, setStaged] = useState<AttachIn | null>(null);   // 作者打了一半字時丟的稿:隨下一輪送出
   const [working, setWorking] = useState(false);   // clear / compact / 開成作品進行中
   const [streaming, setStreaming] = useState<string | null>(null);   // null = 沒在串流
+  const [redoing, setRedoing] = useState<number | null>(null);       // 正在重說的那一格(串流的字放在那格)
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<DashError | null>(null);
   const [draftOf, setDraftOf] = useState<{ slug: string | null; text: string }>(() => ({ slug, text: readDraft(slug) }));
@@ -188,6 +189,47 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setAttachments([]); setBound(now.current.slug); setStaged(null);
   }, [stopDrawing]);
 
+  /** 邊說邊畫:串流中逐字找引文畫線;message 到了把痕跡交給逐字稿,先前沒找到的補畫;看舊版時以 ?v= 重抓位置。 */
+  const tracker = (who: string) => {
+    // 看舊版時 source 是 null:串流中不畫(位置對不上這張稿)
+    const src = now.current.version === undefined ? now.current.source : null;
+    const lq = liveQuotes();
+    const shown = new Set(marksFrom(now.current.turns, chars).map(m => m.id));   // 已在稿上的不重畫
+    return {
+      push(text: string) {
+        if (src === null) return;
+        const found: Mark[] = [];
+        for (const q of lq.push(text)) {
+          const at = src.indexOf(q);   // UTF-16 位移(不是 den 的位移),換成 code point
+          if (at < 0) continue;        // 逐字找不到:等 message 的 spans
+          const start = cpLength(src.slice(0, at));
+          const m = { start, end: start + cpLength(q), character: who, id: markId(start, start + cpLength(q), who) };
+          if (shown.has(m.id)) continue;
+          shown.add(m.id); found.push(m);
+        }
+        if (found.length) { setLiveMarks(ms => [...ms, ...found]); draw(found.map(m => m.id)); }
+      },
+      settle(d: TalkMessage, old: boolean, mine: number) {
+        setLiveMarks([]);
+        if (old) {
+          const v = now.current.version;
+          api.session(d.session_id, v).then(s => {
+            if (epoch.current === mine) { setTurns(s.turns); setSpansV(v); }
+          }, () => { /* 重抓不到:這輪只是沒有位置 */ });
+          return;
+        }
+        const by = chars.byId(d.character).id;
+        const late: string[] = [];
+        for (const s of d.spans) {
+          if (s.start === null || s.end === null) continue;
+          const id = markId(s.start, s.end, by);
+          if (!shown.has(id)) { shown.add(id); late.push(id); }
+        }
+        draw(late);
+      },
+    };
+  };
+
   /** 回傳這一輪有沒有成功存下(呼叫端據此清掉帶著的引文)。 */
   const send = useCallback(async (message: string, quotes: string[], dropped: AttachIn | null = null): Promise<boolean> => {
     if (streaming !== null || legacy || working) return false;
@@ -197,11 +239,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     const live = () => epoch.current === mine;
     setError(null); setStreaming(""); setPending(message ? { text: message, quotes } : null);
     let acc = "", got = false, ok = false;
-    const who = chars.byId(whoId).id;
-    // 看舊版時 source 是 null:串流中不畫(位置對不上這張稿)
-    const src = now.current.version === undefined ? now.current.source : null;
-    const lq = liveQuotes();
-    const shown = new Set(marksFrom(now.current.turns, chars).map(m => m.id));   // 已在稿上的不重畫
+    const live_ = tracker(chars.byId(whoId).id);
     const fail = (e: DashError) => { if (live()) { setError(e); setDraft(d => d || message); } };
     try {
       for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried })) {
@@ -209,17 +247,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") {
           acc += ev.data.text; setStreaming(acc);
-          if (src === null) continue;
-          const found: Mark[] = [];
-          for (const q of lq.push(ev.data.text)) {
-            const at = src.indexOf(q);   // UTF-16 位移(不是 den 的位移),換成 code point
-            if (at < 0) continue;        // 逐字找不到:等 message 的 spans
-            const start = cpLength(src.slice(0, at));
-            const m = { start, end: start + cpLength(q), character: who, id: markId(start, start + cpLength(q), who) };
-            if (shown.has(m.id)) continue;
-            shown.add(m.id); found.push(m);
-          }
-          if (found.length) { setLiveMarks(ms => [...ms, ...found]); draw(found.map(m => m.id)); }
+          live_.push(ev.data.text);
         }
         else if (ev.event === "message") {
           const d: TalkMessage = ev.data, ts = Date.now() / 1000;
@@ -237,24 +265,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
           }
           if (slug) markSeen(slug);
           ok = true;
-          // 串流中的痕跡交給逐字稿;spans 裡先前沒找到的(如只差標點)此時補畫
-          setLiveMarks([]);
-          if (!old) {
-            const by = chars.byId(d.character).id;
-            const late: string[] = [];
-            for (const s of d.spans) {
-              if (s.start === null || s.end === null) continue;
-              const id = markId(s.start, s.end, by);
-              if (!shown.has(id)) { shown.add(id); late.push(id); }
-            }
-            draw(late);
-          }
-          if (old) {
-            const v = now.current.version;
-            api.session(d.session_id, v).then(s => {
-              if (epoch.current === mine) { setTurns(s.turns); setSpansV(v); }
-            }, () => { /* 重抓不到:這輪只是沒有位置 */ });
-          }
+          live_.settle(d, old, mine);
         } else if (ev.event === "error") {
           fail(new DashError(0, ev.data?.code ?? "unknown", {}, ev.data?.message ?? ""));
         }
@@ -270,6 +281,46 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     return ok;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, session, whoId, streaming, legacy, working, staged, setDraft, refreshSessions, chars, draw]);
+
+  /** 重說這局最後一則讀伴回覆:新的字在同一格串流,成功就換上新版;沒成功那格回到舊字。 */
+  const regenerate = useCallback(async (seq: number): Promise<boolean> => {
+    if (!session || streaming !== null || legacy || working) return false;
+    const target = now.current.turns.find(x => x.seq === seq);
+    if (!target) return false;
+    const mine = ++epoch.current;
+    const live = () => epoch.current === mine;
+    setError(null); setStreaming(""); setRedoing(seq);
+    let acc = "", ok = false;
+    const live_ = tracker(chars.byId(target.character).id);
+    try {
+      for await (const ev of api.regenerate(session, seq)) {
+        if (!live()) return false;
+        if (ev.event === "token") {
+          acc += ev.data.text; setStreaming(acc);
+          live_.push(ev.data.text);
+        } else if (ev.event === "message") {
+          const d: TalkMessage = ev.data;
+          const old = now.current.version !== undefined;
+          setTurns(ts => ts.map(x => (x.seq === seq ? {
+            ...x, text: d.text, ts: Date.now() / 1000, spans: old ? [] : d.spans, v: d.v,
+            reaction: null, voice: false, edited: false, variant: { n: d.variant ?? 1, total: d.variants ?? 1 },
+          } : x)));
+          ok = true;
+          live_.settle(d, old, mine);
+        } else if (ev.event === "error") {
+          if (live()) setError(new DashError(0, ev.data?.code ?? "unknown", {}, ev.data?.message ?? ""));
+        }
+      }
+    } catch (e) {
+      if (live()) setError(asError(e));
+    }
+    if (live()) {
+      setStreaming(null); setRedoing(null);
+      if (!ok) setLiveMarks([]);
+    }
+    return ok;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, streaming, legacy, working, chars, draw]);
 
   /** 純聊天的局丟稿:沒打字就直接送一輪(讀伴先回),打了一半就等下一輪一起送。 */
   const attach = useCallback(async (file: File): Promise<boolean> => {
@@ -300,6 +351,14 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     return r;
   });
 
+  /** 挑版、改字:den 存好就照目前版本重抓這局(不在前端自己拼)。 */
+  const pickVariant = (seq: number, n: number) => act(async id => { await api.pickVariant(id, seq, n); load(id); });
+  const editReply = (seq: number, text: string) => act(async id => {
+    const r = await api.editReply(id, seq, text);
+    if (r.edited) load(id);
+    return r.edited;
+  });
+
   const archive = async (id: string): Promise<boolean> => {
     if (streaming !== null || working) return false;
     setError(null);
@@ -314,13 +373,18 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, reaction } : x)));
   }, []);
 
+  const markVoice = useCallback((forSession: string, seq: number, voice: boolean) => {
+    if (forSession !== shownSession.current) return;
+    setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, voice } : x)));
+  }, []);
+
   const markMemories = useCallback((forSession: string, seq: number, memories: TurnMemory[]) => {
     if (forSession !== shownSession.current) return;
     setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, memories } : x)));
   }, []);
 
   return {
-    markTurn, markMemories, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
+    markTurn, markMemories, markVoice, regenerate, redoing, pickVariant, editReply, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
     attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, clear, compact, adopt, archive,
   };

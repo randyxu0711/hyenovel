@@ -42,6 +42,8 @@ RUNNER_ORDER = ("claude",)
 # web 討論一輪(切片 4b):每輪一個隔離工人,整輪逾時;訊息與錨點上限擋手滑的 body
 CHAT_TIMEOUT = 300
 MAX_CHAT_CHARS = 8000
+MAX_VOICE_SAMPLES = 4
+MAX_VOICE_SAMPLE_CHARS = 1500
 MAX_ANCHORS = 8
 MAX_QUOTES = 4          # 一輪最多帶幾段原文
 MAX_ATTACHMENTS = 5

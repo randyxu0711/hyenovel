@@ -18,6 +18,7 @@ export const DEN_ERROR_CODES = [
   "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
   "unknown-memory", "memory-not-current", "memory-is-current",
   "bad-card", "builtin-character",
+  "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long",
   "den-down",
 ];
 
@@ -91,6 +92,10 @@ export type Turn = {
   role: string; text: string; ts: number; character: string | null; quotes: string[]; spans: Span[];
   /** 這則發生時的稿版本;剛串流進來、還沒重新載入的沒有;沒作品的局是 null */
   v?: number | null;
+  /** 讀伴回覆才有:作者改過字、標了「像它」、這格現在留下的是第幾版(共幾版) */
+  edited?: boolean;
+  voice?: boolean;
+  variant?: { n: number; total: number };
 };
 /** den/discuss.py 的 message 事件資料。 */
 export type TalkMessage = {
@@ -99,6 +104,9 @@ export type TalkMessage = {
   v?: number | null;
   /** 這輪帶的附件存成第幾份 */
   attachment?: number | null;
+  /** 重說才有:新版號與總版數 */
+  variant?: number;
+  variants?: number;
 };
 export type Attachment = { n: number; seq: number; name: string; chars: number; adopted: boolean };
 export type AttachIn = { name: string; text: string };
@@ -155,6 +163,7 @@ async function* stream(url: string, init?: RequestInit): AsyncGenerator<SSEEvent
 const BLANK_TURN: Pick<Turn, "character" | "quotes" | "spans" | "text"> = { character: null, quotes: [], spans: [], text: "" };
 const sessionUrl = (session: string) => `/api/sessions/${encodeURIComponent(session)}`;
 const reactionUrl = (session: string, seq: number) => `${sessionUrl(session)}/turns/${seq}/reaction`;
+const turnUrl = (session: string, seq: number, what: string) => `${sessionUrl(session)}/turns/${seq}/${what}`;
 const vq = (v?: number) => (v === undefined ? "" : `?v=${v}`);
 
 export const api = {
@@ -211,6 +220,13 @@ export const api = {
     }),
   clearReaction: (session: string, seq: number) =>
     request<void>(reactionUrl(session, seq), { method: "DELETE" }),
+  regenerate: (session: string, seq: number) => stream(turnUrl(session, seq, "regenerate"), { method: "POST" }),
+  pickVariant: (session: string, seq: number, n: number) =>
+    request<{ variant: number; variants: number }>(turnUrl(session, seq, "variant"), { ...post({ n }), method: "PUT" }),
+  editReply: (session: string, seq: number, text: string) =>
+    request<{ edited: boolean }>(turnUrl(session, seq, "text"), { ...post({ text }), method: "PUT" }),
+  setVoice: (session: string, seq: number) => request<void>(turnUrl(session, seq, "voice"), { method: "PUT" }),
+  clearVoice: (session: string, seq: number) => request<void>(turnUrl(session, seq, "voice"), { method: "DELETE" }),
   clearSession: (session: string) => request<{ seq: number }>(`${sessionUrl(session)}/clear`, { method: "POST" }),
   compactSession: (session: string) => request<{ seq: number; text: string }>(`${sessionUrl(session)}/compact`, { method: "POST" }),
   archiveSession: (session: string) => request<void>(`${sessionUrl(session)}/archive`, { method: "POST" }),

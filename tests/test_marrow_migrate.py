@@ -27,7 +27,7 @@ def _close_all():
 
 def test_fresh_db_gets_all_tables_and_version():
     conn = _mem()
-    assert db.migrate(conn, None) == 15
+    assert db.migrate(conn, None) == 16
     names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert TABLES <= names
 
@@ -35,7 +35,7 @@ def test_fresh_db_gets_all_tables_and_version():
 def test_migrate_is_idempotent():
     conn = _mem()
     db.migrate(conn, None)
-    assert db.migrate(conn, None) == 15
+    assert db.migrate(conn, None) == 16
 
 
 def test_upgrade_backs_up_first(tmp_path):
@@ -133,7 +133,7 @@ def test_v2_db_upgrades_to_prompt_sha_with_backup(tmp_path):     # Task 9e
     conn.execute("INSERT INTO attempt (job_id, step, n, runner, created_at) "
                  "VALUES (1,'analyst',0,'cli',0)")
     conn.commit()
-    assert db.migrate(conn, p) == 15
+    assert db.migrate(conn, p) == 16
     assert "prompt_sha" in _cols(conn, "attempt")
     assert conn.execute("SELECT prompt_sha FROM attempt").fetchone()[0] is None
     assert (tmp_path / "h.db.bak-v2").exists()
@@ -186,7 +186,7 @@ def test_0014_keeps_every_discussion_reference(tmp_path):
     """)
     tables = ("discussion", "utterance", "reaction", "memory", "conclusion", "settlement")
     before = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
-    assert db.migrate(conn, None) == 15
+    assert db.migrate(conn, None) == 16
     assert {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables} == before
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     assert [tuple(r) for r in conn.execute("SELECT id, story_id FROM discussion ORDER BY id")] == [(5, 1), (7, 1), (9, 2)]
@@ -199,3 +199,25 @@ def test_0014_session_id_is_global_and_story_optional():
     conn.execute("INSERT INTO discussion (id, story_id, external_id, home, client, started_at, ended_at) VALUES (1,NULL,'x','web',NULL,0,NULL)")
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO discussion (id, story_id, external_id, home, client, started_at, ended_at) VALUES (2,2,'x','web',NULL,0,NULL)")
+
+
+def test_0016_existing_rows_become_version_one(tmp_path):
+    old = tmp_path / "mig"
+    old.mkdir()
+    for f in sorted(db.MIGRATIONS_DIR.glob("*.sql"))[:15]:
+        (old / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    conn = _mem()
+    assert db.migrate(conn, None, old) == 15
+    conn.executescript("""
+        INSERT INTO story VALUES (1,'a','甲',0);
+        INSERT INTO discussion (id, story_id, external_id, home, client, started_at, ended_at)
+            VALUES (5,1,'x','web',NULL,0,NULL);
+        INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors)
+            VALUES (5,0,'user','問',1,'den','[]'), (5,1,'assistant','答',2,'den','[]');
+        INSERT INTO reaction VALUES (5,1,'misread','嗯',5);
+    """)
+    assert db.migrate(conn, None) == 16
+    assert [tuple(r) for r in conn.execute("SELECT seq, variant, edited_at FROM utterance ORDER BY seq")] == \
+        [(0, 1, None), (1, 1, None)]
+    assert [tuple(r) for r in conn.execute("SELECT * FROM reaction")] == [(5, 1, 1, "misread", "嗯", 5.0)]
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []

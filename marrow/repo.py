@@ -206,20 +206,109 @@ def utterance(conn, discussion_id: int, seq: int) -> dict | None:
                              (discussion_id, seq)).fetchone())
 
 
+_CUR = "(SELECT variant FROM utterance WHERE discussion_id = ? AND seq = ?)"
+_VERSION_COLS = ("text", "ts", "usage", "recipe", "analysis_fp", "edited_at")
+
+
 def set_reaction(conn, discussion_id: int, seq: int, mark: str, comment: str | None, now: float) -> None:
-    conn.execute("INSERT INTO reaction (discussion_id, seq, mark, comment, updated_at) VALUES (?, ?, ?, ?, ?) "
-                 "ON CONFLICT (discussion_id, seq) DO UPDATE SET mark = excluded.mark, "
+    conn.execute("INSERT INTO reaction (discussion_id, seq, variant, mark, comment, updated_at) "
+                 f"VALUES (?, ?, {_CUR}, ?, ?, ?) "
+                 "ON CONFLICT (discussion_id, seq, variant) DO UPDATE SET mark = excluded.mark, "
                  "comment = excluded.comment, updated_at = excluded.updated_at",
-                 (discussion_id, seq, mark, comment, now))
+                 (discussion_id, seq, discussion_id, seq, mark, comment, now))
 
 
 def clear_reaction(conn, discussion_id: int, seq: int) -> None:
-    conn.execute("DELETE FROM reaction WHERE discussion_id = ? AND seq = ?", (discussion_id, seq))
+    conn.execute(f"DELETE FROM reaction WHERE discussion_id = ? AND seq = ? AND variant = {_CUR}",
+                 (discussion_id, seq, discussion_id, seq))
 
 
 def reactions(conn, discussion_id: int) -> dict[int, dict]:
     return {r["seq"]: {"mark": r["mark"], "comment": r["comment"]} for r in conn.execute(
-        "SELECT seq, mark, comment FROM reaction WHERE discussion_id = ?", (discussion_id,))}
+        "SELECT r.seq AS seq, r.mark AS mark, r.comment AS comment FROM reaction r JOIN utterance u "
+        "ON u.discussion_id = r.discussion_id AND u.seq = r.seq AND u.variant = r.variant "
+        "WHERE r.discussion_id = ?", (discussion_id,))}
+
+
+def set_voice(conn, discussion_id: int, seq: int, now: float) -> None:
+    conn.execute(f"INSERT INTO voice_mark (discussion_id, seq, variant, marked_at) VALUES (?, ?, {_CUR}, ?) "
+                 "ON CONFLICT (discussion_id, seq, variant) DO NOTHING",
+                 (discussion_id, seq, discussion_id, seq, now))
+
+
+def clear_voice(conn, discussion_id: int, seq: int) -> None:
+    conn.execute(f"DELETE FROM voice_mark WHERE discussion_id = ? AND seq = ? AND variant = {_CUR}",
+                 (discussion_id, seq, discussion_id, seq))
+
+
+def voice_marks(conn, discussion_id: int) -> set[int]:
+    return {r[0] for r in conn.execute(
+        "SELECT v.seq FROM voice_mark v JOIN utterance u ON u.discussion_id = v.discussion_id "
+        "AND u.seq = v.seq AND u.variant = v.variant WHERE v.discussion_id = ?", (discussion_id,))}
+
+
+def variant_counts(conn, discussion_id: int) -> dict[int, int]:
+    return {r[0]: r[1] + 1 for r in conn.execute(
+        "SELECT seq, COUNT(*) FROM utterance_variant WHERE discussion_id = ? GROUP BY seq", (discussion_id,))}
+
+
+def _encoded(version: dict) -> tuple:
+    return tuple(None if version[k] is None else canonical_json(version[k]) if k in ("usage", "recipe")
+                 else version[k] for k in _VERSION_COLS)
+
+
+def _shelve(conn, discussion_id: int, seq: int, current: dict) -> None:
+    conn.execute(f"INSERT INTO utterance_variant (discussion_id, seq, n, {', '.join(_VERSION_COLS)}) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 (discussion_id, seq, current["variant"], *_encoded(current)))
+
+
+def _install(conn, discussion_id: int, seq: int, n: int, version: dict) -> None:
+    conn.execute(f"UPDATE utterance SET variant = ?, {', '.join(f'{k} = ?' for k in _VERSION_COLS)} "
+                 "WHERE discussion_id = ? AND seq = ?", (n, *_encoded(version), discussion_id, seq))
+
+
+def replace_reply(conn, discussion_id: int, seq: int, *, text: str, ts: float, usage: dict | None,
+                  recipe: dict | None, analysis_fp: str | None) -> int:
+    current = utterance(conn, discussion_id, seq)
+    shelved = conn.execute("SELECT MAX(n) FROM utterance_variant WHERE discussion_id = ? AND seq = ?",
+                           (discussion_id, seq)).fetchone()[0]
+    n = 1 + max(current["variant"], shelved or 0)
+    _shelve(conn, discussion_id, seq, current)
+    _install(conn, discussion_id, seq, n, {"text": text, "ts": ts, "usage": usage, "recipe": recipe,
+                                           "analysis_fp": analysis_fp, "edited_at": None})
+    return n
+
+
+def pick_reply(conn, discussion_id: int, seq: int, n: int) -> bool:
+    current = utterance(conn, discussion_id, seq)
+    if current["variant"] == n:
+        return True
+    row = _row(conn.execute("SELECT * FROM utterance_variant WHERE discussion_id = ? AND seq = ? AND n = ?",
+                            (discussion_id, seq, n)).fetchone())
+    if row is None:
+        return False
+    conn.execute("DELETE FROM utterance_variant WHERE discussion_id = ? AND seq = ? AND n = ?",
+                 (discussion_id, seq, n))
+    _shelve(conn, discussion_id, seq, current)
+    _install(conn, discussion_id, seq, n, row)
+    return True
+
+
+def edit_reply(conn, discussion_id: int, seq: int, text: str, now: float) -> bool:
+    cur = conn.execute("UPDATE utterance SET text = ?, edited_at = ? WHERE discussion_id = ? AND seq = ? "
+                       "AND text <> ?", (text, now, discussion_id, seq, text))
+    return cur.rowcount == 1
+
+
+def voice_samples(conn, character: str, exclude_discussion: int | None) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT u.text AS text, p.text AS prompt, d.story_id AS story_id, v.marked_at AS marked_at "
+        "FROM voice_mark v JOIN utterance u ON u.discussion_id = v.discussion_id AND u.seq = v.seq "
+        "AND u.variant = v.variant JOIN discussion d ON d.id = v.discussion_id "
+        "LEFT JOIN utterance p ON p.discussion_id = u.discussion_id AND p.seq = u.seq - 1 AND p.role = 'user' "
+        "WHERE u.character = ? AND u.role = 'assistant' AND v.discussion_id IS NOT ? "
+        "ORDER BY v.marked_at DESC, v.discussion_id DESC, v.seq DESC", (character, exclude_discussion))]
 
 
 def utterances(conn, discussion_id: int) -> list[dict]:
@@ -302,11 +391,11 @@ def archived_discussions(conn) -> list[dict]:
 
 
 def delete_discussion(conn, discussion_id: int) -> None:
-    """永久刪掉一局:逐字、附件、回饋記號、收束紀錄;記憶與結論留著,只斷開來源。"""
+    """永久刪掉一局:逐字(含擱著的版本)、附件、回饋記號、「像它」、收束紀錄;記憶與結論留著,只斷開來源。"""
     conn.execute("UPDATE memory SET quote = NULL, discussion_id = NULL, seq = NULL WHERE discussion_id = ?",
                  (discussion_id,))
     conn.execute("UPDATE conclusion SET discussion_id = NULL WHERE discussion_id = ?", (discussion_id,))
-    for table in ("reaction", "attachment", "settlement", "utterance"):
+    for table in ("reaction", "voice_mark", "utterance_variant", "attachment", "settlement", "utterance"):
         conn.execute(f"DELETE FROM {table} WHERE discussion_id = ?", (discussion_id,))
     conn.execute("DELETE FROM discussion WHERE id = ?", (discussion_id,))
 

@@ -5,6 +5,7 @@
 from functools import cache
 from pathlib import Path
 
+from den.config import MAX_VOICE_SAMPLE_CHARS, MAX_VOICE_SAMPLES
 from marrow.prompt import Layer, Prompt
 from marrow.workpacks import RunConfig
 
@@ -53,8 +54,27 @@ def _memory_block(memory: dict) -> str:
     return out + "\n"
 
 
-def assemble(ctx: dict, character: dict) -> Prompt:
-    """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子。"""
+def pick_samples(rows: list[dict]) -> list[dict]:
+    """「像它」的回覆由新到舊,最多 MAX_VOICE_SAMPLES 則、總字數不過 MAX_VOICE_SAMPLE_CHARS;單則就超過的跳過。"""
+    out, total = [], 0
+    for r in rows:
+        size = len(r["text"]) + len(r["prompt"] or "")
+        if size > MAX_VOICE_SAMPLE_CHARS:
+            continue
+        if total + size > MAX_VOICE_SAMPLE_CHARS or len(out) == MAX_VOICE_SAMPLES:
+            break
+        out.append(r)
+        total += size
+    return out
+
+
+def _samples_block(samples: list[dict], name: str) -> str:
+    return "".join("<example>\n" + (f"作者:{s['prompt']}\n" if s["prompt"] else "") + f"{name}:{s['text']}\n</example>\n"
+                   for s in samples)
+
+
+def assemble(ctx: dict, character: dict, samples: list[dict] = ()) -> Prompt:
+    """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子、作者標過「像它」的回覆。"""
     layers = _boundary_layers(bool(ctx["source"].strip() or ctx["attachments"]))
     if ctx["memory"]["author"] or ctx["memory"]["work"]:
         layers.append(Layer("memory_header", _MEMORY_HEADER))
@@ -81,4 +101,7 @@ def assemble(ctx: dict, character: dict) -> Prompt:
             for s in ctx["seeds"]), material=True))
     layers.append(Layer("character_header", _CHARACTER_HEADER))
     layers += _character_layers(character["reading"], character["voice"], character.get("examples", ""))
+    if samples:
+        layers.append(Layer("samples_header", "\n" + _read("companion/samples.md").rstrip() + "\n\n"))
+        layers.append(Layer("samples", _samples_block(samples, character["name"]["zh-Hant"]), material=True))
     return Prompt(tuple(layers))
