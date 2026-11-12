@@ -161,6 +161,65 @@ async def regenerate(session: str, seq: Seq, request: Request):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+class VariantIn(BaseModel):
+    n: int = Field(ge=1, le=2**63 - 1)
+
+
+class ReplyTextIn(BaseModel):
+    text: str = Field(max_length=MAX_CHAT_CHARS * 8)
+
+
+@router.put("/sessions/{session}/turns/{seq}/variant")
+async def pick_variant(session: str, seq: Seq, body: VariantIn, request: Request):
+    state = request.app.state
+    d = _reply_target(request, session, seq, last=True, where="variant")
+    _free_lock(state, session, "variant")
+    conn = state.mgr.conn
+    with conn:
+        found = repo.pick_reply(conn, d["id"], seq, body.n)
+    if not found:
+        log.info("event=reject where=variant reason=unknown-variant")
+        raise ApiError(404, "unknown-variant", "沒有這一版")
+    return {"variant": body.n, "variants": repo.variant_counts(conn, d["id"]).get(seq, 1)}
+
+
+@router.put("/sessions/{session}/turns/{seq}/text")
+async def edit_reply(session: str, seq: Seq, body: ReplyTextIn, request: Request):
+    state = request.app.state
+    d = _reply_target(request, session, seq, last=False, where="edit-reply")
+    _free_lock(state, session, "edit-reply")
+    text = body.text.strip()
+    if not text:
+        log.info("event=reject where=edit-reply reason=blank-reply")
+        raise ApiError(422, "blank-reply", "回覆不能是空的")
+    if len(text) > MAX_CHAT_CHARS:
+        log.info("event=reject where=edit-reply reason=reply-too-long")
+        raise ApiError(422, "reply-too-long", "回覆太長")
+    conn = state.mgr.conn
+    now = time.time()
+    with conn:
+        edited = repo.edit_reply(conn, d["id"], seq, text, now)
+        if edited:
+            repo.set_voice(conn, d["id"], seq, now)
+    return {"edited": edited}
+
+
+@router.put("/sessions/{session}/turns/{seq}/voice", status_code=204)
+async def put_voice(session: str, seq: Seq, request: Request):
+    d = _reaction_target(request, session, seq)
+    conn = request.app.state.mgr.conn
+    with conn:
+        repo.set_voice(conn, d, seq, time.time())
+
+
+@router.delete("/sessions/{session}/turns/{seq}/voice", status_code=204)
+async def delete_voice(session: str, seq: Seq, request: Request):
+    d = _reaction_target(request, session, seq)
+    conn = request.app.state.mgr.conn
+    with conn:
+        repo.clear_voice(conn, d, seq)
+
+
 def _session_or_404(conn, session: str, where: str) -> dict:
     d = repo.discussion_by_session(conn, session)
     if d is None:

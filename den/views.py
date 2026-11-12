@@ -219,6 +219,8 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
         made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     us = repo.utterances(conn, d["id"])
     marked = repo.reactions(conn, d["id"])
+    voiced = repo.voice_marks(conn, d["id"])
+    totals = repo.variant_counts(conn, d["id"])
     remembered: dict[int, list[dict]] = {}
     for m in repo.memories_of_discussion(conn, d["id"]):
         remembered.setdefault(m["seq"], []).append({"id": m["id"], "scope": m["scope"]})
@@ -241,7 +243,10 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
                       "role": u["role"], "text": u["text"], "ts": u["ts"],
                       "character": u["character"], "quotes": u["quotes"] or [],
                       "spans": spans.locate_all(qs, shown["text"]) if shown else [],
-                      "v": _at(made, u["ts"]) if made else None})   # 說話當時的版本
+                      "v": _at(made, u["ts"]) if made else None,   # 說話當時的版本
+                      **({"edited": u["edited_at"] is not None, "voice": u["seq"] in voiced,
+                          "variant": {"n": u["variant"], "total": totals.get(u["seq"], 1)}}
+                         if u["role"] == "assistant" else {})})
     return {"session": session, "slug": d["slug"],
             "title": _title(conn, d["story_id"], d["slug"]) if d["story_id"] is not None else None,
             "legacy": not any(u["role"] == "assistant" and u["character"] is not None for u in us),
