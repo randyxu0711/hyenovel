@@ -266,7 +266,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     result = None
     slug = turn["slug"]
     failed = False
-    system = companion.assemble(turn["ctx"], character)
+    system = companion.assemble(turn["ctx"], character,
+                                companion.pick_samples(repo.voice_samples(conn, character["id"], d)))
     analysis = turn["ctx"]["analysis"]
     last = history[-1] if history and history[-1]["role"] == "assistant" else {"text": "", "recipe": None}
     picked = retrieve.pick(analysis, turn["ctx"]["source"], quotes=quotes, message=message, last_reply=last["text"],
