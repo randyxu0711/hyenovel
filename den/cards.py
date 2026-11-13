@@ -130,12 +130,14 @@ def _with_ext(card: dict, ext: dict, **fields) -> dict:
     return {**card, "data": {**data, **fields, "extensions": extensions}}
 
 
-def edited(card: dict, name: dict, line: dict, reading: str) -> dict:
-    """讀法沒改就留原文,{{char}} 才會跟著新名字。"""
+def edited(card: dict, name: dict, line: dict, reading: str, examples: str | None = None) -> dict:
+    """讀法、範例沒改就留原文,{{char}} 才會跟著新名字。"""
     data = card["data"]
     fields = {"name": name["zh-Hant"], "creator_notes": line["zh-Hant"]}
     if reading != _reading(data):
         fields |= {"personality": reading, "description": ""}
+    if examples is not None and examples != _expand(data.get("mes_example") or "", data):
+        fields["mes_example"] = examples
     if data.get("nickname"):
         fields["nickname"] = name["zh-Hant"]
     return _with_ext(card, {"name": name, "line": line}, **fields)

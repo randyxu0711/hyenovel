@@ -370,7 +370,7 @@ describe("設定頁:角色卡", () => {
   let list: Character[];
   let posts: { card: unknown; confirm: boolean }[];
   let reply: (confirm: boolean) => Response;
-  let edits: { name: Record<string, string>; line: Record<string, string>; reading: string; confirm: boolean }[];
+  let edits: { name: Record<string, string>; line: Record<string, string>; reading: string; examples?: string; confirm: boolean }[];
   let editReply: (confirm: boolean) => Response;
   let listFails: boolean;
   const imported = { ...deer, id: "u1", origin: "imported" as const, name: { "zh-Hant": "老讀", en: "Old" } };
@@ -532,8 +532,17 @@ describe("設定頁:角色卡", () => {
     fireEvent.change(p.getByLabelText("名字"), { target: { value: "新老讀" } });
     fireEvent.click(p.getByRole("button", { name: "存" }));
     expect(await p.findByRole("button", { name: "打開新老讀" })).toBeTruthy();
-    expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, confirm: false }]);
+    expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, examples: imported.examples, confirm: false }]);
     expect(p.queryByLabelText("讀法")).toBeNull();
+  });
+  it("編輯範例對話:送出改過的範例", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    fireEvent.change(p.getByLabelText("範例對話"), { target: { value: "<example>\n老讀:嗯\n</example>" } });
+    fireEvent.click(p.getByRole("button", { name: "存" }));
+    await waitFor(() => expect(edits).toHaveLength(1));
+    expect(edits[0].examples).toBe("<example>\n老讀:嗯\n</example>");
   });
   it("已經存好但清單重抓失敗時,編輯器仍關掉,不會誘使再存一次", async () => {
     mountCards();

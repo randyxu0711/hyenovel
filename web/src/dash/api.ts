@@ -39,8 +39,9 @@ export type Character = {
   voice: string;
   mark: "pencil" | "highlighter" | "circle";
   reading: string;
+  examples: string;
 };
-export type CardDraft = { name: LText; line: LText; reading: string };
+export type CardDraft = { name: LText; line: LText; reading: string; examples?: string };
 export type CandidateAnswers = { form: string; wish: string };
 export type CandidateAgain = { reaction: string; previous: { name: string; line: string }[] };
 export type Candidate = {

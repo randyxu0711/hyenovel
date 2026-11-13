@@ -464,7 +464,7 @@ def test_system_prompt_has_no_feedback_or_conclusions(c, fake_chat):
 
 def test_character_defaults_to_hyena_and_is_recorded(c, fake_chat):
     sid = first_turn(c)
-    assert "嘴最壞的那個" in fake_chat.calls[-1][0]
+    assert "看得慢一點" in fake_chat.calls[-1][0]
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert (user["character"], asst["character"]) == (None, "hyena")
 

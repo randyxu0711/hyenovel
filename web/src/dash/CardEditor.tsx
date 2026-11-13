@@ -2,13 +2,13 @@ import { useState, type FormEvent } from "react";
 import { DashError, type CardDraft } from "./api";
 import { errorMessage, localized, useLang, useT, type Lang, type MsgKey } from "./i18n";
 
-export type CardLimits = { name: number; line: number; reading: number; lineRequired?: boolean };
-export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000 };
+export type CardLimits = { name: number; line: number; reading: number; examples?: number; lineRequired?: boolean };
+export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000, examples: 3000 };
 export const candidateLimits = (lang: Lang): CardLimits =>
   lang === "en" ? { name: 32, line: 80, reading: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, lineRequired: true };
 
 export default function CardEditor({ draft, limits, onSave, onCancel, onChange }: {
-  draft: CardDraft; limits: CardLimits;
+  draft: Omit<CardDraft, "examples"> & { examples?: unknown }; limits: CardLimits;
   /** 回傳要作者確認的 warnings;空陣列 = 存好了。 */
   onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
   onCancel: () => void;
@@ -19,6 +19,8 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
   const [name, setName] = useState(() => localized(draft.name, lang));
   const [line, setLine] = useState(() => localized(draft.line, lang));
   const [reading, setReading] = useState(draft.reading);
+  const withExamples = limits.examples !== undefined && typeof draft.examples === "string";
+  const [examples, setExamples] = useState(typeof draft.examples === "string" ? draft.examples : "");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [problems, setProblems] = useState<string[]>([]);
   const [err, setErr] = useState<MsgKey | null>(null);
@@ -30,7 +32,7 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
     e.preventDefault();
     if (!ready || saving) return;
     setSaving(true); setErr(null); setProblems([]);
-    const next = { name: { ...draft.name, [lang]: name.trim() }, line: { ...draft.line, [lang]: line.trim() }, reading };
+    const next = { name: { ...draft.name, [lang]: name.trim() }, line: { ...draft.line, [lang]: line.trim() }, reading, ...(withExamples ? { examples } : {}) };
     try {
       setWarnings(await onSave(next, warnings.length > 0));
     } catch (e) {
@@ -53,6 +55,11 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
       <label>{t("card.reading")}
         <textarea className="nc-edit" rows={4} maxLength={limits.reading} value={reading} onChange={e => edit(setReading)(e.target.value)} />
       </label>
+      {withExamples && (
+        <label>{t("card.examples")}
+          <textarea className="nc-edit" rows={8} maxLength={limits.examples} value={examples} onChange={e => edit(setExamples)(e.target.value)} />
+        </label>
+      )}
       {warnings.map(w => <p key={w} className="nc-warn" role="note">{t(`card.warn.${w}` as MsgKey)}</p>)}
       {problems.length > 0 && <ul role="alert">{problems.map(p => <li key={p}>{t(`card.err.${p}` as MsgKey)}</li>)}</ul>}
       {err && <p className="nc-warn" role="alert">{t(err)}</p>}

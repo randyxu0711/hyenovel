@@ -128,20 +128,21 @@ def copy(conn, character_id: str, now: float) -> dict:
     return create(conn, cards.copied(row["card"], character_id), now)
 
 
-def edited_card(conn, character_id: str, name: dict, line: dict, reading: str) -> dict:
+def edited_card(conn, character_id: str, name: dict, line: dict, reading: str, examples: str | None = None) -> dict:
     row = repo.latest_character(conn, character_id)
     if row is None or row["archived_at"] is not None:
         raise UnknownCharacter(character_id)
     if row["origin"] == "builtin":
         raise BuiltinCharacter(character_id)
-    return cards.edited(row["card"], name, line, reading)
+    return cards.edited(row["card"], name, line, reading, examples)
 
 
-def edit(conn, character_id: str, name: dict, line: dict, reading: str, now: float) -> dict:
-    """呼叫者持 transaction。名字、介紹、讀法都沒變就不加版。"""
-    card = edited_card(conn, character_id, name, line, reading)
+def edit(conn, character_id: str, name: dict, line: dict, reading: str, now: float, examples: str | None = None) -> dict:
+    """呼叫者持 transaction。名字、介紹、讀法、範例都沒變就不加版;examples 為 None = 不改範例。"""
+    card = edited_card(conn, character_id, name, line, reading, examples)
     shown = get(conn, character_id)
-    if (shown["name"], shown["line"], shown["reading"]) != (name, line, reading):
+    if (shown["name"], shown["line"], shown["reading"]) != (name, line, reading) or \
+            examples not in (None, shown["examples"]):
         repo.add_character_version(conn, character_id, card, now)
     return get(conn, character_id)
 

@@ -12,7 +12,7 @@ import { draft, drop, keep, running, start, takeMissed, watch, type Answers, typ
 const GRAY = { fill: "var(--dash-paper-ink-2)", text: "var(--dash-paper-ink-2)" };
 const character = (seed: string, figure: FigureSpec): Character => ({
   id: seed, version: 1, origin: "created", archived: false, name: {}, line: {}, avatar: { kind: "figure", seed },
-  figure, colors: { light: GRAY, dark: GRAY }, voice: "", mark: "pencil", reading: "",
+  figure, colors: { light: GRAY, dark: GRAY }, voice: "", mark: "pencil", reading: "", examples: "",
 });
 const placeholder = (seed: string, pose: Pose) => character(seed, { pose, parts: [], main: "bone", second: "bone" });
 const look = (c: Candidate): FigureSpec => ({ parts: c.figure.parts, eyes: c.figure.eyes, mouth: c.figure.mouth, main: c.figure.main, second: c.figure.second });
@@ -240,7 +240,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   };
 
   const save = async (index: number, card: CardDraft, confirm: boolean) => {
-    const out = await api.createCharacter({ ...batch![index], ...card }, confirm);
+    const out = await api.createCharacter({ ...batch![index], name: card.name, line: card.line, reading: card.reading }, confirm);
     if (!out.created) return out.warnings ?? [];
     done.current = true;
     drop();
