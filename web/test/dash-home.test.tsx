@@ -179,6 +179,18 @@ describe("進門聊天", () => {
     expect(await talk.findByText("嗨,你好")).toBeTruthy();
   });
 
+  it("free chat waiting line does not mention a draft", async () => {
+    mount();
+    const real = fetch;
+    vi.stubGlobal("fetch", (u: string, init?: RequestInit) =>
+      u === "/api/discuss" ? Promise.resolve(new Response(new ReadableStream({ start() {} }))) : real(u, init));
+    const talk = within(await screen.findByRole("region", { name: "對話" }));
+    fireEvent.change(talk.getByLabelText("對話輸入"), { target: { value: "隨便聊聊" } });
+    fireEvent.click(talk.getByRole("button", { name: "送出" }));
+    expect((await talk.findByText("鬣狗在想")).closest("[role=status]")).toBeTruthy();
+    expect(talk.queryByText(/稿/)).toBeNull();
+  });
+
   it("shelf lists storyless sessions under chat group", async () => {
     localStorage.setItem("hyenovel.shelf", "open");
     recent = [free("c1", "聊海"), { ...free("w1", "作品局"), slug: "d2", title: "海" }];
