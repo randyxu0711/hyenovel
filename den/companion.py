@@ -2,6 +2,7 @@
 
 人格 = 共同底層 base.md + 角色卡的讀法;底層不在卡上,卡片不能覆蓋。
 """
+import re
 from functools import cache
 from pathlib import Path
 
@@ -23,9 +24,12 @@ def _boundary_layers(has_text: bool) -> list[Layer]:
             *([Layer("reading", _read("companion/reading.md").rstrip() + "\n\n")] if has_text else [])]
 
 
+_CLOSE_TAG = re.compile(r"[<＜]\s*[/／]\s*character\b[^>＞]*[>＞]", re.I)
+
+
 def _character_layers(reading: str, voice: str, examples: str = "") -> list[Layer]:
     out = [Layer("closing", _read("companion/closing.md").rstrip() + "\n\n"),
-           Layer("character", reading.rstrip() + "\n")]
+           Layer("character", "<character>\n" + _CLOSE_TAG.sub("< /character>", reading.strip()) + "\n</character>\n")]
     if voice.strip():
         out.append(Layer("voice", "\n" + voice.rstrip() + "\n"))
     if examples.strip():

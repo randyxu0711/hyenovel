@@ -407,7 +407,7 @@ def test_set_character_only_affects_that_work(cden):
     rs = _call_all(cden.client(),
                    ("set_character", {"character": "deer", "work": "mini"}),
                    ("talk_to_companion", {"message": "一", "work": "海"}))
-    assert not rs[1].is_error and "嘴最壞的那個" in cden.chat.calls[-1][0]
+    assert not rs[1].is_error and "看得慢一點" in cden.chat.calls[-1][0]
 
 
 def test_set_unknown_character_rejected_before_any_turn(cden):
@@ -420,7 +420,7 @@ def test_talk_records_home_mcp_and_client_name(cden):
     _call(cden.client(), "talk_to_companion", {"work": "mini"})
     (d,) = _discussions(cden)
     assert (d["home"], d["client"]) == ("mcp", "claude-code")
-    assert "嘴最壞的那個" in cden.chat.calls[-1][0]
+    assert "看得慢一點" in cden.chat.calls[-1][0]
 
 
 def test_talk_worker_error_tells_host_to_report_failure(cden):
