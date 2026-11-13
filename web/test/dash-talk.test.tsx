@@ -164,7 +164,7 @@ describe("對話", () => {
     expect(log().getByText("這段怎麼樣")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "拿掉這段引文" })).toBeNull();
   });
-  it("token 逐段接上、沒有計時器;第一個 token 前說「X 在讀你的稿」;message 到了換成正式訊息並標說話者", async () => {
+  it("token 逐段接上、沒有計時器;第一個 token 前說「X 在想」;message 到了換成正式訊息並標說話者", async () => {
     let release!: () => void, start!: () => void;
     const gate = new Promise<void>(r => { release = r; });
     const first = new Promise<void>(r => { start = r; });
@@ -191,12 +191,12 @@ describe("對話", () => {
       for (let i = 0; i < 200 && !until(); i++) await act(async () => { await Promise.resolve(); });
     };
     say("嗨");
-    await flush(() => !!screen.queryByText("水牛在讀你的稿"));
-    expect(screen.getByText("水牛在讀你的稿").closest("[role=status]")).toBeTruthy();
+    await flush(() => !!screen.queryByText("水牛在想"));
+    expect(screen.getByText("水牛在想").closest("[role=status]")).toBeTruthy();
     start();
     await flush(() => !!screen.queryByText("半"));
     expect(screen.getByText("半")).toBeTruthy();
-    expect(screen.queryByText("水牛在讀你的稿")).toBeNull();
+    expect(screen.queryByText("水牛在想")).toBeNull();
     expect(vi.getTimerCount()).toBe(0);   // 串流中沒有任何排程計時器
     release();
     await flush(() => !!screen.queryByText("半句"));
@@ -661,12 +661,12 @@ describe("輸入紙與角色狀態", () => {
     expect(send.querySelector("svg.ico")).not.toBeNull();
     expect(send.textContent).toBe("");
   });
-  it("等第一個字時角色在想,只有「X 在讀你的稿」,沒有小筆", async () => {
+  it("等第一個字時角色在想,只有「X 在想」,沒有小筆", async () => {
     talkReply = () => new Response(new ReadableStream({ start() {} }));
     const { container } = mount();
     await screen.findByText("第一段。");
     say("嗨");
-    expect((await screen.findByText("鬣狗在讀你的稿")).closest("[role=status]")).toBeTruthy();
+    expect((await screen.findByText("鬣狗在想")).closest("[role=status]")).toBeTruthy();
     expect(container.querySelector("form.composer svg.fig")!.getAttribute("data-state")).toBe("thinking");
     expect(container.querySelector(".chat-pen")).toBeNull();
   });
