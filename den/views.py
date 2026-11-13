@@ -6,7 +6,7 @@ den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的�
 import bisect
 
 from den import memory, spans, works
-from marrow import gate, repo, vizdata
+from marrow import gate, labels, repo, vizdata
 
 
 def _current(art: dict | None) -> dict | None:
@@ -42,6 +42,16 @@ def stories(conn) -> list[dict]:
     return out
 
 
+def _labeler(conn, story_id: int | None):
+    if story_id is None:
+        return lambda text, fp=None: text
+    bodies = repo.analysis_bodies(conn, story_id)
+    cur = repo.current_artifact(conn, story_id, "analysis")
+    maps = {fp: labels.label_map(b) for fp, b in bodies.items()}
+    fallback = maps[cur["sha256"]] if cur else {}
+    return lambda text, fp=None: labels.relabel(text, maps.get(fp, fallback))
+
+
 def _story(conn, slug: str) -> dict:
     st = repo.story_by_slug(conn, slug)
     if st is None:
@@ -70,8 +80,14 @@ def conclusions(conn, slug: str) -> list[dict]:
 def transcript(conn, slug: str) -> list[dict]:
     """`Turn` 形狀,依 ts 排;`session` 是討論局的 external_id。"""
     st = _story(conn, slug)
-    return [{"ts": u["ts"], "session": u["external_id"], "role": u["role"], "text": u["text"],
-             "anchors": u["anchors"]} for u in repo.discussions_with_utterances(conn, st["id"])]
+    lab, fps, out = _labeler(conn, st["id"]), {}, []
+    for u in repo.discussions_with_utterances(conn, st["id"]):
+        if u["analysis_fp"]:
+            fps[u["external_id"]] = u["analysis_fp"]
+        text = lab(u["text"], fps.get(u["external_id"])) if u["role"] == "assistant" else u["text"]
+        out.append({"ts": u["ts"], "session": u["external_id"], "role": u["role"],
+                    "text": text, "anchors": u["anchors"]})
+    return out
 
 
 def _title(conn, story_id: int, slug: str) -> str:
@@ -155,10 +171,14 @@ def work_map(conn, slug: str, v: int | None = None) -> dict:
     picked = vizdata.pick_judgment(ana, repo.current_artifact(conn, st["id"], "notes"), None)
     if picked is not None:
         body = picked[1]
+        names = labels.label_map(ana["body"])
+
+        def lab(t):
+            return labels.relabel(t, names) if isinstance(t, str) else t
         out["notes_version"] = out["analysis_version"]    # 配對要求同版,所以就是分析那一版
-        out["notes"] = {"read": body.get("read"), "one_line": body.get("one_line"),
-                        "points": [{"kind": p["kind"], "title": p["title"], "body": p.get("body"),
-                                    "question": p.get("question"),
+        out["notes"] = {"read": lab(body.get("read")), "one_line": lab(body.get("one_line")),
+                        "points": [{"kind": p["kind"], "title": lab(p["title"]), "body": lab(p.get("body")),
+                                    "question": lab(p.get("question")),
                                     "spans": spans.locate_all(p.get("quotes") or [], text)}
                                    for p in body.get("points") or []]}
     return out
@@ -218,6 +238,7 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
             raise UnknownVersion(v)
         made = [sv["created_at"] for sv in repo.source_versions(conn, d["story_id"])]   # 依 n 升序,與 ts 同為 epoch 秒
     us = repo.utterances(conn, d["id"])
+    lab, fp = _labeler(conn, d["story_id"]), None
     marked = repo.reactions(conn, d["id"])
     voiced = repo.voice_marks(conn, d["id"])
     totals = repo.variant_counts(conn, d["id"])
@@ -229,8 +250,9 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
         if u["role"] == "clear":
             turns.append({"seq": u["seq"], "role": "clear", "ts": u["ts"]})
             continue
+        fp = u["analysis_fp"] or fp
         if u["role"] == "compact":
-            turns.append({"seq": u["seq"], "role": "compact", "text": u["text"], "ts": u["ts"]})
+            turns.append({"seq": u["seq"], "role": "compact", "text": lab(u["text"], fp), "ts": u["ts"]})
             continue
         if latest is None:
             qs = []
@@ -240,7 +262,8 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
             qs = u["quotes"] or []
         turns.append({"seq": u["seq"], "reaction": marked.get(u["seq"]),
                       "memories": remembered.get(u["seq"], []),
-                      "role": u["role"], "text": u["text"], "ts": u["ts"],
+                      "role": u["role"], "text": lab(u["text"], fp) if u["role"] == "assistant" else u["text"],
+                      "ts": u["ts"],
                       "character": u["character"], "quotes": u["quotes"] or [],
                       "spans": spans.locate_all(qs, shown["text"]) if shown else [],
                       "v": _at(made, u["ts"]) if made else None,   # 說話當時的版本
@@ -273,6 +296,12 @@ def memories(conn) -> dict:
 
 def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:
     out = repo.recent_discussions(conn, limit, legacy)
+    labs: dict = {}
+    for d in out:
+        sid, fp = d.pop("story_id"), d.pop("fp")
+        if sid not in labs:
+            labs[sid] = _labeler(conn, sid)
+        d["preview"] = labs[sid](d["preview"], fp)[:60]
     titles = {c["story_id"]: c["artifact"]["body"].get("title")
               for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}

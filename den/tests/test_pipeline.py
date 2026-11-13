@@ -469,3 +469,28 @@ def test_resume_skips_old_attempt_without_recipe(conn):
     out, _, _ = _drive(conn, job, run)
     assert out.state == "done" and len(run.calls) == 1
     assert run.calls[0][0] == WORKPACKS["reviewer"].system_prompt
+
+
+def test_missing_nullable_keys_are_filled_not_gated(conn):
+    body = _analysis()
+    for e in body["edges"]:
+        del e["note"]
+    for n in body["nodes"]:
+        for ev in n["evidence"] or []:
+            del ev["note"]
+    job = _job(conn)
+    out, _, _ = _drive(conn, job, FakeRun(ok(body), ok(_notes())))
+    assert out.state == "done"
+    assert _outcomes(conn, job, "analyst") == ["ok"]
+    assert _current(conn, job, "analysis")["body"] == _analysis()
+
+
+def test_missing_required_key_still_reads_as_missing(conn):
+    body = _analysis()
+    del body["nodes"][0]["label"]
+    job = _job(conn)
+    run = FakeRun(ok(body), ok(_analysis()), ok(_notes()))
+    _drive(conn, job, run)
+    gate_att = repo.attempts(conn, job["id"])[0]
+    assert any("'label' is a required property" in e for e in gate_att["gate_verdict"]["errors"])
+    assert f"<previous_output>\n{canonical_json(body)}\n</previous_output>" in run.calls[1][1]

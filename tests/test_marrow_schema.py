@@ -94,3 +94,10 @@ def test_schema_file_follows_version(monkeypatch):
     monkeypatch.undo()
     schema._schema.cache_clear()
     assert schema.load_schema("notes")
+
+
+def test_to_v1_nullable_only_skips_required_strings():
+    body = {"slug": "x", "nodes": [{"id": "b1", "type": "beat", "evidence": [{"quote": "q"}]}], "edges": []}
+    out = schema.to_v1("analysis", body, nullable_only=True)
+    assert "label" not in out["nodes"][0] and out["nodes"][0]["note"] is None
+    assert out["nodes"][0]["evidence"][0]["note"] is None and out["title"] is None

@@ -290,4 +290,6 @@ async def revise(run, candidate: dict, feedback: str, passage: str | None, lang:
     first = _revise_input(core(candidate), feedback, passage, lang)
     check = lambda body: _one_errors(body, passage)
     body = await _gated(run, _revise_prompt().text, ONE, check, first)
+    if candidate.get("name") == candidate.get("form") and body["name"] == candidate.get("name"):
+        body = {**body, "name": dict(body["form"])}
     return _shown(body, axes if isinstance(axes, list) else ())

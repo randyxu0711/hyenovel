@@ -334,6 +334,11 @@ def analysis_versions(conn, story_id: int) -> dict[str, int]:
         "ON sv.id = a.source_version_id WHERE a.story_id = ? AND a.kind = 'analysis'", (story_id,))}
 
 
+def analysis_bodies(conn, story_id: int) -> dict[str, dict]:
+    return {r["sha256"]: json.loads(r["body"]) for r in conn.execute(
+        "SELECT sha256, body FROM artifact WHERE story_id = ? AND kind = 'analysis'", (story_id,))}
+
+
 def artifact_versions(conn, story_id: int, kind: str) -> set[int]:
     """一篇所有 kind artifact 對的原文版本 n(不論 current)。"""
     return {r["n"] for r in conn.execute(
@@ -343,7 +348,7 @@ def artifact_versions(conn, story_id: int, kind: str) -> set[int]:
 
 def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
     """跨作品最近的局(有發言才算),依最後發言時間新到舊;一次查完。
-    turns = assistant 則數;character / preview 取最後一則 assistant 發言(preview 前 60 字)。
+    turns = assistant 則數;character / preview / fp 取最後一則 assistant 發言(preview 不截,換標籤後由 views 截)。
     legacy = 沒有任何記了 character 的 assistant 發言(改版前的舊局);只回 legacy 或只回非 legacy,過濾在 LIMIT 之前。"""
     last = ("(SELECT {c} FROM utterance WHERE discussion_id = d.id AND role = 'assistant' "
             "ORDER BY seq DESC LIMIT 1)")
@@ -354,14 +359,15 @@ def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
             "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
             "(SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'assistant') AS turns, "
             f"{last.format(c='character')} AS character, "
-            f"{last.format(c='text')} AS preview "
+            f"{last.format(c='text')} AS preview, "
+            f"{last.format(c='analysis_fp')} AS fp, d.story_id AS story_id "
             "FROM discussion d LEFT JOIN story st ON st.id = d.story_id "
             "WHERE d.archived_at IS NULL AND EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
             f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
             "AND role = 'assistant' AND character IS NOT NULL) "
             "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
         row = _row(r)
-        row["preview"] = (row["preview"] or "")[:60]
+        row["preview"] = row["preview"] or ""
         out.append(row)
     return out
 
