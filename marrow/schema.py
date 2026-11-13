@@ -51,7 +51,7 @@ def strict_violations(schema: dict) -> list[str]:
     return out
 
 
-def to_v1(kind: Kind, body: dict) -> dict:
+def to_v1(kind: Kind, body: dict, nullable_only: bool = False) -> dict:
     """依 v1 schema 遞迴補齊缺欄(補 None)。不改原物件、不刪多餘欄位(讓 validate 去擋)。"""
     root = _schema(kind)
 
@@ -64,8 +64,9 @@ def to_v1(kind: Kind, body: dict) -> dict:
         if isinstance(value, dict) and "properties" in s:
             out = {k: conv(v, s["properties"][k]) if k in s["properties"] else v
                    for k, v in value.items()}
-            for k in s["properties"]:
-                out.setdefault(k, None)
+            for k, sub in s["properties"].items():
+                if not nullable_only or "null" in (resolve(sub).get("type") or ()):
+                    out.setdefault(k, None)
             return out
         if isinstance(value, list) and "items" in s:
             return [conv(v, s["items"]) for v in value]

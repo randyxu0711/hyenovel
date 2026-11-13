@@ -908,3 +908,22 @@ def test_form_fits_where_a_name_fits():
 def test_prompts_ask_for_concrete_forms():
     assert "具體" in candidates._prompt().text and "具體" in candidates._revise_prompt().text
     assert "具體" in candidates.brief_from({})
+
+
+def test_revise_keeps_name_equal_to_form_when_the_author_named_the_form():
+    form = {"zh-Hant": "老貓", "en": "Old cat"}
+    named = _shown(name=dict(form), form=dict(form))
+    out = _revise(Script(ok(_one(9, name=dict(form), form={"zh-Hant": "黑貓", "en": "Black cat"}))), named)
+    assert out["name"] == out["form"] == {"zh-Hant": "黑貓", "en": "Black cat"}
+    assert out["card"]["data"]["name"] == "黑貓"
+
+
+def test_revise_keeps_a_rename_the_author_asked_for():
+    form = {"zh-Hant": "老貓", "en": "Old cat"}
+    named = _shown(name=dict(form), form=dict(form))
+    out = _revise(Script(ok(_one(9, name={"zh-Hant": "阿花", "en": "Ahua"}, form=dict(form)))), named)
+    assert out["name"]["zh-Hant"] == "阿花"
+
+
+def test_revise_leaves_a_free_name_alone():
+    assert _revise(Script(ok(_one(9))))["name"]["zh-Hant"] == "讀者9"

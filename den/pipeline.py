@@ -16,7 +16,7 @@ from den import config
 from den.runner import RunResult
 from marrow import prompt as prompts
 from marrow import repo, workpacks
-from marrow.schema import version_of
+from marrow.schema import to_v1, version_of
 
 log = logging.getLogger("hyenovel")
 
@@ -95,15 +95,16 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
 
         if r.outcome == "ok":
             # 抽不出 JSON 物件也是格式錯誤:記成 gate、走同一條修補重試,不另開分流
-            errs = ([_NOT_JSON] if r.parsed is None
-                    else workpacks.gate(step, r.parsed, source, inputs))
+            body = None if r.parsed is None else to_v1(pack.kind, r.parsed, nullable_only=True)
+            errs = ([_NOT_JSON] if body is None
+                    else workpacks.gate(step, body, source, inputs))
             if not errs:
                 prov = {"tier": "A", "runner": runner_name, "model": r.model,
                         "cli_version": cli_version, "job": jid, "attempt": n,
                         "run": pack.run.as_dict(), "prompt": pack.prompt.fingerprint()}
                 with conn:
                     aid, _ = repo.add_artifact(conn, job["story_id"], job["source_version_id"],
-                                               pack.kind, version_of(pack.kind), r.parsed, prov, now())
+                                               pack.kind, version_of(pack.kind), body, prov, now())
                     record("ok", r, artifact_id=aid)
                     repo.set_current(conn, job["story_id"], pack.kind, aid)
                 emit(_phase(step, "ok", n))

@@ -289,7 +289,7 @@ def test_recent_discussions_orders_by_last_activity_and_limits(conn):
     b = repo.ensure_discussion(conn, s2, "B", "web", None, 2.0)
     repo.ensure_discussion(conn, s, "empty", "web", None, 3.0)           # 沒發言的局不列
     repo.add_utterance(conn, a, 0, "user", "問", 1.0, "den", [], None)
-    repo.add_utterance(conn, a, 1, "assistant", "答" * 80, 5.0, "den", [], None, character="hyena")
+    repo.add_utterance(conn, a, 1, "assistant", "答" * 80, 5.0, "den", [], "fpA", character="hyena")
     repo.add_utterance(conn, a, 2, "user", "再問", 6.0, "den", [], None)
     repo.add_utterance(conn, b, 0, "user", "問", 2.0, "den", [], None)
     repo.add_utterance(conn, b, 1, "assistant", "乙答", 4.0, "den", [], None, character="buffalo")
@@ -297,7 +297,7 @@ def test_recent_discussions_orders_by_last_activity_and_limits(conn):
     assert [g["external_id"] for g in got] == ["A", "B"]
     assert got[0] == {"external_id": "A", "slug": "s1", "title": None, "started_at": 1.0,
                       "last_at": 6.0, "turns": 1, "character": "hyena",
-                      "preview": "答" * 60}
+                      "preview": "答" * 80, "fp": "fpA", "story_id": s}
     assert (got[1]["title"], got[1]["turns"], got[1]["preview"]) == ("乙", 1, "乙答")
     assert [g["external_id"] for g in repo.recent_discussions(conn, 1)] == ["A"]
 
