@@ -389,8 +389,11 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
                 disabled={streaming !== null || working || !!staged} onClick={() => picker.current?.click()}><Icon name="clip" /></button>
             </>
           )}
-          <button type="submit" className="ib send" aria-label={t("talk.send")} title={t("talk.send")}
-            disabled={legacy || !draft.trim() || streaming !== null}><Icon name="send" /></button>
+          {streaming !== null
+            ? <button key="stop" type="button" className="ib send" aria-label={t("talk.stop")} title={t("talk.stop")}
+              onClick={e => { if (e.detail <= 1) talk.stop(); }}><Icon name="stop" /></button>
+            : <button key="send" type="submit" className="ib send" aria-label={t("talk.send")} title={t("talk.send")}
+              disabled={legacy || !draft.trim()}><Icon name="send" /></button>}
         </div>
       </form>
     </div>

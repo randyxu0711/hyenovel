@@ -27,7 +27,7 @@ const cut = (seq: number, role: "clear" | "compact"): T => ({ seq, role, text: r
 
 let turns: T[];
 let legacy: boolean;
-let regen: () => Response;
+let regen: (init?: RequestInit) => Response;
 let talkReply: () => Response;
 let clearReply: () => Promise<Response>;
 let onPut: (url: string, body: any) => void;
@@ -43,7 +43,7 @@ function mount() {
     if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "第一段。", state: "ready", job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map") return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
     if (p === "/api/works/d1/sessions") return json({ sessions: [{ session: "s1", started_at: 1, last_at: 2, turns: turns.length, character: "hyena", preview: "q", version: 1, legacy }] });
-    if (p.endsWith("/regenerate")) { writes.push({ url: p, method, body: null }); return regen(); }
+    if (p.endsWith("/regenerate")) { writes.push({ url: p, method, body: null }); return regen(init); }
     if (p.startsWith("/api/discuss/")) return talkReply();
     if (p === "/api/sessions/s1/clear") return clearReply();
     if (method !== "GET") {
@@ -143,6 +143,24 @@ describe("重說的結果", () => {
     expect(document.querySelectorAll(".chat-turn")).toHaveLength(before);
     expect(l.getByText("2/2")).toBeTruthy();
     expect(writes.some(w => w.url === "/api/sessions/s1/turns/3/regenerate")).toBe(true);
+  });
+
+  it("停下:那一格回到舊字、不報錯", async () => {
+    regen = init => new Response(new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ event: "token", data: { text: "半" } })}\n\n`));
+        init?.signal?.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+      },
+    }));
+    mount();
+    const l = await log();
+    await l.findByText("舊的");
+    fireEvent.click(l.getByRole("button", { name: REDO }));
+    await l.findByText("半");
+    fireEvent.click(screen.getByRole("button", { name: "停下" }));
+    await l.findByText("舊的");
+    expect(l.queryByText("半")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("失敗:那一格回到舊字、有錯誤", async () => {
