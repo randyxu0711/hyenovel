@@ -95,6 +95,19 @@ describe("鍵盤", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "設定" }));
     expect(where()).toBe("/settings");
   });
+  it("指令框換讀伴 den 存不下:指令框不關,顯示錯誤", async () => {
+    mount("/w/d1");
+    await screen.findByLabelText("對話輸入");
+    const base = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (u, ...rest) => String(u) === "/api/characters/default"
+      ? new Response(JSON.stringify({ detail: "x", code: "unknown-character", params: {} }), { status: 422 })
+      : base(u, ...rest));
+    ctrlK();
+    const dlg = await screen.findByRole("dialog", { name: "指令框" });
+    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴:水牛" }));
+    expect((await within(dlg).findByRole("alert")).textContent).toBe("沒有這位讀伴。");
+    expect(screen.getByRole("dialog", { name: "指令框" })).toBeTruthy();
+  });
   it("找不到時說沒有符合", async () => {
     mount("/w/d1");
     await screen.findByLabelText("對話輸入");

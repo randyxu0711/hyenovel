@@ -12,7 +12,7 @@ import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
 import { speakerChanges } from "./Talk";
 import { selectTheme, setMode, useThemeState, type ModePref } from "./theme";
 import { useCharacters } from "./useCharacters";
-import { companionId, setCompanion } from "./useTalk";
+import { setCompanion } from "./useTalk";
 import { whenLabel } from "./when";
 
 const MODES: { pref: ModePref; key: MsgKey; icon: IconName }[] = [
@@ -262,7 +262,7 @@ function Look() {
 function Companions() {
   const t = useT();
   const chars = useCharacters();
-  const [who, setWho] = useState(() => companionId(chars));
+  const [who, setWho] = useState(() => chars.defaultId);
   const [err, setErr] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
@@ -271,12 +271,12 @@ function Companions() {
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  useEffect(() => setWho(companionId(chars)), [chars]);
+  useEffect(() => setWho(chars.defaultId), [chars]);
   const code = (e: unknown) => (e instanceof DashError ? e.code : "unknown");
   const pick = (id: string) => {
     const before = who;
     setWho(id); setErr(null);
-    setCompanion(id).catch(e => { setWho(before); setErr(code(e)); });
+    setCompanion(chars, id).catch(e => { setWho(before); setErr(code(e)); });
   };
   const send = async (card: unknown, confirm: boolean) => {
     setErr(null); setProblems([]);
