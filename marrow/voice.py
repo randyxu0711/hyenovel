@@ -95,6 +95,9 @@ _ROWS = (
 
 
 def load(conn):
+    marks = {}
+    for d, seq in conn.execute("SELECT discussion_id, seq FROM utterance WHERE role IN ('clear', 'compact')"):
+        marks.setdefault(d, []).append(seq)
     examples = {(r["character_id"], r["n"]): (r["card"].get("data") or {}).get("mes_example") or ""
                 for r in map(repo._row, conn.execute("SELECT character_id, n, card FROM character_version"))}
     rows = []
@@ -105,15 +108,22 @@ def load(conn):
                      "character": r["character"], "card_v": recipe.get("character_v"),
                      "story": r["story_id"] is not None, "analysis": r["analysis_fp"] is not None,
                      "retrieved": len(recipe.get("retrieved", ())), "edited": r["edited_at"] is not None,
+                     "epoch": sum(m < r["seq"] for m in marks.get(r["discussion_id"], ())),
                      "examples": examples.get((r["character"], recipe.get("character_v")), "")})
     return rows
 
 
+def turn_bucket(turn):
+    return "1-3" if turn <= 3 else "4-7" if turn <= 7 else "8+"
+
+
 def measure(rows, character=None, since_version=None):
-    out, seen = [], {}
+    out, seen, count, turns = [], {}, Counter(), {}
     for r in rows:
         repeat = None
         if r["kept"]:
+            count[r["discussion"], r["epoch"]] += 1
+            turns[r["discussion"], r["seq"]] = count[r["discussion"], r["epoch"]]
             openings = seen.setdefault(r["discussion"], set())
             repeat = opening(r["text"]) in openings
             openings.add(opening(r["text"]))
@@ -122,7 +132,8 @@ def measure(rows, character=None, since_version=None):
         if since_version is not None and (r["card_v"] is None or r["card_v"] < since_version):
             continue
         m = metrics(r["text"], r["examples"], r["usage"], r["thinking"])
-        out.append({**{k: v for k, v in r.items() if k not in ("examples", "usage")}, **m, "repeat_opening": repeat})
+        out.append({**{k: v for k, v in r.items() if k not in ("examples", "usage", "epoch")}, **m,
+                    "turn": turns[r["discussion"], r["seq"]], "repeat_opening": repeat})
     return out
 
 
@@ -140,8 +151,8 @@ def summarize(measured):
     groups = {}
     for m in measured:
         if not m["edited"]:
-            groups.setdefault((m["character"], m["card_v"], m["story"]), []).append(m)
-    return [{"character": c, "card_v": v, "story": s, "n": len(g), "shelved": sum(not m["kept"] for m in g),
+            groups.setdefault((m["character"], m["card_v"], m["story"], turn_bucket(m["turn"])), []).append(m)
+    return [{"character": c, "card_v": v, "story": s, "turns": t, "n": len(g), "shelved": sum(not m["kept"] for m in g),
              "len": _median(m["len"] for m in g), "slop_n": _median(m["slop_n"] for m in g),
              "question_end": _rate([m["question_end"] for m in g]),
              "repeat_opening": _rate([m["repeat_opening"] for m in g]),
@@ -149,7 +160,7 @@ def summarize(measured):
              "thinking_tokens": _median(m["thinking_tokens"] for m in g),
              "duration_ms": _median(m["duration_ms"] for m in g),
              "first_delta_ms": _median(m["first_delta_ms"] for m in g)}
-            for (c, v, s), g in groups.items()]
+            for (c, v, s, t), g in groups.items()]
 
 
 def _cell(v):
@@ -157,14 +168,14 @@ def _cell(v):
 
 
 def render(measured, groups, thinking=False):
-    cols = ("discussion", "seq", "variant", "kept", "edited", "character", "card_v", "story", "len",
+    cols = ("discussion", "seq", "variant", "kept", "edited", "character", "card_v", "story", "turn", "len",
             "question_end", "slop_n", "copy", "repeat_opening", "thinking_tokens", "duration_ms", "first_delta_ms")
     lines = ["\t".join(cols)]
     for m in measured:
         lines.append("\t".join(_cell(m[c]) for c in cols))
         if thinking and m["thinking"]:
             lines.append("  thinking: " + m["thinking"].strip().replace("\n", "\n  "))
-    gcols = ("character", "card_v", "story", "n", "shelved", "len", "question_end", "slop_n", "copy",
+    gcols = ("character", "card_v", "story", "turns", "n", "shelved", "len", "question_end", "slop_n", "copy",
              "repeat_opening", "thinking_tokens", "duration_ms", "first_delta_ms")
     lines += ["", "\t".join(gcols)] + ["\t".join(_cell(g[c]) for c in gcols) for g in groups]
     return "\n".join(lines) + "\n"

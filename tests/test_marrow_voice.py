@@ -152,3 +152,23 @@ def test_report_never_writes(tmp_path):
         conn.execute("DELETE FROM utterance")
     with contextlib.closing(db.connect_readonly("sqlite:///:memory:")) as conn:
         assert conn.execute("SELECT 1").fetchone()[0] == 1
+
+
+def test_turn_counts_kept_replies_and_restarts_after_clear_or_compact(tmp_path):
+    rows = _rows(tmp_path)
+    assert [m["turn"] for m in voice.measure(rows)] == [1, 1, 2, 3, 1, 2]
+    url = f"sqlite:///{tmp_path / 't.db'}"
+    conn = db.connect(url)
+    db.migrate(conn, None)
+    with conn:
+        d = repo.ensure_discussion(conn, None, "c", "web", None, 0)
+        roles = ["assistant"] * 4 + ["clear", "assistant", "compact"] + ["assistant"] * 9
+        for seq, role in enumerate(roles):
+            repo.add_utterance(conn, d, seq, role, f"回{seq}", seq, "den", [], None)
+    conn.close()
+    with contextlib.closing(db.connect_readonly(url)) as conn:
+        measured = voice.measure(voice.load(conn))
+    assert [m["turn"] for m in measured] == [1, 2, 3, 4, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    groups = voice.summarize(measured)
+    assert {g["turns"]: g["n"] for g in groups} == {"1-3": 7, "4-7": 5, "8+": 2}
+    assert [voice.turn_bucket(n) for n in (3, 4, 7, 8)] == ["1-3", "4-7", "4-7", "8+"]
