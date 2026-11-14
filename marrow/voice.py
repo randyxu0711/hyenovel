@@ -1,5 +1,6 @@
 """讀伴回覆的機械指標與唯讀報表:`python -m marrow.voice [--character ID] [--since-version N] [--json] [--thinking]`。"""
 import argparse
+import bisect
 import json
 import re
 import sqlite3
@@ -98,6 +99,8 @@ def load(conn):
     marks = {}
     for d, seq in conn.execute("SELECT discussion_id, seq FROM utterance WHERE role IN ('clear', 'compact')"):
         marks.setdefault(d, []).append(seq)
+    for seqs in marks.values():
+        seqs.sort()
     examples = {(r["character_id"], r["n"]): (r["card"].get("data") or {}).get("mes_example") or ""
                 for r in map(repo._row, conn.execute("SELECT character_id, n, card FROM character_version"))}
     rows = []
@@ -108,7 +111,7 @@ def load(conn):
                      "character": r["character"], "card_v": recipe.get("character_v"),
                      "story": r["story_id"] is not None, "analysis": r["analysis_fp"] is not None,
                      "retrieved": len(recipe.get("retrieved", ())), "edited": r["edited_at"] is not None,
-                     "epoch": sum(m < r["seq"] for m in marks.get(r["discussion_id"], ())),
+                     "epoch": bisect.bisect_left(marks.get(r["discussion_id"], []), r["seq"]),
                      "examples": examples.get((r["character"], recipe.get("character_v")), "")})
     return rows
 
@@ -118,13 +121,14 @@ def turn_bucket(turn):
 
 
 def measure(rows, character=None, since_version=None):
-    out, seen, count, turns = [], {}, Counter(), {}
+    out, seen, ctx, turn = [], {}, None, 0
     for r in rows:
         repeat = None
         if r["kept"]:
-            count[r["discussion"], r["epoch"]] += 1
-            turns[r["discussion"], r["seq"]] = count[r["discussion"], r["epoch"]]
-            openings = seen.setdefault(r["discussion"], set())
+            if (r["discussion"], r["epoch"]) != ctx:
+                ctx, turn = (r["discussion"], r["epoch"]), 0
+            turn += 1
+            openings = seen.setdefault(ctx, set())
             repeat = opening(r["text"]) in openings
             openings.add(opening(r["text"]))
         if character is not None and r["character"] != character:
@@ -133,7 +137,7 @@ def measure(rows, character=None, since_version=None):
             continue
         m = metrics(r["text"], r["examples"], r["usage"], r["thinking"])
         out.append({**{k: v for k, v in r.items() if k not in ("examples", "usage", "epoch")}, **m,
-                    "turn": turns[r["discussion"], r["seq"]], "repeat_opening": repeat})
+                    "turn": turn, "repeat_opening": repeat})
     return out
 
 
@@ -152,7 +156,7 @@ def summarize(measured):
     for m in measured:
         if not m["edited"]:
             groups.setdefault((m["character"], m["card_v"], m["story"], turn_bucket(m["turn"])), []).append(m)
-    return [{"character": c, "card_v": v, "story": s, "turns": t, "n": len(g), "shelved": sum(not m["kept"] for m in g),
+    return [{"character": c, "card_v": v, "story": s, "turn_bucket": t, "n": len(g), "shelved": sum(not m["kept"] for m in g),
              "len": _median(m["len"] for m in g), "slop_n": _median(m["slop_n"] for m in g),
              "question_end": _rate([m["question_end"] for m in g]),
              "repeat_opening": _rate([m["repeat_opening"] for m in g]),
@@ -175,7 +179,7 @@ def render(measured, groups, thinking=False):
         lines.append("\t".join(_cell(m[c]) for c in cols))
         if thinking and m["thinking"]:
             lines.append("  thinking: " + m["thinking"].strip().replace("\n", "\n  "))
-    gcols = ("character", "card_v", "story", "turns", "n", "shelved", "len", "question_end", "slop_n", "copy",
+    gcols = ("character", "card_v", "story", "turn_bucket", "n", "shelved", "len", "question_end", "slop_n", "copy",
              "repeat_opening", "thinking_tokens", "duration_ms", "first_delta_ms")
     lines += ["", "\t".join(gcols)] + ["\t".join(_cell(g[c]) for c in gcols) for g in groups]
     return "\n".join(lines) + "\n"
