@@ -41,6 +41,8 @@ class RunResult:
     message: str | None
     num_turns: int | None = None
     text: str | None = None  # 模型的原始文字輸出(CLI 的 result);parsed 抽不出時拿它當修補的 previous
+    thinking: str | None = None
+    first_delta_ms: int | None = None
 
 
 def build_argv(preset: ClaudePreset, config: RunConfig, system_prompt_file: Path, schema: dict) -> list[str]:
@@ -57,7 +59,7 @@ def build_chat_argv(preset: ClaudePreset, config: RunConfig, system_prompt_file:
     # 同 build_argv 的隔離配方,只換成 stream-json 逐字串流
     return [preset.exe, "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
             "--no-session-persistence", "--output-format", "stream-json",
-            "--include-partial-messages", "--verbose",
+            "--include-partial-messages", "--verbose", "--thinking-display", "summarized",
             "--model", config.model, "--effort", config.effort,
             "--system-prompt-file", str(system_prompt_file)]
 
@@ -185,7 +187,7 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
                       *, config: RunConfig, timeout: float) -> AsyncIterator[tuple[str, str | RunResult]]:
     """逐個 yield ("delta", 文字),最後恰好一次 ("result", RunResult)。
 
-    只認 text_delta(見 #13)。消費端中途 aclose / 取消 / 逾時,finally 一律殺整個行程群組。
+    只 yield text_delta(見 #13);thinking_delta 收進結果,不給消費端。消費端中途 aclose / 取消 / 逾時,finally 一律殺整個行程群組。
     """
     t0 = time.monotonic()
 
@@ -202,6 +204,8 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
             start_new_session=True, limit=1 << 24)
         err_task = asyncio.ensure_future(proc.stderr.read())
         result_line = ""
+        thinking: list[str] = []
+        first_delta = None
         timed_out = False
         try:
             deadline = t0 + timeout
@@ -238,9 +242,13 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
                 elif ev.get("type") == "stream_event":
                     inner = ev.get("event") or {}
                     delta = inner.get("delta") or {}
-                    if (inner.get("type") == "content_block_delta"
-                            and delta.get("type") == "text_delta"
-                            and isinstance(delta.get("text"), str)):
+                    if inner.get("type") != "content_block_delta":
+                        continue
+                    if delta.get("type") == "thinking_delta" and isinstance(delta.get("thinking"), str):
+                        thinking.append(delta["thinking"])
+                    elif delta.get("type") == "text_delta" and isinstance(delta.get("text"), str):
+                        if first_delta is None:
+                            first_delta = ms()
                         yield "delta", delta["text"]
             if timed_out:
                 kill_tree(proc)
@@ -259,6 +267,8 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
         log.info("event=chat_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
         res = make_result(outcome, obj, result_line, msg, ms())
         res.parsed = None                            # 聊天輸出是自由文字,不抽 JSON
+        res.thinking = "".join(thinking) or None
+        res.first_delta_ms = first_delta
         yield "result", res
 
 

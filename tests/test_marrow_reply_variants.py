@@ -100,3 +100,15 @@ def test_delete_discussion_removes_versions_and_marks(conn):
     repo.delete_discussion(conn, d)
     for t in ("utterance_variant", "voice_mark", "reaction", "utterance"):
         assert conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0
+
+
+def test_thinking_follows_its_variant(conn):
+    _, d = _turns(conn)
+    repo.replace_reply(conn, d, 1, text="二", ts=3.0, usage=None, recipe=None, analysis_fp=None, thinking="想二")
+    assert repo.utterance(conn, d, 1)["thinking"] == "想二"
+    assert repo.pick_reply(conn, d, 1, 1)
+    assert repo.utterance(conn, d, 1)["thinking"] is None
+    assert repo.pick_reply(conn, d, 1, 2)
+    repo.edit_reply(conn, d, 1, "改", 5.0)
+    u = repo.utterance(conn, d, 1)
+    assert (u["text"], u["thinking"]) == ("改", "想二")

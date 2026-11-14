@@ -24,6 +24,7 @@ def fake(tmp_path):
     shutil.copy(FIX / "fake_claude.py", exe)
     shutil.copy(FIX / "claude_ok.json", tmp_path / "claude_ok.json")
     shutil.copy(FIX / "claude_stream_ok.jsonl", tmp_path / "claude_stream_ok.jsonl")
+    shutil.copy(FIX / "claude_stream_thinking.jsonl", tmp_path / "claude_stream_thinking.jsonl")
     exe.chmod(0o755)
 
     def set_mode(mode):
@@ -199,6 +200,7 @@ def test_chat_argv_recipe_locked():
     assert argv == ["/x/claude", "-p", "--safe-mode", "--tools", "",
                     "--strict-mcp-config", "--no-session-persistence",
                     "--output-format", "stream-json", "--include-partial-messages", "--verbose",
+                    "--thinking-display", "summarized",
                     "--model", "sonnet", "--effort", "low", "--system-prompt-file", "/t/sys.md"]
 
 
@@ -210,6 +212,21 @@ def test_stream_chat_yields_deltas_then_one_result(fake):
     assert deltas == res.text                       # 串出去的 = 落盤的
     assert res.tokens["cost_usd"] is not None
     assert [k for k, _ in evs].count("result") == 1
+
+
+def test_stream_chat_keeps_thinking_out_of_deltas(fake):
+    evs = _chat(fake("stream-thinking"))
+    *deltas, (_, res) = evs
+    assert res.outcome == "ok"
+    assert res.thinking.startswith("I'm thinking about the user's question")
+    assert all(k == "delta" and v not in res.thinking for k, v in deltas)
+    assert "".join(v for _, v in deltas) == res.text
+    assert 0 <= res.first_delta_ms <= res.duration_ms
+
+
+def test_stream_chat_without_thinking_records_none(fake):
+    *_, (_, res) = _chat(fake("stream"))
+    assert res.thinking is None and res.first_delta_ms is not None
 
 
 def test_stream_chat_usage_limit(fake):

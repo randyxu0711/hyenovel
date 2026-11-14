@@ -23,7 +23,8 @@ elif mode == "exit-early":
     sys.exit(1)                                      # 不讀 stdin 就走
 elif mode.startswith("stream"):
     sys.stdin.read()
-    lines = here.with_name("claude_stream_ok.jsonl").read_text().splitlines()
+    src = "claude_stream_thinking.jsonl" if mode == "stream-thinking" else "claude_stream_ok.jsonl"
+    lines = here.with_name(src).read_text().splitlines()
     deltas = [ln for ln in lines if '"text_delta"' in ln]
 
     def emit(ln):
