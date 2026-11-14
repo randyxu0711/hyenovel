@@ -17,10 +17,13 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
   const [at, setAt] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const busy = useRef(false);
+  const alive = useRef(true);
   useEffect(() => {
+    alive.current = true;
     const back = document.activeElement as HTMLElement | null;
     input.current?.focus();
-    return () => back?.focus?.();
+    return () => { alive.current = false; back?.focus?.(); };
   }, []);
 
   const all: Item[] = [
@@ -33,11 +36,14 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
   const items = needle ? all.filter(i => i.label.toLowerCase().includes(needle)) : all;
   const active = Math.min(at, items.length - 1);
   const run = (i: Item | undefined) => {
-    if (!i) return;
+    if (!i || busy.current) return;
     setErr(null);
     const done = i.run();
-    if (!done) { onClose(); return; }
-    done.then(onClose, e => setErr(e instanceof DashError ? e.code : "unknown"));
+    if (!(done instanceof Promise)) { onClose(); return; }
+    busy.current = true;
+    done.then(() => { if (alive.current) onClose(); },
+      e => { if (alive.current) setErr(e instanceof DashError ? e.code : "unknown"); })
+      .finally(() => { busy.current = false; });
   };
   const onKey = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;   // 輸入法組字中:這些鍵是給候選字的
