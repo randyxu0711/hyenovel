@@ -13,7 +13,7 @@ import Side, { marksFrom } from "./Side";
 import Figure from "./Figure";
 import { composerState, useReaction } from "./Talk";
 import { useSeen } from "./useSeen";
-import { initCompanion, useTalk } from "./useTalk";
+import { useTalk } from "./useTalk";
 import { SHELF_W, useShelf } from "./useShelf";
 import { applySignature, initThemes, toggleDayNight, useThemeState } from "./theme";
 import { CharactersProvider, makeCharacters, type Characters } from "./useCharacters";
@@ -261,13 +261,19 @@ export default function Dash() {
   const [chars, setChars] = useState<Characters | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
-    const apply = (ch: { characters: Character[]; default: string }) => {
-      initCompanion(ch.default);
-      setChars(makeCharacters(ch.characters, ch.default, () => api.characters().then(apply)));
+    let writes = 0;
+    const build = (list: Character[], id: string): Characters => makeCharacters(list, id, reload, setDefault);
+    const apply = (ch: { characters: Character[]; default: string }, at: number) =>
+      setChars(prev => build(ch.characters, prev && at !== writes ? prev.defaultId : ch.default));
+    const reload = () => { const at = writes; return api.characters().then(ch => apply(ch, at)); };
+    const setDefault = async (id: string) => {
+      await api.setDefaultCharacter(id);
+      writes++;
+      setChars(prev => prev && build(prev.list, id));
     };
     Promise.all([api.themes(), api.characters()]).then(([th, ch]) => {
       initThemes(th.themes, th.default);
-      apply(ch);
+      apply(ch, writes);
     }, e => setErr(e instanceof DashError ? e.code : "unknown"));
   }, []);
   if (err) return <div className="dash dash-note" role="alert">{t(errorMessage(err))}</div>;

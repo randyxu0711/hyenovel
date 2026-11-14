@@ -9,12 +9,14 @@ export type Characters = {
   /** 永遠回一個角色:找不到 id(角色之後被刪、舊局沒記)→ 預設。 */
   byId: (id: string | null) => Character;
   defaultId: string;
+  setDefault: (id: string) => Promise<void>;
 };
 
-export function makeCharacters(list: Character[], defaultId: string, reload: () => Promise<void> = async () => {}): Characters {
+export function makeCharacters(list: Character[], defaultId: string, reload: () => Promise<void> = async () => {},
+  setDefault: (id: string) => Promise<void> = async () => {}): Characters {
   const fallback = list.find(c => c.id === defaultId) ?? list[0];
   return {
-    list, defaultId, reload,
+    list, defaultId, reload, setDefault,
     active: list.filter(c => !c.archived),
     byId: id => list.find(c => c.id === id) ?? fallback,
   };

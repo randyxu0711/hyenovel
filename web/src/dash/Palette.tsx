@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { Work } from "./api";
-import { localized, useLang, useT } from "./i18n";
+import { DashError, type Work } from "./api";
+import { errorMessage, localized, useLang, useT } from "./i18n";
 import type { Characters } from "./useCharacters";
 import { setCompanion } from "./useTalk";
 
-type Item = { id: string; label: string; run: () => void };
+type Item = { id: string; label: string; run: () => void | Promise<void> };
 
 /** ⌘K / Ctrl+K 的指令框:搜作品、換預設陪讀者、開設定、切晝夜。方向鍵移動、Enter 執行、Esc 關(焦點還給開之前的元素)。 */
 export default function Palette({ works, chars, onOpen, onSettings, onToggle, onClose }: {
@@ -15,23 +15,36 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
   const lang = useLang();
   const [q, setQ] = useState("");
   const [at, setAt] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const busy = useRef(false);
+  const alive = useRef(true);
   useEffect(() => {
+    alive.current = true;
     const back = document.activeElement as HTMLElement | null;
     input.current?.focus();
-    return () => back?.focus?.();
+    return () => { alive.current = false; back?.focus?.(); };
   }, []);
 
   const all: Item[] = [
     ...works.map(w => ({ id: `w-${w.slug}`, label: t("palette.work", { title: w.title }), run: () => onOpen(w.slug) })),
-    ...chars.active.map(c => ({ id: `c-${c.id}`, label: t("palette.companion", { name: localized(c.name, lang) }), run: () => { setCompanion(c.id).catch(() => {}); } })),
+    ...chars.active.map(c => ({ id: `c-${c.id}`, label: t("palette.companion", { name: localized(c.name, lang) }), run: () => setCompanion(chars, c.id) })),
     { id: "settings", label: t("palette.settings"), run: onSettings },
     { id: "daynight", label: t("palette.dayNight"), run: onToggle },
   ];
   const needle = q.trim().toLowerCase();
   const items = needle ? all.filter(i => i.label.toLowerCase().includes(needle)) : all;
   const active = Math.min(at, items.length - 1);
-  const run = (i: Item | undefined) => { if (!i) return; i.run(); onClose(); };
+  const run = (i: Item | undefined) => {
+    if (!i || busy.current) return;
+    setErr(null);
+    const done = i.run();
+    if (!(done instanceof Promise)) { onClose(); return; }
+    busy.current = true;
+    done.then(() => { if (alive.current) onClose(); },
+      e => { if (alive.current) setErr(e instanceof DashError ? e.code : "unknown"); })
+      .finally(() => { busy.current = false; });
+  };
   const onKey = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;   // 輸入法組字中:這些鍵是給候選字的
     if (e.key === "Escape") { e.preventDefault(); onClose(); }
@@ -52,6 +65,7 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
           ))}
         </ul>
         {items.length === 0 && <p className="dash-palette-empty">{t("palette.empty")}</p>}
+        {err && <p className="dash-palette-empty" role="alert">{t(errorMessage(err))}</p>}
       </div>
     </div>
   );

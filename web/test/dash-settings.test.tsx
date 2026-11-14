@@ -10,7 +10,6 @@ import { LinksProvider } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import type { Candidate, Character } from "../src/dash/api";
 import { drop, keep, start } from "../src/dash/newCharacterDraft";
-import { companionId } from "../src/dash/useTalk";
 import { olive, grass, hyena, buffalo, deer } from "./dash-fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -191,9 +190,39 @@ describe("設定頁", () => {
     const p = await page();
     await go("讀伴");
     fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
-    expect(companionId(makeCharacters([hyena, buffalo, deer], "hyena"))).toBe("hyena");
+    fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    const who = () => document.querySelector(".home form.composer svg.fig")?.getAttribute("data-who");
+    await waitFor(() => expect(who()).toBe("hyena"));
     release();
-    await waitFor(() => expect(companionId(makeCharacters([hyena, buffalo, deer], "hyena"))).toBe("buffalo"));
+    await waitFor(() => expect(who()).toBe("buffalo"));
+  });
+  it("讀伴:重抓清單途中換了預設,晚到的舊清單不蓋掉新預設", async () => {
+    const f = mount();
+    const base = f.getMockImplementation()!;
+    let release = () => {};
+    const gate = new Promise<void>(r => { release = r; });
+    let lists = 0;
+    f.mockImplementation(async (u: string, ...rest: unknown[]) => {
+      if (u === "/api/characters" && ++lists === 1) await gate;
+      if (u === "/api/characters/import") return json({ imported: true, character: deer, warnings: [] });
+      return (base as (...a: unknown[]) => Promise<Response>)(u, ...rest);
+    });
+    const p = await page();
+    await go("讀伴");
+    const input = (await screen.findByLabelText("匯入", { selector: "input" })) as HTMLInputElement;
+    const file = new File(["{}"], "card.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => "{}" });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(lists).toBe(1));
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
+    await waitFor(() => expect(f.mock.calls.some(([u]) => u === "/api/characters/default")).toBe(true));
+    await new Promise(r => setTimeout(r, 0));
+    release();
+    await new Promise(r => setTimeout(r, 20));
+    fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
+    expect(isDefault(p, "水牛")).toBe(true);
+    expect(isDefault(p, "鬣狗")).toBe(false);
   });
   it("讀伴:den 存不下預設時,選取退回原角色並顯示錯誤", async () => {
     const f = mount();
