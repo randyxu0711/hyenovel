@@ -249,12 +249,10 @@ def _repair(first: str, previous: str, errors: list[str], parsed: bool) -> str:
 
 
 def _judge(r, check):
-    if r.outcome == "transient":
-        log.info("event=candidates-failed reason=overload")
-        raise Failed("overload")
     if r.outcome != "ok":
-        log.info("event=candidates-failed reason=%s", r.outcome)
-        raise Failed(r.outcome)
+        reason = "overload" if r.outcome == "transient" else r.outcome
+        log.info("event=candidates-failed reason=%s", reason)
+        raise Failed(reason)
     if r.parsed is None:
         return None, (r.text or "")[:MAX_PREVIOUS_CHARS], ["輸出無法解析成單一 JSON 物件"]
     return r.parsed, canonical_json(r.parsed), check(r.parsed)

@@ -403,7 +403,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
                 <input aria-label={t("nc.feedback")} placeholder={t("nc.feedback")} maxLength={300} autoComplete="off" value={text}
                   readOnly={busy} onChange={e => setFeedback(f => ({ ...f, [i]: e.target.value }))} />
                 {busy
-                  ? <button key="stop" type="button" aria-label={t("run.stop")} title={t("run.stop")} onClick={stop}>
+                  ? <button key="stop" type="button" aria-label={t("run.stop")} title={t("run.stop")}
+                    onClick={e => { if (e.detail <= 1) stop(); }}>
                     <Icon name="stop" /><span className="dash-dm">{clock(elapsed)}</span>
                   </button>
                   : <button key="send" type="submit" disabled={locked || !text.trim()}>{t("nc.revise")}</button>}

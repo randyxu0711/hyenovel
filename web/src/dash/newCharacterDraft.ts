@@ -51,7 +51,8 @@ export function drop(): void {
 
 export const running = (): Job | null => job;
 
-export const aborted = (e: unknown) => e instanceof DashError && e.code === "aborted";
+export const aborted = (e: unknown) =>
+  (e instanceof DashError && e.code === "aborted") || (e instanceof DOMException && e.name === "AbortError");
 
 export function start(kind: Job["kind"], index: number | null, work: (signal: AbortSignal) => Promise<(d: Draft) => Draft>, text?: string): Job {
   const ctl = new AbortController();

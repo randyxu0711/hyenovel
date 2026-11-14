@@ -468,6 +468,22 @@ describe("改候選與存卡", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(button("換一批").disabled).toBe(false);
   });
+  it("連點改這張,第二下落在停下鍵上不會停掉", async () => {
+    let release = (_: Response) => {};
+    await toResults();
+    replies = [new Promise<Response>(r => { release = r; }) as unknown as Response];
+    const p = revise(1);
+    fireEvent.click(p.getByRole("button", { name: "停下" }), { detail: 2 });
+    release(json(candidate(9)));
+    await screen.findByRole("tab", { name: /^門縫9/ });
+  });
+  it("讀回應途中停下(AbortError 不是 DashError)也不報錯", async () => {
+    await toResults();
+    replies = [{ ok: true, status: 200, json: () => Promise.reject(new DOMException("aborted", "AbortError")) } as unknown as Response];
+    revise(1);
+    await waitFor(() => expect(panel().getByRole("button", { name: "改這張" })).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
   it("失敗時原內容和回饋都留著,原因顯示在那張的面板", async () => {
     await toResults();
     replies = [json({ code: "candidates-failed", params: { reason: "usage-limit" } }, 502)];

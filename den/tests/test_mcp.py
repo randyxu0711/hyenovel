@@ -18,7 +18,8 @@ import pytest
 from mcp import Client
 from mcp_types import Implementation
 
-from den import candidates, characters
+from den import candidates, characters, pipeline
+from den import config as den_config
 from den import mcp as den_mcp
 from den.config import MAX_SOURCE_BYTES
 from den.tests.test_app import Run
@@ -991,7 +992,9 @@ def test_generation_uses_the_long_timeout(char_den, monkeypatch):
     d = char_den(_batch())
     _call(d.client(), "create_character", {})
     assert seen and seen[0].read == den_mcp._GENERATE_TIMEOUT
-    assert den_mcp._GENERATE_TIMEOUT > 2 * candidates.TIMEOUT
+    retries = den_config.TRANSIENT_MAX_RETRIES
+    worst = (2 + retries) * candidates.TIMEOUT + sum(pipeline.backoff(n) for n in range(1, retries + 1))
+    assert den_mcp._GENERATE_TIMEOUT > worst
 
 
 def test_normal_calls_keep_the_short_timeout(den, monkeypatch):
