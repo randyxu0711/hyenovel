@@ -113,11 +113,10 @@ def _inside(point, box) -> bool:
 
 
 def _shape_error(fig: dict) -> list[str]:
-    body = [p["d"] for p in fig["parts"] if p["group"] == "body"]
-    if not body:
+    if not any(p["group"] == "body" for p in fig["parts"]):
         return ["figure 要有 group 是 body 的部件"]
-    boxes = [figure.bbox(d) for d in body]
-    bad = [f"figure 的 {key} 要落在 body 裡" for key in ("eyes", "mouth")
+    boxes = [figure.bbox(p["d"]) for p in fig["parts"] if p["group"] in ("body", "face")]
+    bad = [f"figure 的 {key} 要落在 body 或 face 裡" for key in ("eyes", "mouth")
            if not all(any(_inside(p, b) for b in boxes) for p in fig[key])]
     if sum(figure.command_count(p["d"]) for p in fig["parts"]) > MAX_COMMANDS:
         bad.append(f"figure 全部部件加起來最多 {MAX_COMMANDS} 個指令")
