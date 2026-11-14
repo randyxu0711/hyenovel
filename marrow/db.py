@@ -47,6 +47,14 @@ def connect(url: str) -> sqlite3.Connection:
     return conn
 
 
+def connect_readonly(url: str) -> sqlite3.Connection:
+    path = sqlite_path(url)
+    conn = (sqlite3.connect(":memory:") if path is None
+            else sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 

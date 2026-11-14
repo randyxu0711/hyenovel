@@ -305,7 +305,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                           "code": "usage-limit" if result.outcome == "usage-limit" else "chat-failed"}}
         return
     end = now()
-    usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
+    usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model,
+             "first_delta_ms": result.first_delta_ms}
     fp = turn["analysis_fp"]
     recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
               "retrieved": [n["id"] for n in picked]}
@@ -316,7 +317,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
             if redo is not None:
                 seq = redo
                 variant = repo.replace_reply(conn, d, seq, text=result.text, ts=end, usage=usage,
-                                             recipe=recipe, analysis_fp=fp)
+                                             recipe=recipe, analysis_fp=fp, thinking=result.thinking)
             else:
                 if d is None:
                     d = repo.ensure_discussion(conn, turn["story_id"], sid, home,
@@ -327,7 +328,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                     repo.add_utterance(conn, d, seq, "user", message, user_ts, "den", anchors, fp, quotes=quotes)
                     seq += 1
                 repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
-                                   usage=usage, character=character["id"], recipe=recipe)
+                                   usage=usage, character=character["id"], recipe=recipe,
+                                   thinking=result.thinking)
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = (repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
                  if turn["story_id"] is not None else None)

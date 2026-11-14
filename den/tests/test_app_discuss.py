@@ -25,6 +25,9 @@ _MESSAGES = {"ok": None, "usage-limit": "用量已達上限", "crash": "工人�
              "transient": "暫時性錯誤", "timeout": "逾時", "auth": "沒登入"}
 
 
+THINKING = "內心盤算蘿蔔乾"
+
+
 class FakeChat:
     """chat_factory:記下每次 (system, user);可設 deltas / outcome / 卡住(只卡下一次呼叫)。"""
 
@@ -60,7 +63,8 @@ class FakeChat:
             text = "".join(self.deltas) if self.outcome == "ok" else None
             yield ("result", RunResult(self.outcome, None, "", "claude-x",
                                        {"output": 7, "cost_usd": 0.01}, 42,
-                                       _MESSAGES[self.outcome], 1, text))
+                                       _MESSAGES[self.outcome], 1, text,
+                                       THINKING if text else None, 3 if text else None))
         finally:
             if hang:
                 self.closed.set()
@@ -168,7 +172,19 @@ def test_assistant_utterance_records_usage(c):
     sid = first_turn(c)
     user, asst = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert user["usage"] is None
-    assert asst["usage"] == {"output": 7, "cost_usd": 0.01, "duration_ms": 42, "model": "claude-x"}
+    assert asst["usage"] == {"output": 7, "cost_usd": 0.01, "duration_ms": 42, "model": "claude-x",
+                             "first_delta_ms": 3}
+    assert asst["thinking"] == THINKING and user["thinking"] is None
+
+
+def test_thinking_stays_out_of_history_and_api(c, fake_chat):
+    sid = first_turn(c)
+    post_discuss(c, "mini", sid, "再一輪")
+    assert THINKING not in fake_chat.calls[-1][1]
+    assert THINKING not in c.get(f"/api/sessions/{sid}").text
+    assert THINKING not in c.get("/api/stories/mini/transcript").text
+    assert c.post(f"/api/sessions/{sid}/compact").status_code == 201
+    assert THINKING not in fake_chat.calls[-1][1]
 
 
 def test_turn_logged_without_text(c, caplog):

@@ -183,14 +183,15 @@ def add_utterance(conn, discussion_id: int, seq: int, role: str, text: str, ts: 
                   origin: str, anchors: list[str], analysis_fp: str | None,
                   *, usage: dict | None = None,
                   character: str | None = None, quotes: list[str] | None = None,
-                  recipe: dict | None = None) -> bool:
+                  recipe: dict | None = None, thinking: str | None = None) -> bool:
     cur = conn.execute(
         "INSERT INTO utterance (discussion_id, seq, role, text, ts, origin, anchors, analysis_fp, "
-        "usage, character, quotes, recipe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (discussion_id, seq) DO NOTHING",
+        "usage, character, quotes, recipe, thinking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT (discussion_id, seq) DO NOTHING",
         (discussion_id, seq, role, text, ts, origin, canonical_json(anchors), analysis_fp,
          None if usage is None else canonical_json(usage), character,
          canonical_json(quotes) if quotes else None,
-         None if recipe is None else canonical_json(recipe)))
+         None if recipe is None else canonical_json(recipe), thinking))
     return cur.rowcount == 1
 
 
@@ -207,7 +208,7 @@ def utterance(conn, discussion_id: int, seq: int) -> dict | None:
 
 
 _CUR = "(SELECT variant FROM utterance WHERE discussion_id = ? AND seq = ?)"
-_VERSION_COLS = ("text", "ts", "usage", "recipe", "analysis_fp", "edited_at")
+_VERSION_COLS = ("text", "ts", "usage", "recipe", "analysis_fp", "edited_at", "thinking")
 
 
 def set_reaction(conn, discussion_id: int, seq: int, mark: str, comment: str | None, now: float) -> None:
@@ -259,7 +260,7 @@ def _encoded(version: dict) -> tuple:
 
 def _shelve(conn, discussion_id: int, seq: int, current: dict) -> None:
     conn.execute(f"INSERT INTO utterance_variant (discussion_id, seq, n, {', '.join(_VERSION_COLS)}) "
-                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 f"VALUES (?, ?, ?, {', '.join('?' * len(_VERSION_COLS))})",
                  (discussion_id, seq, current["variant"], *_encoded(current)))
 
 
@@ -269,14 +270,14 @@ def _install(conn, discussion_id: int, seq: int, n: int, version: dict) -> None:
 
 
 def replace_reply(conn, discussion_id: int, seq: int, *, text: str, ts: float, usage: dict | None,
-                  recipe: dict | None, analysis_fp: str | None) -> int:
+                  recipe: dict | None, analysis_fp: str | None, thinking: str | None = None) -> int:
     current = utterance(conn, discussion_id, seq)
     shelved = conn.execute("SELECT MAX(n) FROM utterance_variant WHERE discussion_id = ? AND seq = ?",
                            (discussion_id, seq)).fetchone()[0]
     n = 1 + max(current["variant"], shelved or 0)
     _shelve(conn, discussion_id, seq, current)
     _install(conn, discussion_id, seq, n, {"text": text, "ts": ts, "usage": usage, "recipe": recipe,
-                                           "analysis_fp": analysis_fp, "edited_at": None})
+                                           "analysis_fp": analysis_fp, "edited_at": None, "thinking": thinking})
     return n
 
 
