@@ -231,6 +231,7 @@ def test_schema_enums_follow_the_grammar():
     (_fig(1, parts=[BODY, {**TRAIT, "d": "M10 10 l5 5"}]), "figure parts/1: bad-path"),
     (_fig(1, parts=[TRAIT]), "figure 要有 group 是 body 的部件"),
     (_fig(1, eyes=[[50, 58], [115, 10]]), "figure 的 eyes 要落在 body 裡"),
+    (_fig(1, mouth=[[40, 120], [45, 122], [50, 120]]), "figure 的 mouth 要落在 body 裡"),
     (_fig(1, parts=[BODY] + [{**TRAIT, "d": "M10 10" + " L20 20" * 23}] * 4), "figure 全部部件加起來最多 80 個指令"),
 ])
 def test_undrawable_figure_goes_to_repair_with_the_reason(bad_fig, error):
