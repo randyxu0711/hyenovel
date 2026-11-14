@@ -2,14 +2,16 @@
 import argparse
 import json
 import re
+import sqlite3
 import statistics
 import sys
 from collections import Counter
 
-from marrow import db
+from marrow import db, repo
 
 _END = r"[。！？!?…\n]"
-_SENT = re.compile(rf"[^。！？!?…\n]+{_END}*")
+_CLOSE = "」』）)\"'”’"
+_SENT = re.compile(rf"[^。！？!?…\n]+{_END}*[{_CLOSE}]*")
 _SPACE = re.compile(r"\s+")
 
 RULES = {
@@ -29,6 +31,10 @@ _BUT = re.compile(r"但|可是|不過|只是")
 _JUDGE = re.compile(r"多餘|太|不夠|拿掉|應該|可惜|我覺得|好像")
 
 
+def _asks(sentence):
+    return sentence.endswith(("?", "？"))
+
+
 def sentences(text):
     return [s.strip() for s in _SENT.findall(text) if s.strip()]
 
@@ -40,9 +46,9 @@ def scan(text):
         if n:
             hits[name] += n
     ss = sentences(text)
-    if ss and ss[-1].endswith(("?", "？")) and any(_JUDGE.search(s) for s in ss[:-1]):
+    if ss and _asks(ss[-1]) and any(_JUDGE.search(s) for s in ss[:-1]):
         hits["判斷後補問"] += 1
-    if len(ss) >= 2 and _PRAISE.search(ss[0]) and any(_BUT.match(s) or _BUT.search(s[:4]) for s in ss[1:]):
+    if len(ss) >= 2 and _PRAISE.search(ss[0]) and any(_BUT.search(s[:4]) for s in ss[1:]):
         hits["先褒後貶"] += 1
     return hits
 
@@ -68,7 +74,7 @@ def metrics(text, examples, usage, thinking):
     out, think = usage.get("output"), usage.get("thinking")
     ss = sentences(text)
     hits = scan(text)
-    return {"len": len(text), "question_end": bool(ss) and ss[-1].endswith(("?", "？")),
+    return {"len": len(text), "question_end": bool(ss) and _asks(ss[-1]),
             "slop": dict(hits), "slop_n": sum(hits.values()), "copy": copy_ratio(text, examples),
             "opening": opening(text), "thinking_tokens": think,
             "thinking_share": round(think / out, 2) if think is not None and out else None,
@@ -76,47 +82,47 @@ def metrics(text, examples, usage, thinking):
             "duration_ms": usage.get("duration_ms"), "first_delta_ms": usage.get("first_delta_ms")}
 
 
+_COLS = ("{t}.discussion_id AS discussion_id, {t}.seq AS seq, {t}.text AS text, {t}.usage AS usage, "
+         "{t}.recipe AS recipe, {t}.thinking AS thinking, {t}.analysis_fp AS analysis_fp, "
+         "{t}.edited_at AS edited_at, u.character AS character, d.story_id AS story_id, ")
 _ROWS = (
-    "SELECT u.discussion_id AS discussion_id, u.seq AS seq, u.text AS text, u.usage AS usage, "
-    "u.recipe AS recipe, u.thinking AS thinking, u.character AS character, u.analysis_fp AS analysis_fp, "
-    "u.variant AS variant, u.edited_at AS edited_at, d.story_id AS story_id "
-    "FROM utterance u JOIN discussion d ON d.id = u.discussion_id "
-    "WHERE u.role = 'assistant' ORDER BY u.discussion_id, u.seq")
-
-
-def _examples(card_text):
-    return (json.loads(card_text).get("data") or {}).get("mes_example") or ""
+    "SELECT " + _COLS.format(t="u") + "u.variant AS variant, 1 AS kept "
+    "FROM utterance u JOIN discussion d ON d.id = u.discussion_id WHERE u.role = 'assistant' "
+    "UNION ALL SELECT " + _COLS.format(t="v") + "v.n AS variant, 0 AS kept "
+    "FROM utterance_variant v JOIN utterance u ON u.discussion_id = v.discussion_id AND u.seq = v.seq "
+    "JOIN discussion d ON d.id = v.discussion_id "
+    "ORDER BY discussion_id, seq, kept DESC, variant")
 
 
 def load(conn):
-    cards = {(r["character_id"], r["n"]): r["card"]
-             for r in conn.execute("SELECT character_id, n, card FROM character_version")}
+    examples = {(r["character_id"], r["n"]): (r["card"].get("data") or {}).get("mes_example") or ""
+                for r in map(repo._row, conn.execute("SELECT character_id, n, card FROM character_version"))}
     rows = []
-    for r in conn.execute(_ROWS):
-        recipe = json.loads(r["recipe"]) if r["recipe"] else {}
-        card = cards.get((r["character"], recipe.get("character_v")))
-        rows.append({"discussion": r["discussion_id"], "seq": r["seq"], "text": r["text"],
-                     "usage": json.loads(r["usage"]) if r["usage"] else None, "thinking": r["thinking"],
+    for r in map(repo._row, conn.execute(_ROWS)):
+        recipe = r["recipe"] or {}
+        rows.append({"discussion": r["discussion_id"], "seq": r["seq"], "variant": r["variant"],
+                     "kept": bool(r["kept"]), "text": r["text"], "usage": r["usage"], "thinking": r["thinking"],
                      "character": r["character"], "card_v": recipe.get("character_v"),
                      "story": r["story_id"] is not None, "analysis": r["analysis_fp"] is not None,
-                     "retrieved": len(recipe.get("retrieved", ())), "variant": r["variant"],
-                     "edited": r["edited_at"] is not None,
-                     "examples": _examples(card) if card else ""})
+                     "retrieved": len(recipe.get("retrieved", ())), "edited": r["edited_at"] is not None,
+                     "examples": examples.get((r["character"], recipe.get("character_v")), "")})
     return rows
 
 
 def measure(rows, character=None, since_version=None):
     out, seen = [], {}
     for r in rows:
-        m = metrics(r["text"], r["examples"], r["usage"], r["thinking"])
-        openings = seen.setdefault(r["discussion"], set())
-        m["repeat_opening"] = m["opening"] in openings
-        openings.add(m["opening"])
+        repeat = None
+        if r["kept"]:
+            openings = seen.setdefault(r["discussion"], set())
+            repeat = opening(r["text"]) in openings
+            openings.add(opening(r["text"]))
         if character is not None and r["character"] != character:
             continue
         if since_version is not None and (r["card_v"] is None or r["card_v"] < since_version):
             continue
-        out.append({**{k: v for k, v in r.items() if k not in ("examples", "usage")}, **m})
+        m = metrics(r["text"], r["examples"], r["usage"], r["thinking"])
+        out.append({**{k: v for k, v in r.items() if k not in ("examples", "usage")}, **m, "repeat_opening": repeat})
     return out
 
 
@@ -126,14 +132,16 @@ def _median(xs):
 
 
 def _rate(xs):
-    return round(sum(xs) / len(xs), 2)
+    xs = [x for x in xs if x is not None]
+    return round(sum(xs) / len(xs), 2) if xs else None
 
 
 def summarize(measured):
     groups = {}
     for m in measured:
-        groups.setdefault((m["character"], m["card_v"], m["story"]), []).append(m)
-    return [{"character": c, "card_v": v, "story": s, "n": len(g),
+        if not m["edited"]:
+            groups.setdefault((m["character"], m["card_v"], m["story"]), []).append(m)
+    return [{"character": c, "card_v": v, "story": s, "n": len(g), "shelved": sum(not m["kept"] for m in g),
              "len": _median(m["len"] for m in g), "slop_n": _median(m["slop_n"] for m in g),
              "question_end": _rate([m["question_end"] for m in g]),
              "repeat_opening": _rate([m["repeat_opening"] for m in g]),
@@ -149,20 +157,20 @@ def _cell(v):
 
 
 def render(measured, groups, thinking=False):
-    cols = ("discussion", "seq", "character", "card_v", "story", "len", "question_end", "slop_n",
-            "copy", "repeat_opening", "thinking_tokens", "duration_ms", "first_delta_ms")
+    cols = ("discussion", "seq", "variant", "kept", "edited", "character", "card_v", "story", "len",
+            "question_end", "slop_n", "copy", "repeat_opening", "thinking_tokens", "duration_ms", "first_delta_ms")
     lines = ["\t".join(cols)]
     for m in measured:
         lines.append("\t".join(_cell(m[c]) for c in cols))
         if thinking and m["thinking"]:
             lines.append("  thinking: " + m["thinking"].strip().replace("\n", "\n  "))
-    gcols = ("character", "card_v", "story", "n", "len", "question_end", "slop_n", "copy",
+    gcols = ("character", "card_v", "story", "n", "shelved", "len", "question_end", "slop_n", "copy",
              "repeat_opening", "thinking_tokens", "duration_ms", "first_delta_ms")
     lines += ["", "\t".join(gcols)] + ["\t".join(_cell(g[c]) for c in gcols) for g in groups]
     return "\n".join(lines) + "\n"
 
 
-def main(argv=None, out=sys.stdout):
+def main(argv=None, out=sys.stdout, err=sys.stderr):
     ap = argparse.ArgumentParser(prog="python -m marrow.voice")
     ap.add_argument("--db", default=None)
     ap.add_argument("--character")
@@ -170,11 +178,17 @@ def main(argv=None, out=sys.stdout):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--thinking", action="store_true")
     args = ap.parse_args(argv)
-    conn = db.connect_readonly(args.db or db.database_url())
+    if args.since_version is not None and args.character is None:
+        ap.error("--since-version 要配 --character(卡版是各角色自己編號)")
     try:
-        measured = measure(load(conn), args.character, args.since_version)
-    finally:
-        conn.close()
+        conn = db.connect_readonly(args.db or db.database_url())
+        try:
+            measured = measure(load(conn), args.character, args.since_version)
+        finally:
+            conn.close()
+    except sqlite3.OperationalError as e:
+        err.write(f"讀不到報表要的資料({e})。DB 不存在,或還沒升到含 thinking 的版本:重啟 den 會自動升級。\n")
+        return 1
     groups = summarize(measured)
     if args.json:
         if not args.thinking:

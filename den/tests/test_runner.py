@@ -224,6 +224,12 @@ def test_stream_chat_keeps_thinking_out_of_deltas(fake):
     assert 0 <= res.first_delta_ms <= res.duration_ms
 
 
+def test_stream_chat_separates_thinking_blocks(fake):
+    *_, (_, res) = _chat(fake("stream-thinking-twice"))
+    assert res.thinking.startswith("I'm thinking") and res.thinking.endswith("back.\n\nSecond block.")
+    assert res.thinking.count("Second block.") == 1
+
+
 def test_stream_chat_without_thinking_records_none(fake):
     *_, (_, res) = _chat(fake("stream"))
     assert res.thinking is None and res.first_delta_ms is not None

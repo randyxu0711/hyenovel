@@ -242,10 +242,13 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
                 elif ev.get("type") == "stream_event":
                     inner = ev.get("event") or {}
                     delta = inner.get("delta") or {}
+                    if (inner.get("type") == "content_block_start"
+                            and (inner.get("content_block") or {}).get("type") == "thinking"):
+                        thinking.append("")
                     if inner.get("type") != "content_block_delta":
                         continue
                     if delta.get("type") == "thinking_delta" and isinstance(delta.get("thinking"), str):
-                        thinking.append(delta["thinking"])
+                        thinking[-1:] = [(thinking[-1] if thinking else "") + delta["thinking"]]
                     elif delta.get("type") == "text_delta" and isinstance(delta.get("text"), str):
                         if first_delta is None:
                             first_delta = ms()
@@ -267,7 +270,7 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
         log.info("event=chat_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
         res = make_result(outcome, obj, result_line, msg, ms())
         res.parsed = None                            # 聊天輸出是自由文字,不抽 JSON
-        res.thinking = "".join(thinking) or None
+        res.thinking = "\n\n".join(b.strip() for b in thinking if b.strip()) or None
         res.first_delta_ms = first_delta
         yield "result", res
 
