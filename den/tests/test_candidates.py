@@ -234,13 +234,22 @@ def test_schema_enums_follow_the_grammar():
     (_fig(1, parts=[BODY, {**TRAIT, "d": "M10 10 L500 10"}]), "figure parts/1: out-of-bounds"),
     (_fig(1, parts=[BODY, {**TRAIT, "d": "M10 10 l5 5"}]), "figure parts/1: bad-path"),
     (_fig(1, parts=[TRAIT]), "figure 要有 group 是 body 的部件"),
-    (_fig(1, eyes=[[50, 58], [115, 10]]), "figure 的 eyes 要落在 body 裡"),
+    (_fig(1, eyes=[[50, 58], [115, 10]]), "figure 的 eyes 要落在 body 或 face 裡"),
+    (_fig(1, mouth=[[40, 120], [45, 122], [50, 120]]), "figure 的 mouth 要落在 body 或 face 裡"),
     (_fig(1, parts=[BODY] + [{**TRAIT, "d": "M10 10" + " L20 20" * 23}] * 4), "figure 全部部件加起來最多 80 個指令"),
 ])
 def test_undrawable_figure_goes_to_repair_with_the_reason(bad_fig, error):
     script = Script(ok(_body(_one(1, figure=bad_fig), _one(2), _one(3))), ok(_body()))
     _generate(script)
     assert error in script.calls[1][1]
+
+
+def test_eyes_and_mouth_on_a_head_sticking_out_of_the_body_pass():
+    head = {"group": "face", "d": "M100 40 L130 40 L130 70 L100 70 Z", "fill": "main"}
+    fig = _fig(1, parts=[BODY, head], eyes=[[110, 50], [120, 50]], mouth=[[108, 62], [115, 64], [122, 62]])
+    script = Script(ok(_body(_one(1, figure=fig), _one(2), _one(3))))
+    _generate(script)
+    assert len(script.calls) == 1
 
 
 def test_three_candidates_need_three_main_pens():

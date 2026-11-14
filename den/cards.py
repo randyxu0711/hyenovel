@@ -169,9 +169,6 @@ def scan(card) -> dict:
         return {"errors": ["bad-schema"], "warnings": []}
     data = card["data"]
     ext = _ext(data)
-    personality, description = data.get("personality", ""), data.get("description", "")
-    shown = view(card, "", 0)
-    reading, voice, examples = shown["reading"], shown["voice"], shown["examples"]
     errors = []
     if size > MAX_CARD_BYTES:
         errors.append("too-large")
@@ -179,6 +176,11 @@ def scan(card) -> dict:
     ext_names = ext_name.values() if isinstance(ext_name, dict) else ()
     if any(len(x) > MAX_NAME for x in (data["name"], data.get("nickname", ""), *ext_names) if isinstance(x, str)):
         errors.append("name-too-long")
+    if errors:
+        return {"errors": errors, "warnings": []}
+    personality, description = data.get("personality", ""), data.get("description", "")
+    shown = view(card, "", 0)
+    reading, voice, examples = shown["reading"], shown["voice"], shown["examples"]
     if not (personality.strip() or description.strip()):
         errors.append("no-reading")
     if len(reading) + len(voice) > MAX_READING:

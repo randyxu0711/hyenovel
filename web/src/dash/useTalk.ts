@@ -7,10 +7,8 @@ import { marksFrom } from "./Side";
 import { useCharacters } from "./useCharacters";
 import { useSeen } from "./useSeen";
 
-let defaultWho: string | null = null;
 const whoListeners = new Set<(id: string) => void>();
 const announce = (v: string) => {
-  defaultWho = v;
   whoListeners.forEach(fn => fn(v));   // 指令框、設定頁換人:開著的對話立刻跟著換
 };
 
@@ -23,18 +21,10 @@ const writeDraft = (slug: string, text: string) => {
   try { if (text) localStorage.setItem(draftKey(slug), text); else localStorage.removeItem(draftKey(slug)); } catch { /* 存不了就算了 */ }
 };
 
-/** den 給的全域預設陪讀者:載入角色時設一次。 */
-export const initCompanion = (id: string | null) => { defaultWho = id; };
-
 /** 設定頁、指令框換全域預設:den 存好才生效,存不下就把錯誤丟給呼叫者。 */
-export async function setCompanion(id: string): Promise<void> {
-  await api.setDefaultCharacter(id);
+export async function setCompanion(chars: { setDefault: (id: string) => Promise<void> }, id: string): Promise<void> {
+  await chars.setDefault(id);
   announce(id);
-}
-
-/** 全域預設陪讀者(要在清單裡),沒有就用清單的預設。進門畫面與新局用它。 */
-export function companionId(chars: { active: { id: string }[]; defaultId: string }): string {
-  return defaultWho && chars.active.some(c => c.id === defaultWho) ? defaultWho : chars.defaultId;
 }
 
 /** 與 den/config.py 的 MAX_CHAT_CHARS 一致(den/tests/test_app_errors.py 比對)。 */
@@ -115,7 +105,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   // 這局沒換過人時,由最後說話的那位接著陪讀。
   const last = [...turns].reverse().find(t => t.role === "assistant");
   const usable = (id: string | null | undefined) => (id && chars.active.some(c => c.id === id) ? id : null);
-  const whoId = usable(picked) ?? usable(last?.character) ?? companionId(chars);
+  const whoId = usable(picked) ?? usable(last?.character) ?? chars.defaultId;
 
   const setDraft = useCallback((v: string | ((d: string) => string)) => {
     const s = now.current.slug;
