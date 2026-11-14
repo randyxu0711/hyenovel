@@ -139,6 +139,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(url, init);
   } catch {
+    if (init?.signal?.aborted) throw new DashError(0, "aborted");
     throw new DashError(0, "den-down");
   }
   if (!res.ok) await throwDashError(res);
@@ -187,10 +188,10 @@ export const api = {
   importCharacter: (card: unknown, confirm: boolean) =>
     request<{ imported: boolean; warnings: string[]; character?: Character }>("/api/characters/import", post({ card, confirm })),
   characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
-  characterCandidates: (answers: CandidateAnswers, lang: string, again?: CandidateAgain) =>
-    request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", post({ answers, lang, ...again })),
-  reviseCandidate: (candidate: Candidate, feedback: string, lang: string) =>
-    request<Candidate>("/api/characters/candidates/revise", post({ candidate, feedback, lang })),
+  characterCandidates: (answers: CandidateAnswers, lang: string, again?: CandidateAgain, signal?: AbortSignal) =>
+    request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", { ...post({ answers, lang, ...again }), signal }),
+  reviseCandidate: (candidate: Candidate, feedback: string, lang: string, signal?: AbortSignal) =>
+    request<Candidate>("/api/characters/candidates/revise", { ...post({ candidate, feedback, lang }), signal }),
   createCharacter: (candidate: Candidate, confirm: boolean) =>
     request<{ created: boolean; warnings?: string[]; character?: Character }>("/api/characters", post({ candidate, confirm })),
   copyCharacter: (id: string) =>

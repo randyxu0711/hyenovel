@@ -1,5 +1,6 @@
 """角色候選:人格軸抽樣、產出閘門、修補一次、生成端點。"""
 import asyncio
+import json
 from contextlib import contextmanager
 from itertools import combinations
 
@@ -74,7 +75,10 @@ class Script:
     async def __call__(self, system_prompt, user_prompt, schema, *, config, timeout):
         self.calls.append((system_prompt, user_prompt))
         self.timeout = timeout
-        return self.results.pop(0)
+        result = self.results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
 
 
 def _generate(script, seed=7, answers=None, lang="zh-Hant", passage=DRAFT):
@@ -395,6 +399,15 @@ def test_endpoint_passes_answers_and_language_to_the_worker(api):
         _post(c, answers={"form": "退潮", "wish": "慢慢來"}, lang="en")
         user = c.script.calls[0][1]
         assert "形體:退潮" in user and "慢慢來" in user and "\nen\n" in user and DRAFT in user
+
+
+def test_endpoint_reports_a_runner_exception_as_a_coded_failure_and_frees_the_slot(api):
+    with api(OSError("spawn failed"), ok(_body())) as c:
+        r = _post(c)
+        assert r.status_code == 502
+        assert r.json()["code"] == "candidates-failed"
+        assert r.json()["params"] == {"reason": "crash"}
+        assert _post(c).status_code == 200
 
 
 def test_endpoint_reports_failure_with_reason_and_frees_the_slot(api):
@@ -927,3 +940,113 @@ def test_revise_keeps_a_rename_the_author_asked_for():
 
 def test_revise_leaves_a_free_name_alone():
     assert _revise(Script(ok(_one(9))))["name"]["zh-Hant"] == "讀者9"
+
+
+class Sleeps(list):
+    async def __call__(self, seconds):
+        self.append(seconds)
+
+
+def test_transient_backs_off_like_the_pipeline_then_recovers():
+    sleeps = Sleeps()
+    script = Script(_failed("transient"), _failed("transient"), ok(_body()))
+    out = asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
+    assert len(out["candidates"]) == 3
+    assert sleeps == [den_config.BACKOFF_BASE * 2, den_config.BACKOFF_BASE * 4]
+    assert len(script.calls) == 3
+    assert script.calls[2] == script.calls[0]
+
+
+def test_transient_exhausted_is_overload_with_a_bounded_spend():
+    sleeps = Sleeps()
+    script = Script(*[_failed("transient")] * (den_config.TRANSIENT_MAX_RETRIES + 2))
+    with pytest.raises(candidates.Failed) as e:
+        asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
+    assert e.value.reason == "overload"
+    assert len(script.calls) == den_config.TRANSIENT_MAX_RETRIES + 1
+    assert len(sleeps) == den_config.TRANSIENT_MAX_RETRIES
+
+
+def test_transient_does_not_use_up_the_repair_and_shares_one_budget_with_it():
+    sleeps = Sleeps()
+    bad = ok(_body(_one(1), _one(2)))
+    script = Script(_failed("transient"), bad, _failed("transient"), ok(_body()))
+    out = asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
+    assert len(out["candidates"]) == 3 and len(script.calls) == 4
+    assert "<previous_output>" in script.calls[3][1] and script.calls[3] == script.calls[2]
+    assert sleeps == [den_config.BACKOFF_BASE * 2, den_config.BACKOFF_BASE * 4]
+    script = Script(_failed("transient"), bad, _failed("transient"), _failed("transient"), ok(_body()))
+    with pytest.raises(candidates.Failed) as e:
+        asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=Sleeps()))
+    assert e.value.reason == "overload" and len(script.calls) == 4
+
+
+def test_revise_retries_transient_too():
+    sleeps = Sleeps()
+    script = Script(_failed("transient"), ok(_one(9)))
+    out = asyncio.run(candidates.revise(script, _shown(), "名字換一個", DRAFT, "zh-Hant", sleep=sleeps))
+    assert out["name"]["zh-Hant"] == "讀者9" and len(sleeps) == 1
+
+
+class Hang:
+    """第一次呼叫就卡住,直到被取消;記下有沒有被取消。"""
+
+    def __init__(self):
+        self.started = asyncio.Event()
+        self.cancelled = False
+        self.calls = 0
+
+    async def __call__(self, system_prompt, user_prompt, schema, *, config, timeout):
+        self.calls += 1
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+
+
+def _hang_app(data):
+    url, d = data
+    hang = Hang()
+    client = TestClient(den_app.create_app(url, d, run_factory=lambda on_proc: hang), base_url="http://127.0.0.1")
+    return client, hang, d
+
+
+async def _post_then_leave(app, token, path, body, hang):
+    raw = json.dumps(body).encode()
+    sent = []
+    first = True
+
+    async def receive():
+        nonlocal first
+        if first:
+            first = False
+            return {"type": "http.request", "body": raw, "more_body": False}
+        await hang.started.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+             "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"",
+             "root_path": "", "server": ("127.0.0.1", 8788), "client": ("127.0.0.1", 50000),
+             "headers": [(b"host", b"127.0.0.1"), (b"content-type", b"application/json"),
+                         (b"authorization", f"Bearer {token}".encode())]}
+    await asyncio.wait_for(app(scope, receive, send), 5)
+    return sent
+
+
+@pytest.mark.parametrize("path,body", [
+    ("/api/characters/candidates", {"answers": {"form": "貓"}}),
+    ("/api/characters/candidates/revise", {"candidate": _shown(), "feedback": "再冷一點"}),
+])
+def test_author_leaving_stops_the_worker_and_frees_the_slot(data, path, body):
+    client, hang, d = _hang_app(data)
+    with client as c:
+        token = _auth(d)["Authorization"].removeprefix("Bearer ")
+        c.portal.call(_post_then_leave, c.app, token, path, body, hang)
+        assert hang.cancelled and hang.calls == 1
+        assert c.app.state.candidates_busy is False
+        assert c.get("/api/health", headers=_auth(d)).json()["busy"] is False

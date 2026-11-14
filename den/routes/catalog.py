@@ -1,4 +1,5 @@
 """角色與主題清單。"""
+import asyncio
 import logging
 import secrets
 import time
@@ -115,17 +116,35 @@ def _builtin() -> ApiError:
     return ApiError(409, "builtin-character", "內建角色不能封存或編輯")
 
 
-async def _spending(state, work: Callable[[], Awaitable[dict]]) -> dict:
+async def _gone(request: Request) -> None:
+    while (await request.receive())["type"] != "http.disconnect":
+        pass
+
+
+async def _spending(request: Request, work: Callable[[], Awaitable[dict]]) -> dict:
+    state = request.app.state
     if state.candidates_busy:
         log.info("event=reject where=candidates reason=busy")
         raise ApiError(409, "candidates-busy", "上一批候選還在生成")
     state.candidates_busy = True
+    task = asyncio.ensure_future(work())
+    gone = asyncio.ensure_future(_gone(request))
     try:
-        return await work()
+        await asyncio.wait((task, gone), return_when=asyncio.FIRST_COMPLETED)
+        if task.done():
+            return task.result()
     except candidates.Failed as e:
         raise ApiError(502, "candidates-failed", "候選生成失敗", {"reason": e.reason}) from None
+    except Exception:
+        log.exception("event=candidates-failed reason=crash")
+        raise ApiError(502, "candidates-failed", "候選生成失敗", {"reason": "crash"}) from None
     finally:
+        gone.cancel()
+        task.cancel()
+        await asyncio.gather(task, gone, return_exceptions=True)
         state.candidates_busy = False
+    log.info("event=candidates-cancelled")
+    raise ApiError(499, "candidates-cancelled", "候選生成已停下")
 
 
 @router.post("/characters/candidates")
@@ -134,7 +153,7 @@ async def character_candidates(body: CandidatesIn, request: Request):
     seed = secrets.randbelow(2**31) if body.seed is None else body.seed
     passage = candidates.opening(repo.works(state.mgr.conn))
     again = {"reaction": body.reaction, "previous": [p.model_dump() for p in body.previous]}
-    return await _spending(state, lambda: candidates.generate(state.run_once, body.answers.model_dump(), passage,
+    return await _spending(request, lambda: candidates.generate(state.run_once, body.answers.model_dump(), passage,
                                                               body.lang, seed, again))
 
 
@@ -144,7 +163,7 @@ async def revise_candidate(body: ReviseIn, request: Request):
         raise _bad_card("candidate-revise", ["bad-schema"])
     state = request.app.state
     passage = candidates.opening(repo.works(state.mgr.conn))
-    return await _spending(state, lambda: candidates.revise(state.run_once, body.candidate, body.feedback, passage, body.lang))
+    return await _spending(request, lambda: candidates.revise(state.run_once, body.candidate, body.feedback, passage, body.lang))
 
 
 def _name_taken(conn, name: dict) -> bool:

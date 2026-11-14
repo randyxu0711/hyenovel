@@ -55,7 +55,12 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => {
     urls.push(_u);
     bodies.push(JSON.parse(String(init?.body)));
-    return replies.shift() ?? json({ seed: 2, candidates: [candidate(4), candidate(5), candidate(6)] });
+    const reply = replies.shift() ?? json({ seed: 2, candidates: [candidate(4), candidate(5), candidate(6)] });
+    const signal = init?.signal;
+    if (!signal) return reply;
+    return Promise.race([reply, new Promise<Response>((_, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })]);
   }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -366,6 +371,26 @@ describe("答案條", () => {
     fireEvent.click(go());
     await waitFor(() => expect(screen.getByRole("alert").textContent).not.toContain("再試一次"));
   });
+  it("生成中按停下:連線斷掉、回問卷不報錯,答案還在", async () => {
+    replies = [new Promise<Response>(() => {}) as unknown as Response];
+    mount();
+    fireEvent.change(formBox(), { target: { value: "門縫" } });
+    fireEvent.click(go());
+    fireEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "停下" }));
+    await waitFor(() => expect(formBox().value).toBe("門縫"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(go().disabled).toBe(false);
+    fireEvent.click(go());
+    await screen.findByRole("tab", { name: /^門縫4/ });
+  });
+  it("換一批途中按停下,原本那批回來", async () => {
+    await toResults();
+    replies = [new Promise<Response>(() => {}) as unknown as Response];
+    again();
+    fireEvent.click(button("停下"));
+    await screen.findByRole("tab", { name: /^門縫1/ });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
   it("換一批失敗時,原本的候選回來,錯誤在答案條", async () => {
     await toResults();
     replies = [json({ code: "candidates-busy" }, 409)];
@@ -431,6 +456,17 @@ describe("改候選與存卡", () => {
     expect(go().disabled).toBe(true);
     release(json(candidate(9)));
     await waitFor(() => expect(go().disabled).toBe(false));
+  });
+  it("改的時候送出鍵換停下;按了那張回原樣、回饋留著、不報錯", async () => {
+    await toResults();
+    replies = [new Promise<Response>(() => {}) as unknown as Response];
+    const p = revise(1);
+    fireEvent.click(p.getByRole("button", { name: "停下" }));
+    await waitFor(() => expect(panel().getByRole("button", { name: "改這張" })).toBeTruthy());
+    expect(tab(1)).toBeTruthy();
+    expect((panel().getByLabelText("想改哪裡?") as HTMLInputElement).value).toBe("再冷一點");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(button("換一批").disabled).toBe(false);
   });
   it("失敗時原內容和回饋都留著,原因顯示在那張的面板", async () => {
     await toResults();

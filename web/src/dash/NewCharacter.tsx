@@ -7,7 +7,7 @@ import Icon from "./Icon";
 import { errorMessage, localized, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import type { FigureSpec, Pose } from "./figure/poses";
 import { WORDS } from "./questionnaire";
-import { draft, drop, keep, running, start, takeMissed, watch, type Answers, type Job } from "./newCharacterDraft";
+import { aborted, draft, drop, keep, running, start, takeMissed, watch, type Answers, type Job } from "./newCharacterDraft";
 
 const GRAY = { fill: "var(--dash-paper-ink-2)", text: "var(--dash-paper-ink-2)" };
 const character = (seed: string, figure: FigureSpec): Character => ({
@@ -154,7 +154,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     }
     return true;
   }, e => {
-    if (!live.current) return false;
+    if (!live.current || aborted(e)) return false;
     setErr({ key: failure(e), card: j.kind === "revise" ? j.index ?? undefined : undefined });
     return false;
   }).finally(() => {
@@ -213,8 +213,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const generate = (again?: CandidateAgain) => {
     const answers = { form: form.trim(), wish: wish.trim() };
     setErr(null); setUsing(null); setPreview(null); setFold(null); setAnim("fold");
-    const j = start("generate", null, async () => {
-      const out = await api.characterCandidates(answers, lang, again);
+    const j = start("generate", null, async signal => {
+      const out = await api.characterCandidates(answers, lang, again, signal);
       return d => ({ ...d, batch: out.candidates, batchNo: d.batchNo + 1, asked: answers, picked: null, reaction: again ? "" : d.reaction });
     });
     setGenerating(true);
@@ -227,8 +227,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     if (!text || revising !== null || generating || !batch) return;
     setErr(null); setRevising(index); setRevised(null);
     const target = batch[index];
-    void follow(start("revise", index, async () => {
-      const next = await api.reviseCandidate(target, text, lang);
+    void follow(start("revise", index, async signal => {
+      const next = await api.reviseCandidate(target, text, lang, signal);
       return d => ({ ...d, batch: d.batch && d.batch.map((c, i) => (i === index ? next : c)) });
     }, text), lookKey(target)).then(ok => { if (ok && live.current) setFeedback(f => ({ ...f, [index]: "" })); });
   };
@@ -267,6 +267,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     setPicked(null);
     tabs.current[at]?.focus();
   };
+  const stop = () => running()?.stop();
   const openAnswers = () => { setErr(null); setAnim("unfold"); setFold("answers"); };
   const closeFold = () => { setAnim("fold"); setFold(null); };
 
@@ -322,6 +323,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
         {generating ? (
           <p className="nc-state" role="status">
             {t("nc.generating")} <span className="dash-dm">{clock(elapsed)}</span>
+            <button type="button" className="ib" aria-label={t("run.stop")} title={t("run.stop")} onClick={stop}><Icon name="stop" /></button>
             <span className="nc-note">{t("nc.leaveOk")}</span>
           </p>
         ) : fold === "again" ? (
@@ -400,9 +402,11 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
               <form className="nc-revise" onSubmit={e => revise(i, e)}>
                 <input aria-label={t("nc.feedback")} placeholder={t("nc.feedback")} maxLength={300} autoComplete="off" value={text}
                   readOnly={busy} onChange={e => setFeedback(f => ({ ...f, [i]: e.target.value }))} />
-                <button type="submit" disabled={locked || !text.trim()}>
-                  {busy ? <span className="dash-dm">{clock(elapsed)}</span> : t("nc.revise")}
-                </button>
+                {busy
+                  ? <button key="stop" type="button" aria-label={t("run.stop")} title={t("run.stop")} onClick={stop}>
+                    <Icon name="stop" /><span className="dash-dm">{clock(elapsed)}</span>
+                  </button>
+                  : <button key="send" type="submit" disabled={locked || !text.trim()}>{t("nc.revise")}</button>}
               </form>
               {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
               <div className="nc-acts-row">

@@ -1,4 +1,5 @@
 """角色候選:在人格軸上抽 3 個夠不同的位置,請工人各寫一張卡和一句試讀。不寫 DB。"""
+import asyncio
 import itertools
 import json
 import logging
@@ -8,7 +9,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from den import cards, figure, pipeline
+from den import cards, config, figure, pipeline
 from marrow.repo import canonical_json
 from marrow.workpacks import MAX_PREVIOUS_CHARS, RunConfig, assemble
 
@@ -49,7 +50,7 @@ _SPEAKER = {"author": "{{user}}", "char": "{{char}}"}
 
 
 class Failed(Exception):
-    """reason = runner 的 outcome,或 gate(修補一次後仍不合格)。"""
+    """reason = runner 的 outcome(transient 重試耗盡記 overload),或 gate(修補一次後仍不合格)。"""
 
     def __init__(self, reason: str):
         super().__init__(reason)
@@ -247,9 +248,10 @@ def _repair(first: str, previous: str, errors: list[str], parsed: bool) -> str:
     return f"{first}\n<previous_output>\n{previous}\n</previous_output>\n{ask}\n{listed}"
 
 
-async def _attempt(run, system: str, schema: dict, check, prompt: str):
-    r = await run(system, prompt, schema, config=RUN, timeout=TIMEOUT)
-    pipeline.check_anomaly(None, "candidates", r)
+def _judge(r, check):
+    if r.outcome == "transient":
+        log.info("event=candidates-failed reason=overload")
+        raise Failed("overload")
     if r.outcome != "ok":
         log.info("event=candidates-failed reason=%s", r.outcome)
         raise Failed(r.outcome)
@@ -258,11 +260,24 @@ async def _attempt(run, system: str, schema: dict, check, prompt: str):
     return r.parsed, canonical_json(r.parsed), check(r.parsed)
 
 
-async def _gated(run, system: str, schema: dict, check, first: str) -> dict:
-    body, previous, errors = await _attempt(run, system, schema, check, first)
+async def _gated(run, system: str, schema: dict, check, first: str, sleep) -> dict:
+    retries = 0
+
+    async def call(prompt: str):
+        nonlocal retries
+        while True:
+            r = await run(system, prompt, schema, config=RUN, timeout=TIMEOUT)
+            pipeline.check_anomaly(None, "candidates", r)
+            if r.outcome != "transient" or retries >= config.TRANSIENT_MAX_RETRIES:
+                return r
+            retries += 1
+            log.info("event=candidates-retry reason=transient n=%d", retries)
+            await sleep(pipeline.backoff(retries))
+
+    body, previous, errors = _judge(await call(first), check)
     if errors:
         log.info("event=candidates-repair errors=%d", len(errors))
-        body, _, errors = await _attempt(run, system, schema, check, _repair(first, previous, errors, body is not None))
+        body, _, errors = _judge(await call(_repair(first, previous, errors, body is not None)), check)
     if errors:
         log.info("event=candidates-failed reason=gate errors=%d", len(errors))
         raise Failed("gate")
@@ -275,21 +290,22 @@ def _shown(candidate: dict, pos) -> dict:
     return {**candidate, "axes": list(pos), "card": card, "warnings": cards.scan(card)["warnings"]}
 
 
-async def generate(run, answers: dict, passage: str | None, lang: str, seed: int, again: dict | None = None) -> dict:
+async def generate(run, answers: dict, passage: str | None, lang: str, seed: int, again: dict | None = None,
+                   *, sleep=asyncio.sleep) -> dict:
     picked, picked_palettes = positions(seed), palettes(seed)
     named = bool((answers.get("form") or "").strip())
     check = lambda body: _errors(body, passage, picked_palettes, named)
     first = _input(brief_from(answers), picked, picked_palettes, passage, lang, again, named)
-    body = await _gated(run, _prompt().text, SCHEMA, check, first)
+    body = await _gated(run, _prompt().text, SCHEMA, check, first, sleep)
     items = [{**c, "name": dict(c["form"])} if named else c for c in body["candidates"]]
     return {"seed": seed, "candidates": [_shown(c, pos) for c, pos in zip(items, picked, strict=True)]}
 
 
-async def revise(run, candidate: dict, feedback: str, passage: str | None, lang: str) -> dict:
+async def revise(run, candidate: dict, feedback: str, passage: str | None, lang: str, *, sleep=asyncio.sleep) -> dict:
     axes = candidate.get("axes")
     first = _revise_input(core(candidate), feedback, passage, lang)
     check = lambda body: _one_errors(body, passage)
-    body = await _gated(run, _revise_prompt().text, ONE, check, first)
+    body = await _gated(run, _revise_prompt().text, ONE, check, first, sleep)
     if candidate.get("name") == candidate.get("form") and body["name"] == candidate.get("name"):
         body = {**body, "name": dict(body["form"])}
     return _shown(body, axes if isinstance(axes, list) else ())

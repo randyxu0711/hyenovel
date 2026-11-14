@@ -31,6 +31,10 @@ _GATE_MSG = "閘門重試後仍未過"
 _NOT_JSON = "輸出不是單一 JSON 物件（可能被截斷或夾了說明文字）"
 
 
+def backoff(retry: int) -> float:
+    return config.BACKOFF_BASE * 2 ** retry
+
+
 def check_anomaly(jid: int, step: str, r: RunResult) -> None:
     """工人回來就看(不論 outcome):輪數或輸出量超門檻、或逾時 → WARNING。缺欄位當 None、不拋。"""
     turns = r.num_turns
@@ -126,7 +130,7 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
             if r.outcome == "transient" and transient < config.TRANSIENT_MAX_RETRIES:
                 transient += 1                            # 不吃閘門額度、不換 prompt
                 emit(_phase(step, "retry", n, r.message))
-                await sleep(config.BACKOFF_BASE * 2 ** transient)
+                await sleep(backoff(transient))
             elif r.outcome == "transient":                # 重試耗盡:可續,但不是額度問題
                 return stop(StepOutcome("paused", "overload", {"message": _OVERLOAD_MSG}))
             elif r.outcome == "usage-limit":
