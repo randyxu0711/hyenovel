@@ -1,11 +1,11 @@
-import type { Candidate } from "./api";
+import { DashError, type Candidate } from "./api";
 
 export type Answers = { form: string; wish: string };
 export type Draft = {
   form: string; wish: string; batch: Candidate[] | null; batchNo: number; scene: number; reaction: string;
   picked?: number | null; revealed?: number; asked?: Answers;
 };
-export type Job = { kind: "generate" | "revise"; index: number | null; text?: string; started: number; done: Promise<void> };
+export type Job = { kind: "generate" | "revise"; index: number | null; text?: string; started: number; done: Promise<void>; stop: () => void };
 
 export const DRAFT_KEY = "hyenovel.newCharacter.v2";
 const EMPTY: Draft = { form: "", wish: "", batch: null, batchNo: 0, scene: 0, reaction: "" };
@@ -51,10 +51,14 @@ export function drop(): void {
 
 export const running = (): Job | null => job;
 
-export function start(kind: Job["kind"], index: number | null, work: () => Promise<(d: Draft) => Draft>, text?: string): Job {
-  const done = work().then(update => { keep(update(draft() ?? EMPTY)); });
-  const j: Job = { kind, index, text, started: Date.now(), done: done.finally(() => { if (job === j) job = null; }) };
-  j.done.catch(e => { if (watching === 0) missed = e; });
+export const aborted = (e: unknown) =>
+  (e instanceof DashError && e.code === "aborted") || (e instanceof DOMException && e.name === "AbortError");
+
+export function start(kind: Job["kind"], index: number | null, work: (signal: AbortSignal) => Promise<(d: Draft) => Draft>, text?: string): Job {
+  const ctl = new AbortController();
+  const done = work(ctl.signal).then(update => { keep(update(draft() ?? EMPTY)); });
+  const j: Job = { kind, index, text, started: Date.now(), done: done.finally(() => { if (job === j) job = null; }), stop: () => ctl.abort() };
+  j.done.catch(e => { if (watching === 0 && !aborted(e)) missed = e; });
   job = j;
   return j;
 }

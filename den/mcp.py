@@ -88,7 +88,7 @@ _CANDIDATES = 20   # 作品有歧義時最多列幾篇
 _WORK_STATES = {"ready": "分析好了", "running": "分析中", "stale": "改過稿,新版還沒分析", "none": "沒有分析",
                 "notes-running": "分析好了,備課筆記還在跑"}
 _READONLY = ToolAnnotations(readOnlyHint=True)
-_GENERATE_TIMEOUT = 400   # 每次最長 180 秒、含修補兩次
+_GENERATE_TIMEOUT = 760   # 每次最長 180 秒:兩次(含修補)加 transient 重試兩次與退避;shim 斷線 den 會停掉工人
 _CANDIDATE_REASONS = {**_REASONS, "gate": "候選沒通過檢查"}
 _CARD_WARNINGS = {"looks-like-instructions": "有像指令的文字", "newer-spec": "規格版本比較新",
                   "ignored-fields": "有不會採用的欄位", "bad-colors": "顏色看不清楚",

@@ -91,7 +91,7 @@ _TOKEN_MIN = 32         # token_urlsafe(32) 是 43 字;短於此一律視為壞�
 
 # dashboard 前端依 code 對照人話;detail 維持原字串(MCP shim 靠它),code 另附。
 ERROR_CODES: tuple[str, ...] = (
-    "candidates-busy", "candidates-failed",
+    "candidates-busy", "candidates-failed", "candidates-cancelled",
     "bad-slug", "unknown-work", "bad-part", "not-analyzed", "no-notes", "no-feedback",
     "nothing-running", "unknown-session", "busy", "quote-not-in-source", "quote-too-long",
     "empty-story", "story-too-long", "unknown-slug-ref", "file-too-large", "extract-failed",
