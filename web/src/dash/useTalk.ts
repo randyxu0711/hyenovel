@@ -81,6 +81,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const [error, setError] = useState<DashError | null>(null);
   const [draftOf, setDraftOf] = useState<{ slug: string | null; text: string }>(() => ({ slug, text: readDraft(slug) }));
   const draft = draftOf.slug === slug ? draftOf.text : readDraft(slug);
+  const abort = useRef<AbortController | null>(null);
   const epoch = useRef(0);       // 換作品/換局/送出後,舊的回應不准再寫進來
   const touched = useRef(false); // 使用者已經自己選局或送出:不再自動打開最近那局
   const now = useRef({ slug, version, draft, source, turns, wanted, onSession });
@@ -240,9 +241,14 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setError(null); setStreaming(""); setPending(message ? { text: message, quotes } : null);
     let acc = "", got = false, ok = false;
     const live_ = tracker(chars.byId(whoId).id);
-    const fail = (e: DashError) => { if (live()) { setError(e); setDraft(d => d || message); } };
+    const fail = (e: DashError) => {
+      if (!live()) return;
+      if (e.code !== "aborted") setError(e);
+      if (!ok) setDraft(d => d || message);
+    };
+    const ctl = abort.current = new AbortController();
     try {
-      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried })) {
+      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried }, ctl.signal)) {
         if (!live()) return false;
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") {
@@ -292,8 +298,9 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setError(null); setStreaming(""); setRedoing(seq);
     let acc = "", ok = false;
     const live_ = tracker(chars.byId(target.character).id);
+    const ctl = abort.current = new AbortController();
     try {
-      for await (const ev of api.regenerate(session, seq)) {
+      for await (const ev of api.regenerate(session, seq, ctl.signal)) {
         if (!live()) return false;
         if (ev.event === "token") {
           acc += ev.data.text; setStreaming(acc);
@@ -312,7 +319,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
         }
       }
     } catch (e) {
-      if (live()) setError(asError(e));
+      const err = asError(e);
+      if (live() && err.code !== "aborted") setError(err);
     }
     if (live()) {
       setStreaming(null); setRedoing(null);
@@ -321,6 +329,8 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     return ok;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, streaming, legacy, working, chars, draw]);
+
+  const stop = useCallback(() => { abort.current?.abort(); }, []);
 
   /** 純聊天的局丟稿:沒打字就直接送一輪(讀伴先回),打了一半就等下一輪一起送。 */
   const attach = useCallback(async (file: File): Promise<boolean> => {
@@ -384,7 +394,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   }, []);
 
   return {
-    markTurn, markMemories, markVoice, regenerate, redoing, pickVariant, editReply, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
+    markTurn, markMemories, markVoice, regenerate, stop, redoing, pickVariant, editReply, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
     attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, clear, compact, adopt, archive,
   };

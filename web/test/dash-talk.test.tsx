@@ -23,7 +23,7 @@ const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
 type Span = { quote: string; start: number | null; end: number | null };
 const works = [{ slug: "d1", title: "海", version: 1, chars: 4 }];
 let talkBodies: any[];
-let talkReply: () => Response;
+let talkReply: (init?: RequestInit) => Response;
 let sessions: Record<string, object>;
 let rows: object[];
 let text: string;
@@ -45,7 +45,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
     if (p === "/api/works/d1") return json({ slug: "d1", title: "海", version: v ?? Math.max(...versions), versions, text, state: "ready", job_id: null, notes_ready: false });
     if (p === "/api/works/d1/map") return json({ version: v ?? 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
     if (p === "/api/works/d1/sessions") return json({ sessions: rows });
-    if (p.startsWith("/api/discuss/")) { talkBodies.push(JSON.parse(String(init?.body))); return talkReply(); }
+    if (p.startsWith("/api/discuss/")) { talkBodies.push(JSON.parse(String(init?.body))); return talkReply(init); }
     if (p.startsWith("/api/sessions/")) return json(sessions[decodeURIComponent(p.split("/").pop()!)]);
     return json({ sessions: [] });
   });
@@ -72,6 +72,63 @@ beforeEach(() => {
   text = "第一段。"; versions = [1];
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
+
+const hang = (t: string) => (init?: RequestInit) => new Response(new ReadableStream({
+  start(c) {
+    c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ event: "token", data: { text: t } })}\n\n`));
+    init?.signal?.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+  },
+}));
+
+describe("停下", () => {
+  it("串流中送出鍵換成停下;按了那輪不留、字回輸入框、不報錯", async () => {
+    talkReply = hang("說到一半");
+    mount();
+    await findLog();
+    say("海是什麼");
+    expect(await log().findByText("說到一半")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "送出" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "停下" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "送出" })).toBeTruthy());
+    expect(log().queryByText("說到一半")).toBeNull();
+    expect(log().queryByText("海是什麼")).toBeNull();
+    expect((screen.getByLabelText("對話輸入") as HTMLTextAreaElement).value).toBe("海是什麼");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(talkBodies).toHaveLength(1);
+  });
+});
+
+describe("停下的邊界", () => {
+  it("回覆已存下才按停下:那輪留著、字不回輸入框", async () => {
+    talkReply = init => new Response(new ReadableStream({
+      start(c) {
+        const enc = (event: string, data: unknown) => new TextEncoder().encode(`data: ${JSON.stringify({ event, data })}\n\n`);
+        c.enqueue(enc("token", { text: "好" }));
+        c.enqueue(enc("message", { role: "assistant", text: "好", session_id: "s1", character: "hyena", spans: [], seq: 1 }));
+        init?.signal?.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+      },
+    }));
+    mount();
+    await findLog();
+    say("問");
+    await log().findByText("好");
+    fireEvent.click(screen.getByRole("button", { name: "停下" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "送出" })).toBeTruthy());
+    expect(log().getByText("好")).toBeTruthy();
+    expect((screen.getByLabelText("對話輸入") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("雙擊送出的第二下不會停掉剛送的那輪", async () => {
+    talkReply = hang("說到一半");
+    mount();
+    await findLog();
+    say("海是什麼");
+    await log().findByText("說到一半");
+    fireEvent.click(screen.getByRole("button", { name: "停下" }), { detail: 2 });
+    expect(screen.getByRole("button", { name: "停下" })).toBeTruthy();
+    expect(log().getByText("說到一半")).toBeTruthy();
+  });
+});
 
 describe("選人", () => {
   it("對話裡換人只影響這一局:不動全域預設,重開回到預設", async () => {

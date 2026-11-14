@@ -155,6 +155,7 @@ async function* stream(url: string, init?: RequestInit): AsyncGenerator<SSEEvent
   try {
     yield* sseFetch(url, init, throwDashError);
   } catch (e) {
+    if (init?.signal?.aborted) throw new DashError(0, "aborted");
     if (e instanceof DashError) throw e;
     if (e instanceof TypeError) throw new DashError(0, "den-down");
     throw new DashError(0, "unknown");
@@ -221,7 +222,8 @@ export const api = {
     }),
   clearReaction: (session: string, seq: number) =>
     request<void>(reactionUrl(session, seq), { method: "DELETE" }),
-  regenerate: (session: string, seq: number) => stream(turnUrl(session, seq, "regenerate"), { method: "POST" }),
+  regenerate: (session: string, seq: number, signal?: AbortSignal) =>
+    stream(turnUrl(session, seq, "regenerate"), { method: "POST", signal }),
   pickVariant: (session: string, seq: number, n: number) =>
     request<{ variant: number; variants: number }>(turnUrl(session, seq, "variant"), { ...post({ n }), method: "PUT" }),
   editReply: (session: string, seq: number, text: string) =>
@@ -242,9 +244,12 @@ export const api = {
   archiveMemory: (id: number) => request<void>(`/api/memory/${id}/archive`, { method: "POST" }),
   revertMemory: (id: number) => request<Memory>(`/api/memory/${id}/revert`, { method: "POST" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回);slug 為 null = 不帶作品的局。 */
-  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn }) =>
-    stream(slug === null ? "/api/discuss" : `/api/discuss/${encodeURIComponent(slug)}`, post({
-      session_id: body.session, message: body.message, character: body.character, quotes: body.quotes,
-      ...(body.attach ? { attach: body.attach } : {}),
-    })),
+  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn },
+    signal?: AbortSignal) =>
+    stream(slug === null ? "/api/discuss" : `/api/discuss/${encodeURIComponent(slug)}`, {
+      ...post({
+        session_id: body.session, message: body.message, character: body.character, quotes: body.quotes,
+        ...(body.attach ? { attach: body.attach } : {}),
+      }), signal,
+    }),
 };
