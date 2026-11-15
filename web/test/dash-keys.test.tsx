@@ -54,7 +54,8 @@ describe("鍵盤", () => {
     expect(document.activeElement).toBe(input);
     fireEvent.change(input, { target: { value: "潮" } });
     const opts = within(dlg).getAllByRole("option");
-    expect(opts.map(o => o.textContent)).toEqual(["作品:潮汐"]);
+    expect(opts.map(o => o.textContent)).toEqual(["潮汐"]);
+    expect(opts.map(o => o.getAttribute("aria-label"))).toEqual(["作品:潮汐"]);
     expect(input.getAttribute("aria-activedescendant")).toBe(opts[0].id);
     fireEvent.keyDown(input, { key: "Enter" });
     expect(where()).toBe("/w/d2");

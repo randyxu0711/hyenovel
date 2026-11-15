@@ -44,7 +44,7 @@ function applySpots(color: string | undefined): void {
   }
   let url = "";
   try { url = paintSpots(color); } catch { /* 沒 canvas 就沒斑點 */ }
-  if (url) root.style.setProperty("--dash-spots", `url(${url})`);
+  if (url) root.style.setProperty("--dash-spots", url);
   else root.style.removeProperty("--dash-spots");
 }
 

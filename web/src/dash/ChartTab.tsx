@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Span, WorkMap } from "./api";
+import type { WorkMap } from "./api";
 import { errorMessage, useLang, useT } from "./i18n";
 import { useLinks } from "./links";
 import type { Mark } from "./Paper";
@@ -7,8 +7,15 @@ import type { Mark } from "./Paper";
 type Beat = WorkMap["beats"][number];
 
 const DOTS = 10;
-const inside = (s: Span | null, at: number | null): boolean =>
-  !!s && s.start !== null && s.end !== null && at !== null && s.start <= at && at < s.end;
+const beatAt = (beats: Beat[], at: number | null): number => {
+  let best = -1;
+  if (at === null) return best;
+  beats.forEach((b, i) => {
+    const s = b.span?.start ?? null;
+    if (s !== null && s <= at && (best < 0 || s >= beats[best].span!.start!)) best = i;
+  });
+  return best;
+};
 
 /** 結構圖分頁:張力曲線 + 意象出現在哪幾段。 */
 export default function ChartTab({ map, marks, error = null, ob = null, onOb }: {
@@ -39,7 +46,7 @@ export default function ChartTab({ map, marks, error = null, ob = null, onOb }: 
       {map.motifs.length > 0 && <p className="side-kind">{t("chart.motifs")}</p>}
       {map.motifs.map(mo => {
         const at = [...new Set(mo.spans.flatMap(s => {
-          const i = map.beats.findIndex(b => inside(b.span, s.start));
+          const i = beatAt(map.beats, s.start);
           return i < 0 ? [] : [i + 1];
         }))].sort((x, y) => x - y);
         return (
@@ -75,7 +82,7 @@ export function Curve({ beats, marks }: { beats: Beat[]; marks: Mark[] }) {
       </svg>
       {beats.map((b, i) => {
         const span = b.span;
-        const m = [...marks].reverse().find(x => inside(span, x.start));
+        const m = [...marks].reverse().find(x => beatAt(beats, x.start) === i);
         return (
           <button key={b.id} type="button" className={i === peak ? "dash-mcol is-peak" : "dash-mcol"}
             disabled={!span || span.start === null} title={b.label}

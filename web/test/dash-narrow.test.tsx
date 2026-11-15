@@ -60,6 +60,32 @@ describe("窄螢幕單窗格", () => {
     fireEvent.click(within(nav).getByRole("button", { name: "讀伴" }));
     expect(within(region).getByRole("heading", { level: 1, name: "讀伴" })).toBeTruthy();
   });
+  it("進門:頂列有書架鍵,開成抽屜列出作品;點作品 → 抽屜收起、到那篇", async () => {
+    narrow(true); mount("/");
+    const dash = () => document.querySelector(".dash") as HTMLElement;
+    const key = await screen.findByRole("button", { name: "展開書架" });
+    expect(dash().dataset.drawer).toBeUndefined();
+    fireEvent.click(key);
+    expect(dash().dataset.drawer).toBe("true");
+    const shelf = screen.getByRole("navigation", { name: "作品" });
+    fireEvent.click(await within(shelf).findByText("海"));
+    await screen.findByText("海水很藍");
+    expect(dash().dataset.drawer).toBeUndefined();
+  });
+  it("抽屜:Esc 或點外面收起;指令鍵是圖示、開指令框", async () => {
+    narrow(true); mount("/");
+    const dash = () => document.querySelector(".dash") as HTMLElement;
+    fireEvent.click(await screen.findByRole("button", { name: "展開書架" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(dash().dataset.drawer).toBeUndefined();
+    fireEvent.click(screen.getByRole("button", { name: "展開書架" }));
+    fireEvent.click(document.querySelector(".dash-drawer-scrim")!);
+    expect(dash().dataset.drawer).toBeUndefined();
+    const cmd = screen.getByRole("button", { name: "指令" });
+    expect(cmd.textContent).toBe("");
+    fireEvent.click(cmd);
+    expect(await screen.findByRole("dialog", { name: "指令框" })).toBeTruthy();
+  });
   it("寬螢幕:兩邊都見、沒有「稿|對話」切換", async () => {
     narrow(false); mount();
     await screen.findByText("海水很藍");

@@ -11,6 +11,7 @@ import Reader from "./Reader";
 import Settings, { SettingsNav, type SettingsSection } from "./Settings";
 import Side, { marksFrom } from "./Side";
 import Figure from "./Figure";
+import Icon from "./Icon";
 import { composerState, useReaction } from "./Talk";
 import { useSeen } from "./useSeen";
 import { useTalk } from "./useTalk";
@@ -120,6 +121,10 @@ function Shell({ chars }: { chars: Characters }) {
   const narrow = useNarrow();
   const { pane, setPane } = useLinks();
   const [palette, setPalette] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const drawn = drawer && narrow;
+  const searchKey = search.toString();
+  useEffect(() => { setDrawer(false); }, [pathname, routeSession, searchKey, narrow]);
   const [focus, setFocus] = useState(false);
   const focused = focus && view === "work" && !narrow;
   useEffect(() => { if (view !== "work") setFocus(false); }, [view]);
@@ -135,6 +140,7 @@ function Shell({ chars }: { chars: Characters }) {
       if (e.isComposing || e.keyCode === 229) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); toggleShelf.current(); return; }
+      if (e.key === "Escape" && drawn && !palette) { setDrawer(false); return; }
       if (e.key === "Escape" && focused && !palette) { setFocus(false); return; }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
@@ -146,7 +152,7 @@ function Shell({ chars }: { chars: Characters }) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [view, hideSide, setPane, focused, palette]);
+  }, [view, hideSide, setPane, focused, palette, drawn]);
   useEffect(() => applySignature(me, mode), [me, mode]);
   const goHome = () => nav("/", { state: { focus: true } });
   const submitted = (s: string, existing: boolean) => {
@@ -163,20 +169,24 @@ function Shell({ chars }: { chars: Characters }) {
   };
 
   return (
-    <div className="dash" data-view={view} data-mode={mode} data-shelf={shelf.mode} data-narrow={narrow ? "true" : "false"} data-focus={focused ? "true" : "false"}
+    <div className="dash" data-view={view} data-mode={mode} data-shelf={shelf.mode} data-narrow={narrow ? "true" : "false"} data-focus={focused ? "true" : "false"} data-drawer={drawn ? "true" : undefined}
       style={split.width ? { "--dash-split": `${split.width}px` } as CSSProperties : undefined}>
       {narrow && (
         <div className="dash-bar">
+          <button type="button" className="ib" aria-label={t("shelf.expand")} title={t("shelf.expand")} aria-expanded={drawn}
+            onClick={() => setDrawer(true)}><Icon name="panel" /></button>
           {view === "work" && (
             <div className="dash-pane-switch" role="group" aria-label={t("pane.label")}>
               <button type="button" aria-pressed={pane === "paper"} onClick={() => setPane("paper")}>{t("pane.paper")}</button>
               <button type="button" aria-pressed={pane === "side"} onClick={() => setPane("side")}>{t("pane.talk")}</button>
             </div>
           )}
-          <button type="button" className="dash-bar-palette" aria-haspopup="dialog" onClick={() => setPalette(true)}>{t("palette.open")}</button>
+          <button type="button" className="ib dash-bar-palette" aria-haspopup="dialog" aria-label={t("palette.open")} title={t("palette.open")}
+            onClick={() => setPalette(true)}><Icon name="find" /></button>
         </div>
       )}
-      <Rail mode={shelf.mode} onToggle={shelf.toggle} works={works} current={slug} talk={talk} view={view}
+      {drawn && <div className="dash-drawer-scrim" onClick={() => setDrawer(false)} />}
+      <Rail mode={narrow ? "open" : shelf.mode} onToggle={narrow ? () => setDrawer(false) : shelf.toggle} works={works} current={slug} talk={talk} view={view}
         onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => { if (id) nav(`/c/${encodeURIComponent(id)}`); else goHome(); }}
         settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>

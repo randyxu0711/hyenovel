@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { spotField } from "../src/dash/spots";
+import { SPOT_TILES, spotField } from "../src/dash/spots";
 
 const N = 480;
 describe("spotField", () => {
@@ -25,5 +25,12 @@ describe("spotField", () => {
     expect([...ys(near)].some(y => ys(far).has(y))).toBe(true);
     const top = a.filter(p => p.y < 20), bot = a.filter(p => p.y > N - 20);
     expect(top.length).toBeGreaterThan(0); expect(bot.length).toBeGreaterThan(0);
+  });
+  it("兩張方塊:格距整除邊長(點陣對齊),邊長互質到週期夠長", () => {
+    for (const t of SPOT_TILES) expect(t.n % 8).toBe(0);
+    const gcd = (x: number, y: number): number => (y ? gcd(y, x % y) : x);
+    const [p, q] = SPOT_TILES.map(t => t.n);
+    expect(p * q / gcd(p, q)).toBeGreaterThan(4000);
+    expect(spotField(N, 8, 11, 6).length).toBeLessThan(a.length);
   });
 });
