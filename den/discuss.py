@@ -275,6 +275,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     failed = False
     system = companion.assemble(turn["ctx"], character,
                                 companion.pick_samples(repo.voice_samples(conn, character["id"], d)))
+    dp = character.get("depth_prompt")
+    note = dp["prompt"].strip() if dp else ""
+    at = note_at(len(history), dp["depth"]) if note else 0
     analysis = turn["ctx"]["analysis"]
     last = history[-1] if history and history[-1]["role"] == "assistant" else {"text": "", "recipe": None}
     picked = retrieve.pick(analysis, turn["ctx"]["source"], quotes=quotes, message=message, last_reply=last["text"],
@@ -285,7 +288,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                                                   else CONTINUE if history or summary else OPENER),
                                              quotes, retrieve.render(analysis, picked), summary,
                                              [a for a in turn["ctx"]["attachments"] if a["seq"] is not None],
-                                             _others(conn, history, character["id"])),
+                                             _others(conn, history, character["id"]),
+                                             companion.note_block(note) if note else "", at),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
@@ -316,7 +320,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
              "first_delta_ms": result.first_delta_ms}
     fp = turn["analysis_fp"]
     recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
-              "retrieved": [n["id"] for n in picked]}
+              "retrieved": [n["id"] for n in picked],
+              "depth_prompt": {"sha": repo.sha256_text(note), "at": at} if note else None}
     variant = None
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫
