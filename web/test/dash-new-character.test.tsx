@@ -533,13 +533,13 @@ describe("改候選與存卡", () => {
   it("編輯器預填每輪提醒,改了會送出", async () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "用這個" }));
-    const box = screen.getByLabelText("每輪提醒") as HTMLTextAreaElement;
-    expect(box.value).toBe("[門縫1: 直率, 務實, 冷面幽默; 說話: 簡短, 乾脆, 口語]");
-    fireEvent.change(box, { target: { value: "[門縫1: 安靜]" } });
+    const words = within(screen.getByRole("group", { name: "每輪提醒" }));
+    expect(words.getByText("務實")).toBeTruthy();
+    fireEvent.click(words.getByRole("button", { name: "拿掉「務實」" }));
     replies = [json({ created: true, character: { id: "new1" } }, 201)];
     fireEvent.click(button("存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
-    expect(last().depth).toBe("[門縫1: 安靜]");
+    expect(last().depth).toBe("[{{char}}: 直率, 冷面幽默; 說話: 簡短, 乾脆, 口語]");
   });
   it("只改名字不送每輪提醒,讓它跟著新名字", async () => {
     await toResults();
