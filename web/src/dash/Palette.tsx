@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DashError, type Work } from "./api";
-import { errorMessage, localized, useLang, useT } from "./i18n";
+import Figure from "./Figure";
+import Icon from "./Icon";
+import { errorMessage, localized, useLang, useT, type MsgKey } from "./i18n";
 import type { Characters } from "./useCharacters";
+import { useThemeState } from "./theme";
 import { setCompanion } from "./useTalk";
 
-type Item = { id: string; label: string; run: () => void | Promise<void> };
+type Group = "works" | "companions" | "misc";
+type Item = { id: string; label: string; text: string; group: Group; lead?: ReactNode; run: () => void | Promise<void> };
+const HEADS: Partial<Record<Group, MsgKey>> = { works: "palette.g.works", companions: "palette.g.companions" };
 
 /** ⌘K / Ctrl+K 的指令框:搜作品、換預設陪讀者、開設定、切晝夜。方向鍵移動、Enter 執行、Esc 關(焦點還給開之前的元素)。 */
 export default function Palette({ works, chars, onOpen, onSettings, onToggle, onClose }: {
@@ -13,6 +18,7 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
 }) {
   const t = useT();
   const lang = useLang();
+  const { mode } = useThemeState();
   const [q, setQ] = useState("");
   const [at, setAt] = useState(0);
   const [err, setErr] = useState<string | null>(null);
@@ -27,10 +33,13 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
   }, []);
 
   const all: Item[] = [
-    ...works.map(w => ({ id: `w-${w.slug}`, label: t("palette.work", { title: w.title }), run: () => onOpen(w.slug) })),
-    ...chars.active.map(c => ({ id: `c-${c.id}`, label: t("palette.companion", { name: localized(c.name, lang) }), run: () => setCompanion(chars, c.id) })),
-    { id: "settings", label: t("palette.settings"), run: onSettings },
-    { id: "daynight", label: t("palette.dayNight"), run: onToggle },
+    ...works.map((w): Item => ({ id: `w-${w.slug}`, group: "works", text: w.title, label: t("palette.work", { title: w.title }), run: () => onOpen(w.slug) })),
+    ...chars.active.map((c): Item => {
+      const name = localized(c.name, lang);
+      return { id: `c-${c.id}`, group: "companions", text: name, label: t("palette.companion", { name }), lead: <Figure character={c} size={20} />, run: () => setCompanion(chars, c.id) };
+    }),
+    { id: "settings", group: "misc", text: t("palette.settings"), label: t("palette.settings"), lead: <Icon name="gear" />, run: onSettings },
+    { id: "daynight", group: "misc", text: t("palette.dayNight"), label: t("palette.dayNight"), lead: <Icon name={mode === "dark" ? "sun" : "moon"} />, run: onToggle },
   ];
   const needle = q.trim().toLowerCase();
   const items = needle ? all.filter(i => i.label.toLowerCase().includes(needle)) : all;
@@ -57,12 +66,21 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
       <div className="dash-float dash-palette" role="dialog" aria-modal="true" aria-label={t("palette.label")} onKeyDown={onKey}>
         <input ref={input} type="text" role="combobox" aria-expanded="true" aria-controls="dash-palette-list" aria-autocomplete="list"
           aria-label={t("palette.input")} aria-activedescendant={items[active] ? `dash-palette-${items[active].id}` : undefined}
-          value={q} onChange={e => { setQ(e.target.value); setAt(0); }} />
+          placeholder={t("palette.input")} value={q} onChange={e => { setQ(e.target.value); setAt(0); }} />
         <ul id="dash-palette-list" role="listbox" aria-label={t("palette.label")}>
-          {items.map((i, n) => (
-            <li key={i.id} id={`dash-palette-${i.id}`} role="option" aria-selected={n === active}
-              onMouseMove={() => setAt(n)} onClick={() => run(i)}>{i.label}</li>
-          ))}
+          {items.flatMap((i, n) => {
+            const head = HEADS[i.group];
+            const first = n === 0 || items[n - 1].group !== i.group;
+            return [
+              first && (head
+                ? <li key={`h-${i.group}`} role="presentation" aria-hidden="true" className="dash-palette-h">{t(head)}</li>
+                : n > 0 && <li key={`h-${i.group}`} role="presentation" aria-hidden="true" className="dash-palette-gap" />),
+              <li key={i.id} id={`dash-palette-${i.id}`} role="option" aria-selected={n === active} aria-label={i.label}
+                onMouseMove={() => setAt(n)} onClick={() => run(i)}>
+                {i.lead && <span className="dash-palette-lead" aria-hidden="true">{i.lead}</span>}<span>{i.text}</span>
+              </li>,
+            ];
+          })}
         </ul>
         {items.length === 0 && <p className="dash-palette-empty">{t("palette.empty")}</p>}
         {err && <p className="dash-palette-empty" role="alert">{t(errorMessage(err))}</p>}

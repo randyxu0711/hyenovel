@@ -395,9 +395,14 @@
 .dash-palette-scrim{position:fixed; inset:0; z-index:20; display:flex; justify-content:center; align-items:flex-start; padding-top:14vh; background:color-mix(in srgb, var(--dash-ink) 18%, transparent)}
 .dash .dash-palette{position:static; display:flex; flex-direction:column; gap:6px; width:min(520px, 92vw); max-height:60vh; padding:10px}
 .dash .dash-palette input{padding:8px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); color:var(--dash-paper-ink); font:inherit}
-.dash .dash-palette input:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.dash .dash-palette input::placeholder{color:var(--dash-paper-ink-2)}
+.dash .dash-palette input:focus-visible{outline:0; border-color:color-mix(in srgb, var(--dash-paper-ink-2) 60%, transparent)}
 .dash .dash-palette ul{list-style:none; margin:0; padding:0; overflow:auto}
-.dash .dash-palette li{padding:7px 10px; border-radius:6px; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .dash-palette li[role="option"]{display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .dash-palette-lead{display:grid; place-items:center; width:20px; color:var(--dash-ink-2)}
+.dash .dash-palette-h{margin:8px 10px 2px; font-size:var(--dash-t-xs); letter-spacing:.12em; color:var(--dash-ink-2)}
+.dash .dash-palette-h:first-child{margin-top:2px}
+.dash .dash-palette-gap{margin:6px 10px; border-top:1px solid var(--dash-line)}
 .dash .dash-palette li[aria-selected="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .dash-palette-empty{margin:0; padding:7px 10px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 /* ── 圖示與圖示鈕(第 2 輪 §6.1);細捲軸(§6.2) ── */
