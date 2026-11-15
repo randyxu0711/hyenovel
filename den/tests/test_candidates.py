@@ -163,6 +163,11 @@ def test_shown_candidate_carries_the_expanded_note():
     {"traits": ["  ", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
     {"traits": ["字" * 25, "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
     {"traits": ["直率\t務實", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
+    {"traits": ["直率\u2029務實", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
+    {"traits": ["直率\u0085務實", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
+    {"traits": ["直率､務實", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
+    {"traits": ["直率﹐務實", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
+    {"traits": ["在意{{user}}", "b", "c"], "speech": ["簡短", "乾脆", "口語"]},
     {"traits": ["a", "b"], "speech": ["簡短", "乾脆", "口語"]},
     {"traits": ["a", "b", "c"], "speech": [f"s{i}" for i in range(11)]},
 ])
@@ -696,6 +701,12 @@ def test_renamed_candidate_note_follows_the_new_name(api):
         got = _save(c, _one(name={"zh-Hant": "門縫", "en": "Door"})).json()["character"]
         assert got["depth_prompt"]["prompt"].startswith("[門縫: ")
         assert _row(c, got["id"])["card"]["data"]["extensions"]["depth_prompt"]["prompt"].startswith("[{{char}}: ")
+
+
+def test_renamed_candidate_with_the_new_name_typed_into_the_note_still_follows_later_renames(api):
+    with api() as c:
+        got = _save(c, _one(name={"zh-Hant": "門縫", "en": "Door"}), depth="[門縫: 安靜]").json()["character"]
+        assert _row(c, got["id"])["card"]["data"]["extensions"]["depth_prompt"]["prompt"] == "[{{char}}: 安靜]"
 
 
 def test_note_that_looks_like_instructions_needs_confirm(api):

@@ -288,6 +288,23 @@ def test_editing_the_depth_prompt_keeps_depth_and_role():
     assert data["extensions"]["other"] == 1
 
 
+@pytest.mark.parametrize("new_name, typed, stored", [
+    ("老讀", "[老讀: 安靜]", "[{{char}}: 安靜]"),
+    ("門縫", "[老讀: 安靜]", "[{{char}}: 安靜]"),
+    ("門縫", "[門縫: 安靜]", "[{{char}}: 安靜]"),
+    ("門縫", "門縫:安靜", "{{char}}:安靜"),
+    ("門縫", "[門縫：安靜]", "[{{char}}：安靜]"),
+    ("門縫", "安靜 [門縫: 嘴硬]", "安靜 [門縫: 嘴硬]"),
+    ("門縫", "[門縫的貓: 安靜]", "[門縫的貓: 安靜]"),
+    ("a.b", "[axb: 安靜]", "[axb: 安靜]"),
+])
+def test_edited_depth_prompt_turns_the_leading_name_back_into_char(new_name, typed, stored):
+    card = _foreign(personality="讀", extensions={"depth_prompt": DEPTH})
+    shown = cards.view(card, "x", 1)
+    out = cards.edited(card, {"zh-Hant": new_name, "en": new_name}, shown["line"], "讀", depth=typed)
+    assert out["data"]["extensions"]["depth_prompt"]["prompt"] == stored
+
+
 def test_unchanged_depth_prompt_keeps_its_macros():
     card = _foreign(personality="讀", extensions={"depth_prompt": DEPTH})
     shown = cards.view(card, "x", 1)
