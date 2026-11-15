@@ -308,3 +308,10 @@ def test_clearing_the_depth_prompt_removes_it(blank):
     shown = cards.view(card, "x", 1)
     data = cards.edited(card, shown["name"], shown["line"], "讀", depth=blank)["data"]
     assert data["extensions"] == {"other": 1, "hyenovel": data["extensions"]["hyenovel"]}
+
+
+def test_blank_input_keeps_a_bad_depth_prompt():
+    card = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": 5}})
+    shown = cards.view(card, "x", 1)
+    data = cards.edited(card, shown["name"], shown["line"], "讀", depth=" ")["data"]
+    assert data["extensions"]["depth_prompt"] == {"prompt": 5}

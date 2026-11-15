@@ -141,6 +141,8 @@ def edited_card(conn, character_id: str, name: dict, line: dict, reading: str, e
 def edit(conn, character_id: str, name: dict, line: dict, reading: str, now: float, examples: str | None = None,
          depth: str | None = None) -> dict:
     """呼叫者持 transaction。名字、介紹、讀法、範例、每輪提醒都沒變就不加版;None = 不改那一欄。"""
+    if depth is not None and not depth.strip():
+        depth = ""
     card = edited_card(conn, character_id, name, line, reading, examples, depth)
     shown = get(conn, character_id)
     if (shown["name"], shown["line"], shown["reading"]) != (name, line, reading) or \

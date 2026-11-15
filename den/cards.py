@@ -147,6 +147,8 @@ def _with_ext(card: dict, ext: dict, **fields) -> dict:
 
 def _edit_depth(extensions: dict, data: dict, prompt: str | None) -> None:
     shown = _depth(data)
+    if prompt is not None and not prompt.strip():
+        prompt = ""
     if prompt is None or prompt == (shown["prompt"] if shown else ""):
         return
     if not prompt.strip():

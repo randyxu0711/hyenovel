@@ -339,3 +339,9 @@ def test_edit_depth_adds_a_version_and_unchanged_does_not(conn):
 def test_copy_keeps_the_depth_prompt(conn):
     cid = _imported(conn, extensions={"depth_prompt": DEPTH})
     assert characters.copy(conn, cid, 2.0)["depth_prompt"] == DEPTH
+
+
+def test_blank_depth_on_a_card_without_one_adds_no_version(conn):
+    cid = _imported(conn)
+    now = characters.get(conn, cid)
+    assert characters.edit(conn, cid, now["name"], now["line"], now["reading"], 2.0, depth=" ")["version"] == 1
