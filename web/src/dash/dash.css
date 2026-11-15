@@ -16,7 +16,7 @@
   color:var(--dash-ink);
   font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
 }
-.dash[data-view="home"]{background-image:var(--dash-spots,none); background-size:480px 480px}
+.dash[data-view="home"]{background-image:var(--dash-spots,none); background-size:480px 480px, 624px 624px}
 /* 點陣字:只用在品牌、版本、時間、段號;要讀的字不用 */
 .dash .vh{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
 .dash .notes-meta{display:flex; align-items:center; gap:6px}
