@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { api, DashError, type ArchivedSession, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
 import Figure from "./Figure";
 import CardEditor, { SAVED_LIMITS } from "./CardEditor";
+import PlistWords from "./Plist";
+import { parsePlist } from "./plistFormat";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import MemoryPage from "./MemoryPage";
@@ -268,7 +270,7 @@ function Companions() {
   const [held, setHeld] = useState<{ card: unknown; warnings: string[]; note?: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<false | "edit" | "copy">(false);
   const [open, setOpen] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => setWho(chars.defaultId), [chars]);
@@ -304,13 +306,13 @@ function Companions() {
   const reloadSaved = () => chars.reload().catch(() => {});
   const copy = (id: string) => {
     setErr(null);
-    api.copyCharacter(id).then(reloadSaved).catch(e => setErr(code(e)));
+    api.copyCharacter(id).then(async r => { await reloadSaved(); setOpen(r.character.id); setEditing("copy"); }).catch(e => setErr(code(e)));
   };
   const saveEdit = async (c: Character, draft: CardDraft, confirm: boolean) => {
     const out = await api.editCharacter(c.id, draft, confirm);
     if (!out.edited) return out.warnings ?? [];
     await reloadSaved();
-    setEditing(null);
+    setEditing(false);
     return [];
   };
   if (creating) {
@@ -321,13 +323,9 @@ function Companions() {
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
       <div className="char-cards char-lineup">
-      {chars.active.map(c => {
-        if (editing === c.id) {
-          return <CardEditor key={c.id} draft={{ ...c, depth: c.depth_prompt?.prompt ?? "" }} limits={SAVED_LIMITS}
-            onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
-        }
-        return <PopCard key={c.id} character={c} on={who === c.id} fresh={fresh === c.id} onOpen={() => setOpen(c.id)} />;
-      })}
+      {chars.active.map(c => (
+        <PopCard key={c.id} character={c} on={who === c.id} fresh={fresh === c.id} onOpen={() => { setEditing(false); setOpen(c.id); }} />
+      ))}
       <div className="char-new">
         <NewSlot onOpen={() => setCreating(true)} />
         <button type="button" className="char-new-imp" aria-label={t("set.card.import")} title={t("set.card.import")} onClick={() => fileInput.current?.click()}><Icon name="up" /><span aria-hidden="true">{t("set.card.import")}</span></button>
@@ -336,8 +334,8 @@ function Companions() {
       </div>
       </div>
       {opened && (
-        <CharSheet character={opened} on={who === opened.id} onClose={() => setOpen(null)} onPick={() => pick(opened.id)}
-          onEdit={() => { setOpen(null); setEditing(opened.id); }} onCopy={() => copy(opened.id)}
+        <CharSheet key={opened.id} character={opened} on={who === opened.id} onClose={() => { setOpen(null); setEditing(false); }} onPick={() => pick(opened.id)}
+          editing={editing} onEdit={on => setEditing(on ? "edit" : false)} onSave={(draft, confirm) => saveEdit(opened, draft, confirm)} onCopy={() => copy(opened.id)}
           onArchive={() => { setOpen(null); archive(opened.id); }} />
       )}
       {problems.length > 0 && (
@@ -384,56 +382,75 @@ function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on
 }
 
 /** 資訊面板:角色站起來、名字、讀法、來源;預設與卡片動作都在這裡。Esc 或點外面關。 */
-function CharSheet({ character: c, on, onClose, onPick, onEdit, onCopy, onArchive }: {
-  character: Character; on: boolean; onClose: () => void; onPick: () => void; onEdit: () => void; onCopy: () => void; onArchive: () => void;
+function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave, onCopy, onArchive }: {
+  character: Character; on: boolean; onClose: () => void; onPick: () => void; onCopy: () => void; onArchive: () => void;
+  editing: false | "edit" | "copy"; onEdit: (editing: boolean) => void; onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
 }) {
   const t = useT();
   const lang = useLang();
   const name = localized(c.name, lang);
+  const plist = c.depth_prompt ? parsePlist(c.depth_prompt.prompt) : null;
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
+    if (!editing) closeRef.current?.focus();
     return () => before?.focus?.();
   }, []);
+  const wasEditing = useRef(editing);
+  useEffect(() => {
+    if (wasEditing.current && !editing) closeRef.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
   return (
-    <div className="char-veil" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={name} className="char-sheet" onClick={e => e.stopPropagation()}
-        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
-        <button ref={closeRef} type="button" className="ib char-sheet-x" aria-label={t("set.card.close")} title={t("set.card.close")} onClick={onClose}><Icon name="close" /></button>
-        <div className="char-sheet-stage" aria-hidden="true"><Figure character={c} size={168} /></div>
-        <h2>{name}</h2>
-        <p className="char-line">{localized(c.line, lang)}</p>
-        <p className="char-meta">{t(`set.card.origin.${c.origin}` as MsgKey)}<span>{t("set.card.ver", { n: c.version })}</span></p>
-        {c.reading && (
-          <section className="char-reading" aria-label={t("card.reading")}>
-            <h3>{t("card.reading")}</h3>
-            <p>{c.reading}</p>
-          </section>
-        )}
-        {c.depth_prompt?.prompt.trim() && (
-          <section className="char-reading" aria-label={t("card.depth")}>
-            <h3>{t("card.depth")}</h3>
-            <p>{c.depth_prompt.prompt}</p>
-          </section>
-        )}
-        <div className="char-sheet-foot">
-          <button type="button" className="dash-key" aria-pressed={on} disabled={on} onClick={onPick}>{t(on ? "set.default" : "set.makeDefault")}</button>
-          <span className="char-acts">
-            <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
-              aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
-            <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
-              onClick={onCopy}><Icon name="copy" /></button>
+    <div className="char-veil" onClick={editing ? undefined : onClose}>
+      <div role="dialog" aria-modal="true" aria-label={name} className="char-sheet" data-editing={editing ? "" : undefined} onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === "Escape" && !editing && !e.nativeEvent.isComposing) { e.stopPropagation(); onClose(); } }}>
+        {!editing && (
+          <span className="char-sheet-top">
             {c.origin !== "builtin" && (
-              <>
-                <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
-                  onClick={onEdit}><Icon name="edit" /></button>
-                <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
-                  onClick={onArchive}><Icon name="box" /></button>
-              </>
+              <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
+                onClick={() => onEdit(true)}><Icon name="edit" /></button>
             )}
+            <button ref={closeRef} type="button" className="ib" aria-label={t("set.card.close")} title={t("set.card.close")} onClick={onClose}><Icon name="close" /></button>
           </span>
-        </div>
+        )}
+        <div className="char-sheet-stage" aria-hidden="true"><Figure character={c} size={168} /></div>
+        {editing ? (
+          <CardEditor sheet selectName={editing === "copy"} draft={{ ...c, depth: c.depth_prompt?.prompt ?? "" }} limits={SAVED_LIMITS} onSave={onSave} onCancel={() => onEdit(false)} />
+        ) : (
+          <>
+          <h2>{name}</h2>
+          <p className="char-line">{localized(c.line, lang)}</p>
+          <p className="char-meta">{t(`set.card.origin.${c.origin}` as MsgKey)}<span>{t("set.card.ver", { n: c.version })}</span></p>
+          {c.reading && (
+            <section className="char-reading" aria-label={t("card.reading")}>
+              <h3>{t("card.reading")}</h3>
+              <p>{c.reading}</p>
+            </section>
+          )}
+          {c.depth_prompt?.prompt.trim() && (
+            <section className="char-reading" aria-label={t("card.depth")}>
+              <h3>{t("card.depth")}</h3>
+              {plist ? <PlistWords plist={plist} /> : <p>{c.depth_prompt.prompt.split("{{char}}").join(name)}</p>}
+            </section>
+          )}
+          <div className="char-sheet-foot">
+            <button type="button" className="dash-key" aria-pressed={on} disabled={on} onClick={onPick}>{t(on ? "set.default" : "set.makeDefault")}</button>
+            <span className="char-acts">
+              <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
+                aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
+              <button type="button" className="ib" aria-label={t("set.card.copy", { name })} title={t("set.card.copy", { name })}
+                onClick={onCopy}><Icon name="copy" /></button>
+              {c.origin !== "builtin" && (
+                <>
+                  <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
+                    onClick={onArchive}><Icon name="box" /></button>
+                </>
+              )}
+            </span>
+          </div>
+          </>
+        )}
       </div>
     </div>
   );
