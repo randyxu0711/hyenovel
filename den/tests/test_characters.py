@@ -244,7 +244,8 @@ def test_create_is_origin_created_with_a_fresh_id(conn):
                                          "eyes": [[50, 70], [70, 70]], "mouth": [[54, 80], [60, 82], [66, 80]],
                                          "main": "olive", "second": "bark",
                                          "tempo": "mid", "move": "tail-sway"},
-                              "examples": [[{"who": "char", "text": "嗯"}]] * 3})
+                              "examples": [[{"who": "char", "text": "嗯"}]] * 3,
+                              "plist": {"traits": ["a", "b", "c"], "speech": ["d", "e", "f"]}})
     a, b = characters.create(conn, card, 2.0), characters.create(conn, card, 2.0)
     assert a["id"] != b["id"] and a["origin"] == "created" and a["id"][0] == "c" and len(a["id"]) == 17
 
@@ -312,7 +313,8 @@ def test_new_characters_list_after_the_builtins(conn):
                                          "eyes": [[50, 70], [70, 70]], "mouth": [[54, 80], [60, 82], [66, 80]],
                                          "main": "olive", "second": "bark",
                                          "tempo": "mid", "move": "tail-sway"},
-                              "examples": [[{"who": "char", "text": "嗯"}]] * 3})
+                              "examples": [[{"who": "char", "text": "嗯"}]] * 3,
+                              "plist": {"traits": ["a", "b", "c"], "speech": ["d", "e", "f"]}})
     got = characters.create(conn, card, 2.0)
     assert [c["id"] for c in characters.all_(conn)] == ["buffalo", "deer", "hyena", got["id"]]
 

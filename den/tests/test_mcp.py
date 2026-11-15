@@ -922,7 +922,8 @@ def _candidate(n=1, **kw):
             "sample": f"讀到「暗暗紅紅」我停住了({n})。",
             "figure": {"parts": [BODY], "eyes": EYES, "mouth": MOUTH, "main": ("olive", "rust", "slate")[(n - 1) % 3], "second": "bark",
                        "tempo": "mid", "move": "tail-sway"},
-            "examples": [[{"who": "char", "text": f"門縫那一下({n})"}, {"who": "author", "text": "嗯"}]] * 3, **kw}
+            "examples": [[{"who": "char", "text": f"門縫那一下({n})"}, {"who": "author", "text": "嗯"}]] * 3,
+            "plist": {"traits": ["直率", "務實", "安靜"], "speech": ["簡短", "乾脆", "口語"]}, **kw}
 
 
 @pytest.fixture(autouse=True)
