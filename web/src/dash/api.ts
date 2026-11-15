@@ -30,6 +30,7 @@ export class DashError extends Error {
 
 export type LText = { "zh-Hant"?: string; en?: string };
 export type ColorPair = { fill: string; text: string };
+export type DepthPrompt = { prompt: string; depth: number; role: "system" | "user" | "assistant" };
 export type Character = {
   id: string; version: number; origin: "builtin" | "imported" | "created"; archived: boolean;
   name: LText; line: LText;
@@ -40,8 +41,9 @@ export type Character = {
   mark: "pencil" | "highlighter" | "circle";
   reading: string;
   examples: string;
+  depth_prompt: DepthPrompt | null;
 };
-export type CardDraft = { name: LText; line: LText; reading: string; examples?: string };
+export type CardDraft = { name: LText; line: LText; reading: string; examples?: string; depth?: string };
 export type CandidateAnswers = { form: string; wish: string };
 export type CandidateAgain = { reaction: string; previous: { name: string; line: string }[] };
 export type Candidate = {

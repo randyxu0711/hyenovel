@@ -12,7 +12,7 @@ import { aborted, draft, drop, keep, running, start, takeMissed, watch, type Ans
 const GRAY = { fill: "var(--dash-paper-ink-2)", text: "var(--dash-paper-ink-2)" };
 const character = (seed: string, figure: FigureSpec): Character => ({
   id: seed, version: 1, origin: "created", archived: false, name: {}, line: {}, avatar: { kind: "figure", seed },
-  figure, colors: { light: GRAY, dark: GRAY }, voice: "", mark: "pencil", reading: "", examples: "",
+  figure, colors: { light: GRAY, dark: GRAY }, voice: "", mark: "pencil", reading: "", examples: "", depth_prompt: null,
 });
 const placeholder = (seed: string, pose: Pose) => character(seed, { pose, parts: [], main: "bone", second: "bone" });
 const look = (c: Candidate): FigureSpec => ({ parts: c.figure.parts, eyes: c.figure.eyes, mouth: c.figure.mouth, main: c.figure.main, second: c.figure.second });

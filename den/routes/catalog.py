@@ -66,6 +66,7 @@ class CardEditIn(BaseModel):
     line: LineIn
     reading: str
     examples: str | None = Field(None, max_length=cards.MAX_EXAMPLES)
+    depth: str | None = Field(None, max_length=cards.MAX_DEPTH)
     confirm: bool = False
 
 
@@ -206,13 +207,15 @@ async def edit_character(character_id: str, body: CardEditIn, request: Request):
     conn = request.app.state.mgr.conn
     name, line = dict(body.name), dict(body.line)
     try:
-        scanned = cards.scan(characters.edited_card(conn, character_id, name, line, body.reading, body.examples))
+        scanned = cards.scan(characters.edited_card(conn, character_id, name, line, body.reading, body.examples,
+                                                       body.depth))
         if scanned["errors"]:
             raise _bad_card("character-edit", scanned["errors"])
         if scanned["warnings"] and not body.confirm:
             return {"edited": False, "warnings": scanned["warnings"]}
         with conn:
-            character = characters.edit(conn, character_id, name, line, body.reading, time.time(), body.examples)
+            character = characters.edit(conn, character_id, name, line, body.reading, time.time(), body.examples,
+                                         body.depth)
     except characters.UnknownCharacter:
         raise _no_character() from None
     except characters.BuiltinCharacter:
