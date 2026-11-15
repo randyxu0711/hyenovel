@@ -64,7 +64,7 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
       )}
       {withDepth && (
         <label>{t("card.depth")}
-          <textarea className="nc-edit" rows={3} maxLength={limits.depth} value={depth} onChange={e => edit(setDepth)(e.target.value)} />
+          <textarea className="nc-edit" rows={3} maxLength={limits.depth} placeholder={t("card.depth.hint")} value={depth} onChange={e => edit(setDepth)(e.target.value)} />
         </label>
       )}
       {warnings.map(w => <p key={w} className="nc-warn" role="note">{t(`card.warn.${w}` as MsgKey)}</p>)}

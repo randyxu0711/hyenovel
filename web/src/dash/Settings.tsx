@@ -259,6 +259,15 @@ function Look() {
   );
 }
 
+function field(o: unknown, k: string): unknown {
+  return typeof o === "object" && o !== null ? (o as Record<string, unknown>)[k] : undefined;
+}
+
+function notePeek(card: unknown): string | null {
+  const prompt = field(field(field(field(card, "data"), "extensions"), "depth_prompt"), "prompt");
+  return typeof prompt === "string" ? prompt : null;
+}
+
 function Companions() {
   const t = useT();
   const chars = useCharacters();
@@ -317,6 +326,7 @@ function Companions() {
     return <NewCharacter onClose={() => setCreating(false)} onSaved={async id => { await reloadSaved(); setFresh(id ?? null); setCreating(false); }} />;
   }
   const opened = open ? chars.active.find(c => c.id === open) ?? null : null;
+  const peek = held?.warnings.includes("has-depth-prompt") ? notePeek(held.card) : null;
   return (
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
@@ -346,6 +356,7 @@ function Companions() {
       {held && (
         <div role="group" aria-label={t("set.card.import")}>
           <ul>{held.warnings.map(w => <li key={w}>{t(`card.warn.${w}` as MsgKey)}</li>)}</ul>
+          {peek !== null && <p className="char-note-peek">{peek}</p>}
           <button type="button" onClick={() => void send(held.card, true)}>{t("set.card.confirm")}</button>
           <button type="button" onClick={() => setHeld(null)}>{t("set.card.cancel")}</button>
         </div>

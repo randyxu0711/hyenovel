@@ -96,6 +96,8 @@ async def put_default_character(body: DefaultCharacterIn, request: Request):
 @router.post("/characters/import")
 async def import_character(body: CardImportIn, request: Request):
     scanned = cards.scan(body.card)
+    if not scanned["errors"] and (cards.view(body.card, "", 0)["depth_prompt"] or {}).get("prompt", "").strip():
+        scanned["warnings"].append("has-depth-prompt")
     if scanned["errors"]:
         log.info("event=reject where=character-import reason=%s", ",".join(scanned["errors"]))
         raise ApiError(422, "bad-card", "這張角色卡不能匯入", {"errors": scanned["errors"]})

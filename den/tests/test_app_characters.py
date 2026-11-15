@@ -193,3 +193,20 @@ def test_note_stays_out_of_history(c, fake_chat):
     _say(c, cid, sid, "再說")
     user = fake_chat.calls[-1][1]
     assert user.count(NOTE) == 1 and user.index("</history>") < user.index(NOTE)
+
+
+def test_import_with_depth_prompt_asks_first(c):
+    card = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": "話少", "depth": 4, "role": "system"}})
+    assert c.post("/api/characters/import", json={"card": card}).json() == \
+        {"imported": False, "warnings": ["has-depth-prompt"]}
+    assert c.post("/api/characters/import", json={"card": card, "confirm": True}).status_code == 201
+    blank = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": " ", "depth": 4, "role": "system"}})
+    assert c.post("/api/characters/import", json={"card": blank}).status_code == 201
+
+
+def test_edit_does_not_warn_about_its_own_depth_prompt(c):
+    cid = _noted(c)
+    got = _char(c, cid)
+    r = c.patch(f"/api/characters/{cid}", json={"name": {**got["name"], "zh-Hant": "新名"}, "line": got["line"],
+                                                "reading": got["reading"], "depth": "話少"})
+    assert r.json()["edited"] is True

@@ -622,6 +622,20 @@ describe("設定頁:角色卡", () => {
     expect(posts[1].confirm).toBe(true);
     expect(p.queryByText(zhHant["card.warn.ignored-fields"])).toBeNull();
   });
+  it("匯入帶每輪提醒的卡:確認框引出提醒內容", async () => {
+    reply = () => json({ imported: false, warnings: ["has-depth-prompt"] });
+    mountCards();
+    const p = await open();
+    await upload(JSON.stringify({ spec: "chara_card_v3", data: { extensions: { depth_prompt: { prompt: "話少" } } } }));
+    expect(await p.findByText(zhHant["card.warn.has-depth-prompt"])).toBeTruthy();
+    expect(p.getByText("話少")).toBeTruthy();
+  });
+  it("每輪提醒空時 placeholder 是格式骨架", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    expect((p.getByLabelText("每輪提醒") as HTMLTextAreaElement).placeholder).toBe(zhHant["card.depth.hint"]);
+  });
   it("警告可以取消,不送第二次", async () => {
     reply = () => json({ imported: false, warnings: ["newer-spec"] });
     mountCards();
@@ -658,7 +672,7 @@ describe("設定頁:角色卡", () => {
       expect(zhHant[`card.err.${code}` as keyof typeof zhHant]).toBeTruthy();
       expect(en[`card.err.${code}` as keyof typeof en]).toBeTruthy();
     }
-    for (const code of ["newer-spec", "looks-like-instructions", "ignored-fields", "bad-colors", "bad-figure"]) {
+    for (const code of ["newer-spec", "looks-like-instructions", "ignored-fields", "bad-colors", "bad-figure", "has-depth-prompt"]) {
       expect(zhHant[`card.warn.${code}` as keyof typeof zhHant]).toBeTruthy();
       expect(en[`card.warn.${code}` as keyof typeof en]).toBeTruthy();
     }
