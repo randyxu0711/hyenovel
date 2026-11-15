@@ -85,6 +85,17 @@ describe("結構圖分頁", () => {
     expect(screen.getByRole("button", { name: /鞋/ })).toBeTruthy();
     expect(screen.getByText("第 1、5 段")).toBeTruthy();
   });
+  it("節拍的錨點引文只是一小段:落在兩拍錨點之間的位置歸前一拍", () => {
+    const marks: Mark[] = [{ start: 17, end: 18, character: "hyena", id: "a" }];
+    const { container } = mount(map({ motifs: [{ id: "m1", label: "鞋", spans: [{ quote: "a", start: 7, end: 8 }, { quote: "b", start: 99, end: 100 }] }] }), marks);
+    expect(screen.getByText("第 1、8 段")).toBeTruthy();
+    expect(cols(container)[1].querySelector(".side-wave")).not.toBeNull();
+  });
+  it("第一拍之前的位置不歸任何一拍", () => {
+    const late = beats.map(b => ({ ...b, span: { ...b.span, start: b.span.start + 50, end: b.span.end + 50 } }));
+    mount(map({ beats: late, motifs: [{ id: "m1", label: "鞋", spans: [{ quote: "a", start: 3, end: 4 }] }] }));
+    expect((screen.getByRole("button", { name: /鞋/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
   it("這版對不到的意象:變淡不能按,不寫說明字", () => {
     mount(map({ motifs: [{ id: "m1", label: "鞋", spans: [{ quote: "a", start: null, end: null }] }] }));
     const b = screen.getByRole("button", { name: /鞋/ }) as HTMLButtonElement;
