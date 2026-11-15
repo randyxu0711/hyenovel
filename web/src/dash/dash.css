@@ -66,7 +66,8 @@
 .dash button:focus-visible, .dash textarea:focus-visible, .dash select:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .chat{display:flex; flex-direction:column; height:100%; min-height:0; color:var(--dash-ink)}
 .dash .chat > .composer, .dash .chat > .chat-carries{box-sizing:border-box; width:calc(100% - 32px); max-width:36em; margin-inline:auto}
-.dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 28px; display:flex; flex-direction:column; gap:18px}
+.dash .chat-log{flex:1; min-height:0; overflow:auto; padding:14px 28px 32px; display:flex; flex-direction:column; gap:18px;
+  -webkit-mask-image:linear-gradient(to bottom, black calc(100% - 28px), transparent); mask-image:linear-gradient(to bottom, black calc(100% - 28px), transparent)}
 .dash .chat-log > *{width:100%; max-width:36em; margin-inline:auto}
 .dash .chat-wait{margin:0; color:var(--dash-ink-2); font-size:var(--dash-t-sm)}
 .dash .chat-who{display:flex; align-items:flex-end; gap:8px; margin:0 0 6px; font-size:var(--dash-t-sm)}
@@ -274,8 +275,8 @@
 .dash .paper-tcy{text-combine-upright:all}
 .dash .paper-sheet.is-old .dash-paper, .dash .paper-sheet.is-old.dash-paper{background:color-mix(in srgb, var(--dash-paper) 86%, var(--dash-desk-2))}
 .dash .paper-sheet p{position:relative; margin:0 0 .95em; text-indent:2em; text-align:justify; border-radius:3px}
-.dash .paper-sheet ::selection{background:color-mix(in srgb, var(--dash-sig) 28%, transparent)}
-@media (max-width:979px){ .dash .paper-sheet{padding:32px 22px 44px} .dash .reader{padding:0 12px} }
+.dash ::selection{background:color-mix(in srgb, var(--dash-sig) 28%, transparent)}
+@media (max-width:979px){ .dash .paper-sheet{padding:32px 22px 44px; max-width:calc(100% - 44px)} .dash .reader{padding:0 12px} }
 /* 兩種鉛筆線(一種記號一種意義):波浪線 = 陪讀者在對話提到;直線 = 結構圖選中的觀察。直排時線在字的左側。 */
 .dash .dash-mark{
   cursor:pointer; border-radius:2px;
@@ -680,8 +681,8 @@
 .dash .char-reading{margin:18px 0 0; padding:12px 0 0; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 12%, transparent); text-align:left}
 .dash .char-reading h3{margin:0 0 6px; font-size:var(--dash-t-xs); font-weight:500; letter-spacing:.12em; color:var(--dash-paper-ink-2)}
 .dash .char-reading p{max-height:11em; overflow:auto; margin:0; padding-bottom:1.4em; font-size:var(--dash-t-sm); white-space:pre-wrap;
-  scrollbar-width:thin; scrollbar-color:color-mix(in srgb, var(--dash-paper-ink) 22%, transparent) transparent;
   -webkit-mask-image:linear-gradient(to bottom, black calc(100% - 1.4em), transparent); mask-image:linear-gradient(to bottom, black calc(100% - 1.4em), transparent)}
+.dash .char-reading p::-webkit-scrollbar-thumb{background-color:color-mix(in srgb, var(--dash-paper-ink) 22%, transparent)}
 .dash .char-sheet-foot{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:20px}
 .dash .char-sheet .ib{color:var(--dash-paper-ink-2)}
 .dash .char-sheet .dash-key:disabled{cursor:default; transform:none}
