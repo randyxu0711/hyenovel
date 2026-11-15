@@ -1,4 +1,4 @@
-from den.discuss import ATTACHED, live_history, render_turn, since_clear
+from den.discuss import ATTACHED, live_history, note_at, render_turn, since_clear
 
 
 def test_render_turn_first_turn_is_just_message():
@@ -95,3 +95,48 @@ def test_render_turn_marks_attachment_in_history():
     out = render_turn(live, "C", attached=[{"n": 1, "seq": 1, "name": "舊"}, {"n": 2, "seq": 4, "name": "海"}])
     assert out.index(ATTACHED.format(name="海")) < out.index("作者:看這篇")
     assert "舊" not in out
+
+
+def test_note_at_clamps_to_history_length():
+    assert (note_at(3, 4), note_at(4, 4), note_at(5, 0), note_at(0, 4)) == (3, 4, 0, 0)
+
+
+def test_note_depth_zero_sits_right_before_the_author():
+    out = render_turn([_u(0, "user", "A"), _u(1, "assistant", "B")], "C", ["引"], notes="筆記", note="N")
+    assert out.index("</history>") < out.index("「引」") < out.index("N\n作者這一輪說:")
+
+
+def test_note_on_first_turn_without_block():
+    assert render_turn([], "嗨", note="N") == "N\n\n作者這一輪說:\n嗨"
+
+
+def test_note_depth_counts_utterances_inside_history():
+    h = [_u(i, "user" if i % 2 == 0 else "assistant", f"T{i}") for i in range(5)]
+    out = render_turn(h, "C", note="N", note_depth=2)
+    assert out.index("<history>") < out.index("T2") < out.index("N") < out.index("T3") < out.index("</history>")
+    assert out.count("N") == 1
+
+
+def test_note_goes_before_the_whole_utterance_group():
+    h = [_u(0, "user", "A"), {**_u(1, "user", "B"), "quotes": ["引"]}, _u(2, "assistant", "D")]
+    out = render_turn(h, "C", attached=[{"n": 1, "seq": 1, "name": "海"}], note="N", note_depth=2)
+    assert out.index("作者:A") < out.index("N") < out.index(ATTACHED.format(name="海")) \
+        < out.index("「引」") < out.index("作者:B")
+
+
+def test_note_at_history_length_goes_before_the_first_utterance():
+    out = render_turn([_u(0, "user", "A")], "C", summary="S", note="N", note_depth=1)
+    assert out.index("</summary>") < out.index("<history>") < out.index("N") < out.index("作者:A")
+
+
+def test_note_after_compact_with_empty_history():
+    out = render_turn([], "嗨", summary="S", note="N")
+    assert out.index("</summary>") < out.index("N") < out.index("作者這一輪說:")
+    assert out.endswith("作者這一輪說:\n嗨")
+
+
+def test_no_note_output_is_unchanged():
+    h = [_u(0, "user", "A"), {**_u(1, "assistant", "B"), "quotes": ["q"]}]
+    for args, kw in [(([], "C"), {}), (([], "C"), {"summary": "S"}), (([], "C", ["q"]), {"notes": "n"}),
+                     ((h, "C"), {}), ((h, "C", ["q"]), {"notes": "n", "summary": "S"})]:
+        assert render_turn(*args, **kw, note="") == render_turn(*args, **kw)

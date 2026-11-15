@@ -32,22 +32,29 @@ def _speaker(h: dict, others: dict[str, str]) -> str:
     return _ROLE[h["role"]]
 
 
+def note_at(n_history: int, depth: int) -> int:
+    return min(depth, n_history)
+
+
 def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
                 summary: str | None = None, attached: Sequence[dict] = (),
-                others: dict[str, str] | None = None) -> str:
+                others: dict[str, str] | None = None, note: str = "", note_depth: int = 0) -> str:
     """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
     作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。
-    notes 是這輪檢索到的細節,只存在這輪,不進歷史。"""
-    block = [*([notes] if notes else []), *_quotes_block(quotes)]
+    notes 是這輪檢索到的細節,只存在這輪,不進歷史。
+    note 是角色卡的每輪提醒,插在倒數第 note_depth 則發言前(0 = 作者這一輪說之前)。"""
+    block = [*([notes] if notes else []), *_quotes_block(quotes), *([note] if note and not note_depth else [])]
     head = [f"之前的對話摘要:\n<summary>\n{summary}\n</summary>", ""] if summary else []
     if not history:
         if not head:
             return "\n".join([*block, "", "作者這一輪說:", message]) if block else message
         return "\n".join([*head, *block, *([""] if block else []), "作者這一輪說:", message])
     dropped = {a["seq"]: a["name"] for a in attached}
-    lines = [x for h in history for x in (
-        *([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
-        *_quotes_block(h.get("quotes")), f"{_speaker(h, others or {})}:{h['text']}")]
+    groups = [[*([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
+               *_quotes_block(h.get("quotes")), f"{_speaker(h, others or {})}:{h['text']}"] for h in history]
+    if note and note_depth:
+        groups.insert(len(history) - note_depth, [note])
+    lines = [x for g in groups for x in g]
     return "\n".join([*head, "以下是這一局到目前為止的對話(作者 = 使用者):",
                       "<history>", *lines, "</history>", "", *block, "作者這一輪說:", message])
 
