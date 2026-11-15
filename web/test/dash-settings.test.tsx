@@ -551,8 +551,10 @@ describe("設定頁:角色卡", () => {
     fireEvent.click(sheet(p, "鬣狗").getByRole("button", { name: "複製鬣狗" }));
     expect(await p.findByText("鬣狗(副本)")).toBeTruthy();
     const d = within(await p.findByRole("dialog", { name: "鬣狗(副本)" }));
-    expect((d.getByLabelText("名字") as HTMLInputElement).value).toBe("鬣狗(副本)");
-    expect(document.activeElement).toBe(d.getByLabelText("名字"));
+    const nameBox = d.getByLabelText("名字") as HTMLInputElement;
+    expect(nameBox.value).toBe("鬣狗(副本)");
+    expect(document.activeElement).toBe(nameBox);
+    expect([nameBox.selectionStart, nameBox.selectionEnd]).toEqual([0, "鬣狗(副本)".length]);
   });
   it("編輯:面板原地換成編輯器,只改目前語言,存完回到面板", async () => {
     mountCards();
@@ -568,16 +570,59 @@ describe("設定頁:角色卡", () => {
     expect(p.getByRole("dialog")).toBeTruthy();
     expect(document.activeElement).toBe(p.getByRole("button", { name: "關" }));
   });
-  it("編輯中按 Esc 或點外面不關面板;Esc 回到閱讀", async () => {
+  it("編輯中點外面不關面板、右上角不放關閉;沒改就 Esc 直接回到閱讀", async () => {
     mountCards();
     const p = await open();
     fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
     fireEvent.click(document.querySelector(".char-veil")!);
     expect(p.getByRole("textbox", { name: "讀法" })).toBeTruthy();
-    fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
+    expect(p.queryByRole("button", { name: "關" })).toBeNull();
+    fireEvent.keyDown(p.getByLabelText("名字"), { key: "Escape" });
     expect(p.queryByRole("textbox", { name: "讀法" })).toBeNull();
     expect(p.getByRole("dialog")).toBeTruthy();
     expect(edits).toEqual([]);
+  });
+  it("改過字再按 Esc 或取消,先在底部問;繼續改留著字,放棄才回閱讀", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    fireEvent.change(p.getByRole("textbox", { name: "讀法" }), { target: { value: "改了一段" } });
+    fireEvent.keyDown(p.getByRole("textbox", { name: "讀法" }), { key: "Escape" });
+    expect(p.getByText("放棄修改?")).toBeTruthy();
+    expect(document.activeElement).toBe(p.getByRole("button", { name: "繼續改" }));
+    fireEvent.click(p.getByRole("button", { name: "繼續改" }));
+    expect((p.getByRole("textbox", { name: "讀法" }) as HTMLTextAreaElement).value).toBe("改了一段");
+    fireEvent.click(p.getByRole("button", { name: "取消" }));
+    fireEvent.click(p.getByRole("button", { name: "放棄" }));
+    expect(p.queryByRole("textbox", { name: "讀法" })).toBeNull();
+    expect(edits).toEqual([]);
+  });
+  it("選字中的 Esc 不算數", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    fireEvent.keyDown(p.getByLabelText("名字"), { key: "Escape", isComposing: true });
+    expect(p.getByRole("textbox", { name: "讀法" })).toBeTruthy();
+  });
+  it("加詞框裡打了字還沒送出也算改過", async () => {
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    fireEvent.change(p.getByRole("textbox", { name: "加性格詞" }), { target: { value: "溫吞" } });
+    fireEvent.click(p.getByRole("button", { name: "取消" }));
+    expect(p.getByText("放棄修改?")).toBeTruthy();
+  });
+  it("空的加詞框按 Backspace:第一下標出最後一個詞,第二下才拿掉", async () => {
+    list = list.map(c => c.id === "u1" ? { ...c, depth_prompt: { prompt: "[老讀: 固執, 多疑; 說話: 簡短]", depth: 4, role: "system" } } : c);
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    const trait = p.getByRole("textbox", { name: "加性格詞" });
+    fireEvent.keyDown(trait, { key: "Backspace" });
+    expect(p.getByText("多疑").hasAttribute("data-marked")).toBe(true);
+    fireEvent.keyDown(trait, { key: "Backspace" });
+    expect(p.queryByText("多疑")).toBeNull();
+    expect(p.getByText("固執").hasAttribute("data-marked")).toBe(false);
   });
   it("編輯範例對話:送出改過的範例", async () => {
     mountCards();
@@ -686,6 +731,9 @@ describe("設定頁:角色卡", () => {
     fireEvent.keyDown(trait, { key: "Enter" });
     expect(trait.value).toBe("長".repeat(700));
     expect(within(p.getByRole("dialog")).queryByRole("button", { name: /^拿掉/ })).toBeNull();
+    expect(p.getByRole("alert").textContent).toBe("每輪提醒最多 600 字");
+    fireEvent.change(trait, { target: { value: "短" } });
+    expect(p.queryByRole("alert")).toBeNull();
   });
   it("警告可以取消,不送第二次", async () => {
     reply = () => json({ imported: false, warnings: ["newer-spec"] });

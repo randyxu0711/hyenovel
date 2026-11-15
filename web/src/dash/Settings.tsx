@@ -270,7 +270,7 @@ function Companions() {
   const [held, setHeld] = useState<{ card: unknown; warnings: string[]; note?: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<false | "edit" | "copy">(false);
   const [open, setOpen] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => setWho(chars.defaultId), [chars]);
@@ -306,7 +306,7 @@ function Companions() {
   const reloadSaved = () => chars.reload().catch(() => {});
   const copy = (id: string) => {
     setErr(null);
-    api.copyCharacter(id).then(async r => { await reloadSaved(); setOpen(r.character.id); setEditing(true); }).catch(e => setErr(code(e)));
+    api.copyCharacter(id).then(async r => { await reloadSaved(); setOpen(r.character.id); setEditing("copy"); }).catch(e => setErr(code(e)));
   };
   const saveEdit = async (c: Character, draft: CardDraft, confirm: boolean) => {
     const out = await api.editCharacter(c.id, draft, confirm);
@@ -335,7 +335,7 @@ function Companions() {
       </div>
       {opened && (
         <CharSheet key={opened.id} character={opened} on={who === opened.id} onClose={() => { setOpen(null); setEditing(false); }} onPick={() => pick(opened.id)}
-          editing={editing} onEdit={setEditing} onSave={(draft, confirm) => saveEdit(opened, draft, confirm)} onCopy={() => copy(opened.id)}
+          editing={editing} onEdit={on => setEditing(on ? "edit" : false)} onSave={(draft, confirm) => saveEdit(opened, draft, confirm)} onCopy={() => copy(opened.id)}
           onArchive={() => { setOpen(null); archive(opened.id); }} />
       )}
       {problems.length > 0 && (
@@ -384,7 +384,7 @@ function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on
 /** 資訊面板:角色站起來、名字、讀法、來源;預設與卡片動作都在這裡。Esc 或點外面關。 */
 function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave, onCopy, onArchive }: {
   character: Character; on: boolean; onClose: () => void; onPick: () => void; onCopy: () => void; onArchive: () => void;
-  editing: boolean; onEdit: (editing: boolean) => void; onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
+  editing: false | "edit" | "copy"; onEdit: (editing: boolean) => void; onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
 }) {
   const t = useT();
   const lang = useLang();
@@ -403,12 +403,20 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
   }, [editing]);
   return (
     <div className="char-veil" onClick={editing ? undefined : onClose}>
-      <div role="dialog" aria-modal="true" aria-label={name} className="char-sheet" data-editing={editing || undefined} onClick={e => e.stopPropagation()}
-        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); if (editing) onEdit(false); else onClose(); } }}>
-        <button ref={closeRef} type="button" className="ib char-sheet-x" aria-label={t("set.card.close")} title={t("set.card.close")} onClick={onClose}><Icon name="close" /></button>
+      <div role="dialog" aria-modal="true" aria-label={name} className="char-sheet" data-editing={editing ? "" : undefined} onClick={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === "Escape" && !editing && !e.nativeEvent.isComposing) { e.stopPropagation(); onClose(); } }}>
+        {!editing && (
+          <span className="char-sheet-top">
+            {c.origin !== "builtin" && (
+              <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
+                onClick={() => onEdit(true)}><Icon name="edit" /></button>
+            )}
+            <button ref={closeRef} type="button" className="ib" aria-label={t("set.card.close")} title={t("set.card.close")} onClick={onClose}><Icon name="close" /></button>
+          </span>
+        )}
         <div className="char-sheet-stage" aria-hidden="true"><Figure character={c} size={168} /></div>
         {editing ? (
-          <CardEditor sheet draft={{ ...c, depth: c.depth_prompt?.prompt ?? "" }} limits={SAVED_LIMITS} onSave={onSave} onCancel={() => onEdit(false)} />
+          <CardEditor sheet selectName={editing === "copy"} draft={{ ...c, depth: c.depth_prompt?.prompt ?? "" }} limits={SAVED_LIMITS} onSave={onSave} onCancel={() => onEdit(false)} />
         ) : (
           <>
           <h2>{name}</h2>
@@ -435,8 +443,6 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
                 onClick={onCopy}><Icon name="copy" /></button>
               {c.origin !== "builtin" && (
                 <>
-                  <button type="button" className="ib" aria-label={t("set.card.edit", { name })} title={t("set.card.edit", { name })}
-                    onClick={() => onEdit(true)}><Icon name="edit" /></button>
                   <button type="button" className="ib" aria-label={t("set.card.archive", { name })} title={t("set.card.archive", { name })}
                     onClick={onArchive}><Icon name="box" /></button>
                 </>

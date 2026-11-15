@@ -575,6 +575,7 @@ describe("改候選與存卡", () => {
     expect(screen.getByRole("tabpanel").querySelector("form.char-edit")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("名字"), { target: { value: "我取的" } });
     fireEvent.click(button("取消"));
+    fireEvent.click(button("放棄"));
     expect(panel().getByRole("button", { name: "用這個" })).toBeTruthy();
     expect(tabs()[0].textContent).toBe("門縫1先聽");
   });
