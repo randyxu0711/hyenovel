@@ -539,7 +539,17 @@ describe("改候選與存卡", () => {
     replies = [json({ created: true, character: { id: "new1" } }, 201)];
     fireEvent.click(button("存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
-    expect(last().depth).toBe("[門縫1: 安靜]");
+    expect(last().depth).toBe("[{{char}}: 安靜]");
+  });
+  it("改名又改提醒,提醒開頭的舊名字換回 {{char}}", async () => {
+    await toResults();
+    fireEvent.click(pick(1).getByRole("button", { name: "用這個" }));
+    fireEvent.change(screen.getByLabelText("名字"), { target: { value: "我取的" } });
+    fireEvent.change(screen.getByLabelText("每輪提醒"), { target: { value: "[門縫1: 安靜; 說話: 慢]" } });
+    replies = [json({ created: true, character: { id: "new1" } }, 201)];
+    fireEvent.click(button("存"));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(last().depth).toBe("[{{char}}: 安靜; 說話: 慢]");
   });
   it("只改名字不送每輪提醒,讓它跟著新名字", async () => {
     await toResults();

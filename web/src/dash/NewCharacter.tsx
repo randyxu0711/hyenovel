@@ -240,7 +240,9 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   };
 
   const save = async (index: number, card: CardDraft, confirm: boolean) => {
-    const depth = card.depth !== batch![index].depth ? card.depth : undefined;
+    const named = `[${batch![index].name["zh-Hant"]}: `;
+    const edited = card.depth !== batch![index].depth ? card.depth : undefined;
+    const depth = edited?.startsWith(named) ? "[{{char}}: " + edited.slice(named.length) : edited;
     const out = await api.createCharacter({ ...batch![index], name: card.name, line: card.line, reading: card.reading }, confirm, depth);
     if (!out.created) return out.warnings ?? [];
     done.current = true;
