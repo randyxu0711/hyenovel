@@ -2,13 +2,13 @@ import { useState, type FormEvent } from "react";
 import { DashError, type CardDraft } from "./api";
 import { errorMessage, localized, useLang, useT, type Lang, type MsgKey } from "./i18n";
 
-export type CardLimits = { name: number; line: number; reading: number; examples?: number; lineRequired?: boolean };
-export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000, examples: 3000 };
+export type CardLimits = { name: number; line: number; reading: number; examples?: number; depth?: number; lineRequired?: boolean };
+export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000, examples: 3000, depth: 600 };
 export const candidateLimits = (lang: Lang): CardLimits =>
   lang === "en" ? { name: 32, line: 80, reading: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, lineRequired: true };
 
 export default function CardEditor({ draft, limits, onSave, onCancel, onChange }: {
-  draft: Omit<CardDraft, "examples"> & { examples?: unknown }; limits: CardLimits;
+  draft: Omit<CardDraft, "examples" | "depth"> & { examples?: unknown; depth?: unknown }; limits: CardLimits;
   /** 回傳要作者確認的 warnings;空陣列 = 存好了。 */
   onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
   onCancel: () => void;
@@ -21,6 +21,8 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
   const [reading, setReading] = useState(draft.reading);
   const withExamples = limits.examples !== undefined && typeof draft.examples === "string";
   const [examples, setExamples] = useState(typeof draft.examples === "string" ? draft.examples : "");
+  const withDepth = limits.depth !== undefined && typeof draft.depth === "string";
+  const [depth, setDepth] = useState(typeof draft.depth === "string" ? draft.depth : "");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [problems, setProblems] = useState<string[]>([]);
   const [err, setErr] = useState<MsgKey | null>(null);
@@ -32,7 +34,7 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
     e.preventDefault();
     if (!ready || saving) return;
     setSaving(true); setErr(null); setProblems([]);
-    const next = { name: { ...draft.name, [lang]: name.trim() }, line: { ...draft.line, [lang]: line.trim() }, reading, ...(withExamples ? { examples } : {}) };
+    const next = { name: { ...draft.name, [lang]: name.trim() }, line: { ...draft.line, [lang]: line.trim() }, reading, ...(withExamples ? { examples } : {}), ...(withDepth ? { depth } : {}) };
     try {
       setWarnings(await onSave(next, warnings.length > 0));
     } catch (e) {
@@ -58,6 +60,11 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange }
       {withExamples && (
         <label>{t("card.examples")}
           <textarea className="nc-edit" rows={8} maxLength={limits.examples} value={examples} onChange={e => edit(setExamples)(e.target.value)} />
+        </label>
+      )}
+      {withDepth && (
+        <label>{t("card.depth")}
+          <textarea className="nc-edit" rows={3} maxLength={limits.depth} value={depth} onChange={e => edit(setDepth)(e.target.value)} />
         </label>
       )}
       {warnings.map(w => <p key={w} className="nc-warn" role="note">{t(`card.warn.${w}` as MsgKey)}</p>)}

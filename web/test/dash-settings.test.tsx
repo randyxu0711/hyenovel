@@ -399,7 +399,7 @@ describe("設定頁:角色卡", () => {
   let list: Character[];
   let posts: { card: unknown; confirm: boolean }[];
   let reply: (confirm: boolean) => Response;
-  let edits: { name: Record<string, string>; line: Record<string, string>; reading: string; examples?: string; confirm: boolean }[];
+  let edits: { name: Record<string, string>; line: Record<string, string>; reading: string; examples?: string; depth?: string; confirm: boolean }[];
   let editReply: (confirm: boolean) => Response;
   let listFails: boolean;
   const imported = { ...deer, id: "u1", origin: "imported" as const, name: { "zh-Hant": "老讀", en: "Old" } };
@@ -561,7 +561,7 @@ describe("設定頁:角色卡", () => {
     fireEvent.change(p.getByLabelText("名字"), { target: { value: "新老讀" } });
     fireEvent.click(p.getByRole("button", { name: "存" }));
     expect(await p.findByRole("button", { name: "打開新老讀" })).toBeTruthy();
-    expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, examples: imported.examples, confirm: false }]);
+    expect(edits).toEqual([{ name: { "zh-Hant": "新老讀", en: "Old" }, line: imported.line, reading: imported.reading, examples: imported.examples, depth: "", confirm: false }]);
     expect(p.queryByLabelText("讀法")).toBeNull();
   });
   it("編輯範例對話:送出改過的範例", async () => {
@@ -572,6 +572,18 @@ describe("設定頁:角色卡", () => {
     fireEvent.click(p.getByRole("button", { name: "存" }));
     await waitFor(() => expect(edits).toHaveLength(1));
     expect(edits[0].examples).toBe("<example>\n老讀:嗯\n</example>");
+  });
+  it("編輯每輪提醒:帶出原文,送出改過的字", async () => {
+    list = list.map(c => c.id === "u1" ? { ...c, depth_prompt: { prompt: "話少", depth: 4, role: "system" } } : c);
+    mountCards();
+    const p = await open();
+    expect(sheet(p, "老讀").getByText("話少")).toBeTruthy();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    expect((p.getByLabelText("每輪提醒") as HTMLTextAreaElement).value).toBe("話少");
+    fireEvent.change(p.getByLabelText("每輪提醒"), { target: { value: "更少" } });
+    fireEvent.click(p.getByRole("button", { name: "存" }));
+    await waitFor(() => expect(edits).toHaveLength(1));
+    expect(edits[0].depth).toBe("更少");
   });
   it("已經存好但清單重抓失敗時,編輯器仍關掉,不會誘使再存一次", async () => {
     mountCards();

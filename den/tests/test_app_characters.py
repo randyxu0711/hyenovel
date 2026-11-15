@@ -1,5 +1,6 @@
 """角色卡匯入、匯出、封存 API。"""
 from den.tests.test_app_discuss import c, fake_chat, in_loop, post_discuss  # noqa: F401
+from den import cards
 from den.tests.test_cards import _foreign
 from marrow import repo
 
@@ -103,3 +104,22 @@ def test_imported_character_speaks_with_its_reading_under_base(c, fake_chat):
     assert "老讀的讀法" in system and "不幫作者寫句子" in system
     assert "不採用的系統提示" not in system and "不採用的開場" not in system
     assert in_loop(c, lambda conn: repo.latest_character(conn, cid))["origin"] == "imported"
+
+
+def test_depth_prompt_survives_import_edit_and_export(c):
+    depth = {"prompt": "{{char}}話少", "depth": 4, "role": "system"}
+    card = _foreign(personality="讀", extensions={"depth_prompt": depth, "other": 1})
+    got = c.post("/api/characters/import", json={"card": card, "confirm": True}).json()["character"]
+    assert got["depth_prompt"] == {"prompt": "老讀話少", "depth": 4, "role": "system"}
+    assert c.get(f"/api/characters/{got['id']}/card").json() == card
+    body = {"name": got["name"], "line": got["line"], "reading": got["reading"], "depth": "更少"}
+    r = c.patch(f"/api/characters/{got['id']}", json=body)
+    assert r.json()["edited"] is True and r.json()["character"]["depth_prompt"]["prompt"] == "更少"
+    ext = c.get(f"/api/characters/{got['id']}/card").json()["data"]["extensions"]
+    assert ext["depth_prompt"] == {**depth, "prompt": "更少"} and ext["other"] == 1
+
+
+def test_edit_rejects_a_too_long_depth(c):
+    got = _import(c)
+    body = {"name": got["name"], "line": got["line"], "reading": got["reading"], "depth": "讀" * (cards.MAX_DEPTH + 1)}
+    assert c.patch(f"/api/characters/{got['id']}", json=body).status_code == 422

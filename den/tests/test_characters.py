@@ -323,3 +323,19 @@ def test_renaming_a_copy_updates_its_macros(conn):
     got = characters.copy(conn, cid, 2.0)
     edited = characters.edit(conn, got["id"], {"zh-Hant": "新名", "en": "New"}, got["line"], got["reading"], 3.0)
     assert edited["reading"] == "你是新名"
+
+
+DEPTH = {"prompt": "話少", "depth": 4, "role": "system"}
+
+
+def test_edit_depth_adds_a_version_and_unchanged_does_not(conn):
+    cid = _imported(conn, extensions={"depth_prompt": DEPTH})
+    now = characters.get(conn, cid)
+    assert characters.edit(conn, cid, now["name"], now["line"], now["reading"], 2.0, depth="話少")["version"] == 1
+    got = characters.edit(conn, cid, now["name"], now["line"], now["reading"], 3.0, depth="更少")
+    assert got["version"] == 2 and got["depth_prompt"] == {"prompt": "更少", "depth": 4, "role": "system"}
+
+
+def test_copy_keeps_the_depth_prompt(conn):
+    cid = _imported(conn, extensions={"depth_prompt": DEPTH})
+    assert characters.copy(conn, cid, 2.0)["depth_prompt"] == DEPTH

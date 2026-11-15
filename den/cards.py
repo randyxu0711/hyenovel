@@ -12,10 +12,12 @@ from marrow.repo import canonical_json, sha256_text
 MAX_CARD_BYTES = 262144
 MAX_READING = 6000
 MAX_EXAMPLES = 3000
+MAX_DEPTH = 600
 MAX_NAME = 64
 MAX_LINE = 200
 _FOREIGN_LINE = 40
 MARKS = ("pencil", "highlighter", "circle")
+_ROLES = ("system", "user", "assistant")
 FALLBACK_COLORS = {"light": {"fill": "#8a8378", "text": "#5f5a52"}, "dark": {"fill": "#b5ae9f", "text": "#c9c3b7"}}
 
 _SCHEMA = Path(__file__).resolve().parent.parent / "marrow" / "schemas" / "card.v3.schema.json"
@@ -102,6 +104,18 @@ def _examples(data: dict) -> str:
     return _expand(text, data) if isinstance(text, str) and len(text) <= MAX_EXAMPLES else ""
 
 
+def _depth_ok(value) -> bool:
+    return (isinstance(value, dict) and isinstance(value.get("prompt"), str) and type(value.get("depth")) is int
+            and value["depth"] >= 0 and value.get("role") in _ROLES)
+
+
+def _depth(data: dict) -> dict | None:
+    value = data.get("extensions", {}).get("depth_prompt")
+    if not _depth_ok(value):
+        return None
+    return {"prompt": _expand(value["prompt"], data), "depth": value["depth"], "role": value["role"]}
+
+
 def _reading(data: dict) -> str:
     return _expand("\n\n".join(x for x in (data.get("personality"), data.get("description")) if x and x.strip()), data)
 
@@ -121,6 +135,7 @@ def view(card: dict, character_id: str, version: int) -> dict:
         "mark": ext.get("mark") if ext.get("mark") in MARKS else "pencil",
         "reading": _reading(data),
         "examples": _examples(data),
+        "depth_prompt": _depth(data),
     }
 
 
@@ -130,8 +145,23 @@ def _with_ext(card: dict, ext: dict, **fields) -> dict:
     return {**card, "data": {**data, **fields, "extensions": extensions}}
 
 
-def edited(card: dict, name: dict, line: dict, reading: str, examples: str | None = None) -> dict:
-    """讀法、範例沒改就留原文,{{char}} 才會跟著新名字。"""
+def _edit_depth(extensions: dict, data: dict, prompt: str | None) -> None:
+    shown = _depth(data)
+    if prompt is None or prompt == (shown["prompt"] if shown else ""):
+        return
+    if not prompt.strip():
+        extensions.pop("depth_prompt", None)
+        return
+    old = extensions.get("depth_prompt")
+    old = old if isinstance(old, dict) else {}
+    depth = old["depth"] if type(old.get("depth")) is int and old["depth"] >= 0 else 0
+    role = old["role"] if old.get("role") in _ROLES else "system"
+    extensions["depth_prompt"] = {**old, "prompt": prompt, "depth": depth, "role": role}
+
+
+def edited(card: dict, name: dict, line: dict, reading: str, examples: str | None = None,
+           depth: str | None = None) -> dict:
+    """讀法、範例、每輪提醒沒改就留原文,{{char}} 才會跟著新名字。"""
     data = card["data"]
     fields = {"name": name["zh-Hant"], "creator_notes": line["zh-Hant"]}
     if reading != _reading(data):
@@ -140,7 +170,9 @@ def edited(card: dict, name: dict, line: dict, reading: str, examples: str | Non
         fields["mes_example"] = examples
     if data.get("nickname"):
         fields["nickname"] = name["zh-Hant"]
-    return _with_ext(card, {"name": name, "line": line}, **fields)
+    out = _with_ext(card, {"name": name, "line": line}, **fields)
+    _edit_depth(out["data"]["extensions"], data, depth)
+    return out
 
 
 def copied(card: dict, character_id: str) -> dict:
@@ -181,14 +213,17 @@ def scan(card) -> dict:
     personality, description = data.get("personality", ""), data.get("description", "")
     shown = view(card, "", 0)
     reading, voice, examples = shown["reading"], shown["voice"], shown["examples"]
+    depth = (shown["depth_prompt"] or {}).get("prompt", "")
     if not (personality.strip() or description.strip()):
         errors.append("no-reading")
     if len(reading) + len(voice) > MAX_READING:
         errors.append("reading-too-long")
+    if len(depth) > MAX_DEPTH:
+        errors.append("depth-too-long")
     warnings = []
     if _newer_spec(card["spec_version"]):
         warnings.append("newer-spec")
-    host_sees = (reading, voice, examples, data["name"], data.get("nickname", ""), data.get("creator_notes", ""),
+    host_sees = (reading, voice, examples, depth, data["name"], data.get("nickname", ""), data.get("creator_notes", ""),
                  *shown["name"].values(), *shown["line"].values())
     if any(_INSTRUCTIONS.search(x) for x in host_sees):
         warnings.append("looks-like-instructions")
@@ -198,6 +233,8 @@ def scan(card) -> dict:
         warnings.append("bad-colors")
     if "figure" in ext and figure.errors(ext["figure"]):
         warnings.append("bad-figure")
+    if "depth_prompt" in data.get("extensions", {}) and shown["depth_prompt"] is None:
+        warnings.append("bad-depth-prompt")
     return {"errors": errors, "warnings": warnings}
 
 

@@ -323,7 +323,7 @@ function Companions() {
       <div className="char-cards char-lineup">
       {chars.active.map(c => {
         if (editing === c.id) {
-          return <CardEditor key={c.id} draft={c} limits={SAVED_LIMITS}
+          return <CardEditor key={c.id} draft={{ ...c, depth: c.depth_prompt?.prompt ?? "" }} limits={SAVED_LIMITS}
             onSave={(draft, confirm) => saveEdit(c, draft, confirm)} onCancel={() => setEditing(null)} />;
         }
         return <PopCard key={c.id} character={c} on={who === c.id} fresh={fresh === c.id} onOpen={() => setOpen(c.id)} />;
@@ -408,6 +408,12 @@ function CharSheet({ character: c, on, onClose, onPick, onEdit, onCopy, onArchiv
           <section className="char-reading" aria-label={t("card.reading")}>
             <h3>{t("card.reading")}</h3>
             <p>{c.reading}</p>
+          </section>
+        )}
+        {c.depth_prompt?.prompt.trim() && (
+          <section className="char-reading" aria-label={t("card.depth")}>
+            <h3>{t("card.depth")}</h3>
+            <p>{c.depth_prompt.prompt}</p>
           </section>
         )}
         <div className="char-sheet-foot">
