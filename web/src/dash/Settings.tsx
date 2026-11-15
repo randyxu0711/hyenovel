@@ -5,6 +5,7 @@ import Figure from "./Figure";
 import CardEditor, { SAVED_LIMITS } from "./CardEditor";
 import PlistWords from "./Plist";
 import { parsePlist } from "./plistFormat";
+import { parseExamples } from "./examplesFormat";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import MemoryPage from "./MemoryPage";
@@ -390,6 +391,7 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
   const lang = useLang();
   const name = localized(c.name, lang);
   const plist = c.depth_prompt ? parsePlist(c.depth_prompt.prompt) : null;
+  const examples = c.examples.trim() ? parseExamples(c.examples) : null;
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
@@ -428,6 +430,23 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
               <p>{c.reading}</p>
             </section>
           )}
+          {c.examples.trim() && (
+            <section className="char-reading" aria-label={t("card.examples")}>
+              <h3>{t("card.examples")}</h3>
+              {examples ? (
+                <div className="char-scroll char-ex">
+                  {examples.lead && <p className="char-ex-lead">{examples.lead}</p>}
+                  {examples.scenes.map((turns, i) => (
+                    <ol key={i} className="nc-talk">
+                      {turns.map((turn, k) => (
+                        <li key={k} data-who={turn.who} className={turn.who === "author" ? "chat-me" : undefined}><p>{turn.text}</p></li>
+                      ))}
+                    </ol>
+                  ))}
+                </div>
+              ) : <p>{c.examples}</p>}
+            </section>
+          )}
           {c.depth_prompt?.prompt.trim() && (
             <section className="char-reading" aria-label={t("card.depth")}>
               <h3>{t("card.depth")}</h3>
@@ -435,7 +454,8 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
             </section>
           )}
           <div className="char-sheet-foot">
-            <button type="button" className="dash-key" aria-pressed={on} disabled={on} onClick={onPick}>{t(on ? "set.default" : "set.makeDefault")}</button>
+            {on ? <span className="char-tag">{t("set.default")}</span>
+              : <button type="button" className="dash-key" onClick={onPick}>{t("set.makeDefault")}</button>}
             <span className="char-acts">
               <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
                 aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>

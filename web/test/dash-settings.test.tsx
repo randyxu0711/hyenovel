@@ -261,7 +261,8 @@ describe("設定頁", () => {
     const s = sheet(p, "鹿");
     fireEvent.click(s.getByRole("button", { name: "設為預設" }));
     expect(tagged()).toEqual([card(p, "鹿")]);
-    expect(s.getByRole("button", { name: "預設" }).getAttribute("aria-pressed")).toBe("true");
+    expect(s.queryByRole("button", { name: /預設/ })).toBeNull();
+    expect(s.getByText("預設", { selector: ".char-tag" })).toBeTruthy();
   });
 
   it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {

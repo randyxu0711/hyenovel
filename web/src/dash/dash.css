@@ -680,12 +680,18 @@
 .dash .char-meta{display:flex; justify-content:center; gap:10px; margin:0; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
 .dash .char-reading{margin:18px 0 0; padding:12px 0 0; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 12%, transparent); text-align:left}
 .dash .char-reading h3{margin:0 0 6px; font-size:var(--dash-t-xs); font-weight:500; letter-spacing:.12em; color:var(--dash-paper-ink-2)}
-.dash .char-reading p{max-height:11em; overflow:auto; margin:0; padding-bottom:1.4em; font-size:var(--dash-t-sm); white-space:pre-wrap;
+.dash .char-reading > p, .dash .char-scroll, .dash .char-sheet .char-edit.is-sheet .char-edit-long textarea.nc-edit{box-sizing:border-box; max-height:11em; overflow:auto; margin:0; padding-bottom:1.4em; font-size:var(--dash-t-sm); white-space:pre-wrap;
   -webkit-mask-image:linear-gradient(to bottom, black calc(100% - 1.4em), transparent); mask-image:linear-gradient(to bottom, black calc(100% - 1.4em), transparent)}
-.dash .char-reading p::-webkit-scrollbar-thumb{background-color:color-mix(in srgb, var(--dash-paper-ink) 22%, transparent)}
-.dash .char-sheet-foot{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:20px}
+.dash .char-ex{white-space:normal}
+.dash .char-ex-lead{margin:0; color:var(--dash-paper-ink-2)}
+.dash .char-ex .nc-talk{gap:6px; margin:0; padding:10px 0; border-bottom:1px dashed color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
+.dash .char-ex .nc-talk:last-child{border-bottom:0}
+.dash .char-ex .nc-talk [data-who="char"] p{line-height:1.8}
+.dash :is(.char-reading > p, .char-scroll, .char-edit-long textarea)::-webkit-scrollbar-thumb{background-color:color-mix(in srgb, var(--dash-paper-ink) 22%, transparent)}
+.dash .char-sheet-foot{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.dash .char-sheet :is(.char-sheet-foot, .char-edit.is-sheet .char-edit-foot){position:sticky; bottom:-22px; z-index:1; margin:8px -28px -22px; padding:24px 28px 16px; background:linear-gradient(to bottom, transparent, var(--dash-paper) 22px)}
+.dash .char-sheet-foot .char-tag{margin:0}
 .dash .char-sheet .ib{color:var(--dash-paper-ink-2)}
-.dash .char-sheet .dash-key:disabled{cursor:default; transform:none}
 @keyframes char-standup{from{transform:rotateX(84deg)} to{transform:rotateX(0)}}
 @keyframes char-veil-in{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){
@@ -713,7 +719,6 @@
 .dash .char-sheet .char-edit.is-sheet .char-edit-long .nc-edit:focus{border-left-color:var(--dash-accent)}
 .dash .char-edit-k{display:block; margin:0 0 6px; font-size:var(--dash-t-xs); font-weight:500; letter-spacing:.12em; color:var(--dash-paper-ink-2)}
 .dash .char-sheet .char-edit.is-sheet .nc-warn{margin:14px 0 0}
-.dash .char-sheet .char-edit.is-sheet .char-edit-foot{position:sticky; bottom:-22px; z-index:1; margin:20px -28px -22px; padding:12px 28px 16px; background:linear-gradient(to bottom, transparent, var(--dash-paper) 14px)}
 .dash .char-edit-ask{font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
 .dash .char-sheet .char-edit.is-sheet .char-edit-foot .dash-key{padding:4px 14px; font-weight:500; color:var(--dash-paper-ink)}
 .dash .char-edit-plist{margin:0}
