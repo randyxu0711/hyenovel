@@ -137,6 +137,15 @@ def mes_example(examples: list[list[dict]]) -> str:
     return "\n\n".join([STORY_HEADER, *blocks]) + "\n"
 
 
+def _speech_label(reading: str) -> str:
+    return "說話" if any("\u3400" <= ch <= "\u9fff" or "\uf900" <= ch <= "\ufaff" for ch in reading) else "Speech"
+
+
+def plist_text(plist: dict, reading: str) -> str:
+    traits, speech = (", ".join(w.strip() for w in plist[k]) for k in ("traits", "speech"))
+    return f"[{{{{char}}}}: {traits}; {_speech_label(reading)}: {speech}]"
+
+
 def to_card(candidate: dict) -> dict:
     return {"spec": "chara_card_v3", "spec_version": "3.0", "data": {
         "name": candidate["name"]["zh-Hant"], "description": "", "tags": [], "creator": "hyenovel",
@@ -146,7 +155,9 @@ def to_card(candidate: dict) -> dict:
         "creator_notes": candidate["line"]["zh-Hant"],
         "extensions": {"hyenovel": {"name": candidate["name"], "line": candidate["line"], "form": candidate["form"],
                                     "figure": spec(candidate["figure"]),
-                                    "colors": figure.pen_colors(candidate["figure"]["main"])}},
+                                    "colors": figure.pen_colors(candidate["figure"]["main"])},
+                       "depth_prompt": {"prompt": plist_text(candidate["plist"], candidate["reading"]),
+                                        "depth": cards.DEFAULT_DEPTH, "role": "system"}},
     }}
 
 
@@ -285,7 +296,8 @@ async def _gated(run, system: str, schema: dict, check, first: str, sleep) -> di
 def _shown(candidate: dict, pos) -> dict:
     candidate = {**candidate, "figure": figure.fit(candidate["figure"])}
     card = to_card(candidate)
-    return {**candidate, "axes": list(pos), "card": card, "warnings": cards.scan(card)["warnings"]}
+    return {**candidate, "axes": list(pos), "card": card, "depth": cards.view(card, "", 0)["depth_prompt"]["prompt"],
+            "warnings": cards.scan(card)["warnings"]}
 
 
 async def generate(run, answers: dict, passage: str | None, lang: str, seed: int, again: dict | None = None,

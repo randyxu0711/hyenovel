@@ -240,7 +240,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   };
 
   const save = async (index: number, card: CardDraft, confirm: boolean) => {
-    const out = await api.createCharacter({ ...batch![index], name: card.name, line: card.line, reading: card.reading }, confirm);
+    const depth = card.depth !== batch![index].depth ? card.depth : undefined;
+    const out = await api.createCharacter({ ...batch![index], name: card.name, line: card.line, reading: card.reading }, confirm, depth);
     if (!out.created) return out.warnings ?? [];
     done.current = true;
     drop();
@@ -396,6 +397,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
               <summary>{t("nc.reading")}</summary>
               <p>{c.reading}</p>
               {c.sample && <p className="nc-sample">{c.sample}</p>}
+              <p className="nc-depth">{c.depth}</p>
             </details>
             {c.warnings.map(w => <p key={w} className="nc-warn" role="note">{t(`card.warn.${w}` as MsgKey)}</p>)}
             <div className="nc-acts">

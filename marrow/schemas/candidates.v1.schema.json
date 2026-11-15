@@ -21,7 +21,8 @@
           "reading",
           "sample",
           "figure",
-          "examples"
+          "examples",
+          "plist"
         ],
         "properties": {
           "name": {
@@ -49,6 +50,9 @@
           },
           "examples": {
             "$ref": "#/$defs/examples"
+          },
+          "plist": {
+            "$ref": "#/$defs/plist"
           }
         }
       }
@@ -235,6 +239,37 @@
               "pattern": "\\S",
               "maxLength": 160
             }
+          }
+        }
+      }
+    },
+    "plist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "traits",
+        "speech"
+      ],
+      "description": "每輪提醒:traits 是性格與在意的東西,speech 是說話的樣子。都是短詞,最重要的放最後。",
+      "properties": {
+        "traits": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 24,
+            "pattern": "^[^\\[\\]［］;；:：,，、\\n\\r\\t\\u2028\\u2029\\u0085､﹐{}]*[^\\[\\]［］;；:：,，、\\n\\r\\t\\u2028\\u2029\\u0085､﹐{}\\s][^\\[\\]［］;；:：,，、\\n\\r\\t\\u2028\\u2029\\u0085､﹐{}]*$"
+          }
+        },
+        "speech": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 24,
+            "pattern": "^[^\\[\\]［］;；:：,，、\\n\\r\\t\\u2028\\u2029\\u0085､﹐{}]*[^\\[\\]［］;；:：,，、\\n\\r\\t\\u2028\\u2029\\u0085､﹐{}\\s][^\\[\\]［］;；:：,，、\\n\\r\\t\\u2028\\u2029\\u0085､﹐{}]*$"
           }
         }
       }

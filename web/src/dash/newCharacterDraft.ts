@@ -7,7 +7,7 @@ export type Draft = {
 };
 export type Job = { kind: "generate" | "revise"; index: number | null; text?: string; started: number; done: Promise<void>; stop: () => void };
 
-export const DRAFT_KEY = "hyenovel.newCharacter.v2";
+export const DRAFT_KEY = "hyenovel.newCharacter.v3";
 const EMPTY: Draft = { form: "", wish: "", batch: null, batchNo: 0, scene: 0, reaction: "" };
 
 let memory: Draft | null | undefined;

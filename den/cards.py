@@ -149,7 +149,12 @@ def _with_ext(card: dict, ext: dict, **fields) -> dict:
     return {**card, "data": {**data, **fields, "extensions": extensions}}
 
 
-def _edit_depth(extensions: dict, data: dict, prompt: str | None) -> None:
+def _char_back(prompt: str, names: tuple[str, ...]) -> str:
+    names = "|".join(re.escape(n) for n in sorted(set(names), key=len, reverse=True) if n)
+    return re.sub(rf"^(\[?)(?:{names})(?=\s*[:：])", r"\1{{char}}", prompt) if names else prompt
+
+
+def _edit_depth(extensions: dict, data: dict, prompt: str | None, new_name: str) -> None:
     shown = _depth(data)
     if prompt is not None and not prompt.strip():
         prompt = ""
@@ -158,6 +163,7 @@ def _edit_depth(extensions: dict, data: dict, prompt: str | None) -> None:
     if not prompt.strip():
         extensions.pop("depth_prompt", None)
         return
+    prompt = _char_back(prompt, (data.get("nickname") or data["name"], new_name))
     old = extensions.get("depth_prompt")
     old = old if isinstance(old, dict) else {}
     depth = old["depth"] if type(old.get("depth")) is int and old["depth"] >= 0 else DEFAULT_DEPTH
@@ -177,7 +183,7 @@ def edited(card: dict, name: dict, line: dict, reading: str, examples: str | Non
     if data.get("nickname"):
         fields["nickname"] = name["zh-Hant"]
     out = _with_ext(card, {"name": name, "line": line}, **fields)
-    _edit_depth(out["data"]["extensions"], data, depth)
+    _edit_depth(out["data"]["extensions"], data, depth, name["zh-Hant"])
     return out
 
 
