@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from den import app as den_app
-from den import companion, discuss
+from den import characters, companion, discuss
 from den.config import MAX_QUOTE_CHARS, MAX_QUOTES
 from den.runner import RunResult
 from den.tests.conftest import FIXTURES
@@ -26,6 +26,11 @@ _MESSAGES = {"ok": None, "usage-limit": "用量已達上限", "crash": "工人�
 
 
 THINKING = "內心盤算蘿蔔乾"
+
+
+def first(message):
+    note = (characters._DIR / "hyena.depth.md").read_text(encoding="utf-8")
+    return discuss.render_turn([], message, note=companion.note_block(note))
 
 
 class FakeChat:
@@ -151,7 +156,7 @@ def test_second_turn_sends_history(c, fake_chat):
     assert "<source>" in system                       # 素材 = companion 那份
     assert "作者:結尾太快?" in user and "你:AB" in user
     assert user.rstrip().endswith("那改慢呢")
-    assert fake_chat.calls[0][1] == "結尾太快?"         # 第一輪沒有歷史
+    assert fake_chat.calls[0][1] == first("結尾太快?")
     assert [t["text"] for t in turns(c)] == ["結尾太快?", "AB", "那改慢呢", "AB"]
 
 
@@ -489,7 +494,7 @@ def test_empty_message_stores_only_assistant(c, fake_chat):
     from den.discuss import OPENER
     evs = post_discuss(c, "mini", None, "")
     sid = evs[-1]["data"]["session_id"]
-    assert fake_chat.calls[-1][1] == OPENER
+    assert fake_chat.calls[-1][1] == first(OPENER)
     us = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert [(u["seq"], u["role"]) for u in us] == [(0, "assistant")]
     post_discuss(c, "mini", sid, "嗯")
@@ -901,7 +906,7 @@ def test_attach_on_bound_session_rejected_before_spend(c, fake_chat):
 
 def test_attach_without_message_sends_attached_prompt(c, fake_chat):
     sid = events(free(c, message="", attach={"name": "海", "text": SEA}))[-1]["data"]["session_id"]
-    assert fake_chat.calls[0][1] == discuss.ATTACHED.format(name="海")
+    assert fake_chat.calls[0][1] == first(discuss.ATTACHED.format(name="海"))
     rows = in_loop(c, lambda conn: _session_rows(conn, sid))[1]
     assert [u["role"] for u in rows] == ["assistant"]
     assert _attachments(c, sid)[0]["seq"] == 0

@@ -1,4 +1,4 @@
-"""角色登記表:DB 的 character_version.card 是正本;內建角色的 <id>.json(長相)+ <id>.md(讀法)+ <id>.examples.md(範例對話,可無)啟動時同步成新版本。"""
+"""角色登記表:DB 的 character_version.card 是正本;內建角色的 <id>.json(長相)+ <id>.md(讀法)+ <id>.examples.md(範例對話,可無)+ <id>.depth.md(每輪提醒,可無)啟動時同步成新版本。"""
 import json
 import secrets
 from functools import cache
@@ -50,9 +50,10 @@ def sync_builtins(conn, now: float) -> None:
     """內建檔和最新版不同才加版;呼叫者持 transaction。"""
     for profile in _load():
         cid = profile["id"]
-        examples = _DIR / f"{cid}.examples.md"
+        examples, depth = _DIR / f"{cid}.examples.md", _DIR / f"{cid}.depth.md"
         card = cards.from_builtin(profile, (_DIR / f"{cid}.md").read_text(encoding="utf-8"),
-                                  examples.read_text(encoding="utf-8") if examples.is_file() else "")
+                                  examples.read_text(encoding="utf-8") if examples.is_file() else "",
+                                  depth.read_text(encoding="utf-8").strip() if depth.is_file() else "")
         latest = repo.latest_character(conn, cid)
         if latest is None:
             repo.add_character(conn, cid, "builtin", now)

@@ -9,12 +9,14 @@ from den import cards, characters
 def _builtin_files():
     out = []
     for p in sorted(characters._DIR.glob("*.json")):
-        out.append((json.loads(p.read_text(encoding="utf-8")), p.with_suffix(".md").read_text(encoding="utf-8")))
+        depth = p.with_suffix(".depth.md")
+        out.append((json.loads(p.read_text(encoding="utf-8")), p.with_suffix(".md").read_text(encoding="utf-8"),
+                    depth.read_text(encoding="utf-8").strip() if depth.is_file() else ""))
     return out
 
 
 def test_builtin_roundtrip_is_byte_identical():
-    for profile, reading in _builtin_files():
+    for profile, reading, _ in _builtin_files():
         c = cards.view(cards.from_builtin(profile, reading), profile["id"], 1)
         assert c["reading"] == reading and c["id"] == profile["id"] and c["version"] == 1
         assert {k: c[k] for k in ("name", "line", "avatar", "colors", "voice", "mark")} == \
@@ -22,7 +24,7 @@ def test_builtin_roundtrip_is_byte_identical():
 
 
 def test_builtin_card_has_required_v3_fields():
-    card = cards.from_builtin(*_builtin_files()[0])
+    card = cards.from_builtin(*_builtin_files()[0][:2])
     assert card["spec"] == "chara_card_v3" and card["spec_version"] == "3.0"
     assert card["data"]["group_only_greetings"] == []
     assert {"name", "description", "tags", "creator", "character_version", "mes_example", "extensions",
@@ -72,8 +74,21 @@ def test_fallback_colors_pass_contrast():
 
 
 def test_builtin_view_keeps_macro_free_text_and_scan_is_clean():
-    for profile, reading in _builtin_files():
-        assert cards.scan(cards.from_builtin(profile, reading)) == {"errors": [], "warnings": []}
+    for profile, reading, depth in _builtin_files():
+        assert cards.scan(cards.from_builtin(profile, reading, depth=depth)) == {"errors": [], "warnings": []}
+
+
+def test_builtin_depth_files_are_short_plain_plists():
+    for p in sorted(characters._DIR.glob("*.json")):
+        text = p.with_suffix(".depth.md").read_text(encoding="utf-8").strip()
+        assert text and len(text) <= 150 and text[0] == "[" and text[-1] == "]" and "{{" not in text, p.stem
+
+
+def test_from_builtin_without_depth_is_unchanged():
+    profile, reading, _ = _builtin_files()[0]
+    assert "depth_prompt" not in cards.from_builtin(profile, reading, "例")["data"]["extensions"]
+    card = cards.from_builtin(profile, reading, depth="[甲]")
+    assert card["data"]["extensions"]["depth_prompt"] == {"prompt": "[甲]", "depth": 4, "role": "system"}
 
 
 def test_scan_keeps_unknown_fields_and_accepts_newer_spec():
@@ -281,12 +296,12 @@ def test_unchanged_depth_prompt_keeps_its_macros():
 
 
 @pytest.mark.parametrize("before", [None, {"prompt": 5}, "字串"])
-def test_writing_a_depth_prompt_where_none_is_usable_starts_at_depth_zero(before):
+def test_writing_a_depth_prompt_where_none_is_usable_starts_at_depth_four(before):
     ext = {} if before is None else {"depth_prompt": before}
     card = _foreign(personality="讀", extensions=ext)
     shown = cards.view(card, "x", 1)
     data = cards.edited(card, shown["name"], shown["line"], "讀", depth="新的")["data"]
-    assert data["extensions"]["depth_prompt"] == {"prompt": "新的", "depth": 0, "role": "system"}
+    assert data["extensions"]["depth_prompt"] == {"prompt": "新的", "depth": 4, "role": "system"}
 
 
 def test_empty_depth_on_a_card_without_one_adds_nothing():
