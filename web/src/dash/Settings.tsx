@@ -259,22 +259,13 @@ function Look() {
   );
 }
 
-function field(o: unknown, k: string): unknown {
-  return typeof o === "object" && o !== null ? (o as Record<string, unknown>)[k] : undefined;
-}
-
-function notePeek(card: unknown): string | null {
-  const prompt = field(field(field(field(card, "data"), "extensions"), "depth_prompt"), "prompt");
-  return typeof prompt === "string" ? prompt : null;
-}
-
 function Companions() {
   const t = useT();
   const chars = useCharacters();
   const [who, setWho] = useState(() => chars.defaultId);
   const [err, setErr] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
-  const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
+  const [held, setHeld] = useState<{ card: unknown; warnings: string[]; note?: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -291,7 +282,7 @@ function Companions() {
     setErr(null); setProblems([]);
     try {
       const r = await api.importCharacter(card, confirm);
-      if (!r.imported) { setHeld({ card, warnings: r.warnings }); return; }
+      if (!r.imported) { setHeld({ card, warnings: r.warnings, note: r.note }); return; }
       setHeld(null);
       await chars.reload();
     } catch (e) {
@@ -326,7 +317,6 @@ function Companions() {
     return <NewCharacter onClose={() => setCreating(false)} onSaved={async id => { await reloadSaved(); setFresh(id ?? null); setCreating(false); }} />;
   }
   const opened = open ? chars.active.find(c => c.id === open) ?? null : null;
-  const peek = held?.warnings.includes("has-depth-prompt") ? notePeek(held.card) : null;
   return (
     <div className="set-rows">
       {err && <p role="alert">{t(errorMessage(err))}</p>}
@@ -356,7 +346,7 @@ function Companions() {
       {held && (
         <div role="group" aria-label={t("set.card.import")}>
           <ul>{held.warnings.map(w => <li key={w}>{t(`card.warn.${w}` as MsgKey)}</li>)}</ul>
-          {peek !== null && <p className="char-note-peek">{peek}</p>}
+          {held.note && <p className="char-note-peek">{held.note}</p>}
           <button type="button" onClick={() => void send(held.card, true)}>{t("set.card.confirm")}</button>
           <button type="button" onClick={() => setHeld(null)}>{t("set.card.cancel")}</button>
         </div>

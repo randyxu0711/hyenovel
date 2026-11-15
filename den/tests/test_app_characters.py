@@ -196,9 +196,9 @@ def test_note_stays_out_of_history(c, fake_chat):
 
 
 def test_import_with_depth_prompt_asks_first(c):
-    card = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": "話少", "depth": 4, "role": "system"}})
+    card = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": " {{char}}話少 ", "depth": 4, "role": "system"}})
     assert c.post("/api/characters/import", json={"card": card}).json() == \
-        {"imported": False, "warnings": ["has-depth-prompt"]}
+        {"imported": False, "warnings": ["has-depth-prompt"], "note": "老讀話少"}
     assert c.post("/api/characters/import", json={"card": card, "confirm": True}).status_code == 201
     blank = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": " ", "depth": 4, "role": "system"}})
     assert c.post("/api/characters/import", json={"card": blank}).status_code == 201

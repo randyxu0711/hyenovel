@@ -188,7 +188,7 @@ export const api = {
   setDefaultCharacter: (character: string) =>
     request<{ default: string }>("/api/characters/default", { ...post({ character }), method: "PUT" }),
   importCharacter: (card: unknown, confirm: boolean) =>
-    request<{ imported: boolean; warnings: string[]; character?: Character }>("/api/characters/import", post({ card, confirm })),
+    request<{ imported: boolean; warnings: string[]; note?: string; character?: Character }>("/api/characters/import", post({ card, confirm })),
   characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
   characterCandidates: (answers: CandidateAnswers, lang: string, again?: CandidateAgain, signal?: AbortSignal) =>
     request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", { ...post({ answers, lang, ...again }), signal }),

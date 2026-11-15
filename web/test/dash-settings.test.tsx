@@ -623,12 +623,13 @@ describe("設定頁:角色卡", () => {
     expect(p.queryByText(zhHant["card.warn.ignored-fields"])).toBeNull();
   });
   it("匯入帶每輪提醒的卡:確認框引出提醒內容", async () => {
-    reply = () => json({ imported: false, warnings: ["has-depth-prompt"] });
+    reply = () => json({ imported: false, warnings: ["has-depth-prompt"], note: "老讀話少" });
     mountCards();
     const p = await open();
-    await upload(JSON.stringify({ spec: "chara_card_v3", data: { extensions: { depth_prompt: { prompt: "話少" } } } }));
+    await upload(JSON.stringify({ spec: "chara_card_v3", data: { extensions: { depth_prompt: { prompt: "{{char}}話少" } } } }));
     expect(await p.findByText(zhHant["card.warn.has-depth-prompt"])).toBeTruthy();
-    expect(p.getByText("話少")).toBeTruthy();
+    expect(p.getByText("老讀話少")).toBeTruthy();
+    expect(p.queryByText("{{char}}話少")).toBeNull();
   });
   it("每輪提醒空時 placeholder 是格式骨架", async () => {
     mountCards();

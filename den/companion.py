@@ -24,17 +24,17 @@ def _boundary_layers(has_text: bool) -> list[Layer]:
             *([Layer("reading", _read("companion/reading.md").rstrip() + "\n\n")] if has_text else [])]
 
 
-_CLOSE_TAG = re.compile(r"[<＜]\s*[/／]\s*character\b[^>＞]*[>＞]", re.I)
-_NOTE_CLOSE = re.compile(r"[<＜]\s*[/／]\s*character_note\b[^>＞]*[>＞]", re.I)
+_CLOSE_TAG = re.compile(r"[<＜]\s*[/／]\s*(?=character\b)", re.I)
+_NOTE_CLOSE = re.compile(r"[<＜]\s*[/／]\s*(?=character_note\b)", re.I)
 
 
 def note_block(prompt: str) -> str:
-    return "<character_note>\n" + _NOTE_CLOSE.sub("< /character_note>", prompt.strip()) + "\n</character_note>"
+    return "<character_note>\n" + _NOTE_CLOSE.sub("< /", prompt.strip()) + "\n</character_note>"
 
 
 def _character_layers(reading: str, voice: str, examples: str = "") -> list[Layer]:
     out = [Layer("closing", _read("companion/closing.md").rstrip() + "\n\n"),
-           Layer("character", "<character>\n" + _CLOSE_TAG.sub("< /character>", reading.strip()) + "\n</character>\n")]
+           Layer("character", "<character>\n" + _CLOSE_TAG.sub("< /", reading.strip()) + "\n</character>\n")]
     if voice.strip():
         out.append(Layer("voice", "\n" + voice.rstrip() + "\n"))
     if examples.strip():
