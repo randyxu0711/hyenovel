@@ -347,8 +347,8 @@
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 
 /* ── 設定頁 ── */
-.dash .dash-settings{box-sizing:border-box; width:100%; max-width:46em; margin:0 auto; padding:36px clamp(16px, 5vw, 48px) 80px}
-.dash .dash-settings[data-section="companions"]{max-width:60em}
+.dash .dash-settings{box-sizing:border-box; width:100%; max-width:60em; margin:0 auto; padding:36px clamp(16px, 5vw, 48px) 80px}
+.dash .dash-settings:not([data-section="companions"]) > :not(.dash-h, .set-nav){max-width:46em}
 .dash .dash-settings .dash-h{margin:0 0 28px; font-family:var(--serif); font-size:var(--dash-t-xl); font-weight:500}
 .dash .set-group{margin:0 0 30px}
 .dash .set-group-h, .dash .dash-set-archive h2{display:flex; align-items:baseline; gap:8px; margin:0 0 6px; padding:0 0 8px; border-bottom:1px solid var(--dash-line); font-size:var(--dash-t-xs); font-weight:500; letter-spacing:.12em; color:var(--dash-ink-2)}
@@ -471,7 +471,6 @@
 
 /* ── 設定(第 2 輪 §5):書架換成分區;內容列 = 左標籤/右控制,無卡片框 ── */
 /* 建角色:短文是唯一的亮點,其餘安靜;波浪 = 陪讀者提到,跟稿上同一個意思 */
-.dash .dash-settings:has(.nc){max-width:64em}
 .dash .dash-settings:has(.nc) > .dash-h{display:none}
 .dash .nc-back{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:4px 8px 4px 2px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .nc-back:hover{color:var(--dash-ink)}
