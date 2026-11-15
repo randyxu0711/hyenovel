@@ -32,22 +32,29 @@ def _speaker(h: dict, others: dict[str, str]) -> str:
     return _ROLE[h["role"]]
 
 
+def note_at(n_history: int, depth: int) -> int:
+    return min(depth, n_history)
+
+
 def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
                 summary: str | None = None, attached: Sequence[dict] = (),
-                others: dict[str, str] | None = None) -> str:
+                others: dict[str, str] | None = None, note: str = "", note_depth: int = 0) -> str:
     """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
     作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。
-    notes 是這輪檢索到的細節,只存在這輪,不進歷史。"""
-    block = [*([notes] if notes else []), *_quotes_block(quotes)]
+    notes 是這輪檢索到的細節,只存在這輪,不進歷史。
+    note 是角色卡的每輪提醒,插在倒數第 note_depth 則發言前(0 = 作者這一輪說之前)。"""
+    block = [*([notes] if notes else []), *_quotes_block(quotes), *([note] if note and not note_depth else [])]
     head = [f"之前的對話摘要:\n<summary>\n{summary}\n</summary>", ""] if summary else []
     if not history:
         if not head:
             return "\n".join([*block, "", "作者這一輪說:", message]) if block else message
         return "\n".join([*head, *block, *([""] if block else []), "作者這一輪說:", message])
     dropped = {a["seq"]: a["name"] for a in attached}
-    lines = [x for h in history for x in (
-        *([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
-        *_quotes_block(h.get("quotes")), f"{_speaker(h, others or {})}:{h['text']}")]
+    groups = [[*([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
+               *_quotes_block(h.get("quotes")), f"{_speaker(h, others or {})}:{h['text']}"] for h in history]
+    if note and note_depth:
+        groups.insert(len(history) - note_depth, [note])
+    lines = [x for g in groups for x in g]
     return "\n".join([*head, "以下是這一局到目前為止的對話(作者 = 使用者):",
                       "<history>", *lines, "</history>", "", *block, "作者這一輪說:", message])
 
@@ -268,6 +275,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     failed = False
     system = companion.assemble(turn["ctx"], character,
                                 companion.pick_samples(repo.voice_samples(conn, character["id"], d)))
+    dp = character.get("depth_prompt")
+    note = dp["prompt"].strip() if dp else ""
+    at = note_at(len(history), dp["depth"]) if note else 0
     analysis = turn["ctx"]["analysis"]
     last = history[-1] if history and history[-1]["role"] == "assistant" else {"text": "", "recipe": None}
     picked = retrieve.pick(analysis, turn["ctx"]["source"], quotes=quotes, message=message, last_reply=last["text"],
@@ -278,7 +288,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                                                   else CONTINUE if history or summary else OPENER),
                                              quotes, retrieve.render(analysis, picked), summary,
                                              [a for a in turn["ctx"]["attachments"] if a["seq"] is not None],
-                                             _others(conn, history, character["id"])),
+                                             _others(conn, history, character["id"]),
+                                             companion.note_block(note) if note else "", at),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
@@ -309,7 +320,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
              "first_delta_ms": result.first_delta_ms}
     fp = turn["analysis_fp"]
     recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
-              "retrieved": [n["id"] for n in picked]}
+              "retrieved": [n["id"] for n in picked],
+              "depth_prompt": {"sha": repo.sha256_text(note), "at": at} if note else None}
     variant = None
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫

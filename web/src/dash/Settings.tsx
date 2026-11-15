@@ -265,7 +265,7 @@ function Companions() {
   const [who, setWho] = useState(() => chars.defaultId);
   const [err, setErr] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
-  const [held, setHeld] = useState<{ card: unknown; warnings: string[] } | null>(null);
+  const [held, setHeld] = useState<{ card: unknown; warnings: string[]; note?: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -282,7 +282,7 @@ function Companions() {
     setErr(null); setProblems([]);
     try {
       const r = await api.importCharacter(card, confirm);
-      if (!r.imported) { setHeld({ card, warnings: r.warnings }); return; }
+      if (!r.imported) { setHeld({ card, warnings: r.warnings, note: r.note }); return; }
       setHeld(null);
       await chars.reload();
     } catch (e) {
@@ -346,6 +346,7 @@ function Companions() {
       {held && (
         <div role="group" aria-label={t("set.card.import")}>
           <ul>{held.warnings.map(w => <li key={w}>{t(`card.warn.${w}` as MsgKey)}</li>)}</ul>
+          {held.note && <p className="char-note-peek">{held.note}</p>}
           <button type="button" onClick={() => void send(held.card, true)}>{t("set.card.confirm")}</button>
           <button type="button" onClick={() => setHeld(null)}>{t("set.card.cancel")}</button>
         </div>

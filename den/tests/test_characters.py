@@ -87,6 +87,13 @@ def test_sync_is_idempotent(conn):
     assert {c["id"]: c["version"] for c in characters.all_(conn)} == {"buffalo": 1, "deer": 1, "hyena": 1}
 
 
+def test_builtin_card_carries_depth_at_four(conn):
+    for cid in ("buffalo", "deer", "hyena"):
+        dp = characters.get(conn, cid)["depth_prompt"]
+        assert dp == {"prompt": (characters._DIR / f"{cid}.depth.md").read_text(encoding="utf-8").strip(),
+                      "depth": 4, "role": "system"}
+
+
 def test_db_reading_matches_file_bytes(conn):
     for c in characters.all_(conn):
         assert c["reading"] == (characters._DIR / f"{c['id']}.md").read_text(encoding="utf-8")
@@ -109,6 +116,12 @@ def test_examples_file_is_optional_and_versions_on_change(tmp_path, monkeypatch)
         characters.sync_builtins(c, 2.0)
         now = characters.get(c, "hyena")
         assert now["version"] == 2 and now["examples"] == "<example>\n鬣狗:嗯哼\n</example>\n"
+        assert now["depth_prompt"] is None
+        (tmp_path / "hyena.depth.md").write_text("[鬣狗: 慢]\n", encoding="utf-8")
+        characters.sync_builtins(c, 3.0)
+        characters.sync_builtins(c, 4.0)
+        now = characters.get(c, "hyena")
+        assert now["version"] == 3 and now["depth_prompt"]["prompt"] == "[鬣狗: 慢]"
     finally:
         c.close()
         characters._load.cache_clear()

@@ -99,8 +99,11 @@ async def import_character(body: CardImportIn, request: Request):
     if scanned["errors"]:
         log.info("event=reject where=character-import reason=%s", ",".join(scanned["errors"]))
         raise ApiError(422, "bad-card", "這張角色卡不能匯入", {"errors": scanned["errors"]})
+    note = (cards.view(body.card, "", 0)["depth_prompt"] or {}).get("prompt", "").strip()
+    if note:
+        scanned["warnings"].append("has-depth-prompt")
     if scanned["warnings"] and not body.confirm:
-        return {"imported": False, "warnings": scanned["warnings"]}
+        return {"imported": False, "warnings": scanned["warnings"], **({"note": note} if note else {})}
     conn = request.app.state.mgr.conn
     with conn:
         character = characters.import_card(conn, body.card, time.time())

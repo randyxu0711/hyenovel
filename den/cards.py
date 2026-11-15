@@ -13,6 +13,7 @@ MAX_CARD_BYTES = 262144
 MAX_READING = 6000
 MAX_EXAMPLES = 3000
 MAX_DEPTH = 600
+DEFAULT_DEPTH = 4
 MAX_NAME = 64
 MAX_LINE = 200
 _FOREIGN_LINE = 40
@@ -77,15 +78,18 @@ def _voice(ext: dict) -> str:
     return ext["voice"] if isinstance(ext.get("voice"), str) else ""
 
 
-def from_builtin(profile: dict, reading: str, examples: str = "") -> dict:
-    """內建角色(.json 的內容 + 讀法原文 + 範例對話)→ CCv3 卡。"""
-    return {"spec": "chara_card_v3", "spec_version": "3.0", "data": {
+def from_builtin(profile: dict, reading: str, examples: str = "", depth: str = "") -> dict:
+    """內建角色(.json 的內容 + 讀法原文 + 範例對話 + 每輪提醒)→ CCv3 卡。"""
+    card = {"spec": "chara_card_v3", "spec_version": "3.0", "data": {
         "name": profile["name"]["zh-Hant"], "description": "", "tags": [], "creator": "hyenovel",
         "character_version": "", "mes_example": examples, "system_prompt": "", "post_history_instructions": "",
         "first_mes": "", "alternate_greetings": [], "group_only_greetings": [], "personality": reading,
         "scenario": "", "creator_notes": profile["line"]["zh-Hant"],
         "extensions": {"hyenovel": {k: profile[k] for k in ("name", "line", "avatar", "colors", "voice", "mark", "figure")}},
     }}
+    if depth:
+        card["data"]["extensions"]["depth_prompt"] = {"prompt": depth, "depth": DEFAULT_DEPTH, "role": "system"}
+    return card
 
 
 def _avatar(value, character_id: str) -> dict:
@@ -156,7 +160,7 @@ def _edit_depth(extensions: dict, data: dict, prompt: str | None) -> None:
         return
     old = extensions.get("depth_prompt")
     old = old if isinstance(old, dict) else {}
-    depth = old["depth"] if type(old.get("depth")) is int and old["depth"] >= 0 else 0
+    depth = old["depth"] if type(old.get("depth")) is int and old["depth"] >= 0 else DEFAULT_DEPTH
     role = old["role"] if old.get("role") in _ROLES else "system"
     extensions["depth_prompt"] = {**old, "prompt": prompt, "depth": depth, "role": role}
 

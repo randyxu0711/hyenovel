@@ -829,3 +829,4 @@
 .dash .dash-mem-row:hover .dash-mem-bar .ib, .dash .dash-mem-row .dash-mem-bar .ib:focus-visible{opacity:1}
 .dash .dash-mem-old{margin:8px 0 0; padding-left:12px; border-left:1px solid var(--dash-line)}
 .dash .dash-mem-old li{margin:0 0 10px}
+.dash .char-note-peek{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap}

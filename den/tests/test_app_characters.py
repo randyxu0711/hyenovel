@@ -1,4 +1,6 @@
 """角色卡匯入、匯出、封存 API。"""
+import json
+
 from den.tests.test_app_discuss import c, fake_chat, in_loop, post_discuss  # noqa: F401
 from den import cards
 from den.tests.test_cards import _foreign
@@ -123,3 +125,88 @@ def test_edit_rejects_a_too_long_depth(c):
     got = _import(c)
     body = {"name": got["name"], "line": got["line"], "reading": got["reading"], "depth": "讀" * (cards.MAX_DEPTH + 1)}
     assert c.patch(f"/api/characters/{got['id']}", json=body).status_code == 422
+
+
+def _noted(c, prompt="話少", depth=4):
+    card = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": prompt, "depth": depth, "role": "system"}})
+    return c.post("/api/characters/import", json={"card": card, "confirm": True}).json()["character"]["id"]
+
+
+def _say(c, cid, sid=None, message="嗨"):
+    return post_discuss_as(c, cid, sid, message)[-1]["data"]["session_id"]
+
+
+def post_discuss_as(c, cid, sid, message):
+    r = c.post("/api/discuss/mini", json={"session_id": sid, "message": message, "character": cid})
+    return [json.loads(x[6:]) for x in r.text.splitlines() if x.startswith("data: ")]
+
+
+def _recipes(c, sid):
+    us = in_loop(c, lambda conn: repo.utterances(conn, repo.discussion_by_session(conn, sid)["id"]))
+    return [u["recipe"]["depth_prompt"] for u in us if u["role"] == "assistant"]
+
+
+NOTE = "<character_note>\n話少\n</character_note>"
+
+
+def test_imported_depth_prompt_is_sent_each_turn_and_recorded(c, fake_chat):
+    cid = _noted(c)
+    sid = _say(c, cid)
+    _say(c, cid, sid, "再說")
+    first, second = fake_chat.calls[-2][1], fake_chat.calls[-1][1]
+    assert first == f"{NOTE}\n\n作者這一輪說:\n嗨"
+    assert second.index("<history>") < second.index(NOTE) < second.index("作者:嗨") < second.index("</history>")
+    sha = repo.sha256_text("話少")
+    assert _recipes(c, sid) == [{"sha": sha, "at": 0}, {"sha": sha, "at": 2}]
+
+
+def test_depth_prompt_goes_into_history_once_long_enough(c, fake_chat):
+    cid = _noted(c)
+    sid = _say(c, cid)
+    for m in ("二", "三"):
+        _say(c, cid, sid, m)
+    user = fake_chat.calls[-1][1]
+    assert _recipes(c, sid)[-1]["at"] == 4
+    assert user.index("<history>") < user.index(NOTE) < user.index("作者:二") < user.index("</history>")
+    assert user.count("character_note>") == 2
+
+
+def test_blank_depth_prompt_is_not_sent(c, fake_chat):
+    cid = _noted(c, prompt="  ")
+    sid = _say(c, cid)
+    assert "character_note" not in fake_chat.calls[-1][1]
+    assert _recipes(c, sid) == [None]
+
+
+def test_regenerate_carries_the_note(c, fake_chat):
+    cid = _noted(c)
+    sid = _say(c, cid)
+    first = fake_chat.calls[-1]
+    r = c.post(f"/api/sessions/{sid}/turns/1/regenerate")
+    assert r.status_code == 200 and fake_chat.calls[-1] == first
+    assert _recipes(c, sid)[-1] == {"sha": repo.sha256_text("話少"), "at": 0}
+
+
+def test_note_stays_out_of_history(c, fake_chat):
+    cid = _noted(c, depth=0)
+    sid = _say(c, cid)
+    _say(c, cid, sid, "再說")
+    user = fake_chat.calls[-1][1]
+    assert user.count(NOTE) == 1 and user.index("</history>") < user.index(NOTE)
+
+
+def test_import_with_depth_prompt_asks_first(c):
+    card = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": " {{char}}話少 ", "depth": 4, "role": "system"}})
+    assert c.post("/api/characters/import", json={"card": card}).json() == \
+        {"imported": False, "warnings": ["has-depth-prompt"], "note": "老讀話少"}
+    assert c.post("/api/characters/import", json={"card": card, "confirm": True}).status_code == 201
+    blank = _foreign(personality="讀", extensions={"depth_prompt": {"prompt": " ", "depth": 4, "role": "system"}})
+    assert c.post("/api/characters/import", json={"card": blank}).status_code == 201
+
+
+def test_edit_does_not_warn_about_its_own_depth_prompt(c):
+    cid = _noted(c)
+    got = _char(c, cid)
+    r = c.patch(f"/api/characters/{cid}", json={"name": {**got["name"], "zh-Hant": "新名"}, "line": got["line"],
+                                                "reading": got["reading"], "depth": "話少"})
+    assert r.json()["edited"] is True
