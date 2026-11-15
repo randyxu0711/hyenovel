@@ -5,7 +5,7 @@ import { errorMessage, localized, useLang, useT, type Lang, type MsgKey } from "
 export type CardLimits = { name: number; line: number; reading: number; examples?: number; depth?: number; lineRequired?: boolean };
 export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000, examples: 3000, depth: 600 };
 export const candidateLimits = (lang: Lang): CardLimits =>
-  lang === "en" ? { name: 32, line: 80, reading: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, lineRequired: true };
+  lang === "en" ? { name: 32, line: 80, reading: 600, depth: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, depth: 600, lineRequired: true };
 
 export default function CardEditor({ draft, limits, onSave, onCancel, onChange }: {
   draft: Omit<CardDraft, "examples" | "depth"> & { examples?: unknown; depth?: unknown }; limits: CardLimits;

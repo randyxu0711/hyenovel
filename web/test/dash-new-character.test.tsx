@@ -15,6 +15,8 @@ const candidate = (n: number, warnings: string[] = []) => ({
     eyes: [[50, 58], [70, 58]], mouth: [[54, 70], [60, 73], [66, 70]] },
   axes: [], card: {}, warnings,
   examples: [1, 2, 3].map(k => [{ who: "char", text: `菜脯${n}-${k}` }, { who: "author", text: `作者${n}-${k}` }]),
+  plist: { traits: ["直率", "務實", "冷面幽默"], speech: ["簡短", "乾脆", "口語"] },
+  depth: `[門縫${n}: 直率, 務實, 冷面幽默; 說話: 簡短, 乾脆, 口語]`,
 });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -523,6 +525,31 @@ describe("改候選與存卡", () => {
     expect(last().candidate.reading).toBe("我改的讀法");
     expect(last().confirm).toBe(false);
   });
+  it("怎麼讀裡看得到每輪提醒", async () => {
+    await toResults();
+    fireEvent.click(pick(1).getByText("怎麼讀"));
+    expect(panel().getByText("[門縫1: 直率, 務實, 冷面幽默; 說話: 簡短, 乾脆, 口語]")).toBeTruthy();
+  });
+  it("編輯器預填每輪提醒,改了會送出", async () => {
+    await toResults();
+    fireEvent.click(pick(1).getByRole("button", { name: "用這個" }));
+    const box = screen.getByLabelText("每輪提醒") as HTMLTextAreaElement;
+    expect(box.value).toBe("[門縫1: 直率, 務實, 冷面幽默; 說話: 簡短, 乾脆, 口語]");
+    fireEvent.change(box, { target: { value: "[門縫1: 安靜]" } });
+    replies = [json({ created: true, character: { id: "new1" } }, 201)];
+    fireEvent.click(button("存"));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(last().depth).toBe("[門縫1: 安靜]");
+  });
+  it("只改名字不送每輪提醒,讓它跟著新名字", async () => {
+    await toResults();
+    fireEvent.click(pick(1).getByRole("button", { name: "用這個" }));
+    fireEvent.change(screen.getByLabelText("名字"), { target: { value: "我取的" } });
+    replies = [json({ created: true, character: { id: "new1" } }, 201)];
+    fireEvent.click(button("存"));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect("depth" in last()).toBe(false);
+  });
   it("名字空白不能存", async () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "用這個" }));
@@ -602,6 +629,14 @@ describe("離開再回來", () => {
     expect(formBox()).toBeTruthy();
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByRole("button", { name: "收起" })).toBeNull();
+  });
+  it("v2 的舊草稿不讀,因為候選沒有每輪提醒", () => {
+    sessionStorage.setItem("hyenovel.newCharacter.v2", JSON.stringify({
+      form: "門縫", wish: "", batch: [candidate(1), candidate(2), candidate(3)], batchNo: 1, scene: 0, reaction: "",
+    }));
+    mount();
+    expect(formBox().value).toBe("");
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
   it("舊存檔沒有新欄位也接得回來", () => {
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify({

@@ -51,6 +51,7 @@ export type Candidate = {
   figure: { parts: Part[]; eyes: [Pt, Pt]; mouth: [Pt, Pt, Pt]; main: Pen; second: Pen };
   axes: string[]; card: unknown; warnings: string[];
   examples: { who: "author" | "char"; text: string }[][];
+  plist: { traits: string[]; speech: string[] }; depth: string;
 };
 export type ThemeTokens = Record<string, string>;
 export type Theme = { id: string; name: LText; source: string; light: ThemeTokens; dark: ThemeTokens };
@@ -194,8 +195,9 @@ export const api = {
     request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", { ...post({ answers, lang, ...again }), signal }),
   reviseCandidate: (candidate: Candidate, feedback: string, lang: string, signal?: AbortSignal) =>
     request<Candidate>("/api/characters/candidates/revise", { ...post({ candidate, feedback, lang }), signal }),
-  createCharacter: (candidate: Candidate, confirm: boolean) =>
-    request<{ created: boolean; warnings?: string[]; character?: Character }>("/api/characters", post({ candidate, confirm })),
+  createCharacter: (candidate: Candidate, confirm: boolean, depth?: string) =>
+    request<{ created: boolean; warnings?: string[]; character?: Character }>("/api/characters",
+      post({ candidate, confirm, ...(depth === undefined ? {} : { depth }) })),
   copyCharacter: (id: string) =>
     request<{ character: Character }>(`/api/characters/${encodeURIComponent(id)}/copy`, { method: "POST" }),
   editCharacter: (id: string, draft: CardDraft, confirm: boolean) =>
