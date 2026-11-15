@@ -389,9 +389,14 @@
 .dash .dash-pane-switch{display:flex; gap:2px; padding:2px; border-radius:8px; background:var(--dash-desk-2)}
 .dash .dash-pane-switch button{padding:3px 14px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .dash-pane-switch button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
-.dash .dash-bar-palette{margin-left:auto; padding:3px 12px; border:1px solid var(--dash-line); border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .dash-bar .ib{width:32px; height:32px; padding:0; display:grid; place-items:center}
+.dash .dash-bar-palette{margin-left:auto}
 .dash[data-narrow="true"][data-view]{grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr)}
 .dash[data-narrow="true"] .dash-rail{display:none}
+.dash[data-narrow="true"][data-drawer="true"] .dash-rail{display:flex; position:fixed; inset:0 auto 0 0; z-index:16; width:min(300px, 86vw); box-shadow:var(--dash-sh-float); animation:dash-drawer-in .18s ease-out}
+.dash-drawer-scrim{position:fixed; inset:0; z-index:15; background:color-mix(in srgb, var(--dash-ink) 18%, transparent)}
+@keyframes dash-drawer-in{from{transform:translateX(-24px); opacity:0}}
+@media (prefers-reduced-motion:reduce){ .dash[data-narrow="true"][data-drawer="true"] .dash-rail{animation:none} }
 .dash-palette-scrim{position:fixed; inset:0; z-index:20; display:flex; justify-content:center; align-items:flex-start; padding-top:14vh; background:color-mix(in srgb, var(--dash-ink) 18%, transparent)}
 .dash .dash-palette{position:static; display:flex; flex-direction:column; gap:6px; width:min(520px, 92vw); max-height:60vh; padding:10px}
 .dash .dash-palette input{padding:8px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); color:var(--dash-paper-ink); font:inherit}
