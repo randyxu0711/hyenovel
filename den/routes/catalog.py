@@ -52,6 +52,7 @@ class ReviseIn(BaseModel):
 
 class CandidateSaveIn(BaseModel):
     candidate: Any = None
+    depth: str | None = Field(None, max_length=cards.MAX_DEPTH)
     confirm: bool = False
 
 
@@ -182,6 +183,8 @@ async def create_character(body: CandidateSaveIn, request: Request):
     if candidate is None:
         raise _bad_card("character-create", ["bad-schema"])
     card = candidates.to_card(candidate)
+    if body.depth is not None:
+        card = cards.edited(card, candidate["name"], candidate["line"], candidate["reading"], depth=body.depth)
     scanned = cards.scan(card)
     if scanned["errors"]:
         raise _bad_card("character-create", scanned["errors"])

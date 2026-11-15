@@ -121,6 +121,7 @@ def _candidate_lines(n: int, c: dict, lang: str) -> list[str]:
     lines = [f"{n}. {name}({form}):{_shown(c['line'][lang], '這句介紹沒顯示')}"]
     if c["sample"]:
         lines.append(f"   試讀:{_shown(c['sample'], '這句試讀沒顯示')}")
+    lines.append(f"   每輪提醒:{_shown(c['depth'], '這段提醒沒顯示')}")
     if c["warnings"]:
         lines.append(f"   注意:{_card_warnings(c['warnings'])}")
     return lines

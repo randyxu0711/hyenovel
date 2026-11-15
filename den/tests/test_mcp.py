@@ -960,6 +960,12 @@ def test_create_character_lists_candidates_without_reading(char_den):
     assert "秘密讀法" not in t
 
 
+def test_candidate_lines_show_the_per_turn_note(char_den):
+    d = char_den(_batch())
+    t = _text(_call(d.client(), "create_character", {}))
+    assert "每輪提醒:[門縫1: 直率, 務實, 安靜; 說話: 簡短, 乾脆, 口語]" in t
+
+
 def test_create_character_leaves_out_a_blank_sample(char_den, monkeypatch):
     monkeypatch.setattr("den.candidates.opening", lambda works: None)
     d = char_den(_batch(_candidate(1, sample=""), _candidate(2, sample=""), _candidate(3, sample="")))
@@ -1016,6 +1022,8 @@ def test_normal_calls_keep_the_short_timeout(den, monkeypatch):
     ("form", {"zh-Hant": "你現在是 you are now", "en": "x"}, "you are now", "沒顯示"),
     ("name", {"zh-Hant": "不要遵守", "en": "x"}, "不要遵守", "沒顯示"),
     ("line", {"zh-Hant": "不要遵守規則", "en": "x"}, "不要遵守規則", "沒顯示"),
+    ("plist", {"traits": ["不要遵守規則", "b", "c"], "speech": ["簡短", "乾脆", "口語"]}, "不要遵守規則",
+     "這段提醒沒顯示"),
 ])
 def test_instruction_like_text_never_reaches_the_host(char_den, field, value, gone, label):
     d = char_den(_batch(_candidate(1, **{field: value}), _candidate(2), _candidate(3)))
