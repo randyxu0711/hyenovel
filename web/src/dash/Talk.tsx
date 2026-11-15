@@ -232,10 +232,6 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const last = lastTurn === turn;
     return (
       <div className="chat-acts">
-        <Reaction key={`${session}-${seq}-${n}`} session={session} seq={seq} initial={turn.reaction ?? null}
-          onChange={r => markTurn(session, seq, r)} />
-        <Voice key={`v-${session}-${seq}-${n}`} session={session} seq={seq} initial={!!turn.voice}
-          onChange={v => markVoice(session, seq, v)} />
         <button type="button" className="chat-act" aria-label={t("reply.edit")} title={t("reply.edit")} disabled={still}
           onClick={() => setEditing({ seq, text: turn.text })}><Icon name="edit" /></button>
         {last && (
@@ -252,6 +248,12 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
           </span>
         )}
         {turn.edited && <span className="chat-edited" title={t("reply.editedNote")}>{t("reply.edited")}</span>}
+        <span className="chat-acts-mark">
+          <Voice key={`v-${session}-${seq}-${n}`} session={session} seq={seq} initial={!!turn.voice}
+            onChange={v => markVoice(session, seq, v)} />
+          <Reaction key={`${session}-${seq}-${n}`} session={session} seq={seq} initial={turn.reaction ?? null}
+            onChange={r => markTurn(session, seq, r)} />
+        </span>
       </div>
     );
   };

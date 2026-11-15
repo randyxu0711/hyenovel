@@ -112,7 +112,9 @@
 .dash .chat-turn:hover .chat-act, .dash .chat-act:focus-visible{opacity:1}
 .dash .chat-turn:hover .chat-act:disabled{opacity:.35}
 @media (hover:none){ .dash .chat-act{opacity:.6} .dash .chat-act:disabled{opacity:.3} }
-.dash .chat-voice.is-on{opacity:1; color:var(--dash-paper-ink)}
+.dash .chat-acts-mark{display:inline-flex; align-items:center; gap:2px; margin-left:10px}
+.dash .chat-voice{gap:4px}
+.dash .chat-voice.is-on{opacity:1; padding-right:6px; border-radius:999px; background:color-mix(in srgb, var(--dash-paper-ink-2) 14%, transparent); color:var(--dash-paper-ink)}
 .dash .chat-flip{display:inline-flex; align-items:center; margin-left:6px}
 .dash .chat-flip .chat-act{opacity:1}
 .dash .chat-flip .chat-act:disabled{opacity:.3}

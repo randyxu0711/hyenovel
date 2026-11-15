@@ -43,7 +43,7 @@ export default function Voice({ session, seq, initial, onChange }: {
     <>
       <button type="button" className={voiced ? "chat-act chat-voice is-on" : "chat-act chat-voice"} aria-pressed={voiced}
         aria-label={t("reply.voice")} title={t("reply.voiceNote")} onClick={press}>
-        <Icon name={voiced ? "forkOn" : "fork"} />
+        <Icon name={voiced ? "voiceOn" : "voice"} />{voiced && <span>{t("reply.voice")}</span>}
       </button>
       {code && <p className="chat-react-err" role="alert">{t(errorMessage(code))}</p>}
     </>
