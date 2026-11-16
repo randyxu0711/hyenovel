@@ -55,6 +55,7 @@ def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> 
             sid = repo.ensure_story(conn, slug, title, now)
             _, new = repo.add_source_version(conn, sid, text, now)
             reused = False
+    repo.unarchive_story(conn, sid)
     st = repo.story(conn, sid)
     return {"slug": slug, "title": st["title"],
             "version": repo.latest_source_version(conn, sid)["n"],
@@ -83,7 +84,7 @@ def companion_context(conn, slug: str | None, discussion_id: int | None = None) 
     points = notes["body"]["points"] if notes and notes["source_version_id"] == latest["id"] else ()
     return {
         "seeds": [{"kind": p["kind"], "quotes": p["quotes"]} for p in points if p["kind"] != "opinion"],
-        "slug": slug, "title": st["title"], "source": latest["text"],
+        "slug": slug, "title": st["custom_title"] or st["title"], "source": latest["text"],
         "analysis": analysis["body"] if analysis and analysis["source_version_id"] == latest["id"] else None,
         "progress": job["state"] if job else "none",
         "memory": memory.load(conn, st["id"]),

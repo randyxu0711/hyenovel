@@ -30,7 +30,7 @@ function mount(path = "/w/d1") {
     if (p.startsWith("/api/discuss/")) return sse(
       ["message", { role: "assistant", text: "「海」好", session_id: "s1", character: "hyena", spans: [{ quote: "海", start: 0, end: 1 }] }],
       ["done", { ok: true, session_id: "s1" }]);
-    return json({ sessions: [] });
+    return json({ sessions: [], works: [] });
   }));
   render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/" element={<Dash />} /><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
 }

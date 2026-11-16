@@ -206,9 +206,9 @@
 .dash .shelf-boxed:hover{color:var(--dash-ink); background:var(--dash-line)}
 .dash .shelf-boxed .ico{width:13px; height:13px}
 .dash .shelf-boxed > span:last-child{margin-left:auto; font-variant-numeric:tabular-nums}
-.dash .shelf-sess .shelf-gone{display:flex; align-items:center; gap:8px; padding:4px 8px; font-size:var(--dash-t-sm); color:var(--dash-ink-2); white-space:nowrap; animation:nc-in .2s ease-out both}
-.dash .shelf-sess .shelf-gone button{width:auto; margin-left:auto; padding:0 2px; border-radius:0; background:none; font:inherit; color:var(--dash-accent)}
-.dash .shelf-sess .shelf-gone button:hover{background:none; text-decoration:underline; text-underline-offset:3px}
+.dash :is(.shelf-sess, .shelf-works) .shelf-gone{display:flex; align-items:center; gap:8px; padding:4px 8px; font-size:var(--dash-t-sm); color:var(--dash-ink-2); white-space:nowrap; animation:nc-in .2s ease-out both}
+.dash :is(.shelf-sess, .shelf-works) .shelf-gone button{width:auto; margin-left:auto; padding:0 2px; border-radius:0; background:none; font:inherit; color:var(--dash-accent)}
+.dash :is(.shelf-sess, .shelf-works) .shelf-gone button:hover{background:none; text-decoration:underline; text-underline-offset:3px}
 .dash .chat-staged{display:flex; align-items:center; gap:6px; margin:8px 10px 0; padding:6px 4px 6px 10px; border-radius:2px 8px 2px 2px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .chat-staged .ico{width:14px; height:14px; flex:none}
 .dash .chat-staged b{min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600}
@@ -267,6 +267,12 @@
 .dash .reader{padding:0 24px}
 .dash .paper-top{position:sticky; top:0; z-index:2; display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px; min-height:54px; padding:8px 0; background:var(--dash-desk)}
 .dash .paper-h{margin:0; font-size:var(--dash-t-md); font-weight:600}
+.dash .paper-name{display:flex; align-items:center; gap:4px; min-width:0}
+.dash .paper-rename{width:24px; height:24px; padding:0; opacity:0}
+.dash .paper-rename .ico{width:14px; height:14px}
+.dash .paper-name:hover .paper-rename, .dash .paper-rename:focus-visible{opacity:1}
+.dash .paper-name-in{font:inherit; font-size:var(--dash-t-md); font-weight:600; color:inherit; background:transparent;
+  border:0; border-bottom:1px dashed currentColor; padding:0; min-width:8em; outline:none}
 .dash .paper-title{display:inline-flex; align-items:center; gap:4px; padding:3px 8px; margin-left:-8px; border:0; border-radius:7px; background:none; cursor:pointer; font-weight:600; color:var(--dash-ink)}
 .dash .paper-title:hover, .dash .paper-title[aria-expanded="true"]{background:var(--dash-desk-2)}
 .dash .paper-vers{position:relative; display:flex; align-items:center; gap:4px}
@@ -288,7 +294,9 @@
 .dash .paper-flow{margin-left:auto}
 .dash[data-narrow="true"] .paper-top::after{content:""; order:2; flex-basis:100%; height:0}
 .dash[data-narrow="true"] .paper-top > *{order:3}
-.dash[data-narrow="true"] .paper-top > :is(.paper-h, .paper-flow, .paper-focus){order:1}
+.dash[data-narrow="true"] .paper-top > :is(.paper-name, .paper-name-in, .paper-flow, .paper-focus){order:1}
+.dash[data-narrow="true"] .paper-name{flex:0 1 auto}
+.dash[data-narrow="true"] .paper-rename{opacity:.6}
 .dash[data-narrow="true"] .paper-h{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:0 1 auto}
 /* 拖檔:整個畫面蓋一層桌色,一張寫著下一版號的紙從右上斜著滑進來 */
 .dash .drop-sheet{position:fixed; inset:0; z-index:20; display:grid; place-items:center; pointer-events:none; background:color-mix(in srgb, var(--dash-desk) 70%, transparent)}
@@ -411,6 +419,8 @@
 .dash .dash-set-archived .arch-open{flex:1; min-width:0; display:flex; align-items:baseline; gap:10px; padding:8px 10px; margin-left:-10px; border:0; border-radius:8px; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer}
 .dash .dash-set-archived .arch-open:hover{background:var(--dash-desk-2)}
 .dash .dash-set-archived .arch-open:focus-visible{outline:2px solid var(--dash-accent); outline-offset:-2px}
+.dash .dash-set-archived div.arch-open{cursor:default}
+.dash .dash-set-archived div.arch-open:hover{background:none}
 .dash .dash-set-archived .arch-open b{flex:none; font-weight:500; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .dash-set-archived .arch-open span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash .dash-set-archived .arch-open time{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
@@ -501,6 +511,15 @@
 .dash .shelf-fp{grid-column:1/-1; width:100%; height:14px; margin-top:2px; color:var(--dash-ink-2); opacity:.7; overflow:visible}
 .dash .shelf-fp polyline{fill:none; stroke:currentColor; stroke-width:1.2; stroke-linejoin:round; stroke-linecap:round; vector-effect:non-scaling-stroke}
 .dash .shelf-work[data-on] .shelf-fp{color:var(--dash-accent); opacity:1}
+.dash .shelf-work{position:relative}
+.dash .shelf-work > .shelf-wx{position:absolute; right:10px; top:7px; display:inline-grid; place-items:center; width:24px; height:24px; padding:0; opacity:0; background:var(--dash-line)}
+.dash .shelf-work > button:hover + .shelf-wx, .dash .shelf-work > .shelf-wx:hover, .dash .shelf-work > .shelf-wx:focus-visible{opacity:1}
+.dash .shelf-work:has(> button:hover, > .shelf-wx:hover, > .shelf-wx:focus-visible) > button .shelf-when{visibility:hidden}
+.dash .shelf-wx .ico{width:14px; height:14px}
+@media (hover: none){
+  .dash .shelf-work > .shelf-wx{opacity:.6}
+  .dash .shelf-work > button .shelf-when{visibility:hidden}
+}
 .dash .shelf-sess{list-style:none; margin:4px 0 8px 10px; padding:0}
 .dash .shelf-sess button{
   display:flex; align-items:center; gap:6px; width:100%; padding:4px 8px; cursor:pointer;

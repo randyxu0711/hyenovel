@@ -21,7 +21,7 @@ function mount(path: string) {
     if (p === "/api/works") return json({ works: WORKS });
     if (p.endsWith("/map")) return json({ version: 1, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
     if (p.startsWith("/api/works/") && !p.endsWith("/sessions")) return json({ slug: "d1", title: "海", version: 1, versions: [1], text: "內文一行", state: "ready", job_id: null, notes_ready: false });
-    return json({ sessions: [] });
+    return json({ sessions: [], works: [] });
   }));
   render(<MemoryRouter initialEntries={[path]}><Where />
     <Routes><Route path="/" element={<Dash />} /><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes>
@@ -212,7 +212,7 @@ describe("專注模式", () => {
       if (p === "/api/works") return json({ works: WORKS });
       if (p.endsWith("/map")) return json({ version: 5, analysis_version: null, notes_version: null, beats: [], motifs: [], notes: null });
       if (p.startsWith("/api/works/") && !p.endsWith("/sessions")) return json({ slug: "d1", title: "海", version: 5, versions: [1, 2, 3, 4, 5], text: "內文一行", state: "ready", job_id: null, notes_ready: false });
-      return json({ sessions: [] });
+      return json({ sessions: [], works: [] });
     });
     await enter();
     const more = await screen.findByRole("button", { name: "所有版本" });

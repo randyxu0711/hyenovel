@@ -93,7 +93,8 @@ function Chats({ talk, onChat, onArchived, onShelf, rev, undo, onRestore }: {
   useEffect(() => {
     let live = true;
     api.recentSessions(20).then(rs => { if (live) setRows(rs.filter(r => r.slug === null)); }, () => {});
-    api.archivedSessions().then(rs => { if (live) setBoxed(rs.length); }, () => {});
+    Promise.all([api.archivedSessions(), api.archivedWorks()])
+      .then(([ss, ws]) => { if (live) setBoxed(ss.length + ws.length); }, () => {});
     return () => { live = false; };
   }, [talk.session, talk.turns.length, rev]);
   const shown = all ? rows : rows.slice(0, CHATS_SHOWN);
@@ -146,7 +147,7 @@ function IB({ icon, label, children, ...rest }: { icon: IconName; label: string;
 }
 
 /** 書架。展開:作品(依更新新到舊)→ 目前這篇的局;窄條:工具在上、目前這篇(標題第一個字)在下。 */
-export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, onChat, onArchiveShelf, settingsNav = null, hidden = false }: {
+export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, onChat, onArchiveShelf, onWorks, settingsNav = null, hidden = false }: {
   mode: ShelfMode; onToggle: () => void;
   works: Work[]; current: string | null; talk: TalkState;
   view: "home" | "work" | "settings";
@@ -159,6 +160,8 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   onChat: (id: string | null) => void;
   /** 去設定的封存分區。 */
   onArchiveShelf?: () => void;
+  /** 封存或復原了作品:外面重抓作品清單。 */
+  onWorks?: () => void;
   /** 在設定頁:書架換成設定分區(不列作品)。 */
   settingsNav?: ReactNode;
   hidden?: boolean;
@@ -175,7 +178,31 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   const news = works.some(w => w.slug !== current && dotState(w, seen(w.slug)) === "fresh");
   const [undo, setUndo] = useState<Undo | null>(null);
   const [rev, setRev] = useState(0);
+  const [goneWork, setGoneWork] = useState<{ slug: string; at: number; current: boolean } | null>(null);
   useEffect(() => { setUndo(null); }, [current]);
+  useEffect(() => {
+    if (!goneWork) return;
+    const id = setTimeout(() => setGoneWork(null), UNDO_MS);
+    return () => clearTimeout(id);
+  }, [goneWork]);
+  const archiveWork = (w: Work, at: number, on: boolean) => {
+    void api.archiveWork(w.slug).then(() => {
+      setGoneWork({ slug: w.slug, at, current: on });
+      setRev(n => n + 1);
+      onWorks?.();
+      if (on) nav("/");
+    }, () => {});
+  };
+  const restoreWork = () => {
+    if (!goneWork) return;
+    const { slug, current } = goneWork;
+    setGoneWork(null);
+    void api.unarchiveWork(slug).then(() => {
+      setRev(n => n + 1);
+      onWorks?.();
+      if (current) onOpen(slug);
+    }, () => {});
+  };
   useEffect(() => {
     if (!undo) return;
     const id = setTimeout(() => setUndo(null), UNDO_MS);
@@ -216,7 +243,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
       )}
       {open && !settingsNav && (
         <ul className="shelf-works">
-          {shown.map(w => {
+          {withGone(shown, goneWork && { session: goneWork.slug, current: false, chat: false, at: goneWork.at }, false, w => {
             const s = dotState(w, seen(w.slug));
             const on = w.slug === current;
             const pts = fpPoints(w.curve ?? [], 100, 14);
@@ -234,11 +261,13 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
                     </svg>
                   )}
                 </button>
+                <IB icon="box" label={t("work.archive")} className="ib shelf-wx" disabled={on && talk.streaming !== null}
+                  onClick={() => archiveWork(w, shown.indexOf(w), on)} />
                 {on && <Sessions talk={talk} undo={undo} onRestore={restore}
                   onArchived={(session, cur, at) => { setUndo({ session, current: cur, chat: false, at }); setRev(n => n + 1); }} />}
               </li>
             );
-          })}
+          }, <Gone key="gone-work" onRestore={restoreWork} />)}
         </ul>
       )}
       <div className="shelf-foot">

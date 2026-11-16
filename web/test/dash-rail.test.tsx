@@ -224,3 +224,24 @@ describe("Rail(窄條)", () => {
     expect(onFind).toHaveBeenCalled();
   });
 });
+
+describe("Rail(封存作品)", () => {
+  it("封存目前這篇:回進門、外面重抓、原地留復原;復原送 unarchive 並回到那篇", async () => {
+    const { api } = await import("../src/dash/api");
+    const arch = vi.spyOn(api, "archiveWork").mockResolvedValue(undefined);
+    const un = vi.spyOn(api, "unarchiveWork").mockResolvedValue(undefined);
+    const p = { onOpen: vi.fn(), onNew: vi.fn(), onFind: vi.fn(), onChat: vi.fn(), onToggle: vi.fn(), onWorks: vi.fn() };
+    render(<MemoryRouter initialEntries={["/w/d1"]}><Where /><Rail mode="open" works={WORKS} current="d1"
+      talk={fakeTalk()} view="work" {...p} /></MemoryRouter>);
+    fireEvent.click(screen.getAllByRole("button", { name: "封存這篇" })[0]);
+    expect(await screen.findByText("已封存")).toBeTruthy();
+    expect(arch).toHaveBeenCalledWith("d1");
+    expect(p.onWorks).toHaveBeenCalled();
+    expect(screen.getByTestId("loc").textContent).toBe("/");
+    fireEvent.click(screen.getByRole("button", { name: "復原" }));
+    await vi.waitFor(() => expect(p.onOpen).toHaveBeenCalledWith("d1"));
+    expect(un).toHaveBeenCalledWith("d1");
+    expect(screen.queryByText("已封存")).toBeNull();
+    vi.restoreAllMocks();
+  });
+});

@@ -35,7 +35,7 @@ def build(conn, slug: str) -> tuple[str, str]:
     # 原文取 analysis 當時對照的那一版;之後改稿不該讓引用對不上。
     source = repo.source_version(conn, art["source_version_id"])["text"]
     # 一份文件一個標題、一個 front matter;分析標題也用同一個(淺拷貝,不動 DB body)。
-    title = analysis.get("title") or story["title"] or slug
+    title = story["custom_title"] or analysis.get("title") or story["title"] or slug
     tag = judgment = None
     if picked is not None:
         kind, body = picked

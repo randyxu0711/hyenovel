@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, DashError, type ArchivedSession, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
+import { api, DashError, type ArchivedSession, type ArchivedWork, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
 import Figure from "./Figure";
 import CardEditor, { SAVED_LIMITS } from "./CardEditor";
 import PlistWords from "./Plist";
@@ -57,9 +57,12 @@ function Archive() {
   }, []);
   const [archived, setArchived] = useState<ArchivedSession[]>([]);
   const [sure, setSure] = useState<string | null>(null);
+  const [works, setWorks] = useState<ArchivedWork[]>([]);
+  const [sureWork, setSureWork] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
     api.archivedSessions().then(r => { if (live) setArchived(r); }, () => {});
+    api.archivedWorks().then(r => { if (live) setWorks(r); }, () => {});
     return () => { live = false; };
   }, []);
   const fail = (e: unknown) => setErr(e instanceof DashError ? e.code : "unknown");
@@ -67,11 +70,48 @@ function Archive() {
   const restore = (id: string) => api.unarchiveSession(id).then(() => drop(id), fail);
   const remove = (id: string) => api.deleteSession(id).then(() => drop(id), fail);
   const show = (id: string) => api.session(id).then(setDetail, fail);
+  const dropWork = (slug: string) => { setWorks(ws => ws.filter(w => w.slug !== slug)); setSureWork(null); };
+  const restoreWork = (slug: string) => api.unarchiveWork(slug).then(() => dropWork(slug), fail);
+  const removeWork = (slug: string) => api.deleteWork(slug).then(() => {
+    dropWork(slug);
+    setArchived(rs => rs.filter(r => r.slug !== slug));
+  }, fail);
   const who = speakerChanges(detail?.turns ?? [], chars.byId);
   const now = Date.now() / 1000;
   return (
     <>
       {err && <p role="alert">{t(errorMessage(err))}</p>}
+      {works.length > 0 && !detail && (
+        <section className="dash-set-archived" aria-label={t("set.archivedWorks")}>
+          <h2 className="set-group-h">{t("set.archivedWorks")}<span className="dash-dm">{works.length}</span></h2>
+          <ul>
+            {works.map(w => (
+              <li key={w.slug}>
+                {sureWork === w.slug ? (
+                  <p className="arch-sure" role="group" aria-label={t("session.delete")}>
+                    <span>{t("work.deleteSure", { n: w.sessions })}</span>
+                    <button type="button" className="ib arch-kill" aria-label={t("session.delete")} title={t("session.delete")}
+                      onClick={() => void removeWork(w.slug)}><Icon name="trash" /></button>
+                    <button type="button" className="ib" aria-label={t("memory.cancel")} title={t("memory.cancel")}
+                      onClick={() => setSureWork(null)}><Icon name="close" /></button>
+                  </p>
+                ) : (
+                  <>
+                    <div className="arch-open">
+                      <b>{w.title}</b><span>{t("set.sessionsN", { n: w.sessions })}</span>
+                      <time>{whenLabel(w.archived_at, now, lang)}</time>
+                    </div>
+                    <button type="button" className="ib" aria-label={t("session.restore")} title={t("session.restore")}
+                      onClick={() => void restoreWork(w.slug)}><Icon name="up" /></button>
+                    <button type="button" className="ib" aria-label={t("session.delete")} title={t("session.delete")}
+                      onClick={() => setSureWork(w.slug)}><Icon name="trash" /></button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {archived.length > 0 && !detail && (
         <section className="dash-set-archived" aria-label={t("set.archived")}>
           <h2 className="set-group-h">{t("set.archived")}<span className="dash-dm">{archived.length}</span></h2>

@@ -335,6 +335,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                     d = repo.ensure_discussion(conn, turn["story_id"], sid, home,
                                                (client or {}).get("name") or home, user_ts)
                 repo.unarchive_discussion(conn, d)
+                if turn["story_id"] is not None:
+                    repo.unarchive_story(conn, turn["story_id"])
                 if attach:
                     n = repo.add_attachment(conn, d, seq, attach["name"], attach["text"], user_ts)
                 if message:

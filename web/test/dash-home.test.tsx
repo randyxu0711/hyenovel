@@ -40,6 +40,7 @@ function mount(path = "/") {
     if (u.endsWith("/sessions")) return json({ sessions: sessionRows });
     if (u.startsWith("/api/sessions?")) return json({ sessions: recent });
     if (u === "/api/archived-sessions") return json({ sessions: boxed });
+    if (u === "/api/archived-works") return json({ works: [] });
     if (u === "/api/discuss" && discussDown) return json({ code: "usage-limit" }, 429);
     if (u === "/api/discuss") return sse(["message", { role: "assistant", text: "嗨,你好", session_id: "c1", seq: 1, character: "hyena", spans: [], v: null, attachment: null }],
       ["done", { ok: true, session_id: "c1" }]);

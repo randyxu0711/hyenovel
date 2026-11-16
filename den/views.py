@@ -29,7 +29,7 @@ def stories(conn) -> list[dict]:
         body = ana["body"] if ana else {}
         out.append({
             "slug": st["slug"],
-            "title": body.get("title") or st["title"] or st["slug"],
+            "title": works.title_of(st, body),
             "synopsis": body.get("synopsis") or "",
             "nodes": len(body.get("nodes", [])),
             "edges": len(body.get("edges", [])),
@@ -90,10 +90,9 @@ def transcript(conn, slug: str) -> list[dict]:
     return out
 
 
-def _title(conn, story_id: int, slug: str) -> str:
-    """與作品清單同口徑:分析標題 > 故事標題 > slug。"""
+def _title(conn, story_id: int) -> str:
     ana = repo.current_artifact(conn, story_id, "analysis")
-    return (ana or {}).get("body", {}).get("title") or repo.story(conn, story_id)["title"] or slug
+    return works.title_of(repo.story(conn, story_id), (ana or {}).get("body"))
 
 
 class UnknownVersion(Exception):
@@ -274,7 +273,7 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
                           "variant": {"n": u["variant"], "total": totals.get(u["seq"], 1)}}
                          if u["role"] == "assistant" else {})})
     return {"session": session, "slug": d["slug"],
-            "title": _title(conn, d["story_id"], d["slug"]) if d["story_id"] is not None else None,
+            "title": _title(conn, d["story_id"]) if d["story_id"] is not None else None,
             "legacy": not any(u["role"] == "assistant" and u["character"] is not None for u in us),
             "version": shown["n"] if shown else None, "turns": turns, "archived": d["archived_at"] is not None,
             "attachments": [{"n": a["n"], "seq": a["seq"], "name": a["name"], "chars": len(a["text"].strip()),
@@ -286,11 +285,33 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
 def memory_row(conn, row: dict) -> dict:
     return {"id": row["id"], "root": row["id"] if row["root_id"] is None else row["root_id"],
             "scope": row["scope"], "slug": row["slug"],
-            "title": None if row["work_id"] is None else _title(conn, row["work_id"], row["slug"]),
+            "title": None if row["work_id"] is None else _title(conn, row["work_id"]),
             "text": row["text"],
             "quote": row["quote"], "session": row["session"], "seq": row["seq"],
             "valid_from": row["valid_from"], "learned_at": row["learned_at"],
             "invalidated_at": row["invalidated_at"]}
+
+
+def _analysis_bodies(conn) -> dict[int, dict]:
+    return {c["story_id"]: c["artifact"]["body"] for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
+
+
+def archived_sessions(conn) -> list[dict]:
+    bodies = _analysis_bodies(conn)
+    out = []
+    for r in repo.archived_discussions(conn):
+        sid = r.pop("story_id")
+        r["title"] = None if sid is None else works.title_of(r, bodies.get(sid))
+        del r["custom_title"]
+        r["session"] = r.pop("external_id")
+        out.append(r)
+    return out
+
+
+def archived_works(conn) -> list[dict]:
+    bodies = _analysis_bodies(conn)
+    return [{"slug": r["slug"], "title": works.title_of(r, bodies.get(r["id"])),
+             "archived_at": r["archived_at"], "sessions": r["sessions"]} for r in repo.archived_stories(conn)]
 
 
 def memories(conn) -> dict:
@@ -306,12 +327,12 @@ def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:
         if sid not in labs:
             labs[sid] = _labeler(conn, sid)
         d["preview"] = labs[sid](d["preview"], fp)[:60]
-    titles = {c["story_id"]: c["artifact"]["body"].get("title")
-              for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
+    bodies = _analysis_bodies(conn)
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
     for d in out:
         if d["slug"] is not None:
-            d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
+            d["title"] = works.title_of(d, bodies.get(ids[d["slug"]]))
+        del d["custom_title"]
         d["session"] = d.pop("external_id")   # 與 session_rows 同名,前端只認 session
         d["legacy"] = legacy
     return out

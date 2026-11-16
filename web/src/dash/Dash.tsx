@@ -51,7 +51,7 @@ function Shell({ chars }: { chars: Characters }) {
     api.works().then(ws => { if (live) { setLoaded(ws); setWorksErr(null); } },
       e => { if (live) setWorksErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
-  }, [refresh]);
+  }, [refresh, view]);
 
   // 稿上正顯示的原文:是這篇的最新版時才交給 useTalk(邊說邊畫線在這裡找引文)
   const [paper, setPaper] = useState<{ slug: string; latest: boolean; text: string } | null>(null);
@@ -184,11 +184,11 @@ function Shell({ chars }: { chars: Characters }) {
       {drawn && <div className="dash-drawer-scrim" onClick={() => setDrawer(false)} />}
       <Rail mode={narrow ? "open" : shelf.mode} onToggle={narrow ? () => setDrawer(false) : shelf.toggle} works={works} current={slug} talk={talk} view={view}
         onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => { if (id) nav(`/c/${encodeURIComponent(id)}`); else goHome(); }}
-        onArchiveShelf={() => { setSection("archive"); nav("/settings"); }}
+        onArchiveShelf={() => { setSection("archive"); nav("/settings"); }} onWorks={bump}
         settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
-          onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
+          onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion} onRenamed={bump}
           focus={focused} onFocus={narrow ? undefined : setFocus}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           onQuote={q => {

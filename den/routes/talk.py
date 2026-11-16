@@ -238,10 +238,7 @@ def _free_lock(state, session: str, where: str) -> asyncio.Lock:
 
 @router.get("/archived-sessions")
 async def archived_sessions(request: Request):
-    rows = repo.archived_discussions(request.app.state.mgr.conn)
-    for r in rows:
-        r["session"] = r.pop("external_id")
-    return {"sessions": rows}
+    return {"sessions": views.archived_sessions(request.app.state.mgr.conn)}
 
 
 @router.post("/sessions/{session}/archive", status_code=204)
@@ -259,6 +256,8 @@ async def unarchive_session(session: str, request: Request):
     d = _session_or_404(conn, session, "unarchive")
     with conn:
         repo.unarchive_discussion(conn, d["id"])
+        if d["story_id"] is not None:
+            repo.unarchive_story(conn, d["story_id"])
 
 
 @router.delete("/sessions/{session}", status_code=204)

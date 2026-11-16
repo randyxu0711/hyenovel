@@ -47,6 +47,11 @@ def state(row: dict, analysis: dict | None, job: dict | None) -> str:
     return "stale" if analysis is not None else "none"
 
 
+def title_of(story: dict, analysis_body: dict | None) -> str:
+    """作者改的名字 > 分析抽出的標題 > 交稿時的標題 > slug。"""
+    return story.get("custom_title") or (analysis_body or {}).get("title") or story["title"] or story["slug"]
+
+
 def _opening(text: str) -> str:
     flat = "".join(text.split())
     return flat[:_SHOWN] + ("…" if len(flat) > _SHOWN else "")
@@ -91,7 +96,7 @@ def rows(conn) -> list[dict]:
     out = []
     for r in repo.works(conn):
         ana, job = cur.get(r["id"]), jobs.get(r["id"])
-        r["title"] = (ana or {}).get("body", {}).get("title") or r["title"] or r["slug"]
+        r["title"] = title_of(r, (ana or {}).get("body"))
         st = state(r, ana, job)
         live = st in ("running", "stopped", "notes-running", "notes-stopped")
         out.append({"slug": r["slug"], "title": r["title"], "latest_text": r["latest_text"],
@@ -100,6 +105,7 @@ def rows(conn) -> list[dict]:
                     "opening": _opening(r["latest_text"]), "submitted_at": r["submitted_at"],
                     "talked_at": r["talked_at"], "state": st,
                     "updated_at": active.get(r["id"], r["submitted_at"]), "curve": _curve(ana),
+                    "archived": r["archived_at"] is not None,
                     "job_id": job["id"] if live else None,
                     "error_class": job["error_class"] if live else None})
     return out
@@ -107,10 +113,10 @@ def rows(conn) -> list[dict]:
 
 def listing(conn, query: str | None, limit: int = 20) -> list[dict]:
     """依最近活動(聊過或交稿,取晚的)排序。固定 5 次查詢。"""
-    hits = match(rows(conn), query)
+    hits = match([r for r in rows(conn) if not r["archived"]], query)
     hits.sort(key=lambda w: max(w["talked_at"] or 0, w["submitted_at"]), reverse=True)
     for w in hits:
-        del w["latest_text"], w["latest_sv_id"]
+        del w["latest_text"], w["latest_sv_id"], w["archived"]
     return hits[:limit]
 
 
@@ -133,7 +139,7 @@ def read_part(conn, slug: str, part: str) -> str:
         raise LookupError(slug)
     latest = repo.latest_source_version(conn, st["id"])
     ana = repo.current_artifact(conn, st["id"], "analysis")
-    title = (ana or {}).get("body", {}).get("title") or st["title"] or slug
+    title = title_of(st, (ana or {}).get("body"))
     if part == "source":
         return f"〈{title}〉第 {latest['n']} 版原文:\n\n{latest['text']}"
     if part == "analysis":
