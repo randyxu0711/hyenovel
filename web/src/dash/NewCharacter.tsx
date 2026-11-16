@@ -124,6 +124,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const [err, setErr] = useState<Fault | null>(null);
   const [mirror, setMirror] = useState<{ name: string; line: string } | null>(null);
   const [stuck, setStuck] = useState(false);
+  const [clockSeen, setClockSeen] = useState(true);
+  const panelClock = useRef<HTMLParagraphElement>(null);
   const pin = useRef<HTMLSpanElement>(null);
   const onTitle = useCallback((name: string, line: string) => setMirror({ name, line }), []);
   const live = useRef(true);
@@ -223,14 +225,25 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   }, [fold]);
 
   const home = batch !== null || generating;
+  const blank = !form.trim() && !wish.trim();
   useEffect(() => {
     const el = pin.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting));
+    const desk = el.closest(".dash-desk");
+    const top = desk ? desk.getBoundingClientRect().top + (parseFloat(getComputedStyle(desk).paddingTop) || 0) : 0;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < top + 1),
+      { rootMargin: `${-Math.round(top)}px 0px 0px 0px` });
     io.observe(el);
     return () => io.disconnect();
   }, [home, fold]);
   useEffect(() => { if (using === null) setMirror(null); }, [using]);
+  useEffect(() => {
+    const el = panelClock.current;
+    if (revising === null || !el || typeof IntersectionObserver === "undefined") { setClockSeen(true); return; }
+    const io = new IntersectionObserver(([e]) => setClockSeen(e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [revising, picked]);
   const stale = !!batch && !!asked && !generating && (form.trim() !== asked.form || wish.trim() !== asked.wish);
 
   const generate = (again?: CandidateAgain) => {
@@ -331,9 +344,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
       </div>
       {pageAlert}
       <div className="nc-foot">
-        <button type="button" className="dash-key" disabled={revising !== null || (!form.trim() && !wish.trim())}
-          title={!form.trim() && !wish.trim() ? t("nc.needAnswer") : undefined} onClick={() => generate()}>{t("nc.generate")}</button>
-        <span className="nc-note">{t("nc.costs")}</span>
+        <button type="button" className="dash-key" disabled={revising !== null || blank} onClick={() => generate()}>{t("nc.generate")}</button>
+        <span className="nc-note">{t(blank ? "nc.needAnswer" : "nc.costs")}</span>
       </div>
     </div>
   );
@@ -348,17 +360,17 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
       <div className="nc-strip-acts">
         {generating ? (
           <p className="nc-state" role="status">
-            <span className="nc-note">{t("nc.leaveOk")}</span>
             {t("nc.generating")} <span className="dash-dm">{clock(elapsed)}</span>
             <button type="button" className="nc-swap nc-stop" onClick={stop}><Icon name="stop" />{t("run.stop")}</button>
+            <span className="nc-note">{t("nc.leaveOk")}</span>
           </p>
         ) : fold === "again" ? (
           <button type="button" className="ib" aria-label={t("nc.fold")} title={t("nc.fold")} onClick={closeFold}><Icon name="close" /></button>
         ) : (
           <>
-            <button type="button" ref={editRef} className="nc-swap" disabled={using !== null} onClick={openAnswers}><Icon name="edit" />{t("nc.editAnswers")}</button>
+            <button type="button" ref={editRef} className="nc-swap" disabled={using !== null} onClick={openAnswers} aria-label={t("nc.editAnswers")} title={t("nc.editAnswers")}><Icon name="edit" /><span className="nc-swap-t">{t("nc.editAnswers")}</span></button>
             <button type="button" ref={swapRef} className="nc-swap" aria-expanded={false} disabled={revising !== null || using !== null}
-              onClick={() => { setErr(null); setFold("again"); }}><Icon name="again" />{t("nc.again")}</button>
+              onClick={() => { setErr(null); setFold("again"); }} aria-label={t("nc.again")} title={t("nc.again")}><Icon name="again" /><span className="nc-swap-t">{t("nc.again")}</span></button>
           </>
         )}
       </div>
@@ -437,7 +449,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
                   {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
                   <div className="nc-again-foot">
                     {busy ? (
-                      <p className="nc-state" role="status">
+                      <p ref={panelClock} className="nc-state" role="status">
                         <span className="dash-dm">{clock(elapsed)}</span>
                         <button type="button" className="nc-swap nc-stop" onClick={e => { if (e.detail <= 1) stop(); }}><Icon name="stop" />{t("run.stop")}</button>
                       </p>
@@ -454,7 +466,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
                   {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
                   <div className="nc-acts-row">
                     <button type="button" ref={reviseKey} className="nc-swap" disabled={locked} onClick={() => { setErr(null); setReviseOpen(i); }}>
-                      {t("nc.revise")}
+                      <Icon name="edit" />{t("nc.revise")}
                     </button>
                     <button type="button" ref={useKey} className="dash-key nc-use" disabled={locked} onClick={() => setUsing(i)}>{t("nc.use")}</button>
                   </div>
@@ -486,7 +498,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
                   <span key={lookKey(c)} className="nc-fig"><Figure character={figureOf(c, lang)} size={FIG} state={figureState(i)} /></span>
                 </span>
                 {title(c, i)}
-                {revising === i && <span className="dash-dm nc-clock" aria-hidden="true">{clock(elapsed)}</span>}
+                {revising === i && !clockSeen && <span className="dash-dm nc-clock" aria-hidden="true">{clock(elapsed)}</span>}
               </button>
             );
           })}

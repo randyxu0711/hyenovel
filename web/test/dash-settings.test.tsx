@@ -284,7 +284,7 @@ describe("設定頁", () => {
     expect(p.getByText("預覽old2")).toBeTruthy();
   });
 
-  it("封存的局:列在舊討論頁上方,可拉回;永久刪除要再確認一次", async () => {
+  it("封存的局:列在舊討論頁上方,可復原;永久刪除要再確認一次", async () => {
     const f = mount();
     const base = f.getMockImplementation()!;
     const sent: string[] = [];
@@ -300,7 +300,7 @@ describe("設定頁", () => {
     const box = within(await p.findByRole("region", { name: "封存的局" }));
     expect(box.getByText("封存一")).toBeTruthy();
     expect(p.getByText("改版前的討論")).toBeTruthy();
-    fireEvent.click(box.getAllByRole("button", { name: "拉回" })[0]);
+    fireEvent.click(box.getAllByRole("button", { name: "復原" })[0]);
     await waitFor(() => expect(box.queryByText("封存一")).toBeNull());
     fireEvent.click(box.getByRole("button", { name: "永久刪除" }));
     expect(sent).toEqual(["POST /api/sessions/a1/unarchive"]);

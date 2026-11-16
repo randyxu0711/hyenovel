@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
+import Markdown from "react-markdown";
 import { useNavigate } from "react-router-dom";
 import type { Attachment, Turn } from "./api";
 import type { Character } from "./api";
@@ -17,6 +18,7 @@ import { MAX_CHAT, type Talk as TalkState } from "./useTalk";
 import WhoPick from "./WhoPick";
 
 const FLASH_MS = 1400;
+const ARM_MS = 4000;
 
 /** 要在其前畫「第 n 版」分隔的 index:v 與前一個有值的 v 不同;沒 v 的(剛串流進來)沿用前一則。 */
 export function versionBreaks(turns: Turn[]): Set<number> {
@@ -42,6 +44,18 @@ export function speakerChanges(turns: Turn[], byId: (id: string | null) => Chara
   return out;
 }
 
+/** 壓縮摘要:一小張紙,預設露幾行、點了全開。 */
+function Summary({ text, past, label }: { text: string; past: boolean; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="chat-sum" data-past={past || undefined} data-open={open || undefined} role="button" tabIndex={0}
+      aria-expanded={open} aria-label={label}
+      onClick={() => setOpen(o => !o)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); } }}>
+      <Markdown>{text}</Markdown>
+    </div>
+  );
+}
+
 /** 最後一個清空/壓縮標記的 index;它之前的逐字讀伴看不到(沒有標記 = -1)。 */
 export function lastCut(turns: Turn[]): number {
   for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "clear" || turns[i].role === "compact") return i;
@@ -50,7 +64,7 @@ export function lastCut(turns: Turn[]): number {
 
 export const REACT_MS = 1800;
 
-export type SlashCommand = { name: string; label: string; icon: IconName; run: () => unknown };
+export type SlashCommand = { name: string; label: string; icon: IconName; note?: string; run: () => unknown };
 
 export function slashCommands(draft: string, all: SlashCommand[]): SlashCommand[] {
   const m = /^\/(\S*)$/.exec(draft.trim());
@@ -102,6 +116,12 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const [editing, setEditing] = useState<{ seq: number; text: string } | null>(null);
   const [asking, setAsking] = useState(false);
   const [peek, setPeek] = useState<Set<number>>(new Set());
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const id = setTimeout(() => setArming(false), ARM_MS);
+    return () => clearTimeout(id);
+  }, [arming]);
   const togglePeek = (n: number) => setPeek(p => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
   const editBox = useRef<HTMLTextAreaElement>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -157,7 +177,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const idle = !session || streaming !== null || working;
   const commands = slashCommands(draft, [
     { name: "clear", label: t("talk.clear"), icon: "wipe", run: talk.clear },
-    { name: "compact", label: t("talk.compactCost"), icon: "squeeze", run: talk.compact },
+    { name: "compact", label: t("talk.compact"), icon: "squeeze", note: t("nc.costs"), run: talk.compact },
   ]);
   const [pick, setPick] = useState(0);
   const chosen = commands[Math.min(pick, commands.length - 1)];
@@ -172,7 +192,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
 
   const submit = async () => {
     const text = draft.trim();
-    if (!text || streaming !== null || legacy) return;
+    if ((!text && !staged) || streaming !== null || legacy) return;
     if (chosen) {
       if (exact) runCommand(chosen); else setDraft(`/${chosen.name}`);
       return;
@@ -315,7 +335,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     if (turn.role === "compact") {
       return [
         <div key={i} className="chat-cut is-compact" role="separator" aria-label={t("talk.compacted")}><Icon name="squeeze" /><span>{t("talk.compacted")}</span></div>,
-        <p key={`s${i}`} className="chat-sum" data-past={past}>{turn.text}</p>,
+        <Summary key={`s${i}`} text={turn.text} past={!!past} label={t("talk.compacted")} />,
       ];
     }
     const att = before(turn, !!past);
@@ -377,14 +397,6 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
       </div>
       {error && <p className="chat-error" role="alert">{t(errorMessage(error.code))}</p>}
       {legacy && <p className="chat-error">{t("err.legacy-session")}</p>}
-      {staged && (
-        <div className="chat-carries">
-          <div className="chat-carry">
-            <div className="chat-att"><Icon name="sheet2" /><b>{staged.name}</b></div>
-            <button type="button" className="ib" aria-label={t("talk.dropAttach")} title={t("talk.dropAttach")} onClick={talk.dropStaged}><Icon name="close" /></button>
-          </div>
-        </div>
-      )}
       {quotes.length > 0 && (
         <div className="chat-carries">
           {quotes.map((q, i) => (
@@ -401,12 +413,18 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
             {commands.map(c => (
               <li key={c.name} role="option" aria-selected={c === chosen} aria-disabled={!usable}>
                 <button type="button" disabled={!usable} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c)}>
-                  <Icon name={c.icon} /><b>/{c.name}</b><span>{c.label}</span>
+                  <Icon name={c.icon} /><b>/{c.name}</b><span>{c.label}</span>{c.note && <small>{c.note}</small>}
                 </button>
               </li>
             ))}
             {!usable && <li className="slash-note" role="status">{t(streaming !== null || working ? "err.busy" : "talk.cmdIdle")}</li>}
           </ul>
+        )}
+        {staged && (
+          <div className="chat-staged">
+            <Icon name="sheet2" /><b>{staged.name}</b><span>{t("talk.chars", { n: [...staged.text.trim()].length })}</span>
+            <button type="button" className="ib" aria-label={t("talk.dropAttach")} title={t("talk.dropAttach")} onClick={talk.dropStaged}><Icon name="close" /></button>
+          </div>
         )}
         <WhoPick me={me} onPick={talk.setWho} size={whoSize} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} />
         <textarea ref={inputRef} value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
@@ -423,17 +441,21 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
           )}
           {session && (
             <>
+              <span className="bar-sep" aria-hidden="true" />
               <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.clear")} title={`${t("talk.clear")} · /clear`}
                 onClick={() => void talk.clear()}><Icon name="wipe" /></button>
-              <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.compact")} title={`${t("talk.compactCost")} · /compact`}
-                onClick={() => void talk.compact()}><Icon name="squeeze" /></button>
+              <button type="button" className={arming ? "ib bar-arm" : "ib"} disabled={idle || !live} aria-label={t("talk.compact")}
+                title={`${t("talk.compactCost")} · /compact`} onBlur={() => setArming(false)}
+                onClick={() => { if (!arming) { setArming(true); return; } setArming(false); void talk.compact(); }}>
+                <Icon name="squeeze" />{arming && <span>{t("talk.compactSure")}</span>}
+              </button>
             </>
           )}
           {streaming !== null
             ? <button key="stop" type="button" className="ib send" aria-label={t("talk.stop")} title={t("talk.stop")}
               onClick={e => { if (e.detail <= 1) talk.stop(); }}><Icon name="stop" /></button>
             : <button key="send" type="submit" className="ib send" aria-label={t("talk.send")} title={t("talk.send")}
-              disabled={legacy || !draft.trim()}><Icon name="send" /></button>}
+              disabled={legacy || (!draft.trim() && !staged)}><Icon name="send" /></button>}
         </div>
       </form>
     </div>

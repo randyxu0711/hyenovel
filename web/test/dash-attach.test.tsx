@@ -124,12 +124,16 @@ describe("純聊天的附件", () => {
     expect(screen.queryByLabelText("丟一份稿進來", { selector: "input" })).toBeNull();
   });
 
-  it("compact summary is shown open; everything before the last marker is marked past", async () => {
-    detail = { ...detail, turns: [...(detail.turns as object[]), { seq: 2, role: "compact", text: "之前聊了海", ts: 2 }, { seq: 3, role: "clear", ts: 3 }, u(4, "之後的話")] };
+  it("compact summary renders markdown, starts clamped and opens on click; everything before the last marker is marked past", async () => {
+    detail = { ...detail, turns: [...(detail.turns as object[]), { seq: 2, role: "compact", text: "**摘要**\n\n之前聊了海", ts: 2 }, { seq: 3, role: "clear", ts: 3 }, u(4, "之後的話")] };
     mount();
-    const sum = await screen.findByText("之前聊了海");
-    expect(sum.closest("details")).toBeNull();
+    const sum = (await screen.findByText("之前聊了海")).closest(".chat-sum") as HTMLElement;
+    expect(sum.querySelector("strong")!.textContent).toBe("摘要");
+    expect(sum.textContent).not.toContain("**");
     expect(sum.hasAttribute("data-past")).toBe(true);
+    expect(sum.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(sum);
+    expect(sum.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("嗨").closest("[data-past]")).not.toBeNull();
     expect(screen.getByText("之後的話").closest("[data-past]")).toBeNull();
     expect(screen.getByRole("separator", { name: "對話清空" })).toBeTruthy();
@@ -138,6 +142,9 @@ describe("純聊天的附件", () => {
   it("clear and compact buttons post and add a divider", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "壓縮對話" }));
+    expect(screen.getByText("壓縮 · 會使用額度")).toBeTruthy();
+    expect(posts).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "壓縮對話" }));
     expect(await screen.findByText("摘要文字")).toBeTruthy();
     expect(screen.getByRole("button", { name: "壓縮對話" }).getAttribute("title")).toContain("額度");
     fireEvent.click(screen.getByRole("button", { name: "清空對話" }));
@@ -151,7 +158,7 @@ describe("純聊天的附件", () => {
     const box = screen.getByLabelText("對話輸入");
     fireEvent.change(box, { target: { value: "/" } });
     const menu = screen.getByRole("listbox", { name: "指令" });
-    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話(會使用額度)"]);
+    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話會使用額度"]);
     fireEvent.change(box, { target: { value: "/cl" } });
     expect(within(screen.getByRole("listbox", { name: "指令" })).getAllByRole("option")).toHaveLength(1);
     fireEvent.keyDown(box, { key: "Enter" });

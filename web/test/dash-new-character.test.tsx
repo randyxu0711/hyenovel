@@ -81,7 +81,7 @@ describe("作答", () => {
   it("兩題都空不能生成(會花額度);只寫第二題也能生成", async () => {
     mount();
     expect(go().disabled).toBe(true);
-    expect(go().title).toBe("先寫一題,或按骰子");
+    expect(screen.getByText("先寫一題,或按骰子")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("你想要它怎麼讀?"), { target: { value: "慢慢來" } });
     expect(go().disabled).toBe(false);
     fireEvent.click(go());
@@ -493,7 +493,7 @@ describe("改候選與存卡", () => {
     await toResults();
     replies = [new Promise<Response>(() => {}) as unknown as Response];
     const p = revise(1);
-    expect(tab(1).querySelector(".nc-clock")!.textContent).toBe("0:00");
+    expect(tab(1).querySelector(".nc-clock")).toBeNull();
     fireEvent.click(p.getByRole("button", { name: "停下" }));
     await waitFor(() => expect(panel().getByRole("button", { name: "送出修改" })).toBeTruthy());
     expect(tab(1)).toBeTruthy();

@@ -90,10 +90,10 @@ function Archive() {
                   <>
                     <button type="button" className="arch-open" onClick={() => void show(s.session)}>
                       {s.title && <b>{s.title}</b>}<span>{plain(s.preview)}</span>
-                      <time className="dash-dm">{whenLabel(s.archived_at, now, lang)}</time>
+                      <time>{whenLabel(s.archived_at, now, lang)}</time>
                     </button>
                     <button type="button" className="ib" aria-label={t("session.restore")} title={t("session.restore")}
-                      onClick={() => void restore(s.session)}><Icon name="back" /></button>
+                      onClick={() => void restore(s.session)}><Icon name="up" /></button>
                     <button type="button" className="ib" aria-label={t("session.delete")} title={t("session.delete")}
                       onClick={() => setSure(s.session)}><Icon name="trash" /></button>
                   </>
@@ -103,7 +103,7 @@ function Archive() {
           </ul>
         </section>
       )}
-      {rows && !detail && (
+      {rows && rows.length > 0 && !detail && (
         <div className="dash-set-archive">
           {archived.length > 0 && <h2 className="set-group-h">{t("set.legacyHead")}</h2>}
           <p className="dash-set-count">{t("set.legacy", { n: rows.length })}</p>
@@ -114,7 +114,7 @@ function Archive() {
                 {g.rows.map(s => (
                   <li key={s.session}>
                     <button type="button" onClick={() => void show(s.session)}>
-                      <span>{plain(s.preview)}</span><time className="dash-dm">{whenLabel(s.last_at, now, lang)}</time>
+                      <span>{plain(s.preview)}</span><time>{whenLabel(s.last_at, now, lang)}</time>
                     </button>
                   </li>
                 ))}
@@ -146,7 +146,7 @@ function Archive() {
 export type SettingsSection = "look" | "companions" | "memory" | "archive";
 const SECTIONS: { id: SettingsSection; key: MsgKey; icon: IconName }[] = [
   { id: "look", key: "set.look", icon: "look" }, { id: "companions", key: "set.companions", icon: "pal" },
-  { id: "memory", key: "set.memory", icon: "memory" }, { id: "archive", key: "set.archive", icon: "talk" },
+  { id: "memory", key: "set.memory", icon: "memory" }, { id: "archive", key: "set.archive", icon: "box" },
 ];
 const NAV_GROUPS: { key: MsgKey; ids: SettingsSection[] }[] = [
   { key: "set.nav.pref", ids: ["look", "companions"] }, { key: "set.nav.data", ids: ["memory", "archive"] },

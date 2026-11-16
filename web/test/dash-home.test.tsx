@@ -127,7 +127,8 @@ describe("沒有作品", () => {
     discussDown = true;
     fireEvent.paste(b, { clipboardData: { getData: () => text } });
     expect(await screen.findByRole("button", { name: "不帶這份稿" })).toBeTruthy();
-    expect(document.querySelector(".chat-carries .chat-att")!.textContent).toContain("海邊");
+    expect(document.querySelector(".composer .chat-staged")!.textContent).toContain("海邊");
+    expect((screen.getByRole("button", { name: "送出" }) as HTMLButtonElement).disabled).toBe(false);
   });
   it("貼上 > 2000 字當附件,不進輸入框;短文字照常留在輸入框", async () => {
     mount();
