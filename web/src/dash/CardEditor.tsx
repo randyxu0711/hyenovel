@@ -9,12 +9,11 @@ export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000, ex
 export const candidateLimits = (lang: Lang): CardLimits =>
   lang === "en" ? { name: 32, line: 80, reading: 600, depth: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, depth: 600, lineRequired: true };
 
-export default function CardEditor({ draft, limits, onSave, onCancel, onChange, sheet = false, selectName = false }: {
+export default function CardEditor({ draft, limits, onSave, onCancel, sheet = false, selectName = false }: {
   draft: Omit<CardDraft, "examples" | "depth"> & { examples?: unknown; depth?: unknown }; limits: CardLimits;
   /** 回傳要作者確認的 warnings;空陣列 = 存好了。 */
   onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
   onCancel: () => void;
-  onChange?: (card: { name: string; line: string }) => void;
   sheet?: boolean;
   selectName?: boolean;
 }) {
@@ -76,8 +75,8 @@ export default function CardEditor({ draft, limits, onSave, onCancel, onChange, 
 
   return (
     <form className={sheet ? "char-edit is-sheet" : "char-card char-edit"} onSubmit={e => void save(e)} onKeyDown={keys}>
-      {field("card.name", <input ref={nameRef} className="nc-edit char-edit-name" autoFocus={sheet} maxLength={limits.name} autoComplete="off" value={name} onChange={e => { edit(setName)(e.target.value); onChange?.({ name: e.target.value, line }); }} />)}
-      {field("card.line", <input className="nc-edit char-edit-line" maxLength={limits.line} autoComplete="off" value={line} onChange={e => { edit(setLine)(e.target.value); onChange?.({ name, line: e.target.value }); }} />)}
+      {field("card.name", <input ref={nameRef} className="nc-edit char-edit-name" autoFocus={sheet} maxLength={limits.name} autoComplete="off" value={name} onChange={e => edit(setName)(e.target.value)} />)}
+      {field("card.line", <input className="nc-edit char-edit-line" maxLength={limits.line} autoComplete="off" value={line} onChange={e => edit(setLine)(e.target.value)} />)}
       {field("card.reading", <textarea className="nc-edit" rows={4} maxLength={limits.reading} value={reading} onChange={e => edit(setReading)(e.target.value)} />, true)}
       {withExamples && field("card.examples", <textarea className="nc-edit" rows={8} maxLength={limits.examples} value={examples} onChange={e => edit(setExamples)(e.target.value)} />, true)}
       {withDepth && (plist

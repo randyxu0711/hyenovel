@@ -308,7 +308,7 @@ async def generate(run, answers: dict, passage: str | None, lang: str, seed: int
     first = _input(brief_from(answers), picked, picked_palettes, passage, lang, again, named)
     body = await _gated(run, _prompt().text, SCHEMA, check, first, sleep)
     items = [{**c, "name": dict(c["form"])} if named else c for c in body["candidates"]]
-    return {"seed": seed, "candidates": [_shown(c, pos) for c, pos in zip(items, picked, strict=True)]}
+    return {"seed": seed, "story": STORY, "candidates": [_shown(c, pos) for c, pos in zip(items, picked, strict=True)]}
 
 
 async def revise(run, candidate: dict, feedback: str, passage: str | None, lang: str, *, sleep=asyncio.sleep) -> dict:

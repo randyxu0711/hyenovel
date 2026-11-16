@@ -19,7 +19,6 @@ const look = (c: Candidate): FigureSpec => ({ parts: c.figure.parts, eyes: c.fig
 const figureOf = (c: Candidate, lang: Lang) => character(c.name["zh-Hant"] ?? localized(c.name, lang), look(c));
 const lookKey = (c: Candidate | undefined) => (c ? JSON.stringify(c.figure) : "");
 
-const SCENES = [0, 1, 2] as const;
 const SLOTS: Pose[][] = [["perch", "quad", "long"], ["mound", "upright", "frame"], ["wisp", "long", "perch"]];
 const SKETCH = 4200;
 const SPEAK = 1200;
@@ -113,8 +112,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const [revising, setRevising] = useState<number | null>(job?.kind === "revise" ? job.index : null);
   const [picked, setPicked] = useState<number | null>(saved?.picked ?? null);
   const [using, setUsing] = useState<number | null>(null);
-  const [preview, setPreview] = useState<{ name: string; line: string } | null>(null);
-  const [scene, setScene] = useState(saved?.scene ?? 0);
+  const [reviseOpen, setReviseOpen] = useState<number | null>(job?.kind === "revise" ? job.index : null);
+  const [story, setStory] = useState(saved?.story);
   const [reaction, setReaction] = useState(saved?.reaction ?? "");
   const [feedback, setFeedback] = useState<Record<number, string>>(() => (job?.kind === "revise" && job.index !== null && job.text ? { [job.index]: job.text } : {}));
   const [fold, setFold] = useState<"answers" | "again" | null>(() => (saved?.reaction && job?.kind !== "generate" ? "again" : null));
@@ -132,6 +131,10 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const reactionRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLButtonElement>(null);
   const swapRef = useRef<HTMLButtonElement>(null);
+  const useKey = useRef<HTMLButtonElement>(null);
+  const reviseKey = useRef<HTMLButtonElement>(null);
+  const lastOpen = useRef(reviseOpen);
+  const lastUsing = useRef(using);
   const elapsed = useElapsed(generating || revising !== null);
 
   const failure = (e: unknown): MsgKey => {
@@ -145,7 +148,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     if (d?.batch) {
       setBatch(d.batch);
       if (j.kind === "generate") {
-        setBatchNo(d.batchNo); setReaction(d.reaction); setAsked(d.asked); setPicked(null); setFold(null);
+        setBatchNo(d.batchNo); setStory(d.story); setReaction(d.reaction); setAsked(d.asked); setPicked(null); setFold(null);
         landed.current = true;
       } else if (j.index !== null) {
         if (lookKey(d.batch[j.index]) !== before) setDrawn({ cards: [j.index], stagger: false });
@@ -174,8 +177,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   }, []);
   useEffect(() => {
     if (done.current) return;
-    keep({ form, wish, batch, batchNo, scene, reaction, picked, revealed, asked });
-  }, [form, wish, batch, batchNo, scene, reaction, picked, revealed, asked]);
+    keep({ form, wish, batch, batchNo, story, reaction, picked, revealed, asked });
+  }, [form, wish, batch, batchNo, story, reaction, picked, revealed, asked]);
   useEffect(() => {
     if (generating || !batch || revealed === batchNo) return;
     setRevealed(batchNo);
@@ -191,12 +194,20 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     setSpeaking(picked);
     const id = setTimeout(() => setSpeaking(null), SPEAK);
     return () => clearTimeout(id);
-  }, [picked, scene]);
+  }, [picked]);
   useEffect(() => {
     if (generating || !landed.current) return;
     landed.current = false;
     tabs.current[0]?.focus();
   }, [generating]);
+  useEffect(() => {
+    if (lastOpen.current !== null && reviseOpen === null) reviseKey.current?.focus();
+    lastOpen.current = reviseOpen;
+  }, [reviseOpen]);
+  useEffect(() => {
+    if (lastUsing.current !== null && using === null) useKey.current?.focus();
+    lastUsing.current = using;
+  }, [using]);
   useEffect(() => {
     const was = lastFold.current;
     if (was === fold) return;
@@ -212,10 +223,10 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
 
   const generate = (again?: CandidateAgain) => {
     const answers = { form: form.trim(), wish: wish.trim() };
-    setErr(null); setUsing(null); setPreview(null); setFold(null); setAnim("fold");
+    setErr(null); setUsing(null); setFold(null); setAnim("fold");
     const j = start("generate", null, async signal => {
       const out = await api.characterCandidates(answers, lang, again, signal);
-      return d => ({ ...d, batch: out.candidates, batchNo: d.batchNo + 1, asked: answers, picked: null, reaction: again ? "" : d.reaction });
+      return d => ({ ...d, batch: out.candidates, story: out.story, batchNo: d.batchNo + 1, asked: answers, picked: null, reaction: again ? "" : d.reaction });
     });
     setGenerating(true);
     void follow(j);
@@ -230,7 +241,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     void follow(start("revise", index, async signal => {
       const next = await api.reviseCandidate(target, text, lang, signal);
       return d => ({ ...d, batch: d.batch && d.batch.map((c, i) => (i === index ? next : c)) });
-    }, text), lookKey(target)).then(ok => { if (ok && live.current) setFeedback(f => ({ ...f, [index]: "" })); });
+    }, text), lookKey(target)).then(ok => { if (ok && live.current) { setFeedback(f => ({ ...f, [index]: "" })); setReviseOpen(null); } });
   };
 
   const regenerate = (e: FormEvent) => {
@@ -250,10 +261,11 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   };
 
   const choose = (i: number) => {
-    if (i !== picked) { setUsing(null); setPreview(null); setRevised(null); }
+    if (i !== picked) { setUsing(null); setRevised(null); if (revising === null) setReviseOpen(null); }
     setPicked(i);
   };
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    if (using !== null) return;
     const n = batch?.length ?? 0;
     const to = ({ ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 } as Record<string, number>)[e.key];
     if (to === undefined) return;
@@ -331,8 +343,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
           <button type="button" className="ib" aria-label={t("nc.fold")} title={t("nc.fold")} onClick={closeFold}><Icon name="close" /></button>
         ) : (
           <>
-            <button type="button" ref={editRef} className="ib" aria-label={t("nc.editAnswers")} title={t("nc.editAnswers")} onClick={openAnswers}><Icon name="edit" /></button>
-            <button type="button" ref={swapRef} className="nc-swap" aria-expanded={false} disabled={revising !== null}
+            <button type="button" ref={editRef} className="ib" aria-label={t("nc.editAnswers")} title={t("nc.editAnswers")} disabled={using !== null} onClick={openAnswers}><Icon name="edit" /></button>
+            <button type="button" ref={swapRef} className="nc-swap" aria-expanded={false} disabled={revising !== null || using !== null}
               onClick={() => { setErr(null); setFold("again"); }}><Icon name="swap" />{t("nc.again")}</button>
           </>
         )}
@@ -359,9 +371,9 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     </div>
   );
 
-  const title = (c: Candidate, i: number) => {
-    const name = i === using && preview ? preview.name : localized(c.name, lang);
-    const line = i === using && preview ? preview.line : localized(c.line, lang);
+  const title = (c: Candidate) => {
+    const name = localized(c.name, lang);
+    const line = localized(c.line, lang);
     if (name === localized(c.form, lang)) return <b className="nc-name" data-lined="true">{line}</b>;
     return <><b className="nc-name">{name}</b><span className="nc-line">{line}</span></>;
   };
@@ -375,47 +387,66 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     return (
       <section role="tabpanel" id="nc-panel" aria-labelledby={`nc-tab-${i}`} className="nc-panel" data-at={i}>
         {using === i ? (
-          <CardEditor key={`${batchNo}-${i}`} draft={c} limits={candidateLimits(lang)} onChange={setPreview}
-            onSave={(d, confirm) => save(i, d, confirm)} onCancel={() => { setUsing(null); setPreview(null); }} />
+          <CardEditor key={`${batchNo}-${i}`} sheet draft={c} limits={candidateLimits(lang)}
+            onSave={(d, confirm) => save(i, d, confirm)} onCancel={() => setUsing(null)} />
         ) : (
           <div key={`${i}-${lookKey(c)}-${localized(c.line, lang)}`} className="nc-panel-body" data-fresh={revised === i || undefined}>
             {c.examples.length > 0 && (
-              <div className="nc-scenes" role="group" aria-label={t("nc.sceneGroup")}>
-                {SCENES.map(k => (
-                  <button key={k} type="button" aria-pressed={scene === k} onClick={() => setScene(k)}>{t(`nc.scene.${k}` as MsgKey)}</button>
+              <div className="nc-ex char-ex">
+                {story && <p className="char-ex-lead" title={story}>{t("nc.story", { story: story.includes("〉") ? story.slice(0, story.indexOf("〉") + 1) : story })}</p>}
+                {c.examples.map((turns, j) => (
+                  <ol key={j} className="nc-talk">
+                    {turns.map((turn, k) => (
+                      <li key={k} data-who={turn.who} className={turn.who === "author" ? "chat-me" : undefined}><p>{turn.text}</p></li>
+                    ))}
+                  </ol>
                 ))}
               </div>
-            )}
-            {c.examples[scene] && (
-              <ol className="nc-talk" aria-label={t(`nc.scene.${scene}` as MsgKey)}>
-                {c.examples[scene].map((turn, k) => (
-                  <li key={k} data-who={turn.who} className={turn.who === "author" ? "chat-me" : undefined}><p>{turn.text}</p></li>
-                ))}
-              </ol>
             )}
             <details className="nc-how">
               <summary>{t("nc.reading")}</summary>
               <p>{c.reading}</p>
               {c.sample && <p className="nc-sample">{c.sample}</p>}
-              <p className="nc-depth">{c.depth}</p>
             </details>
             {c.warnings.map(w => <p key={w} className="nc-warn" role="note">{t(`card.warn.${w}` as MsgKey)}</p>)}
             <div className="nc-acts">
-              <form className="nc-revise" onSubmit={e => revise(i, e)}>
-                <input aria-label={t("nc.feedback")} placeholder={t("nc.feedback")} maxLength={300} autoComplete="off" value={text}
-                  readOnly={busy} onChange={e => setFeedback(f => ({ ...f, [i]: e.target.value }))} />
-                {busy
-                  ? <button key="stop" type="button" aria-label={t("run.stop")} title={t("run.stop")}
-                    onClick={e => { if (e.detail <= 1) stop(); }}>
-                    <Icon name="stop" /><span className="dash-dm">{clock(elapsed)}</span>
-                  </button>
-                  : <button key="send" type="submit" disabled={locked || !text.trim()}>{t("nc.revise")}</button>}
-              </form>
-              {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
-              <div className="nc-acts-row">
-                <button type="button" className="nc-use" disabled={locked} onClick={() => setUsing(i)}>{t("nc.use")}</button>
-                <span className="nc-note">{t("nc.reviseCosts")}</span>
-              </div>
+              {reviseOpen === i ? (
+                <form className="nc-again nc-revise" onSubmit={e => revise(i, e)}
+                  onKeyDown={e => { if (e.key === "Escape" && !busy && !e.nativeEvent.isComposing) { e.stopPropagation(); setReviseOpen(null); } }}>
+                  <div className="nc-againline">
+                    <input autoFocus aria-label={t("nc.feedback")} placeholder={t("nc.feedback")} maxLength={300} autoComplete="off" value={text}
+                      readOnly={busy} onChange={e => setFeedback(f => ({ ...f, [i]: e.target.value }))} />
+                    {!busy && (
+                      <button type="button" className="ib" aria-label={t("nc.fold")} title={t("nc.fold")} onClick={() => setReviseOpen(null)}><Icon name="close" /></button>
+                    )}
+                  </div>
+                  {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
+                  <div className="nc-again-foot">
+                    {busy ? (
+                      <p className="nc-state" role="status">
+                        <span className="dash-dm">{clock(elapsed)}</span>
+                        <button type="button" className="ib" aria-label={t("run.stop")} title={t("run.stop")}
+                          onClick={e => { if (e.detail <= 1) stop(); }}><Icon name="stop" /></button>
+                      </p>
+                    ) : (
+                      <>
+                        <span className="nc-note">{t("nc.costs")}</span>
+                        <button type="submit" className="dash-key" disabled={locked || !text.trim()}><Icon name="again" />{t("nc.revise")}</button>
+                      </>
+                    )}
+                  </div>
+                </form>
+              ) : (
+                <>
+                  {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
+                  <div className="nc-acts-row">
+                    <button type="button" ref={reviseKey} className="nc-swap" disabled={locked} onClick={() => { setErr(null); setReviseOpen(i); }}>
+                      <Icon name="again" />{t("nc.revise")}
+                    </button>
+                    <button type="button" ref={useKey} className="dash-key nc-use" disabled={locked} onClick={() => setUsing(i)}>{t("nc.use")}</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -435,12 +466,13 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
               <button key={`${batchNo}-${i}`} ref={el => { tabs.current[i] = el; }} type="button" role="tab" id={`nc-tab-${i}`}
                 className="nc-card nc-tab" aria-selected={picked === i} aria-controls={picked === i ? "nc-panel" : undefined}
                 tabIndex={(picked ?? 0) === i ? 0 : -1} data-draw={draw || undefined}
+                disabled={using !== null && using !== i} data-using={using === i || undefined}
                 style={draw && drawn.stagger ? { "--nc-d": `${i * 0.3}s` } as CSSProperties : undefined}
                 onClick={() => (picked === i && using !== i ? setPicked(null) : choose(i))} onKeyDown={e => onTabKey(e, i)}>
                 <span className="char-stage">
                   <span key={lookKey(c)} className="nc-fig"><Figure character={figureOf(c, lang)} size={FIG} state={figureState(i)} /></span>
                 </span>
-                {title(c, i)}
+                {title(c)}
               </button>
             );
           })}

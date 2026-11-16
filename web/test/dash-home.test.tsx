@@ -117,7 +117,7 @@ describe("沒有作品", () => {
     fireEvent.drop(home, { dataTransfer: { files: [new File(["x"], "海.md")] } });
     expect(await screen.findByText("4 字")).toBeTruthy();
     expect(screen.queryByText(/預估/)).toBeNull();
-    expect(screen.getByText("會花額度")).toBeTruthy();
+    expect(screen.getByText("會使用額度")).toBeTruthy();
     expect(document.querySelector(".chat-att")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "分析" }));
     await waitFor(() => expect(calls.some(c => c.url === "/api/stories")).toBe(true));

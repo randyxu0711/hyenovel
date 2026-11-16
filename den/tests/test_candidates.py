@@ -115,6 +115,7 @@ def test_same_seed_same_positions_different_seeds_vary():
 def test_sample_is_shown_but_never_stored_on_the_card_because_it_quotes_the_draft():
     out = _generate(Script(ok(_body())))
     assert out["seed"] == 7
+    assert out["story"] == candidates.STORY
     assert len(out["candidates"]) == 3
     first = out["candidates"][0]
     assert first["sample"] == _one()["sample"]

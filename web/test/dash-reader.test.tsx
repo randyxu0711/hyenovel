@@ -53,14 +53,14 @@ describe("Reader(稿窗格)", () => {
     expect(v2.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByText(/這是第/)).toBeNull();
   });
-  it("點 v1 → 網址 ?v=1、出現「舊版」膠囊;回到最新版 → 拿掉 ?v=", async () => {
+  it("點 v1 → 網址 ?v=1、出現「舊版」;點最新版號 → 拿掉 ?v=", async () => {
     await mount(detail());
     fireEvent.click(screen.getByRole("button", { name: "v1" }));
     expect(loc()).toBe("/w/d1?v=1");
     expect(await screen.findByText("舊版")).toBeTruthy();
     expect(await screen.findByText("第 1 版的字。")).toBeTruthy();
     expect(screen.getByRole("button", { name: "v1" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "回到最新版" }));
+    fireEvent.click(screen.getByRole("button", { name: "v2" }));
     expect(loc()).toBe("/w/d1");
     expect(await screen.findByText("第一段。")).toBeTruthy();
     expect(screen.queryByText("舊版")).toBeNull();
@@ -81,13 +81,23 @@ describe("Reader(稿窗格)", () => {
     const dlg = within(screen.getByRole("dialog", { name: "所有版本" }));
     const rows = dlg.getAllByRole("button");
     expect(rows).toHaveLength(5);
-    expect(rows[0].querySelector(".vdot")!.getAttribute("data-dot")).toBe("full");
-    expect(rows[1].querySelector(".vdot")!.getAttribute("data-dot")).toBe("half");
+    expect(rows.map(r => r.textContent!.slice(0, 2))).toEqual(["v5", "v4", "v3", "v2", "v1"]);
+    expect(rows[0].getAttribute("aria-current")).toBe("true");
+    expect(rows.slice(1).some(r => r.hasAttribute("aria-current"))).toBe(false);
+    expect(rows[4].querySelector(".vdot")!.getAttribute("data-dot")).toBe("full");
+    expect(rows[3].querySelector(".vdot")!.getAttribute("data-dot")).toBe("half");
     expect(rows[2].querySelector(".vdot")!.getAttribute("data-dot")).toBe("empty");
     expect(rows.every(r => r.querySelector(".vdot-when")!.textContent!.length > 0)).toBe(true);
-    fireEvent.click(rows[1]);
+    fireEvent.click(rows[3]);
     expect(loc()).toBe("/w/d1?v=2");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("版本條跳號的地方插不能點的 …,連號不插", async () => {
+    await mount(detail({ version: 1, versions: [1, 2, 3, 4, 5] }));
+    const bar = screen.getByRole("group", { name: "版本" });
+    expect(within(bar).getAllByRole("button", { name: /^v\d$/ }).map(b => b.textContent)).toEqual(["v1", "v4", "v5"]);
+    expect(bar.querySelectorAll(".paper-gap")).toHaveLength(1);
+    expect(bar.querySelector(".paper-gap")!.nextElementSibling!.textContent).toBe("v4");
   });
   it("所有版本浮層按 Esc 關", async () => {
     await mount(detail({ version: 4, versions: [1, 2, 3, 4] }));
@@ -385,7 +395,7 @@ describe("交新版", () => {
     expect(api.extract).toHaveBeenCalled();
     expect(screen.getByText("4 字")).toBeTruthy();
     expect(screen.queryByText(/預估/)).toBeNull();
-    expect(screen.getByText("會花額度")).toBeTruthy();
+    expect(screen.getByText("會使用額度")).toBeTruthy();
   });
   it("在 ?v=1 開交稿條也是第 3 版", async () => {
     const { container } = await mountNew({}, "/w/d1?v=1");

@@ -192,7 +192,7 @@ export const api = {
     request<{ imported: boolean; warnings: string[]; note?: string; character?: Character }>("/api/characters/import", post({ card, confirm })),
   characterCardUrl: (id: string) => `/api/characters/${encodeURIComponent(id)}/card`,
   characterCandidates: (answers: CandidateAnswers, lang: string, again?: CandidateAgain, signal?: AbortSignal) =>
-    request<{ seed: number; candidates: Candidate[] }>("/api/characters/candidates", { ...post({ answers, lang, ...again }), signal }),
+    request<{ seed: number; story: string; candidates: Candidate[] }>("/api/characters/candidates", { ...post({ answers, lang, ...again }), signal }),
   reviseCandidate: (candidate: Candidate, feedback: string, lang: string, signal?: AbortSignal) =>
     request<Candidate>("/api/characters/candidates/revise", { ...post({ candidate, feedback, lang }), signal }),
   createCharacter: (candidate: Candidate, confirm: boolean, depth?: string) =>

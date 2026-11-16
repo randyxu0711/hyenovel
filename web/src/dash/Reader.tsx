@@ -154,16 +154,19 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
             <button type="button" className="ib" aria-label={t("paper.allVersions")} title={t("paper.allVersions")}
               aria-expanded={all} onClick={() => setAll(a => !a)}><Icon name="dots" /></button>
           )}
-          {shown.list.map(n => (
-            <button key={n} type="button" className="paper-v" aria-pressed={n === work.version} onClick={() => pickVersion(n)}>
-              <VDot d={dot(n)} />v{n}
-            </button>
-          ))}
+          <div className="paper-seg">
+            {shown.list.map((n, k) => [
+              k > 0 && n - shown.list[k - 1] > 1 && <span key={`g${n}`} className="paper-gap" aria-hidden="true">…</span>,
+              <button key={n} type="button" className="paper-v" aria-pressed={n === work.version} onClick={() => pickVersion(n)}>
+                <VDot d={dot(n)} />v{n}
+              </button>,
+            ])}
+          </div>
           {all && (
             <ul className="dash-float paper-vlist" role="dialog" aria-label={t("paper.allVersions")} ref={listRef}
               onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setAll(false); } }}>
-              {history.map(h => (
-                <li key={h.n}><button type="button" onClick={() => { setAll(false); pickVersion(h.n); }}>
+              {[...history].sort((a, b) => b.n - a.n).map(h => (
+                <li key={h.n}><button type="button" aria-current={h.n === work.version || undefined} onClick={() => { setAll(false); pickVersion(h.n); }}>
                   <VDot d={dot(h.n)} /><span>v{h.n}</span><span className="vdot-when">{whenLabel(h.at, Date.now() / 1000, lang)}</span>
                 </button></li>
               ))}
@@ -174,12 +177,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
           onClick={() => fileInput.current?.click()}><Icon name="stack" /></button>
         <input ref={fileInput} type="file" accept=".md,.txt" hidden
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !submit.busy) void submit.fromFile(f); }} />
-        {work.version !== latest && (
-          <span className="paper-oldpill">{t("paper.old")}
-            <button type="button" className="ib" aria-label={t("paper.latest")} title={t("paper.latest")}
-              onClick={() => pickVersion(latest)}><Icon name="back" /></button>
-          </span>
-        )}
+        {work.version !== latest && <span className="paper-state paper-old">{t("paper.old")}</span>}
         {analyzing
           ? <Running jobId={work.job_id!} state={work.state} sseStep={job.step} onStopped={() => { setRev(r => r + 1); onFinished?.(); }} />
           : stateText(work.state) && <span className="paper-state" role="status">{t(stateText(work.state)!)}</span>}
@@ -195,7 +193,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
           ))}
         </div>
         {onFocus && (
-          <button type="button" className="ib" aria-pressed={focus} aria-label={t("focus.on")} title={t("focus.on")}
+          <button type="button" className="ib paper-focus" aria-pressed={focus} aria-label={t("focus.on")} title={t("focus.on")}
             onClick={() => onFocus(!focus)}><Icon name="focus" /></button>
         )}
         {analyzing && <i className="paper-track" aria-hidden="true" />}

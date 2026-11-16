@@ -227,15 +227,43 @@ describe("編輯", () => {
     return { l, box: l.getByRole("textbox", { name: "改讀伴的回覆" }) as HTMLTextAreaElement };
   };
 
-  it("原地變文字框,內容是現有全文;Esc 取消不送", async () => {
+  it("原地變文字框,沿用回覆的字樣,內容是現有全文;沒改 Esc 直接離開", async () => {
     mount();
     const { l, box } = await open();
     expect(box.value).toBe("舊的");
+    expect(box.classList.contains("chat-text")).toBe(true);
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(l.queryByRole("textbox", { name: "改讀伴的回覆" })).toBeNull();
+    expect(writes).toEqual([]);
+  });
+
+  it("改過按 Esc 先問;繼續改留著,放棄才離開且不送", async () => {
+    mount();
+    const { l, box } = await open();
     fireEvent.change(box, { target: { value: "改掉" } });
     fireEvent.keyDown(box, { key: "Escape" });
+    expect(l.getByRole("alert").textContent).toBe("放棄修改?");
+    fireEvent.click(l.getByRole("button", { name: "繼續改" }));
+    expect((l.getByRole("textbox", { name: "改讀伴的回覆" }) as HTMLTextAreaElement).value).toBe("改掉");
+    fireEvent.click(l.getByRole("button", { name: "取消" }));
+    fireEvent.click(l.getByRole("button", { name: "放棄" }));
     expect(l.queryByRole("textbox", { name: "改讀伴的回覆" })).toBeNull();
     expect(l.getByText("舊的")).toBeTruthy();
     expect(writes).toEqual([]);
+  });
+
+  it("組字中按 Esc 不離開", async () => {
+    mount();
+    const { l, box } = await open();
+    fireEvent.keyDown(box, { key: "Escape", isComposing: true });
+    fireEvent.keyDown(box, { key: "Escape", keyCode: 229 });
+    expect(l.getByRole("textbox", { name: "改讀伴的回覆" })).toBeTruthy();
+  });
+
+  it("改的時候別則的改這則鎖住", async () => {
+    mount();
+    const { l } = await open();
+    for (const key of l.queryAllByRole("button", { name: "改這則" })) expect((key as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("沒改就存 = 取消,不送", async () => {

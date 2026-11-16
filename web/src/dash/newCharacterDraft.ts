@@ -2,13 +2,13 @@ import { DashError, type Candidate } from "./api";
 
 export type Answers = { form: string; wish: string };
 export type Draft = {
-  form: string; wish: string; batch: Candidate[] | null; batchNo: number; scene: number; reaction: string;
+  form: string; wish: string; batch: Candidate[] | null; batchNo: number; story?: string; reaction: string;
   picked?: number | null; revealed?: number; asked?: Answers;
 };
 export type Job = { kind: "generate" | "revise"; index: number | null; text?: string; started: number; done: Promise<void>; stop: () => void };
 
 export const DRAFT_KEY = "hyenovel.newCharacter.v3";
-const EMPTY: Draft = { form: "", wish: "", batch: null, batchNo: 0, scene: 0, reaction: "" };
+const EMPTY: Draft = { form: "", wish: "", batch: null, batchNo: 0, reaction: "" };
 
 let memory: Draft | null | undefined;
 let job: Job | null = null;
@@ -21,10 +21,10 @@ const answers = (v: unknown) => !!v && typeof v === "object" && str((v as Answer
 function valid(d: unknown): d is Draft {
   if (!d || typeof d !== "object") return false;
   const x = d as Record<string, unknown>;
-  return str(x.form) && str(x.wish) && str(x.reaction) && num(x.batchNo) && num(x.scene)
+  return str(x.form) && str(x.wish) && str(x.reaction) && num(x.batchNo)
     && (x.batch === null || Array.isArray(x.batch))
     && (x.picked === undefined || x.picked === null || num(x.picked)) && (x.revealed === undefined || num(x.revealed))
-    && (x.asked === undefined || answers(x.asked));
+    && (x.asked === undefined || answers(x.asked)) && (x.story === undefined || str(x.story));
 }
 
 export function draft(): Draft | null {
