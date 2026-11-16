@@ -97,7 +97,18 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const log = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
   const [editing, setEditing] = useState<{ seq: number; text: string } | null>(null);
+  const [asking, setAsking] = useState(false);
+  const editBox = useRef<HTMLTextAreaElement>(null);
+  const keepRef = useRef<HTMLButtonElement>(null);
   useEffect(() => setEditing(null), [talk.session]);
+  useEffect(() => { setAsking(false); }, [editing?.seq]);
+  useEffect(() => {
+    const el = editBox.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editing?.seq]);
+  useEffect(() => { if (asking) keepRef.current?.focus(); }, [asking]);
   const { markTurn, markMemories, markVoice, redoing, session, turns, streaming, pending, whoId, draft, setDraft, error, legacy,
     attachments, bound, staged, working } = talk;
   const navigate = useNavigate();
@@ -217,25 +228,48 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const r = await talk.editReply(editing.seq, editing.text);
     if (r !== null) setEditing(null);
   };
-  const onEditKey = (e: KeyboardEvent<HTMLTextAreaElement>, turn: Turn) => {
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setEditing(null); }
-    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void saveEdit(turn); }
+  const leaveEdit = (turn: Turn) => {
+    if (editing && editing.text !== turn.text) setAsking(true);
+    else setEditing(null);
+  };
+  const keepEditing = () => { setAsking(false); editBox.current?.focus({ preventScroll: true }); };
+  const onEditKey = (e: KeyboardEvent<HTMLElement>, turn: Turn) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (asking) keepEditing(); else leaveEdit(turn); }
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !asking) { e.preventDefault(); void saveEdit(turn); }
   };
   const still = legacy || streaming !== null || working;
   const lastTurn = turns[turns.length - 1];
+  const editBar = (turn: Turn) => (
+    <div className="chat-acts chat-edit-bar" data-asking={asking || undefined}>
+      {asking ? (
+        <>
+          <span className="chat-edit-ask" role="alert">{t("card.discard.ask")}</span>
+          <button type="button" ref={keepRef} className="chat-edit-btn is-save" onClick={keepEditing}>{t("card.discard.keep")}</button>
+          <button type="button" className="chat-edit-btn" onClick={() => setEditing(null)}>{t("card.discard")}</button>
+        </>
+      ) : (
+        <>
+          <button type="button" className="chat-edit-btn is-save" disabled={still || !editing?.text.trim() || editing?.text === turn.text}
+            onClick={() => void saveEdit(turn)}>{t("reply.save")}</button>
+          <button type="button" className="chat-edit-btn" onClick={() => leaveEdit(turn)}>{t("reply.cancel")}</button>
+        </>
+      )}
+    </div>
+  );
   const acts = (turn: Turn) => {
     if (!session || turn.seq === undefined) return null;
     const seq = turn.seq;
     const n = turn.variant?.n ?? 1;
     const total = turn.variant?.total ?? 1;
     const last = lastTurn === turn;
+    const held = still || editing !== null;
     return (
       <div className="chat-acts">
-        <button type="button" className="chat-act" aria-label={t("reply.edit")} title={t("reply.edit")} disabled={still}
+        <button type="button" className="chat-act" aria-label={t("reply.edit")} title={t("reply.edit")} disabled={held}
           onClick={() => setEditing({ seq, text: turn.text })}><Icon name="edit" /></button>
         {last && (
-          <button type="button" className="chat-act" aria-label={t("reply.redo")} title={t("reply.redo")} disabled={still}
+          <button type="button" className="chat-act" aria-label={t("reply.redo")} title={t("reply.redo")} disabled={held}
             onClick={() => { setEditing(null); void talk.regenerate(seq); }}><Icon name="again" /></button>
         )}
         {last && total > 1 && (
@@ -295,25 +329,17 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const redo = redoing !== null && turn.seq === redoing;
     const open = editing !== null && editing.seq === turn.seq;
     return [brk, att,
-      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}>
+      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}
+        data-editing={open || undefined} onKeyDown={open ? e => onEditKey(e, turn) : undefined}>
         {who.has(i) && whoLine(c)}
         {redo
           ? (streaming ? <p className="chat-text">{streaming}</p>
             : <p className="chat-wait" role="status">{t("talk.waiting", { name: nameOf(c.id) })}</p>)
           : open
-            ? (
-              <div className="chat-edit">
-                <textarea autoFocus aria-label={t("reply.editBox")} value={editing.text}
-                  onChange={e => setEditing({ seq: turn.seq!, text: e.target.value })} onKeyDown={e => onEditKey(e, turn)} />
-                <div className="chat-edit-bar">
-                  <button type="button" className="chat-edit-btn" onClick={() => setEditing(null)}>{t("reply.cancel")}</button>
-                  <button type="button" className="chat-edit-btn is-save" disabled={still || !editing.text.trim()}
-                    onClick={() => void saveEdit(turn)}>{t("reply.save")}</button>
-                </div>
-              </div>
-            )
+            ? <textarea ref={editBox} className="chat-text chat-text-edit" aria-label={t("reply.editBox")} value={editing.text} readOnly={asking}
+                onChange={e => setEditing({ seq: turn.seq!, text: e.target.value })} />
             : <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>}
-        {!redo && !open && acts(turn)}
+        {!redo && (open ? editBar(turn) : acts(turn))}
       </div>,
     ];
   });

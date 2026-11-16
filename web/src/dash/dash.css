@@ -120,10 +120,14 @@
 .dash .chat-flip .chat-act:disabled{opacity:.3}
 .dash .chat-flip-n{min-width:2.6em; text-align:center; font-variant-numeric:tabular-nums; color:var(--dash-paper-ink)}
 .dash .chat-edited{margin-left:6px; font-family:var(--serif); color:var(--dash-paper-ink-2); cursor:default}
-.dash .chat-edit{display:flex; flex-direction:column; gap:4px}
-.dash .chat-edit textarea{box-sizing:border-box; width:100%; min-height:5.4em; field-sizing:content; padding:4px 8px; border:0; border-left:2px solid var(--dash-paper-ink-2); border-radius:0;
-  background:color-mix(in srgb, var(--dash-paper-ink-2) 6%, transparent); color:var(--dash-paper-ink); font:inherit; font-family:var(--serif); line-height:1.8; white-space:pre-wrap; resize:vertical}
-.dash .chat-edit-bar{display:flex; justify-content:flex-end; gap:4px; font-family:var(--sans); font-size:var(--dash-t-sm)}
+.dash .chat-edit-bar{gap:4px; font-size:var(--dash-t-sm)}
+.dash .chat-edit-ask{margin-right:6px; color:var(--dash-paper-ink)}
+.dash .chat-text-edit{display:block; box-sizing:border-box; width:100%; margin:0; padding:0; border:0; border-radius:0; background:none; color:inherit; font:inherit; line-height:1.8; white-space:pre-wrap; resize:none; field-sizing:content; outline:none}
+.dash .chat-turn[data-editing]{position:relative}
+.dash .chat-turn[data-editing]::before{content:""; position:absolute; left:-12px; top:0; bottom:2.4em; width:2px; background:color-mix(in srgb, var(--dash-paper-ink) 14%, transparent)}
+.dash .chat-turn[data-editing]:focus-within::before{background:var(--dash-accent)}
+.dash .chat-turn[data-editing] .chat-edit-bar{position:sticky; bottom:0; z-index:1; padding-top:12px; background:linear-gradient(to bottom, transparent, var(--dash-desk) 12px)}
+.dash .chat-log:has(.chat-turn[data-editing]){-webkit-mask-image:none; mask-image:none}
 .dash .chat-edit-btn{padding:2px 8px; border:0; border-radius:6px; background:none; color:var(--dash-paper-ink-2); font:inherit; cursor:pointer}
 .dash .chat-edit-btn.is-save{color:var(--dash-paper-ink); background:color-mix(in srgb, var(--dash-paper-ink-2) 14%, transparent)}
 .dash .chat-edit-btn:disabled{opacity:.45; cursor:default}
@@ -230,9 +234,11 @@
 .dash .paper-h{margin:0; font-size:var(--dash-t-md); font-weight:600}
 .dash .paper-title{display:inline-flex; align-items:center; gap:4px; padding:3px 8px; margin-left:-8px; border:0; border-radius:7px; background:none; cursor:pointer; font-weight:600; color:var(--dash-ink)}
 .dash .paper-title:hover, .dash .paper-title[aria-expanded="true"]{background:var(--dash-desk-2)}
-.dash .paper-vers{position:relative; display:flex; align-items:center; gap:2px}
+.dash .paper-vers{position:relative; display:flex; align-items:center; gap:4px}
+.dash .paper-seg{display:flex; align-items:center; gap:2px; padding:2px; border-radius:9px; background:var(--dash-desk-2); box-shadow:inset 0 0 0 1px var(--dash-line)}
 .dash .paper-v{display:inline-flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums}
-.dash .paper-v + .paper-v::before{content:""; width:10px; height:1.5px; margin:0 6px 0 -8px; background:var(--dash-ink-2); opacity:.35; border-radius:1px}
+.dash .paper-gap{padding:0 2px; font-size:var(--dash-t-xs); color:var(--dash-ink-2); opacity:.6; user-select:none}
+.dash .paper-vlist button[aria-current]{font-weight:600}
 .dash .paper-vlist{position:absolute; top:calc(100% + 6px); left:0; z-index:8; list-style:none; margin:0; padding:6px; min-width:190px; border-radius:10px}
 .dash .paper-vlist button{display:grid; grid-template-columns:auto auto 1fr; gap:8px; align-items:center; width:100%; padding:6px 10px; border:0; border-radius:7px; background:none; cursor:pointer; text-align:left; font-size:var(--dash-t-sm); font-variant-numeric:tabular-nums; color:var(--dash-ink)}
 .dash .paper-vlist button:hover{background:var(--dash-line)}
@@ -244,15 +250,18 @@
 .dash .vdot[data-busy]{animation:vdot-pulse 1.6s ease-in-out infinite}
 @keyframes vdot-pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--dash-sig) 50%, transparent)}50%{box-shadow:0 0 0 4px transparent}}
 @media (prefers-reduced-motion:reduce){ .dash .vdot[data-busy]{animation:none} }
-.dash .paper-oldpill{display:inline-flex; align-items:center; gap:4px; padding:2px 2px 2px 12px; border-radius:999px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .paper-flow{margin-left:auto}
+.dash[data-narrow="true"] .paper-top::after{content:""; order:2; flex-basis:100%; height:0}
+.dash[data-narrow="true"] .paper-top > *{order:3}
+.dash[data-narrow="true"] .paper-top > :is(.paper-h, .paper-flow, .paper-focus){order:1}
+.dash[data-narrow="true"] .paper-h{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:0 1 auto}
 /* 拖檔:整個畫面蓋一層桌色,一張寫著下一版號的紙從右上斜著滑進來 */
 .dash .drop-sheet{position:fixed; inset:0; z-index:20; display:grid; place-items:center; pointer-events:none; background:color-mix(in srgb, var(--dash-desk) 70%, transparent)}
 .dash .drop-paper{display:grid; place-items:center; width:180px; height:230px; box-shadow:var(--dash-sh-float); transform:rotate(1deg); animation:drop-in .45s cubic-bezier(.3,.7,.2,1) both}
 .dash .drop-paper span{font-family:var(--serif); font-size:42px; /* t-ok: 拖檔紙上的版號是道具字,不是內文 */ color:var(--dash-ink-2)}
 @keyframes drop-in{from{transform:translate(30px,-30px) rotate(4deg); opacity:.6}}
 @media (prefers-reduced-motion:reduce){ .dash .drop-paper{animation:none} }
-.dash .paper-vers .paper-v{padding:1px 9px; border:0; border-radius:5px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .paper-vers .paper-v{height:24px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-vers .paper-v[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
 .dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-resume{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
@@ -522,19 +531,8 @@
 .dash .char-card header{display:flex; align-items:center; gap:10px; margin-bottom:14px}
 .dash .char-card h2{margin:0; font-family:var(--serif); font-size:var(--dash-t-lg); font-weight:500; line-height:1.3}
 .dash .char-card h2 small{display:block; font-family:var(--sans); font-size:var(--dash-t-xs); font-weight:400; color:var(--dash-paper-ink-2)}
-.dash .nc-scenes{display:flex; flex-wrap:wrap; gap:2px; width:fit-content; margin:0; padding:2px; border-radius:8px; background:var(--dash-desk-2)}
-.dash .nc-scenes button{padding:3px 14px; border:0; border-radius:6px; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
-.dash .nc-scenes button[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
-.dash .nc-scenes button:focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
 .dash .nc-warn{margin:10px 0 0; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
 .dash .nc :is(button, summary):focus-visible{outline:2px solid var(--dash-accent); outline-offset:2px}
-.dash .nc-revise{display:flex; align-items:baseline; gap:10px; margin-top:14px; border-bottom:1px solid var(--dash-paper-ink-2)}
-.dash .nc-revise:focus-within{border-bottom-color:var(--dash-accent)}
-.dash .nc-revise input{flex:1; min-width:0; padding:5px 0; border:0; outline:0; border-radius:0; background:none; font-size:var(--dash-t-sm); color:inherit}
-.dash .nc-revise input::placeholder{color:var(--dash-paper-ink-2)}
-.dash .nc-revise button, .dash .nc-use{flex:none; padding:2px 0; border:0; background:none; cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
-.dash .nc-revise button:disabled, .dash .nc-use:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
-.dash .nc-revise button:not(:disabled):hover, .dash .nc-use:not(:disabled):hover{text-decoration:underline; text-underline-offset:.3em}
 /* 生成中:三張空白紙上,鉛筆一筆筆試畫長相;畫完擱一下、淡掉、換一個再試。只說「還在想長什麼樣」,不說畫到幾成 */
 .dash .nc-state{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:flex-end; gap:2px 10px; margin:0; color:var(--dash-paper-ink)}
 .dash .nc-state .dash-dm{font-size:var(--dash-t-lg)}
@@ -562,7 +560,6 @@
   .dash .nc-ghost-fig, .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path, .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:none}
   .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path{stroke-dasharray:none; stroke-dashoffset:0}
 }
-.dash .nc-use{font-weight:500}
 .dash .nc-againline{flex:1 1 22em; display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--dash-paper-ink-2)}
 .dash .nc-againline:focus-within{border-bottom-color:var(--dash-accent); box-shadow:0 1px 0 var(--dash-accent)}
 .dash .nc-againline input{flex:1; min-width:0; padding:6px 0; border:0; outline:0; background:none; font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
@@ -614,8 +611,6 @@
 .dash .nc-panel > *{max-width:36em; margin-inline:auto}
 .dash .nc-panel-body{animation:nc-open .2s ease-out both}
 .dash .nc-panel-body[data-fresh]{animation:nc-in .6s ease-out both}
-.dash .nc-panel .nc-scenes{flex-wrap:nowrap; max-width:100%; overflow-x:auto; scrollbar-width:none}
-.dash .nc-panel .nc-scenes button{flex:none; white-space:nowrap}
 .dash .nc-talk{display:flex; flex-direction:column; gap:12px; margin:18px 0 0; padding:0; list-style:none}
 .dash .nc-talk p{margin:0; white-space:pre-wrap}
 .dash .nc-talk [data-who="char"] p{font-family:var(--serif); line-height:1.9}
@@ -627,10 +622,23 @@
 .dash .nc-acts{margin-top:20px; padding-top:4px; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 12%, transparent)}
 .dash .nc-acts .nc-err{margin:8px 0 0; color:var(--dash-paper-ink)}
 .dash .nc-acts-row{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:10px}
-.dash .nc-acts-row .nc-note{color:var(--dash-paper-ink-2)}
-.dash .nc-revise .dash-dm{font-size:var(--dash-t-sm)}
+.dash .nc-panel .nc-acts-row{align-items:center; margin-top:14px}
+.dash .nc-panel .nc-swap{margin-left:-10px; color:var(--dash-paper-ink-2)}
+.dash .nc-panel .nc-swap:not(:disabled):hover{color:var(--dash-paper-ink)}
+.dash .nc-panel .nc-again{margin-top:14px; padding-top:0; border-top:0}
+.dash .nc-panel .nc-again-foot{flex:1 1 100%; justify-content:space-between}
+.dash .nc-panel .nc-again .dash-key{display:inline-flex; align-items:center; gap:6px; padding:4px 14px; font-weight:500; color:var(--dash-paper-ink)}
+.dash .nc-panel .nc-again .dash-key:disabled{color:var(--dash-paper-ink-2)}
+.dash .nc-panel .nc-again .nc-state .dash-dm{font-size:var(--dash-t-sm)}
+.dash .nc-panel .nc-use{padding:4px 14px; font-weight:500; color:var(--dash-paper-ink)}
+.dash .nc-panel .nc-use:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2); box-shadow:none; transform:none}
+.dash .nc-ex{margin:0}
+.dash .nc-ex .char-ex-lead{margin:0 0 4px; font-size:var(--dash-t-sm)}
+.dash .nc-ex .nc-talk:first-of-type{padding-top:4px}
 .dash .nc-revise input:read-only{color:var(--dash-paper-ink-2)}
-.dash .nc-panel .char-edit{padding:0; background:none; box-shadow:none}
+.dash .nc-panel .char-edit.is-sheet .char-edit-foot{position:sticky; bottom:0; z-index:1; margin:8px -28px -22px; padding:24px 28px 16px; background:linear-gradient(to bottom, transparent, var(--dash-paper) 22px)}
+.dash .nc-tab[data-using] :is(.nc-name, .nc-line){visibility:hidden}
+.dash .nc-tab:disabled{cursor:default}
 .dash .char-new-slot > .nc-mini{display:flex; align-items:flex-end; justify-content:center; gap:2px; width:auto; height:64px; border:0; border-radius:0}
 .dash .nc-mini .dash-dm{align-self:center; margin-left:4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .char-pop[data-fresh="true"] .char-stage .fig{animation:char-standup .6s cubic-bezier(.2, .9, .3, 1.2) both}
@@ -642,6 +650,7 @@
   .dash .nc-line{padding:0 8px; white-space:normal; font-size:var(--dash-t-xs); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2}
   .dash .nc-blank{height:calc(var(--dash-t-md) * 1.3 + var(--dash-t-xs) * 3 + 12px)}
   .dash .nc-panel{padding:18px 16px}
+  .dash .nc-panel .char-edit.is-sheet .char-edit-foot{margin:8px -16px -18px; padding:24px 16px 14px}
   .dash .nc-strip{padding-left:14px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -691,7 +700,7 @@
 .dash .char-meta{display:flex; justify-content:center; gap:10px; margin:0; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
 .dash .char-reading{margin:18px 0 0; padding:12px 0 0; border-top:1px solid color-mix(in srgb, var(--dash-paper-ink) 12%, transparent); text-align:left}
 .dash .char-reading h3{margin:0 0 6px; font-size:var(--dash-t-xs); font-weight:500; letter-spacing:.12em; color:var(--dash-paper-ink-2)}
-.dash .char-reading > p, .dash .char-scroll, .dash .char-sheet .char-edit.is-sheet .char-edit-long textarea.nc-edit{box-sizing:border-box; max-height:11em; overflow:auto; margin:0; padding-bottom:1.4em; font-size:var(--dash-t-sm); white-space:pre-wrap;
+.dash .char-reading > p, .dash .char-scroll, .dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .char-edit-long textarea.nc-edit{box-sizing:border-box; max-height:11em; overflow:auto; margin:0; padding-bottom:1.4em; font-size:var(--dash-t-sm); white-space:pre-wrap;
   -webkit-mask-image:linear-gradient(to bottom, black calc(100% - 1.4em), transparent); mask-image:linear-gradient(to bottom, black calc(100% - 1.4em), transparent)}
 .dash .char-ex{white-space:normal}
 .dash .char-ex-lead{margin:0; color:var(--dash-paper-ink-2)}
@@ -720,18 +729,18 @@
 .dash .char-edit-foot button[type="submit"]{font-weight:500; color:var(--dash-paper-ink)}
 .dash .char-edit-foot button:disabled{cursor:not-allowed; color:var(--dash-paper-ink-2)}
 .dash .char-edit :is(button, input, textarea):focus-visible{outline-offset:2px}
-.dash .char-sheet .char-edit.is-sheet{display:block; max-width:none; text-align:left}
-.dash .char-sheet .char-edit.is-sheet > label{display:block; font-size:inherit; color:inherit}
-.dash .char-sheet .char-edit.is-sheet .nc-edit{margin:0; border-bottom:1px dashed color-mix(in srgb, var(--dash-paper-ink) 28%, transparent); color:var(--dash-paper-ink)}
-.dash .char-sheet .char-edit.is-sheet .nc-edit:focus{border-bottom-style:solid; border-bottom-color:var(--dash-accent)}
-.dash .char-sheet .char-edit-name{margin:16px 0 2px; text-align:center; font-size:var(--dash-t-xl); font-weight:500; line-height:1.3}
-.dash .char-sheet .char-edit-line{margin:4px 0 6px; text-align:center; font-family:var(--sans); font-size:var(--dash-t-sm); line-height:1.6}
-.dash .char-sheet .char-edit.is-sheet .char-edit-long .nc-edit{padding:2px 0 2px 10px; border-bottom:0; border-left:2px solid color-mix(in srgb, var(--dash-paper-ink) 14%, transparent); font-family:var(--sans); font-size:var(--dash-t-sm); line-height:1.7; white-space:pre-wrap}
-.dash .char-sheet .char-edit.is-sheet .char-edit-long .nc-edit:focus{border-left-color:var(--dash-accent)}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet{display:block; max-width:none; text-align:left}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet > label{display:block; font-size:inherit; color:inherit}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .nc-edit{margin:0; border-bottom:1px dashed color-mix(in srgb, var(--dash-paper-ink) 28%, transparent); color:var(--dash-paper-ink)}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .nc-edit:focus{border-bottom-style:solid; border-bottom-color:var(--dash-accent)}
+.dash :is(.char-sheet, .nc-panel) .char-edit-name{margin:16px 0 2px; text-align:center; font-size:var(--dash-t-xl); font-weight:500; line-height:1.3}
+.dash :is(.char-sheet, .nc-panel) .char-edit-line{margin:4px 0 6px; text-align:center; font-family:var(--sans); font-size:var(--dash-t-sm); line-height:1.6}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .char-edit-long .nc-edit{padding:2px 0 2px 10px; border-bottom:0; border-left:2px solid color-mix(in srgb, var(--dash-paper-ink) 14%, transparent); font-family:var(--sans); font-size:var(--dash-t-sm); line-height:1.7; white-space:pre-wrap}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .char-edit-long .nc-edit:focus{border-left-color:var(--dash-accent)}
 .dash .char-edit-k{display:block; margin:0 0 6px; font-size:var(--dash-t-xs); font-weight:500; letter-spacing:.12em; color:var(--dash-paper-ink-2)}
-.dash .char-sheet .char-edit.is-sheet .nc-warn{margin:14px 0 0}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .nc-warn{margin:14px 0 0}
 .dash .char-edit-ask{font-size:var(--dash-t-sm); color:var(--dash-paper-ink)}
-.dash .char-sheet .char-edit.is-sheet .char-edit-foot .dash-key{padding:4px 14px; font-weight:500; color:var(--dash-paper-ink)}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .char-edit-foot .dash-key{padding:4px 14px; font-weight:500; color:var(--dash-paper-ink)}
 .dash .char-edit-plist{margin:0}
 .dash .plist{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; align-items:baseline; font-size:var(--dash-t-sm); line-height:1.8}
 .dash .plist-row{display:contents}
@@ -744,7 +753,7 @@
 .dash .plist-w[data-marked]{box-shadow:inset 0 -2px 0 var(--dash-accent)}
 .dash .plist-full{grid-column:2; margin:0}
 .dash .plist-in[aria-invalid]{border-bottom-style:solid; border-bottom-color:var(--dash-paper-ink)}
-.dash .char-sheet .char-edit.is-sheet .plist-full{margin:2px 0 0}
+.dash :is(.char-sheet, .nc-panel) .char-edit.is-sheet .plist-full{margin:2px 0 0}
 .dash .plist-x{position:absolute; top:-7px; right:calc(1em - 7px); display:inline-flex; padding:1px; border:0; border-radius:50%; background:var(--dash-paper); box-shadow:0 0 0 1px color-mix(in srgb, var(--dash-paper-ink) 18%, transparent); color:var(--dash-paper-ink-2); cursor:pointer; opacity:0; transition:opacity .12s}
 .dash .plist-x .ico{width:10px; height:10px}
 .dash .plist-x::before{content:""; position:absolute; inset:-6px}

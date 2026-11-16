@@ -457,7 +457,7 @@ describe("設定頁:角色卡", () => {
     const p = await open();
     fireEvent.click(p.getByRole("button", { name: "新角色" }));
     expect(p.getByLabelText("陪你讀稿的,是什麼?")).toBeTruthy();
-    fireEvent.click(p.getByRole("button", { name: "回讀伴" }));
+    fireEvent.click(p.getByRole("button", { name: "返回讀伴" }));
     expect(p.getByRole("button", { name: "新角色" })).toBeTruthy();
   });
   const kept = (line: string) => ({
@@ -465,7 +465,7 @@ describe("設定頁:角色卡", () => {
     figure: { parts: [{ group: "body", d: "M20 90 C20 50 40 30 60 30 C80 30 100 50 100 90 Z", fill: "main" }],
       eyes: [[50, 58], [70, 58]], mouth: [[54, 70], [60, 73], [66, 70]], main: "olive", second: "bark" }, axes: [], card: {}, warnings: [], examples: [],
   }) as unknown as Candidate;
-  const seed = () => keep({ form: "門縫", wish: "", batch: ["聽1", "聽2", "聽3"].map(kept), batchNo: 1, revealed: 1, scene: 0, reaction: "" });
+  const seed = () => keep({ form: "門縫", wish: "", batch: ["聽1", "聽2", "聽3"].map(kept), batchNo: 1, revealed: 1, reaction: "" });
   it("有沒存的候選時,新角色那格換成三隻迷你圖,字在 aria-label/title;點進去就是那批", async () => {
     seed();
     try {
@@ -514,7 +514,7 @@ describe("設定頁:角色卡", () => {
       const p = await open();
       fireEvent.click(p.getByRole("button", { name: "新角色,上次的候選還在" }));
       fireEvent.click(p.getByRole("tab", { name: "聽1" }));
-      fireEvent.click(p.getByRole("button", { name: "用這個" }));
+      fireEvent.click(p.getByRole("button", { name: "選用" }));
       fireEvent.click(p.getByRole("button", { name: "存" }));
       const fresh = await p.findByRole("button", { name: "打開門縫" });
       expect(fresh.getAttribute("data-fresh")).toBe("true");
