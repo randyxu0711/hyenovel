@@ -119,3 +119,17 @@ def test_submitting_to_archived_work_brings_it_back(c):
     c.post("/api/works/mini/archive")
     assert c.post("/api/stories", json={"text": "新的一版。", "slug": "mini"}).status_code == 201
     assert "mini" in _slugs(c)
+
+
+def test_renamed_title_reaches_companion_context(c):
+    from den import stories
+    c.patch("/api/works/mini", json={"title": "改過"})
+    assert in_loop(c, lambda conn: stories.companion_context(conn, "mini"))["title"] == "改過"
+
+
+def test_restoring_a_session_brings_its_archived_work_back(c):
+    sid = first_turn(c)
+    c.post(f"/api/sessions/{sid}/archive")
+    c.post("/api/works/mini/archive")
+    assert c.post(f"/api/sessions/{sid}/unarchive").status_code == 204
+    assert "mini" in _slugs(c)

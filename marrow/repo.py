@@ -423,8 +423,8 @@ def archived_discussions(conn) -> list[dict]:
     """封存的局,新封存的在上;preview = 第一句話前 60 字。"""
     out = []
     for r in conn.execute(
-            "SELECT d.external_id AS external_id, st.slug AS slug, COALESCE(st.custom_title, st.title) AS title, "
-            "d.archived_at AS archived_at, "
+            "SELECT d.external_id AS external_id, d.story_id AS story_id, st.slug AS slug, st.title AS title, "
+            "st.custom_title AS custom_title, d.archived_at AS archived_at, "
             "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
             "(SELECT text FROM utterance WHERE discussion_id = d.id AND role IN ('user', 'assistant') "
             "ORDER BY seq LIMIT 1) AS preview "

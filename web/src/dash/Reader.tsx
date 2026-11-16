@@ -80,8 +80,9 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   const submit = useSubmitDraft(slug);
   const slugNow = useRef(slug);
   slugNow.current = slug;
-  const [keeping, setKeeping] = useState(false);
-  const [naming, setNaming] = useState<string | null>(null);   // 送出中的是「只存版」那顆
+  const [keeping, setKeeping] = useState(false);   // 送出中的是「只存版」那顆
+  const [naming, setNaming] = useState<string | null>(null);
+  const nameDone = useRef(false);   // 按了 Enter/Esc 之後輸入框被拿掉時,Chrome 還會補一次 blur
   const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
@@ -146,7 +147,8 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   };
 
   const saveName = () => {
-    if (naming === null || !work) return;
+    if (naming === null || !work || nameDone.current) return;
+    nameDone.current = true;
     setNaming(null);
     if (naming.trim() === work.title) return;
     const at = slug;
@@ -166,14 +168,14 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
           <div className="paper-name">
             <h1 className="paper-h">{work.title}</h1>
             <button type="button" className="ib paper-rename" aria-label={t("work.rename")} title={t("work.rename")}
-              onClick={() => setNaming(work.title)}><Icon name="edit" /></button>
+              onClick={() => { nameDone.current = false; setNaming(work.title); }}><Icon name="edit" /></button>
           </div>
         ) : (
           <input className="paper-h paper-name-in" aria-label={t("work.rename")} maxLength={80} autoFocus
             value={naming} onChange={e => setNaming(e.target.value)} onBlur={saveName}
             onKeyDown={e => {
               if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); saveName(); }
-              if (e.key === "Escape") { e.stopPropagation(); setNaming(null); }
+              if (e.key === "Escape") { e.stopPropagation(); nameDone.current = true; setNaming(null); }
             }} />
         )}
         <div className="paper-vers" role="group" aria-label={t("paper.versions")}>

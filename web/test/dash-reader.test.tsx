@@ -83,6 +83,7 @@ describe("Reader(稿窗格)", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "改名" }), { target: { value: "新名" } });
     fireEvent.keyDown(screen.getByRole("textbox", { name: "改名" }), { key: "Enter" });
     expect(await screen.findByRole("heading", { name: "新名" })).toBeTruthy();
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith("d1", "新名");
     spy.mockRestore();
   });

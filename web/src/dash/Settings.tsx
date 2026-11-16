@@ -57,7 +57,6 @@ function Archive() {
   }, []);
   const [archived, setArchived] = useState<ArchivedSession[]>([]);
   const [sure, setSure] = useState<string | null>(null);
-  const go = useNavigate();
   const [works, setWorks] = useState<ArchivedWork[]>([]);
   const [sureWork, setSureWork] = useState<string | null>(null);
   useEffect(() => {
@@ -98,10 +97,10 @@ function Archive() {
                   </p>
                 ) : (
                   <>
-                    <button type="button" className="arch-open" onClick={() => go(`/w/${encodeURIComponent(w.slug)}`)}>
+                    <div className="arch-open">
                       <b>{w.title}</b><span>{t("set.sessionsN", { n: w.sessions })}</span>
                       <time>{whenLabel(w.archived_at, now, lang)}</time>
-                    </button>
+                    </div>
                     <button type="button" className="ib" aria-label={t("session.restore")} title={t("session.restore")}
                       onClick={() => void restoreWork(w.slug)}><Icon name="up" /></button>
                     <button type="button" className="ib" aria-label={t("session.delete")} title={t("session.delete")}

@@ -143,6 +143,8 @@ def test_title_order_analysis_then_story_then_slug(conn):
         repo.set_current(conn, sid, "analysis", aid)
         md, _ = export.build(conn, slug)
         assert f'title: "{want}"' in md
+    repo.rename_story(conn, repo.story_by_slug(conn, "mini")["id"], "作者改的")
+    assert 'title: "作者改的"' in export.build(conn, "mini")[0]
 
 
 def test_build_prefers_notes(conn):

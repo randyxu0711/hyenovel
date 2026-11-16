@@ -84,7 +84,7 @@ def companion_context(conn, slug: str | None, discussion_id: int | None = None) 
     points = notes["body"]["points"] if notes and notes["source_version_id"] == latest["id"] else ()
     return {
         "seeds": [{"kind": p["kind"], "quotes": p["quotes"]} for p in points if p["kind"] != "opinion"],
-        "slug": slug, "title": st["title"], "source": latest["text"],
+        "slug": slug, "title": st["custom_title"] or st["title"], "source": latest["text"],
         "analysis": analysis["body"] if analysis and analysis["source_version_id"] == latest["id"] else None,
         "progress": job["state"] if job else "none",
         "memory": memory.load(conn, st["id"]),

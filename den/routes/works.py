@@ -139,13 +139,7 @@ async def rename_work(slug: str, body: RenameIn, request: Request):
 
 @router.get("/archived-works")
 async def archived_works(request: Request):
-    conn = request.app.state.mgr.conn
-    out = []
-    for r in repo.archived_stories(conn):
-        ana = repo.current_artifact(conn, r["id"], "analysis")
-        out.append({"slug": r["slug"], "title": works.title_of(r, (ana or {}).get("body")),
-                    "archived_at": r["archived_at"], "sessions": r["sessions"]})
-    return {"works": out}
+    return {"works": views.archived_works(request.app.state.mgr.conn)}
 
 
 @router.post("/works/{slug}/archive", status_code=204)

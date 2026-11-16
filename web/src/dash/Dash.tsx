@@ -51,7 +51,7 @@ function Shell({ chars }: { chars: Characters }) {
     api.works().then(ws => { if (live) { setLoaded(ws); setWorksErr(null); } },
       e => { if (live) setWorksErr(e instanceof DashError ? e.code : "unknown"); });
     return () => { live = false; };
-  }, [refresh]);
+  }, [refresh, view]);
 
   // 稿上正顯示的原文:是這篇的最新版時才交給 useTalk(邊說邊畫線在這裡找引文)
   const [paper, setPaper] = useState<{ slug: string; latest: boolean; text: string } | null>(null);
