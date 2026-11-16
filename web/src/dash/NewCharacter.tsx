@@ -386,8 +386,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
 
   const title = (c: Candidate, i: number) => {
     const typed = using === i ? mirror : null;
-    const name = typed?.name ?? localized(c.name, lang);
-    const line = typed?.line ?? localized(c.line, lang);
+    const name = typed?.name || localized(c.name, lang);
+    const line = typed?.line || localized(c.line, lang);
     if (name === localized(c.form, lang)) return <b className="nc-name" data-lined="true">{line}</b>;
     return <><b className="nc-name">{name}</b><span className="nc-line">{line}</span></>;
   };

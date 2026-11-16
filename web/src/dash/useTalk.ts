@@ -39,6 +39,7 @@ export type Pending = { text: string; quotes: string[] };
 export const attachable = (f: File) => /\.(md|txt)$/i.test(f.name);
 const stem = (name: string) => name.replace(/\.(md|txt)$/i, "");
 const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const ATTACH_HEAD = 120;
 const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "unknown"));
 
 /** 一篇作品上的對話:局清單、目前這局的逐字稿、串流中的字、誰在陪讀、草稿、邊說邊畫的痕跡。
@@ -256,7 +257,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
             { seq: d.seq, role: "assistant", text: d.text, ts, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           if (carried && d.attachment != null) {
             const n = d.attachment;
-            setAttachments(as => [...as, { n, seq: userSeq(message, d.seq) ?? d.seq, name: carried.name, chars: cpLength(carried.text.trim()), adopted: false }]);
+            setAttachments(as => [...as, { n, seq: userSeq(message, d.seq) ?? d.seq, name: carried.name, chars: cpLength(carried.text.trim()), head: [...carried.text.trim()].slice(0, ATTACH_HEAD).join(""), adopted: false }]);
             setStaged(null);
           }
           if (slug) markSeen(slug);
@@ -328,7 +329,9 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     const dropped = { name, text };
     const said = now.current.draft.trim();
     if (said && said !== text.trim()) { setStaged(dropped); return true; }
-    return send("", [], dropped);
+    const ok = await send("", [], dropped);
+    if (!ok) setStaged(dropped);
+    return ok;
   }, [bound, send]);
   const attach = useCallback(async (file: File): Promise<boolean> => {
     if (bound !== null || !attachable(file)) return false;

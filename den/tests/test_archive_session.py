@@ -90,3 +90,11 @@ def test_archived_flag_on_session_and_transcript(c):
     assert c.get(f"/api/sessions/{keep}").json()["archived"] is False
     by = {(t["session"], t["archived"]) for t in c.get("/api/stories/mini/transcript").json()["turns"]}
     assert by == {(keep, False), (gone, True)}
+
+
+def test_regenerating_in_archived_session_keeps_it_archived(c):
+    from den.tests.test_regenerate import regen_events
+    sid = first_turn(c)
+    c.post(f"/api/sessions/{sid}/archive")
+    regen_events(c, sid, 1)
+    assert _discussion(c, sid)["archived_at"] is not None

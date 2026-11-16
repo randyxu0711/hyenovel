@@ -81,6 +81,15 @@ describe("純聊天的附件", () => {
     expect(screen.getByRole("button", { name: "開成作品" })).toBeTruthy();
   });
 
+  it("a just-sent attachment opens to its first lines without reloading", async () => {
+    mount("/");
+    const input = await screen.findByLabelText("丟一份稿進來", { selector: "input" });
+    fireEvent.change(input, { target: { files: [file("海.md", "  浪打上來。\n她沒回頭。")] } });
+    const name = await screen.findByRole("button", { name: /海/ });
+    fireEvent.click(name);
+    expect(name.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".chat-att-head")!.textContent).toBe("浪打上來。\n她沒回頭。");
+  });
   it("drafted text waits: the file goes with the next send", async () => {
     mount("/");
     fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "看這篇" } });
@@ -116,12 +125,13 @@ describe("純聊天的附件", () => {
   });
 
   it("compact summary is shown open; everything before the last marker is marked past", async () => {
-    detail = { ...detail, turns: [...(detail.turns as object[]), { seq: 2, role: "compact", text: "之前聊了海", ts: 2 }, { seq: 3, role: "clear", ts: 3 }] };
+    detail = { ...detail, turns: [...(detail.turns as object[]), { seq: 2, role: "compact", text: "之前聊了海", ts: 2 }, { seq: 3, role: "clear", ts: 3 }, u(4, "之後的話")] };
     mount();
     const sum = await screen.findByText("之前聊了海");
     expect(sum.closest("details")).toBeNull();
     expect(sum.hasAttribute("data-past")).toBe(true);
     expect(screen.getByText("嗨").closest("[data-past]")).not.toBeNull();
+    expect(screen.getByText("之後的話").closest("[data-past]")).toBeNull();
     expect(screen.getByRole("separator", { name: "對話清空" })).toBeTruthy();
   });
 

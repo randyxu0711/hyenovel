@@ -150,6 +150,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   const news = works.some(w => w.slug !== current && dotState(w, seen(w.slug)) === "fresh");
   const [undo, setUndo] = useState<{ session: string; current: boolean; chat: boolean } | null>(null);
   const [rev, setRev] = useState(0);
+  useEffect(() => { setUndo(null); }, [current]);
   useEffect(() => {
     if (!undo) return;
     const id = setTimeout(() => setUndo(null), UNDO_MS);
@@ -208,7 +209,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
                     </svg>
                   )}
                 </button>
-                {on && <Sessions talk={talk} onArchived={(session, cur) => setUndo({ session, current: cur, chat: false })} />}
+                {on && <Sessions talk={talk} onArchived={(session, cur) => { setUndo({ session, current: cur, chat: false }); setRev(n => n + 1); }} />}
               </li>
             );
           })}

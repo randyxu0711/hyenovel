@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Attachment, Turn } from "./api";
 import type { Character } from "./api";
@@ -81,16 +81,13 @@ export function useReaction(analyzing: boolean): boolean {
 
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
  *  稿上的痕跡被點時,捲到說那句的訊息並閃一下(onReveal 讓右欄切回對話)。 */
-export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, onFile, above, inputRef, placeholder, whoSize = 72 }: {
+export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, inputRef, placeholder, whoSize = 72 }: {
   talk: TalkState; quotes: string[]; analyzing: boolean;
   /** 正在看的版本號(引文對不到時的說明用)。 */
   version: number;
   onDropQuote: (i: number) => void; onSent: () => void; onReveal: () => void;
   /** 進門用:超過門檻的文字(貼上或按 Enter)交給它,不當聊天送出。 */
   longText?: { min: number; take: (text: string) => void };
-  /** 進門用:拖進來的檔交給它,不當附件。 */
-  onFile?: (f: File) => void;
-  above?: ReactNode;
   inputRef?: RefObject<HTMLTextAreaElement>;
   placeholder?: string;
   whoSize?: number;
@@ -108,7 +105,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const togglePeek = (n: number) => setPeek(p => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
   const editBox = useRef<HTMLTextAreaElement>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => setEditing(null), [talk.session]);
+  useEffect(() => { setEditing(null); setPeek(new Set()); }, [talk.session]);
   useEffect(() => { setAsking(false); }, [editing?.seq]);
   useEffect(() => {
     const el = editBox.current;
@@ -209,8 +206,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const drop = (files: FileList | null) => { const f = files?.[0]; if (f) void talk.attach(f); };
   const onDrop = (e: DragEvent) => {
     e.preventDefault(); e.stopPropagation();
-    const f = e.dataTransfer.files[0];
-    if (f && onFile) onFile(f); else drop(e.dataTransfer.files);
+    drop(e.dataTransfer.files);
   };
   const bySeq = new Map<number, Attachment[]>();
   for (const a of attachments) bySeq.set(a.seq, [...(bySeq.get(a.seq) ?? []), a]);
@@ -362,7 +358,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   });
 
   return (
-    <div className="chat" onDragOver={free || onFile ? e => e.preventDefault() : undefined} onDrop={free || onFile ? onDrop : undefined}>
+    <div className="chat" onDragOver={free ? e => e.preventDefault() : undefined} onDrop={free ? onDrop : undefined}>
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
         {rows}
         {pending && (
@@ -399,7 +395,6 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
           ))}
         </div>
       )}
-      {above}
       <form className="composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
         {commands.length > 0 && (
           <ul className="slash-menu" role="listbox" aria-label={t("talk.commands")}>

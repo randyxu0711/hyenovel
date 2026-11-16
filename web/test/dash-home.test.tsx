@@ -19,6 +19,7 @@ function Where() { const l = useLocation(); return <output data-testid="loc">{l.
 let recent: object[];
 let chat: Record<string, object>;
 let boxed: object[];
+let discussDown: boolean;
 const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
   start(c) {
     const enc = new TextEncoder();
@@ -39,6 +40,7 @@ function mount(path = "/") {
     if (u.endsWith("/sessions")) return json({ sessions: sessionRows });
     if (u.startsWith("/api/sessions?")) return json({ sessions: recent });
     if (u === "/api/archived-sessions") return json({ sessions: boxed });
+    if (u === "/api/discuss" && discussDown) return json({ code: "usage-limit" }, 429);
     if (u === "/api/discuss") return sse(["message", { role: "assistant", text: "嗨,你好", session_id: "c1", seq: 1, character: "hyena", spans: [], v: null, attachment: null }],
       ["done", { ok: true, session_id: "c1" }]);
     if (u.startsWith("/api/sessions/")) return json(chat[decodeURIComponent(u.split("/").pop()!)] ?? {});
@@ -64,7 +66,7 @@ const confirmBtn = () => screen.queryByRole("button", { name: "分析" });
 
 beforeEach(() => {
   setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; calls = [];
-  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null; recent = []; chat = {}; boxed = [];
+  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null; recent = []; chat = {}; boxed = []; discussDown = false;
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -93,7 +95,7 @@ describe("進門只有一欄聊天", () => {
     expect(calls.some(c => c.url === "/api/discuss")).toBe(false);
     fireEvent.keyDown(b, { key: "Enter" });
     await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body)
-      .toMatchObject({ message: "", attach: { name: "貼上的稿", text: "字".repeat(2001) } }));
+      .toMatchObject({ message: "", attach: { name: "字".repeat(40), text: "字".repeat(2001) } }));
     expect(calls.some(c => c.url === "/api/stories")).toBe(false);
   });
   it("交新稿:從作品頁回到 / 並把游標放進輸入框", async () => {
@@ -118,13 +120,22 @@ describe("沒有作品", () => {
     expect(confirmBtn()).toBeNull();
     expect(calls.some(c => c.url === "/api/stories")).toBe(false);
   });
+  it("貼上的稿以第一行當名字(去掉 # 記號);附件送不出去時稿留著當待送附件", async () => {
+    mount();
+    const b = await box() as HTMLTextAreaElement;
+    const text = "\n# 海邊\n" + "字".repeat(2001);
+    discussDown = true;
+    fireEvent.paste(b, { clipboardData: { getData: () => text } });
+    expect(await screen.findByRole("button", { name: "不帶這份稿" })).toBeTruthy();
+    expect(document.querySelector(".chat-carries .chat-att")!.textContent).toContain("海邊");
+  });
   it("貼上 > 2000 字當附件,不進輸入框;短文字照常留在輸入框", async () => {
     mount();
     const b = await box() as HTMLTextAreaElement;
     fireEvent.paste(b, { clipboardData: { getData: () => "短短的" } });
     expect(calls.some(c => c.url === "/api/discuss")).toBe(false);
     fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(2001) } });
-    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ attach: { name: "貼上的稿" } }));
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ attach: { name: "字".repeat(40) } }));
     expect(b.value).toBe("");
   });
 });
@@ -278,7 +289,7 @@ describe("進門聊天", () => {
     await screen.findByText("c1 的話");
     const b = await box() as HTMLTextAreaElement;
     fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(8001) } });
-    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ session_id: "c1", attach: { name: "貼上的稿" } }));
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ session_id: "c1", attach: { name: "字".repeat(40) } }));
     expect(confirmBtn()).toBeNull();
   });
 

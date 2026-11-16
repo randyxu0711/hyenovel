@@ -7,6 +7,11 @@ import Talk from "./Talk";
 import { useCharacters } from "./useCharacters";
 import { MAX_CHAT, type Talk as TalkState } from "./useTalk";
 
+const NAME_MAX = 40;
+/** 貼上的稿:第一個非空行當名字(去掉 markdown 標題記號)。 */
+export const pastedName = (text: string) =>
+  [...(text.split("\n").map(l => l.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "")].slice(0, NAME_MAX).join("");
+
 /** 進門:一欄置中的純聊天;拖檔、貼長文都當附件(要分析就「開成作品」)。 */
 export default function Home({ works: loaded, error: listError = null, talk }: {
   /** null = 清單還沒到或抓不到(這時不說「沒有作品」)。 */
@@ -25,7 +30,7 @@ export default function Home({ works: loaded, error: listError = null, talk }: {
   useEffect(() => { if (wantsFocus) area.current?.focus(); }, [wantsFocus, loc.key]);
 
   const live = talk.turns.length > 0 || talk.streaming !== null || talk.pending !== null;
-  const paste = (text: string) => { void talk.attachText(t("home.pasted"), text); };
+  const paste = (text: string) => { void talk.attachText(pastedName(text) || t("home.pasted"), text); };
   return (
     <div className="home" onDragOver={e => e.preventDefault()}
       onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void talk.attach(f); }}>
