@@ -55,6 +55,7 @@ def ingest(conn, text: str, title: str | None, slug: str | None, now: float) -> 
             sid = repo.ensure_story(conn, slug, title, now)
             _, new = repo.add_source_version(conn, sid, text, now)
             reused = False
+    repo.unarchive_story(conn, sid)
     st = repo.story(conn, sid)
     return {"slug": slug, "title": st["title"],
             "version": repo.latest_source_version(conn, sid)["n"],

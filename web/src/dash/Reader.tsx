@@ -45,7 +45,7 @@ function VDot({ d }: { d: ReturnType<typeof dotOf> }) {
 }
 
 /** 稿窗格:頂列(標題、版本條、交新版、分析、排法)+ 紙。 */
-export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, marks = [], obs = [], drawing, reload = 0, focus = false, onFocus }: {
+export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, onRenamed, marks = [], obs = [], drawing, reload = 0, focus = false, onFocus }: {
   slug: string;
   onQuote: (q: string) => void;
   /** 指定版本(?v=);沒給就是最新。 */
@@ -65,6 +65,8 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   onPaper?: (p: { slug: string; latest: boolean; text: string }) => void;
   /** 交新版成功(same = 跟最新版一字不差、沒有新增版本;version = 交成/對到的那一版)。 */
   onNewVersion?: (r: { same: boolean; version: number; analyzing: boolean }) => void;
+  /** 改了名字:外面重抓作品清單。 */
+  onRenamed?: () => void;
 }) {
   const t = useT();
   const [, setSearch] = useSearchParams();
@@ -78,7 +80,8 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   const submit = useSubmitDraft(slug);
   const slugNow = useRef(slug);
   slugNow.current = slug;
-  const [keeping, setKeeping] = useState(false);   // 送出中的是「只存版」那顆
+  const [keeping, setKeeping] = useState(false);
+  const [naming, setNaming] = useState<string | null>(null);   // 送出中的是「只存版」那顆
   const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
@@ -96,7 +99,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   }, [job.done, job.error]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 換作品或換版本:先清掉舊的字,別讓新的痕跡落在上一篇/上一版上(續跑重抓過之後也一樣)。
-  useEffect(() => { setWork(null); setErr(null); setAll(false); }, [slug, version]);
+  useEffect(() => { setWork(null); setErr(null); setAll(false); setNaming(null); }, [slug, version]);
   // 所有版本浮層:開了聚焦第一列;點外面關
   const listRef = useRef<HTMLUListElement>(null);
   useEffect(() => {
@@ -142,13 +145,37 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
     onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same && !r.jobError });
   };
 
+  const saveName = () => {
+    if (naming === null || !work) return;
+    setNaming(null);
+    if (naming.trim() === work.title) return;
+    const at = slug;
+    api.renameWork(at, naming).then(r => {
+      setWork(w => w && w.slug === at ? { ...w, title: r.title } : w);
+      onRenamed?.();
+    }, e => setResumeErr(e instanceof DashError ? e.code : "unknown"));
+  };
+
   const { draft } = submit;
   const est = draft?.estimate;
   return (
     <div className="reader">
       <DropSheet next={latest + 1} onFile={f => { if (!submit.busy) void submit.fromFile(f); }} />
       <header className="paper-top">
-        <h1 className="paper-h">{work.title}</h1>
+        {naming === null ? (
+          <div className="paper-name">
+            <h1 className="paper-h">{work.title}</h1>
+            <button type="button" className="ib paper-rename" aria-label={t("work.rename")} title={t("work.rename")}
+              onClick={() => setNaming(work.title)}><Icon name="edit" /></button>
+          </div>
+        ) : (
+          <input className="paper-h paper-name-in" aria-label={t("work.rename")} maxLength={80} autoFocus
+            value={naming} onChange={e => setNaming(e.target.value)} onBlur={saveName}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); saveName(); }
+              if (e.key === "Escape") { e.stopPropagation(); setNaming(null); }
+            }} />
+        )}
         <div className="paper-vers" role="group" aria-label={t("paper.versions")}>
           {shown.more && (
             <button type="button" className="ib" aria-label={t("paper.allVersions")} title={t("paper.allVersions")}

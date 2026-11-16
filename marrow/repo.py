@@ -70,6 +70,43 @@ def story_by_slug(conn, slug: str) -> dict | None:
     return _row(conn.execute("SELECT * FROM story WHERE slug = ?", (slug,)).fetchone())
 
 
+def rename_story(conn, story_id: int, title: str | None) -> None:
+    conn.execute("UPDATE story SET custom_title = ? WHERE id = ?", (title, story_id))
+
+
+def archive_story(conn, story_id: int, now: float) -> None:
+    conn.execute("UPDATE story SET archived_at = ? WHERE id = ? AND archived_at IS NULL", (now, story_id))
+
+
+def unarchive_story(conn, story_id: int) -> None:
+    conn.execute("UPDATE story SET archived_at = NULL WHERE id = ?", (story_id,))
+
+
+def archived_stories(conn) -> list[dict]:
+    """封存的作品,新封存的在上;sessions = 綁在這篇的局數(含各自封存的)。"""
+    return [_row(r) for r in conn.execute(
+        "SELECT st.id, st.slug, st.title, st.custom_title, st.archived_at, "
+        "(SELECT COUNT(*) FROM discussion WHERE story_id = st.id) AS sessions "
+        "FROM story st WHERE st.archived_at IS NOT NULL ORDER BY st.archived_at DESC, st.id DESC")]
+
+
+def discussions_of_story(conn, story_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute("SELECT * FROM discussion WHERE story_id = ? ORDER BY id", (story_id,))]
+
+
+def delete_story(conn, story_id: int) -> None:
+    """永久刪掉一篇:各版原文、分析與筆記、job 紀錄、結論、這篇的記憶、綁在這篇的局;
+    別的局裡「開成作品」的附件留著,只斷開它連到的版本。"""
+    for d in discussions_of_story(conn, story_id):
+        delete_discussion(conn, d["id"])
+    conn.execute("UPDATE attachment SET source_version_id = NULL WHERE source_version_id IN "
+                 "(SELECT id FROM source_version WHERE story_id = ?)", (story_id,))
+    conn.execute("DELETE FROM attempt WHERE job_id IN (SELECT id FROM job WHERE story_id = ?)", (story_id,))
+    for table in ("memory", "conclusion", "job", "current_artifact", "artifact", "source_version"):
+        conn.execute(f"DELETE FROM {table} WHERE story_id = ?", (story_id,))
+    conn.execute("DELETE FROM story WHERE id = ?", (story_id,))
+
+
 def add_source_version(conn, story_id: int, text: str, now: float) -> tuple[int, bool]:
     """只跟**最新一版**比:相同回 (舊 id, False);不同就是新的一版——
     包括改回更早的稿(A→B→A 的第三次是 n=3,不是 n=1),否則「最新版」會指向磁碟上已不存在的文字。"""
@@ -356,14 +393,15 @@ def recent_discussions(conn, limit: int, legacy: bool = False) -> list[dict]:
     out = []
     for r in conn.execute(
             "SELECT d.external_id AS external_id, st.slug AS slug, st.title AS title, "
-            "d.started_at AS started_at, "
+            "st.custom_title AS custom_title, d.started_at AS started_at, "
             "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
             "(SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'assistant') AS turns, "
             f"{last.format(c='character')} AS character, "
             f"{last.format(c='text')} AS preview, "
             f"{last.format(c='analysis_fp')} AS fp, d.story_id AS story_id "
             "FROM discussion d LEFT JOIN story st ON st.id = d.story_id "
-            "WHERE d.archived_at IS NULL AND EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
+            "WHERE d.archived_at IS NULL AND st.archived_at IS NULL "
+            "AND EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id) "
             f"AND {'NOT ' if legacy else ''}EXISTS (SELECT 1 FROM utterance WHERE discussion_id = d.id "
             "AND role = 'assistant' AND character IS NOT NULL) "
             "ORDER BY last_at DESC, d.id DESC LIMIT ?", (limit,)):
@@ -385,7 +423,8 @@ def archived_discussions(conn) -> list[dict]:
     """封存的局,新封存的在上;preview = 第一句話前 60 字。"""
     out = []
     for r in conn.execute(
-            "SELECT d.external_id AS external_id, st.slug AS slug, st.title AS title, d.archived_at AS archived_at, "
+            "SELECT d.external_id AS external_id, st.slug AS slug, COALESCE(st.custom_title, st.title) AS title, "
+            "d.archived_at AS archived_at, "
             "(SELECT MAX(ts) FROM utterance WHERE discussion_id = d.id) AS last_at, "
             "(SELECT text FROM utterance WHERE discussion_id = d.id AND role IN ('user', 'assistant') "
             "ORDER BY seq LIMIT 1) AS preview "
@@ -499,7 +538,7 @@ def stories(conn) -> list[dict]:
 def works(conn) -> list[dict]:
     """每篇一列:最新版(id / n / 原文 / 交稿時間)與最近一次聊天的結束時間(沒聊過 = None)。"""
     return [_row(r) for r in conn.execute(
-        "SELECT st.id, st.slug, st.title, sv.id AS latest_sv_id, sv.n AS latest_n, "
+        "SELECT st.id, st.slug, st.title, st.custom_title, st.archived_at, sv.id AS latest_sv_id, sv.n AS latest_n, "
         "sv.text AS latest_text, sv.created_at AS submitted_at, "
         "(SELECT MAX(ended_at) FROM discussion WHERE story_id = st.id) AS talked_at "
         "FROM story st JOIN source_version sv ON sv.story_id = st.id "

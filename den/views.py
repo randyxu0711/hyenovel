@@ -29,7 +29,7 @@ def stories(conn) -> list[dict]:
         body = ana["body"] if ana else {}
         out.append({
             "slug": st["slug"],
-            "title": body.get("title") or st["title"] or st["slug"],
+            "title": works.title_of(st, body),
             "synopsis": body.get("synopsis") or "",
             "nodes": len(body.get("nodes", [])),
             "edges": len(body.get("edges", [])),
@@ -91,9 +91,8 @@ def transcript(conn, slug: str) -> list[dict]:
 
 
 def _title(conn, story_id: int, slug: str) -> str:
-    """與作品清單同口徑:分析標題 > 故事標題 > slug。"""
     ana = repo.current_artifact(conn, story_id, "analysis")
-    return (ana or {}).get("body", {}).get("title") or repo.story(conn, story_id)["title"] or slug
+    return works.title_of(repo.story(conn, story_id), (ana or {}).get("body"))
 
 
 class UnknownVersion(Exception):
@@ -306,12 +305,13 @@ def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:
         if sid not in labs:
             labs[sid] = _labeler(conn, sid)
         d["preview"] = labs[sid](d["preview"], fp)[:60]
-    titles = {c["story_id"]: c["artifact"]["body"].get("title")
+    bodies = {c["story_id"]: c["artifact"]["body"]
               for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
     for d in out:
         if d["slug"] is not None:
-            d["title"] = titles.get(ids[d["slug"]]) or d["title"] or d["slug"]
+            d["title"] = works.title_of(d, bodies.get(ids[d["slug"]]))
+        del d["custom_title"]
         d["session"] = d.pop("external_id")   # 與 session_rows 同名,前端只認 session
         d["legacy"] = legacy
     return out

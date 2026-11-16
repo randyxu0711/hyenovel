@@ -41,6 +41,7 @@ function mount(path = "/settings") {
     if (u === "/api/memory") return json({ memories: [], caps: { author: 800, work: 600 } });
     if (u.startsWith("/api/sessions/old1")) return json(DETAIL);
     if (u.startsWith("/api/sessions")) return json({ sessions: [row("old1", true), row("new1", false), row("old2", true)] });
+    if (u === "/api/archived-works") return json({ works: [] });
     return json({ sessions: [] });
   });
   vi.stubGlobal("fetch", f);
@@ -313,6 +314,31 @@ describe("設定頁", () => {
     expect(sent).toEqual(["POST /api/sessions/a1/unarchive", "DELETE /api/sessions/a2"]);
   });
 
+  it("封存的作品:列局數,可復原;永久刪除先確認、說會一起刪幾局", async () => {
+    const f = mount();
+    const base = f.getMockImplementation()!;
+    const sent: string[] = [];
+    f.mockImplementation(async (u: string, init?: RequestInit) => {
+      if (u === "/api/archived-works") return json({ works: [
+        { slug: "d1", title: "舊的", archived_at: 3, sessions: 2 },
+        { slug: "d2", title: "海", archived_at: 2, sessions: 0 }] });
+      if (init?.method === "POST" || init?.method === "DELETE") { sent.push(`${init.method} ${u}`); return new Response(null, { status: 204 }); }
+      return (base as (u: string, i?: RequestInit) => Promise<Response>)(u, init);
+    });
+    const p = await page();
+    await go("封存");
+    const box = within(await p.findByRole("region", { name: "封存的作品" }));
+    expect(box.getByText("2 局")).toBeTruthy();
+    fireEvent.click(box.getAllByRole("button", { name: "永久刪除" })[0]);
+    expect(box.getByText(/和 2 局對話會一起刪掉/)).toBeTruthy();
+    expect(sent).toEqual([]);
+    fireEvent.click(within(box.getByRole("group", { name: "永久刪除" })).getByRole("button", { name: "永久刪除" }));
+    await waitFor(() => expect(box.queryByText("舊的")).toBeNull());
+    fireEvent.click(box.getByRole("button", { name: "復原" }));
+    await waitFor(() => expect(p.queryByRole("region", { name: "封存的作品" })).toBeNull());
+    expect(sent).toEqual(["DELETE /api/works/d1", "POST /api/works/d2/unarchive"]);
+  });
+
   it("舊討論依作品分組,預覽去掉 markdown 記號", async () => {
     const f = mount();
     const base = f.getMockImplementation()!;
@@ -434,6 +460,7 @@ describe("設定頁:角色卡", () => {
         return json({ archived: "u1" });
       }
       if (u === "/api/works") return json({ works: [] });
+      if (u === "/api/archived-works") return json({ works: [] });
       return json({ sessions: [] });
     });
     vi.stubGlobal("fetch", f);

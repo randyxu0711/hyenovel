@@ -18,7 +18,7 @@ export const DEN_ERROR_CODES = [
   "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
   "unknown-memory", "memory-not-current", "memory-is-current",
   "bad-card", "builtin-character",
-  "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long",
+  "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
   "den-down",
 ];
 
@@ -79,6 +79,7 @@ export type RecentSession = Omit<SessionRow, "version"> & { slug: string | null;
 export type ReactionMark = "stopped" | "misread";
 export type TurnReaction = { mark: ReactionMark; comment: string | null };
 export type ArchivedSession = { session: string; slug: string | null; title: string | null; preview: string; last_at: number | null; archived_at: number };
+export type ArchivedWork = { slug: string; title: string; archived_at: number; sessions: number };
 export type MemoryScope = "author" | "work";
 export type TurnMemory = { id: number; scope: MemoryScope };
 export type Memory = {
@@ -240,6 +241,12 @@ export const api = {
   archiveSession: (session: string) => request<void>(`${sessionUrl(session)}/archive`, { method: "POST" }),
   unarchiveSession: (session: string) => request<void>(`${sessionUrl(session)}/unarchive`, { method: "POST" }),
   deleteSession: (session: string) => request<void>(sessionUrl(session), { method: "DELETE" }),
+  renameWork: (slug: string, title: string) =>
+    request<{ title: string }>(`/api/works/${encodeURIComponent(slug)}`, { ...post({ title }), method: "PATCH" }),
+  archiveWork: (slug: string) => request<void>(`/api/works/${encodeURIComponent(slug)}/archive`, { method: "POST" }),
+  unarchiveWork: (slug: string) => request<void>(`/api/works/${encodeURIComponent(slug)}/unarchive`, { method: "POST" }),
+  deleteWork: (slug: string) => request<void>(`/api/works/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  archivedWorks: () => request<{ works: ArchivedWork[] }>("/api/archived-works").then(r => r.works),
   archivedSessions: () => request<{ sessions: ArchivedSession[] }>("/api/archived-sessions").then(r => r.sessions),
   adoptAttachment: (session: string, n: number) =>
     request<Adopted>(`${sessionUrl(session)}/attachments/${n}/adopt`, { method: "POST" }),

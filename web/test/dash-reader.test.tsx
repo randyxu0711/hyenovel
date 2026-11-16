@@ -71,6 +71,21 @@ describe("Reader(稿窗格)", () => {
     expect(screen.getByRole("heading", { name: "海" }).textContent).toBe("海");
     expect(container.querySelector(".dash-printhead, .dash-print")).toBeNull();
   });
+  it("改名:鉛筆開輸入框,Enter 存回新名並通知外面;Esc 不送", async () => {
+    await mount(detail());
+    const spy = vi.spyOn(api, "renameWork").mockResolvedValue({ title: "新名" });
+    fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    const box = screen.getByRole("textbox", { name: "改名" }) as HTMLInputElement;
+    expect(box.value).toBe("海");
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "改名" }), { target: { value: "新名" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "改名" }), { key: "Enter" });
+    expect(await screen.findByRole("heading", { name: "新名" })).toBeTruthy();
+    expect(spy).toHaveBeenCalledWith("d1", "新名");
+    spy.mockRestore();
+  });
   it("5 版:版本條露 3 版,「所有版本」浮層列 5 列各帶日期與點;點 v2 → ?v=2", async () => {
     const day = 86400;
     const history = [1, 2, 3, 4, 5].map(n => ({ n, at: Date.now() / 1000 - (6 - n) * day * 3, analysed: n !== 3, noted: n === 1 }));

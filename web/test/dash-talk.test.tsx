@@ -47,7 +47,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
     if (p === "/api/works/d1/sessions") return json({ sessions: rows });
     if (p.startsWith("/api/discuss/")) { talkBodies.push(JSON.parse(String(init?.body))); return talkReply(init); }
     if (p.startsWith("/api/sessions/")) return json(sessions[decodeURIComponent(p.split("/").pop()!)]);
-    return json({ sessions: [] });
+    return json({ sessions: [], works: [] });
   });
   vi.stubGlobal("fetch", f);
   return render(<MemoryRouter initialEntries={[path]}><Where />

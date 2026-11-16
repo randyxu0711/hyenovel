@@ -16,6 +16,7 @@ log = logging.getLogger("hyenovel")
 router = APIRouter()
 
 _WORKS_MAX = 50
+TITLE_MAX = 80
 _STORY_ERRORS = {"空白故事": "empty-story", "原文過長": "story-too-long", "bad slug": "bad-slug",
                  "unknown slug": "unknown-slug-ref"}
 
@@ -108,6 +109,79 @@ async def cancel_work(slug: str, request: Request):
         log.info("event=reject where=cancel-work reason=nothing-running")
         raise ApiError(409, "nothing-running", "nothing-running")
     return {"cancelled": done}
+
+
+class RenameIn(BaseModel):
+    title: str | None = None
+
+
+def _story_or_404(conn, slug: str, where: str) -> dict:
+    slug_ok(slug, where)
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise unknown_work(where)
+    return st
+
+
+@router.patch("/works/{slug}")
+async def rename_work(slug: str, body: RenameIn, request: Request):
+    conn = request.app.state.mgr.conn
+    st = _story_or_404(conn, slug, "rename-work")
+    title = (body.title or "").strip() or None
+    if title is not None and len(title) > TITLE_MAX:
+        log.info("event=reject where=rename-work reason=title-too-long chars=%s", len(title))
+        raise ApiError(422, "title-too-long", f"名字最多 {TITLE_MAX} 字")
+    with conn:
+        repo.rename_story(conn, st["id"], title)
+    ana = repo.current_artifact(conn, st["id"], "analysis")
+    return {"title": works.title_of(repo.story(conn, st["id"]), (ana or {}).get("body"))}
+
+
+@router.get("/archived-works")
+async def archived_works(request: Request):
+    conn = request.app.state.mgr.conn
+    out = []
+    for r in repo.archived_stories(conn):
+        ana = repo.current_artifact(conn, r["id"], "analysis")
+        out.append({"slug": r["slug"], "title": works.title_of(r, (ana or {}).get("body")),
+                    "archived_at": r["archived_at"], "sessions": r["sessions"]})
+    return {"works": out}
+
+
+@router.post("/works/{slug}/archive", status_code=204)
+async def archive_work(slug: str, request: Request):
+    conn = request.app.state.mgr.conn
+    st = _story_or_404(conn, slug, "archive-work")
+    with conn:
+        repo.archive_story(conn, st["id"], time.time())
+
+
+@router.post("/works/{slug}/unarchive", status_code=204)
+async def unarchive_work(slug: str, request: Request):
+    conn = request.app.state.mgr.conn
+    st = _story_or_404(conn, slug, "unarchive-work")
+    with conn:
+        repo.unarchive_story(conn, st["id"])
+
+
+@router.delete("/works/{slug}", status_code=204)
+async def delete_work(slug: str, request: Request):
+    state = request.app.state
+    conn = state.mgr.conn
+    st = _story_or_404(conn, slug, "delete-work")
+    if st["archived_at"] is None:
+        log.info("event=reject where=delete-work reason=not-archived")
+        raise ApiError(409, "not-archived", "要先封存才能永久刪除")
+    sessions = [d["external_id"] for d in repo.discussions_of_story(conn, st["id"])]
+    if repo.active_jobs_of_story(conn, st["id"]) or any(
+            state.chat_locks.get(s) is not None and state.chat_locks[s].locked() for s in sessions):
+        log.info("event=reject where=delete-work reason=busy")
+        raise ApiError(409, "busy", "這篇還有分析或對話在跑")
+    with conn:
+        repo.delete_story(conn, st["id"])
+    for s in sessions:
+        state.chat_locks.pop(s, None)
+    log.info("event=delete-work sessions=%s", len(sessions))
 
 
 @router.get("/stories/{slug}/viz")

@@ -295,7 +295,7 @@ def test_recent_discussions_orders_by_last_activity_and_limits(conn):
     repo.add_utterance(conn, b, 1, "assistant", "乙答", 4.0, "den", [], None, character="buffalo")
     got = repo.recent_discussions(conn, 10)
     assert [g["external_id"] for g in got] == ["A", "B"]
-    assert got[0] == {"external_id": "A", "slug": "s1", "title": None, "started_at": 1.0,
+    assert got[0] == {"external_id": "A", "slug": "s1", "title": None, "custom_title": None, "started_at": 1.0,
                       "last_at": 6.0, "turns": 1, "character": "hyena",
                       "preview": "答" * 80, "fp": "fpA", "story_id": s}
     assert (got[1]["title"], got[1]["turns"], got[1]["preview"]) == ("乙", 1, "乙答")
@@ -530,3 +530,67 @@ def test_activity_times_ignores_storyless(conn):
     repo.add_utterance(conn, d, 0, "assistant", "答", 4.0, "den", [], None)
     repo.add_utterance(conn, free, 0, "assistant", "答", 9.0, "den", [], None)
     assert repo.activity_times(conn) == {s: 4.0}
+
+
+def test_rename_archive_and_archived_stories(conn):
+    s, _ = _story(conn)
+    other = repo.ensure_story(conn, "s2", None, 0)
+    repo.ensure_discussion(conn, s, "A", "web", None, 1.0)
+    repo.rename_story(conn, s, "新名")
+    assert repo.story(conn, s)["custom_title"] == "新名"
+    assert repo.archived_stories(conn) == []
+    repo.archive_story(conn, s, 5.0)
+    repo.archive_story(conn, s, 9.0)                                    # 再封存不改第一次的時間
+    repo.archive_story(conn, other, 7.0)
+    got = repo.archived_stories(conn)
+    assert [(g["slug"], g["archived_at"], g["sessions"]) for g in got] == [("s2", 7.0, 0), ("s1", 5.0, 1)]
+    assert got[1]["custom_title"] == "新名"
+    repo.unarchive_story(conn, s)
+    assert [g["slug"] for g in repo.archived_stories(conn)] == ["s2"]
+
+
+def test_archived_story_hides_its_sessions_from_recent(conn):
+    s, _ = _story(conn)
+    a = repo.ensure_discussion(conn, s, "A", "web", None, 1.0)
+    free = repo.ensure_discussion(conn, None, "F", "web", None, 1.0)
+    for d in (a, free):
+        repo.add_utterance(conn, d, 0, "assistant", "答", 2.0, "den", [], None, character="hyena")
+    repo.archive_story(conn, s, 3.0)
+    assert [g["external_id"] for g in repo.recent_discussions(conn, 10)] == ["F"]
+    assert repo.discussion_by_session(conn, "A")["archived_at"] is None
+
+
+def test_delete_story_removes_everything_of_it_and_nothing_else(conn):
+    s, v = _story(conn)
+    keep, kv = repo.ensure_story(conn, "s2", None, 0), None
+    kv, _ = repo.add_source_version(conn, keep, "乙", 0)
+    art, _ = repo.add_artifact(conn, s, v, "analysis", 1, {"a": 1}, {}, 0)
+    repo.set_current(conn, s, "analysis", art)
+    job = repo.create_job(conn, "critique", s, v, {}, 0)
+    repo.add_attempt(conn, job, "analyst", 1, runner="cli", model=None, cli_version=None, outcome="ok",
+                     raw_output=None, parsed=None, gate_verdict=None, tokens=None, duration_ms=None,
+                     artifact_id=art, now=0)
+    d = repo.ensure_discussion(conn, s, "A", "web", None, 1.0)
+    repo.add_utterance(conn, d, 0, "user", "問", 1.0, "den", [], None)
+    repo.add_memory(conn, "work", "這篇的事", 1.0, story_id=s)
+    author = repo.add_memory(conn, "author", "寫短句", 1.0, quote="問", discussion_id=d, seq=0)
+    repo.add_conclusion(conn, s, "c1", d, "k", "t", [], [], {}, 0, None)
+    free = repo.ensure_discussion(conn, None, "F", "web", None, 1.0)
+    repo.add_utterance(conn, free, 0, "user", "稿", 1.0, "den", [], None)
+    repo.add_attachment(conn, free, 0, "稿", "甲", 1.0)
+    repo.adopt_attachment(conn, free, 1, v)
+    kd = repo.ensure_discussion(conn, keep, "K", "web", None, 1.0)
+    repo.add_memory(conn, "work", "那篇的事", 1.0, story_id=keep)
+
+    repo.delete_story(conn, s)
+
+    assert repo.story(conn, s) is None and repo.discussion_by_session(conn, "A") is None
+    for table in ("source_version", "artifact", "current_artifact", "job", "conclusion"):
+        assert conn.execute(f"SELECT COUNT(*) FROM {table} WHERE story_id = ?", (s,)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM attempt").fetchone()[0] == 0
+    assert [r["text"] for r in conn.execute("SELECT text FROM memory ORDER BY id")] == ["寫短句", "那篇的事"]
+    assert conn.execute("SELECT discussion_id FROM memory WHERE id = ?", (author,)).fetchone()[0] is None
+    assert [a["source_version_id"] for a in repo.attachments(conn, free)] == [None]
+    assert repo.discussion_by_session(conn, "K")["id"] == kd
+    assert repo.latest_source_version(conn, keep)["id"] == kv
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []

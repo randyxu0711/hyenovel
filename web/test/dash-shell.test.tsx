@@ -26,7 +26,7 @@ function mount(path: string, works: object[] = WORKS) {
       return u.endsWith("/sessions") ? json({ sessions: [] })
         : json({ slug: "d2", title: "最近的", version: 1, versions: [1], text: "內文一行", state: "ready", job_id: null, notes_ready: false });
     }
-    return json({ sessions: [] });
+    return json({ sessions: [], works: [] });
   });
   vi.stubGlobal("fetch", f);
   render(<MemoryRouter initialEntries={[path]}>

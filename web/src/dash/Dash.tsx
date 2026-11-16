@@ -184,11 +184,11 @@ function Shell({ chars }: { chars: Characters }) {
       {drawn && <div className="dash-drawer-scrim" onClick={() => setDrawer(false)} />}
       <Rail mode={narrow ? "open" : shelf.mode} onToggle={narrow ? () => setDrawer(false) : shelf.toggle} works={works} current={slug} talk={talk} view={view}
         onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => { if (id) nav(`/c/${encodeURIComponent(id)}`); else goHome(); }}
-        onArchiveShelf={() => { setSection("archive"); nav("/settings"); }}
+        onArchiveShelf={() => { setSection("archive"); nav("/settings"); }} onWorks={bump}
         settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
-          onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion}
+          onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion} onRenamed={bump}
           focus={focused} onFocus={narrow ? undefined : setFocus}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           onQuote={q => {
