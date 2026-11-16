@@ -150,7 +150,7 @@ def test_transcript_shape_and_order(c):
     got = views.transcript(c, "x1")
     assert [t["text"] for t in got] == ["a0", "b0", "a1"]
     assert got[0] == {"ts": 1.0, "session": "sessA", "role": "user", "text": "a0",
-                      "anchors": ["t1"]}
+                      "anchors": ["t1"], "archived": False}
     assert isinstance(got[1]["anchors"], list) and got[1]["session"] == "sessB"
 
 

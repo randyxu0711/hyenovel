@@ -86,7 +86,7 @@ def transcript(conn, slug: str) -> list[dict]:
             fps[u["external_id"]] = u["analysis_fp"]
         text = lab(u["text"], fps.get(u["external_id"])) if u["role"] == "assistant" else u["text"]
         out.append({"ts": u["ts"], "session": u["external_id"], "role": u["role"],
-                    "text": text, "anchors": u["anchors"]})
+                    "text": text, "anchors": u["anchors"], "archived": u["archived_at"] is not None})
     return out
 
 
@@ -219,6 +219,9 @@ def _span(made: list[float], us: list[dict]) -> list[int]:
     return [min(vs), max(vs)]
 
 
+ATTACH_HEAD = 120
+
+
 def session_turns(conn, session: str, v: int | None = None) -> dict:
     """單局逐字。每則 turn 帶 spans = 引文在第 v 版(預設最新)原文的位移。
     assistant 的「」只收最新版原文找得到的(其餘是強調或複述,不是引文);再對 v 定位,這版沒有 → None。
@@ -273,8 +276,9 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
     return {"session": session, "slug": d["slug"],
             "title": _title(conn, d["story_id"], d["slug"]) if d["story_id"] is not None else None,
             "legacy": not any(u["role"] == "assistant" and u["character"] is not None for u in us),
-            "version": shown["n"] if shown else None, "turns": turns,
+            "version": shown["n"] if shown else None, "turns": turns, "archived": d["archived_at"] is not None,
             "attachments": [{"n": a["n"], "seq": a["seq"], "name": a["name"], "chars": len(a["text"].strip()),
+                             "head": a["text"].strip()[:ATTACH_HEAD],
                              "adopted": a["source_version_id"] is not None}
                             for a in repo.attachments(conn, d["id"])]}
 

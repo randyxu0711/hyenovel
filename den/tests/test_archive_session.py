@@ -73,3 +73,20 @@ def test_archive_and_delete_busy_while_turn_running(c, fake_chat):
     finally:
         fake_chat.release.set()
     t.join(5)
+
+
+def test_talking_in_archived_session_brings_it_back(c):
+    sid = first_turn(c)
+    c.post(f"/api/sessions/{sid}/archive")
+    post_discuss(c, "mini", sid, "再聊一下")
+    assert _listed(c) == ([sid], [sid], [])
+    assert _discussion(c, sid)["archived_at"] is None
+
+
+def test_archived_flag_on_session_and_transcript(c):
+    keep, gone = first_turn(c), first_turn(c)
+    c.post(f"/api/sessions/{gone}/archive")
+    assert c.get(f"/api/sessions/{gone}").json()["archived"] is True
+    assert c.get(f"/api/sessions/{keep}").json()["archived"] is False
+    by = {(t["session"], t["archived"]) for t in c.get("/api/stories/mini/transcript").json()["turns"]}
+    assert by == {(keep, False), (gone, True)}

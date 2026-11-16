@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Attachment, Turn } from "./api";
 import type { Character } from "./api";
 import Figure, { type FigureState } from "./Figure";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
 import Reaction from "./Reaction";
@@ -42,9 +42,15 @@ export function speakerChanges(turns: Turn[], byId: (id: string | null) => Chara
   return out;
 }
 
+/** 最後一個清空/壓縮標記的 index;它之前的逐字讀伴看不到(沒有標記 = -1)。 */
+export function lastCut(turns: Turn[]): number {
+  for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "clear" || turns[i].role === "compact") return i;
+  return -1;
+}
+
 export const REACT_MS = 1800;
 
-export type SlashCommand = { name: string; label: string; run: () => unknown };
+export type SlashCommand = { name: string; label: string; icon: IconName; run: () => unknown };
 
 export function slashCommands(draft: string, all: SlashCommand[]): SlashCommand[] {
   const m = /^\/(\S*)$/.exec(draft.trim());
@@ -98,6 +104,8 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
   const [editing, setEditing] = useState<{ seq: number; text: string } | null>(null);
   const [asking, setAsking] = useState(false);
+  const [peek, setPeek] = useState<Set<number>>(new Set());
+  const togglePeek = (n: number) => setPeek(p => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
   const editBox = useRef<HTMLTextAreaElement>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
   useEffect(() => setEditing(null), [talk.session]);
@@ -151,8 +159,8 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const live = turns.some(x => x.role === "user" || x.role === "assistant");
   const idle = !session || streaming !== null || working;
   const commands = slashCommands(draft, [
-    { name: "clear", label: t("talk.clear"), run: talk.clear },
-    { name: "compact", label: t("talk.compactCost"), run: talk.compact },
+    { name: "clear", label: t("talk.clear"), icon: "wipe", run: talk.clear },
+    { name: "compact", label: t("talk.compactCost"), icon: "squeeze", run: talk.compact },
   ]);
   const [pick, setPick] = useState(0);
   const chosen = commands[Math.min(pick, commands.length - 1)];
@@ -206,9 +214,12 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   };
   const bySeq = new Map<number, Attachment[]>();
   for (const a of attachments) bySeq.set(a.seq, [...(bySeq.get(a.seq) ?? []), a]);
-  const card = (a: Attachment) => (
-    <div key={`a${a.n}`} className="chat-att">
-      <Icon name="sheet2" /><b>{a.name}</b><span>{t("talk.chars", { n: a.chars })}</span>
+  const card = (a: Attachment, past: boolean) => (
+    <div key={`a${a.n}`} className="chat-att" data-past={past || undefined}>
+      <button type="button" className="chat-att-name" aria-expanded={peek.has(a.n)} onClick={() => togglePeek(a.n)}>
+        <Icon name="sheet2" /><b>{a.name}</b><span>{t("talk.chars", { n: a.chars })}</span>
+      </button>
+      {peek.has(a.n) && a.head && <p className="chat-att-head">{a.head}</p>}
       {free && !a.adopted && (
         <button type="button" className="chat-att-adopt" disabled={working || streaming !== null}
           onClick={() => void adopt(a.n)}><Icon name="new" />{t("talk.adopt")}</button>
@@ -216,10 +227,10 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     </div>
   );
   const placed = new Set<number>();
-  const before = (turn: Turn) => {
+  const before = (turn: Turn, past: boolean) => {
     if (turn.seq === undefined || placed.has(turn.seq)) return null;
     placed.add(turn.seq);
-    return bySeq.get(turn.seq)?.map(card) ?? null;
+    return bySeq.get(turn.seq)?.map(a => card(a, past)) ?? null;
   };
 
   const saveEdit = async (turn: Turn) => {
@@ -298,23 +309,23 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     <p className="chat-who"><Figure character={c} size={36} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
   );
   let lastId: string | null = null;
+  const cut = lastCut(turns);
   const rows = turns.map((turn: Turn, i) => {
+    const past = i < cut || undefined;
     const brk = breaks.has(i) && <div key={`v${i}`} className="chat-ver"><Icon name="sheet2" /><span>{t("talk.versionBreak", { n: turn.v! })}</span></div>;
     if (turn.role === "clear") {
-      return [<div key={i} className="chat-cut" role="separator" title={t("talk.cleared")} aria-label={t("talk.cleared")}><Icon name="wipe" /></div>];
+      return [<div key={i} className="chat-cut" role="separator" aria-label={t("talk.cleared")}><Icon name="wipe" /><span>{t("talk.cleared")}</span></div>];
     }
     if (turn.role === "compact") {
       return [
-        <details key={i} className="chat-cut is-compact">
-          <summary title={t("talk.compacted")} aria-label={t("talk.compacted")}><Icon name="squeeze" /></summary>
-          <p>{turn.text}</p>
-        </details>,
+        <div key={i} className="chat-cut is-compact" role="separator" aria-label={t("talk.compacted")}><Icon name="squeeze" /><span>{t("talk.compacted")}</span></div>,
+        <p key={`s${i}`} className="chat-sum" data-past={past}>{turn.text}</p>,
       ];
     }
-    const att = before(turn);
+    const att = before(turn, !!past);
     if (turn.role !== "assistant") {
       return [brk, att,
-        <div key={i} className="chat-me">
+        <div key={i} className="chat-me" data-past={past}>
           {turn.quotes.map((q, j) => <blockquote key={j} className="chat-quote">{q}</blockquote>)}
           {session && turn.seq !== undefined
             ? <Remember key={`${session}-${turn.seq}`} slug={bound} session={session} seq={turn.seq} text={turn.text}
@@ -329,7 +340,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const redo = redoing !== null && turn.seq === redoing;
     const open = editing !== null && editing.seq === turn.seq;
     return [brk, att,
-      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i} data-last={lastTurn === turn || undefined}
+      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i} data-last={lastTurn === turn || undefined} data-past={past}
         data-editing={open || undefined} onKeyDown={open ? e => onEditKey(e, turn) : undefined}>
         {who.has(i) && whoLine(c)}
         {redo
@@ -352,14 +363,6 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
 
   return (
     <div className="chat" onDragOver={free || onFile ? e => e.preventDefault() : undefined} onDrop={free || onFile ? onDrop : undefined}>
-      {session && (
-        <div className="chat-tools">
-          <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.clear")} title={t("talk.clear")}
-            onClick={() => void talk.clear()}><Icon name="wipe" /></button>
-          <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.compact")} title={t("talk.compactCost")}
-            onClick={() => void talk.compact()}><Icon name="squeeze" /></button>
-        </div>
-      )}
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
         {rows}
         {pending && (
@@ -403,7 +406,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
             {commands.map(c => (
               <li key={c.name} role="option" aria-selected={c === chosen} aria-disabled={!usable}>
                 <button type="button" disabled={!usable} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c)}>
-                  <b>/{c.name}</b><span>{c.label}</span>
+                  <Icon name={c.icon} /><b>/{c.name}</b><span>{c.label}</span>
                 </button>
               </li>
             ))}
@@ -421,6 +424,14 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
                 onChange={e => { drop(e.target.files); e.target.value = ""; }} />
               <button type="button" className="ib" aria-label={t("talk.attach")} title={t("talk.attach")}
                 disabled={streaming !== null || working || !!staged} onClick={() => picker.current?.click()}><Icon name="clip" /></button>
+            </>
+          )}
+          {session && (
+            <>
+              <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.clear")} title={`${t("talk.clear")} · /clear`}
+                onClick={() => void talk.clear()}><Icon name="wipe" /></button>
+              <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.compact")} title={`${t("talk.compactCost")} · /compact`}
+                onClick={() => void talk.compact()}><Icon name="squeeze" /></button>
             </>
           )}
           {streaming !== null

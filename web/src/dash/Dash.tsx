@@ -155,10 +155,6 @@ function Shell({ chars }: { chars: Characters }) {
   }, [view, hideSide, setPane, focused, palette, drawn]);
   useEffect(() => applySignature(me, mode), [me, mode]);
   const goHome = () => nav("/", { state: { focus: true } });
-  const submitted = (s: string, existing: boolean) => {
-    nav(`/w/${encodeURIComponent(s)}`); bump(); setReload(n => n + 1);
-    setNote(existing ? { slug: s, text: t("feed.already") } : null);
-  };
   const open = (s: string) => { setNote(null); nav(`/w/${encodeURIComponent(s)}`); };
   // 交新版:回最新版(拿掉 ?v=,?s= 目前這局留著),重抓左欄與稿。
   const newVersion = (r: { same: boolean; version: number }) => {
@@ -188,6 +184,7 @@ function Shell({ chars }: { chars: Characters }) {
       {drawn && <div className="dash-drawer-scrim" onClick={() => setDrawer(false)} />}
       <Rail mode={narrow ? "open" : shelf.mode} onToggle={narrow ? () => setDrawer(false) : shelf.toggle} works={works} current={slug} talk={talk} view={view}
         onOpen={open} onNew={goHome} onFind={() => setPalette(true)} onChat={id => { if (id) nav(`/c/${encodeURIComponent(id)}`); else goHome(); }}
+        onArchiveShelf={() => { setSection("archive"); nav("/settings"); }}
         settingsNav={view === "settings" ? setNav : null} hidden={focused} />
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
@@ -198,7 +195,7 @@ function Shell({ chars }: { chars: Characters }) {
             setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
             if (narrow) setPane("side");
           }} />}
-        {view === "home" && <Home works={loaded} error={worksErr} onSubmitted={submitted} talk={talk} />}
+        {view === "home" && <Home works={loaded} error={worksErr} talk={talk} />}
         {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
       </main>
       {notice && (

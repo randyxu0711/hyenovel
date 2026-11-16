@@ -270,7 +270,7 @@ def test_discussions_with_utterances_orders_by_ts_then_seq(conn):
     assert [(u["external_id"], u["text"]) for u in got] == [("A", "a0"), ("B", "b0"), ("A", "a1")]
     assert got[0]["anchors"] == ["t1"] and set(got[0]) == {
         "external_id", "seq", "role", "text", "ts", "anchors", "character", "quotes",
-        "analysis_fp"}
+        "analysis_fp", "archived_at"}
 
 
 def test_discussions_with_utterances_carries_character_quotes(conn):

@@ -12,6 +12,8 @@ import { whenLabel } from "./when";
 
 const FILTER_FROM = 7;   // 作品超過 6 篇才出篩選框
 const SHOWN = 3;         // 目前這篇露幾局
+const UNDO_MS = 5000;
+const CHATS_SHOWN = 5;   // 聊天露幾局
 
 /** 張力指紋的 polyline points:x 平均鋪滿 w,intensity 0–1 由下往上;少於兩點不畫。 */
 export function fpPoints(curve: number[], w: number, h: number): string {
@@ -23,7 +25,7 @@ export function fpPoints(curve: number[], w: number, h: number): string {
 const span = (v: SessionRow["versions"]) => !v ? "" : v[0] === v[1] ? `v${v[0]}` : `v${v[0]}–${v[1]}`;
 
 /** 目前這篇的局:新到舊只露 3 局,多的收成「⋯」;最後「開一局」。串流中不能換局。 */
-function Sessions({ talk, onDone }: { talk: TalkState; onDone?: () => void }) {
+function Sessions({ talk, onDone, onArchived }: { talk: TalkState; onDone?: () => void; onArchived?: (id: string, current: boolean) => void }) {
   const t = useT();
   const [all, setAll] = useState(false);
   const busy = talk.streaming !== null;
@@ -37,7 +39,10 @@ function Sessions({ talk, onDone }: { talk: TalkState; onDone?: () => void }) {
             onClick={() => { talk.open(r.session); onDone?.(); }}>
             <Icon name="talk" /><span className="shelf-st">{r.preview}</span><span className="shelf-vr">{span(r.versions)}</span>
           </button>
-          <IB icon="box" label={t("session.archive")} className="ib shelf-x" disabled={busy} onClick={() => void talk.archive(r.session)} />
+          <IB icon="box" label={t("session.archive")} className="ib shelf-x" disabled={busy} onClick={() => {
+            const current = r.session === talk.session;
+            void talk.archive(r.session).then(ok => { if (ok) onArchived?.(r.session, current); });
+          }} />
         </li>
       ))}
       {more > 0 && (
@@ -50,17 +55,25 @@ function Sessions({ talk, onDone }: { talk: TalkState; onDone?: () => void }) {
   );
 }
 
-/** 沒綁作品的局:最近的在上;+ 開一局新的純聊天。 */
-function Chats({ talk, onChat }: { talk: TalkState; onChat: (id: string | null) => void }) {
+/** 沒綁作品的局:最近的在上;+ 開一局新的純聊天;底部 = 封存的局有幾局(點了去設定的封存)。 */
+function Chats({ talk, onChat, onArchived, onShelf, rev }: {
+  talk: TalkState; onChat: (id: string | null) => void;
+  onArchived: (id: string, current: boolean) => void; onShelf?: () => void; rev: number;
+}) {
   const t = useT();
   const lang = useLang();
   const [rows, setRows] = useState<RecentSession[]>([]);
+  const [all, setAll] = useState(false);
+  const [boxed, setBoxed] = useState(0);
   const busy = talk.streaming !== null;
   useEffect(() => {
     let live = true;
     api.recentSessions(20).then(rs => { if (live) setRows(rs.filter(r => r.slug === null)); }, () => {});
+    api.archivedSessions().then(rs => { if (live) setBoxed(rs.length); }, () => {});
     return () => { live = false; };
-  }, [talk.session, talk.turns.length]);
+  }, [talk.session, talk.turns.length, rev]);
+  const shown = all ? rows : rows.slice(0, CHATS_SHOWN);
+  const more = rows.length - shown.length;
   const now = Date.now() / 1000;
   return (
     <section className="shelf-chats" aria-label={t("shelf.chats")}>
@@ -69,7 +82,7 @@ function Chats({ talk, onChat }: { talk: TalkState; onChat: (id: string | null) 
         <IB icon="plus" label={t("shelf.newChat")} disabled={busy} onClick={() => onChat(null)} />
       </div>
       <ul className="shelf-sess">
-        {rows.map(r => (
+        {shown.map(r => (
           <li key={r.session}>
             <button type="button" disabled={busy} aria-current={r.session === talk.session ? "true" : undefined}
               onClick={() => onChat(r.session)}>
@@ -77,10 +90,27 @@ function Chats({ talk, onChat }: { talk: TalkState; onChat: (id: string | null) 
               <span className="shelf-vr">{whenLabel(r.last_at, now, lang)}</span>
             </button>
             <IB icon="box" label={t("session.archive")} className="ib shelf-x" disabled={busy}
-              onClick={() => void talk.archive(r.session).then(ok => { if (ok) setRows(rs => rs.filter(x => x.session !== r.session)); })} />
+              onClick={() => {
+                const current = r.session === talk.session;
+                void talk.archive(r.session).then(ok => {
+                  if (!ok) return;
+                  setRows(rs => rs.filter(x => x.session !== r.session));
+                  setBoxed(n => n + 1);
+                  onArchived(r.session, current);
+                });
+              }} />
           </li>
         ))}
+        {more > 0 && (
+          <li><button type="button" aria-label={t("shelf.more", { n: more })} title={t("shelf.more", { n: more })}
+            onClick={() => setAll(true)}><Icon name="dots" /></button></li>
+        )}
       </ul>
+      {boxed > 0 && onShelf && (
+        <button type="button" className="shelf-boxed" onClick={onShelf} title={t("set.archived")}>
+          <Icon name="box" /><span>{t("set.archived")}</span><span className="dash-dm">{boxed}</span>
+        </button>
+      )}
     </section>
   );
 }
@@ -91,7 +121,7 @@ function IB({ icon, label, children, ...rest }: { icon: IconName; label: string;
 }
 
 /** 書架。展開:作品(依更新新到舊)→ 目前這篇的局;窄條:工具在上、目前這篇(標題第一個字)在下。 */
-export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, onChat, settingsNav = null, hidden = false }: {
+export default function Rail({ mode, onToggle, works, current, talk, view, onOpen, onNew, onFind, onChat, onArchiveShelf, settingsNav = null, hidden = false }: {
   mode: ShelfMode; onToggle: () => void;
   works: Work[]; current: string | null; talk: TalkState;
   view: "home" | "work" | "settings";
@@ -102,6 +132,8 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   onFind: () => void;
   /** 開一局純聊天(id = null 開新的)。 */
   onChat: (id: string | null) => void;
+  /** 去設定的封存分區。 */
+  onArchiveShelf?: () => void;
   /** 在設定頁:書架換成設定分區(不列作品)。 */
   settingsNav?: ReactNode;
   hidden?: boolean;
@@ -116,6 +148,23 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
   const now = Date.now() / 1000;
   const cur = works.find(w => w.slug === current);
   const news = works.some(w => w.slug !== current && dotState(w, seen(w.slug)) === "fresh");
+  const [undo, setUndo] = useState<{ session: string; current: boolean; chat: boolean } | null>(null);
+  const [rev, setRev] = useState(0);
+  useEffect(() => {
+    if (!undo) return;
+    const id = setTimeout(() => setUndo(null), UNDO_MS);
+    return () => clearTimeout(id);
+  }, [undo]);
+  const restore = () => {
+    if (!undo) return;
+    const { session, current, chat } = undo;
+    setUndo(null);
+    void talk.unarchive(session, current && !chat).then(ok => {
+      if (!ok) return;
+      setRev(n => n + 1);
+      if (current && chat) onChat(session);
+    });
+  };
   const shown = works.length >= FILTER_FROM && q.trim() ? works.filter(w => w.title.includes(q.trim())) : works;
   return (
     <nav className="dash-rail" aria-label={t("rail.works")} data-shelf={mode} hidden={hidden}>
@@ -131,7 +180,8 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
         {!open && cur && <CurrentInitial work={cur} talk={talk} />}
       </div>
       {settingsNav}
-      {open && !settingsNav && <Chats talk={talk} onChat={onChat} />}
+      {open && !settingsNav && <Chats talk={talk} onChat={onChat} rev={rev} onShelf={onArchiveShelf}
+        onArchived={(session, cur) => setUndo({ session, current: cur, chat: true })} />}
       {open && !settingsNav && works.length >= FILTER_FROM && (
         <label className="shelf-find">
           <Icon name="find" />
@@ -158,11 +208,17 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
                     </svg>
                   )}
                 </button>
-                {on && <Sessions talk={talk} />}
+                {on && <Sessions talk={talk} onArchived={(session, cur) => setUndo({ session, current: cur, chat: false })} />}
               </li>
             );
           })}
         </ul>
+      )}
+      {undo && (
+        <p className="shelf-undo" role="status">
+          <span>{t("session.archived")}</span>
+          <button type="button" onClick={restore}>{t("session.undo")}</button>
+        </p>
       )}
       <div className="shelf-foot">
         <IB icon={themeMode === "dark" ? "sun" : "moon"} label={t("palette.dayNight")} onClick={toggleDayNight} />

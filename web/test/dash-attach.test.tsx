@@ -115,11 +115,13 @@ describe("純聊天的附件", () => {
     expect(screen.queryByLabelText("丟一份稿進來", { selector: "input" })).toBeNull();
   });
 
-  it("compact divider renders summary collapsed", async () => {
+  it("compact summary is shown open; everything before the last marker is marked past", async () => {
     detail = { ...detail, turns: [...(detail.turns as object[]), { seq: 2, role: "compact", text: "之前聊了海", ts: 2 }, { seq: 3, role: "clear", ts: 3 }] };
     mount();
     const sum = await screen.findByText("之前聊了海");
-    expect(sum.closest("details")!.hasAttribute("open")).toBe(false);
+    expect(sum.closest("details")).toBeNull();
+    expect(sum.hasAttribute("data-past")).toBe(true);
+    expect(screen.getByText("嗨").closest("[data-past]")).not.toBeNull();
     expect(screen.getByRole("separator", { name: "對話清空" })).toBeTruthy();
   });
 
@@ -139,7 +141,7 @@ describe("純聊天的附件", () => {
     const box = screen.getByLabelText("對話輸入");
     fireEvent.change(box, { target: { value: "/" } });
     const menu = screen.getByRole("listbox", { name: "指令" });
-    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話(花一次額度)"]);
+    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話(會使用額度)"]);
     fireEvent.change(box, { target: { value: "/cl" } });
     expect(within(screen.getByRole("listbox", { name: "指令" })).getAllByRole("option")).toHaveLength(1);
     fireEvent.keyDown(box, { key: "Enter" });
