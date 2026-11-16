@@ -716,6 +716,19 @@ describe("設定頁:角色卡", () => {
     await waitFor(() => expect(edits).toHaveLength(1));
     expect(edits[0].depth).toBe("[{{char}}: 固執, 念舊; 說話: 簡短, 口語]");
   });
+  it("每輪提醒不是詞格式:文字框顯示名字,存回 {{char}}", async () => {
+    list = list.map(c => c.id === "u1" ? { ...c, depth_prompt: { prompt: "{{char}} always answers briefly.", depth: 4, role: "system" } } : c);
+    mountCards();
+    const p = await open();
+    fireEvent.click(sheet(p, "老讀").getByRole("button", { name: "編輯老讀" }));
+    const d = within(p.getByRole("dialog"));
+    const box = d.getByRole("textbox", { name: "每輪提醒" }) as HTMLTextAreaElement;
+    expect(box.value).toBe("老讀 always answers briefly.");
+    fireEvent.change(box, { target: { value: "老讀 always answers briefly. 老讀 likes tea." } });
+    fireEvent.click(d.getByRole("button", { name: "存" }));
+    await waitFor(() => expect(edits).toHaveLength(1));
+    expect(edits[0].depth).toBe("{{char}} always answers briefly. {{char}} likes tea.");
+  });
   it("每輪提醒空的時候也是詞編輯;沒加詞就送空字串", async () => {
     mountCards();
     const p = await open();

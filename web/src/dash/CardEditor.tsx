@@ -86,7 +86,8 @@ export default function CardEditor({ draft, limits, onSave, onCancel, sheet = fa
             <PlistWords plist={plist} limit={limits.depth} onPending={onPending} onChange={next => { setPlist(next); edit(setDepth)(composePlist(next)); }} />
           </section>
         )
-        : field("card.depth", <textarea className="nc-edit" rows={3} maxLength={limits.depth} value={depth} onChange={e => edit(setDepth)(e.target.value)} />, true))}
+        : field("card.depth", <textarea className="nc-edit" rows={3} maxLength={limits.depth} value={start.name ? depth.split("{{char}}").join(start.name) : depth}
+            onChange={e => edit(setDepth)(start.name ? e.target.value.split(start.name).join("{{char}}") : e.target.value)} />, true))}
       {warnings.map(w => <p key={w} className="nc-warn" role="note">{t(`card.warn.${w}` as MsgKey)}</p>)}
       {problems.length > 0 && <ul role="alert">{problems.map(p => <li key={p}>{t(`card.err.${p}` as MsgKey)}</li>)}</ul>}
       {err && <p className="nc-warn" role="alert">{t(err)}</p>}

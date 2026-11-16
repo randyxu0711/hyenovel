@@ -106,20 +106,26 @@
 .dash .chat-turn.is-flash{animation:dash-flash 1.4s ease-out forwards}
 .dash .chat-acts{display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-top:4px; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
 .dash .chat-react{position:relative; display:flex; align-items:center}
-.dash .chat-act{display:inline-flex; align-items:center; padding:3px; border:0; border-radius:6px; background:none; color:var(--dash-paper-ink-2); cursor:pointer; opacity:0; transition:opacity .15s, color .15s}
+.dash .chat-act{position:relative; display:inline-flex; align-items:center; padding:3px; border:0; border-radius:6px; background:none; color:var(--dash-paper-ink-2); cursor:pointer; opacity:0; transition:opacity .15s, color .15s}
+.dash .chat-act::before{content:""; position:absolute; inset:-4px}
 .dash .chat-act:hover:not(:disabled){color:var(--dash-paper-ink)}
 .dash .chat-act:disabled{cursor:default}
 .dash .chat-turn:hover .chat-act, .dash .chat-act:focus-visible{opacity:1}
 .dash .chat-turn:hover .chat-act:disabled{opacity:.35}
+.dash .chat-turn[data-last]:not(:hover) .chat-acts > .chat-act:not(.is-stop):not(:focus-visible):not(:disabled),
+.dash .chat-turn[data-last]:not(:hover) .chat-voice:not(.is-on):not(:focus-visible),
+.dash .chat-turn[data-last]:not(:hover) .chat-react:not(.is-marked) .chat-react-key:not(:focus-visible):not([aria-expanded="true"]){opacity:.45}
+.dash .chat-turn[data-last]:not(:hover) .chat-acts > .chat-act:not(.is-stop):disabled{opacity:.2}
+.dash .chat-act.is-stop{opacity:1}
 @media (hover:none){ .dash .chat-act{opacity:.6} .dash .chat-act:disabled{opacity:.3} }
 .dash .chat-acts-mark{display:inline-flex; align-items:center; gap:2px; margin-left:10px}
 .dash .chat-voice{gap:4px}
-.dash .chat-voice.is-on{opacity:1; padding-right:6px; border-radius:999px; background:color-mix(in srgb, var(--dash-paper-ink-2) 14%, transparent); color:var(--dash-paper-ink)}
+.dash .chat-voice.is-on{opacity:1; border-radius:999px; background:color-mix(in srgb, var(--dash-paper-ink-2) 14%, transparent); color:var(--dash-paper-ink)}
 .dash .chat-flip{display:inline-flex; align-items:center; margin-left:6px}
 .dash .chat-flip .chat-act{opacity:1}
 .dash .chat-flip .chat-act:disabled{opacity:.3}
 .dash .chat-flip-n{min-width:2.6em; text-align:center; font-variant-numeric:tabular-nums; color:var(--dash-paper-ink)}
-.dash .chat-edited{margin-left:6px; font-family:var(--serif); color:var(--dash-paper-ink-2); cursor:default}
+.dash .chat-edited{margin-left:auto; font-family:var(--serif); color:var(--dash-paper-ink-2); cursor:default}
 .dash .chat-edit-bar{gap:4px; font-size:var(--dash-t-sm)}
 .dash .chat-edit-ask{margin-right:6px; color:var(--dash-paper-ink)}
 .dash .chat-text-edit{display:block; box-sizing:border-box; width:100%; margin:0; padding:0; border:0; border-radius:0; background:none; color:inherit; font:inherit; line-height:1.8; white-space:pre-wrap; resize:none; field-sizing:content; outline:none}
