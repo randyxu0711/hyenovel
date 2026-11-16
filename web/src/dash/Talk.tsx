@@ -251,7 +251,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
       ) : (
         <>
           <button type="button" className="chat-edit-btn is-save" disabled={still || !editing?.text.trim() || editing?.text === turn.text}
-            onClick={() => void saveEdit(turn)}>{t("reply.save")}</button>
+            title={`${t("reply.save")} (⌘↵)`} onClick={() => void saveEdit(turn)}>{t("reply.save")}</button>
           <button type="button" className="chat-edit-btn" onClick={() => leaveEdit(turn)}>{t("reply.cancel")}</button>
         </>
       )}
@@ -281,13 +281,13 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
               onClick={() => void talk.pickVariant(seq, n + 1)}><Icon name="next" /></button>
           </span>
         )}
-        {turn.edited && <span className="chat-edited" title={t("reply.editedNote")}>{t("reply.edited")}</span>}
         <span className="chat-acts-mark">
           <Voice key={`v-${session}-${seq}-${n}`} session={session} seq={seq} initial={!!turn.voice}
             onChange={v => markVoice(session, seq, v)} />
           <Reaction key={`${session}-${seq}-${n}`} session={session} seq={seq} initial={turn.reaction ?? null}
             onChange={r => markTurn(session, seq, r)} />
         </span>
+        {turn.edited && <span className="chat-edited" title={t("reply.editedNote")}>{t("reply.edited")}</span>}
       </div>
     );
   };
@@ -329,7 +329,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const redo = redoing !== null && turn.seq === redoing;
     const open = editing !== null && editing.seq === turn.seq;
     return [brk, att,
-      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i}
+      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i} data-last={lastTurn === turn || undefined}
         data-editing={open || undefined} onKeyDown={open ? e => onEditKey(e, turn) : undefined}>
         {who.has(i) && whoLine(c)}
         {redo
@@ -339,6 +339,12 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
             ? <textarea ref={editBox} className="chat-text chat-text-edit" aria-label={t("reply.editBox")} value={editing.text} readOnly={asking}
                 onChange={e => setEditing({ seq: turn.seq!, text: e.target.value })} />
             : <p className="chat-text">{quoted(turn.text, turn.spans, version)}</p>}
+        {redo && streaming !== null && (
+          <div className="chat-acts">
+            <button type="button" className="chat-act is-stop" aria-label={t("talk.stop")} title={t("talk.stop")}
+              onClick={e => { if (e.detail <= 1) talk.stop(); }}><Icon name="stop" /></button>
+          </div>
+        )}
         {!redo && (open ? editBar(turn) : acts(turn))}
       </div>,
     ];

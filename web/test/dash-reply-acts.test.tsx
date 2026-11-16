@@ -157,7 +157,8 @@ describe("重說的結果", () => {
     await l.findByText("舊的");
     fireEvent.click(l.getByRole("button", { name: REDO }));
     await l.findByText("半");
-    fireEvent.click(screen.getByRole("button", { name: "停下" }));
+    expect(screen.getAllByRole("button", { name: "停下" })).toHaveLength(2);
+    fireEvent.click(l.getByRole("button", { name: "停下" }));
     await l.findByText("舊的");
     expect(l.queryByText("半")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
