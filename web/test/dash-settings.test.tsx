@@ -64,7 +64,7 @@ describe("設定頁", () => {
     expect(nav.queryByText("舊的")).toBeNull();
     expect(nav.queryByRole("searchbox")).toBeNull();
     const names = within(nav.getByRole("group", { name: "設定分區" })).getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "舊討論"]);
+    expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "封存"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
   });
   it("記憶分區畫出記憶頁,圖示是記憶專用的", async () => {
@@ -268,7 +268,7 @@ describe("設定頁", () => {
   it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {
     const f = mount();
     const p = await page();
-    await go("舊討論");
+    await go("封存");
     await waitFor(() => expect(f.mock.calls.some(c => String(c[0]) === "/api/sessions?limit=100&legacy=1")).toBe(true));
     await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
     expect(p.getByText("2 局")).toBeTruthy();
@@ -284,7 +284,7 @@ describe("設定頁", () => {
     expect(p.getByText("預覽old2")).toBeTruthy();
   });
 
-  it("封存的局:列在舊討論頁上方,可拉回;永久刪除要再確認一次", async () => {
+  it("封存的局:列在舊討論頁上方,可復原;永久刪除要再確認一次", async () => {
     const f = mount();
     const base = f.getMockImplementation()!;
     const sent: string[] = [];
@@ -296,11 +296,11 @@ describe("設定頁", () => {
       return (base as (u: string, i?: RequestInit) => Promise<Response>)(u, init);
     });
     const p = await page();
-    await go("舊討論");
+    await go("封存");
     const box = within(await p.findByRole("region", { name: "封存的局" }));
     expect(box.getByText("封存一")).toBeTruthy();
     expect(p.getByText("改版前的討論")).toBeTruthy();
-    fireEvent.click(box.getAllByRole("button", { name: "拉回" })[0]);
+    fireEvent.click(box.getAllByRole("button", { name: "復原" })[0]);
     await waitFor(() => expect(box.queryByText("封存一")).toBeNull());
     fireEvent.click(box.getByRole("button", { name: "永久刪除" }));
     expect(sent).toEqual(["POST /api/sessions/a1/unarchive"]);
@@ -321,7 +321,7 @@ describe("設定頁", () => {
         ? json({ sessions: [row("a", true), { ...row("b", true), slug: "d2", title: "長夜", preview: "**粗體**與`碼`" }, row("c", true)] })
         : (base as (...a: unknown[]) => Promise<Response>)(u, ...rest));
     const p = await page();
-    await go("舊討論");
+    await go("封存");
     const sea = within(await p.findByRole("region", { name: "舊的" }));
     expect(sea.getAllByRole("button").map(b => b.querySelector("span")!.textContent)).toEqual(["預覽a", "預覽c"]);
     expect(within(p.getByRole("region", { name: "長夜" })).getByText("粗體與碼")).toBeTruthy();
@@ -346,9 +346,9 @@ describe("設定頁", () => {
       .filter(el => !["匯入", "新角色"].includes(el.getAttribute("aria-label") ?? el.textContent ?? "")
         && !/^(複製|編輯)/.test(el.getAttribute("aria-label") ?? ""));   // 系統檔案視窗不改狀態;新角色、複製、編輯另有測試
     let n = 0;
-    for (const sec of ["讀伴", "舊討論", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
+    for (const sec of ["讀伴", "封存", "外觀"]) {   // 外觀最後:裡面會把語言切成英文
       await go(sec);
-      if (sec === "舊討論") await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
+      if (sec === "封存") await waitFor(() => expect(p.getByText("2 局")).toBeTruthy());
       for (let i = 0; i < controls().length; i++, n++) {
         const el = controls()[i];
         if (el.getAttribute("aria-pressed") === "true" || (el as HTMLInputElement).checked) continue;

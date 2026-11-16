@@ -39,6 +39,7 @@ export type Pending = { text: string; quotes: string[] };
 export const attachable = (f: File) => /\.(md|txt)$/i.test(f.name);
 const stem = (name: string) => name.replace(/\.(md|txt)$/i, "");
 const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const ATTACH_HEAD = 120;
 const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "unknown"));
 
 /** 一篇作品上的對話:局清單、目前這局的逐字稿、串流中的字、誰在陪讀、草稿、邊說邊畫的痕跡。
@@ -256,7 +257,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
             { seq: d.seq, role: "assistant", text: d.text, ts, character: d.character, quotes: [], spans: old ? [] : d.spans, v: d.v }]);
           if (carried && d.attachment != null) {
             const n = d.attachment;
-            setAttachments(as => [...as, { n, seq: userSeq(message, d.seq) ?? d.seq, name: carried.name, chars: cpLength(carried.text.trim()), adopted: false }]);
+            setAttachments(as => [...as, { n, seq: userSeq(message, d.seq) ?? d.seq, name: carried.name, chars: cpLength(carried.text.trim()), head: [...carried.text.trim()].slice(0, ATTACH_HEAD).join(""), adopted: false }]);
             setStaged(null);
           }
           if (slug) markSeen(slug);
@@ -323,12 +324,19 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const stop = useCallback(() => { abort.current?.abort(); }, []);
 
   /** 純聊天的局丟稿:沒打字就直接送一輪(讀伴先回),打了一半就等下一輪一起送。 */
+  const attachText = useCallback(async (name: string, text: string): Promise<boolean> => {
+    if (bound !== null) return false;
+    const dropped = { name, text };
+    const said = now.current.draft.trim();
+    if (said && said !== text.trim()) { setStaged(dropped); return true; }
+    const ok = await send("", [], dropped);
+    if (!ok) setStaged(dropped);
+    return ok;
+  }, [bound, send]);
   const attach = useCallback(async (file: File): Promise<boolean> => {
     if (bound !== null || !attachable(file)) return false;
-    const dropped = { name: stem(file.name), text: await file.text() };
-    if (now.current.draft.trim()) { setStaged(dropped); return true; }
-    return send("", [], dropped);
-  }, [bound, send]);
+    return attachText(stem(file.name), await file.text());
+  }, [bound, attachText]);
 
   const act = async <T,>(run: (id: string) => Promise<T>): Promise<T | null> => {
     if (!session || streaming !== null || working) return null;
@@ -368,6 +376,14 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     return true;
   };
 
+  const unarchive = async (id: string, reopen: boolean): Promise<boolean> => {
+    setError(null);
+    try { await api.unarchiveSession(id); } catch (e) { setError(asError(e)); return false; }
+    if (slug !== null) refreshSessions(slug);
+    if (reopen) open(id);
+    return true;
+  };
+
   const markTurn = useCallback((forSession: string, seq: number, reaction: TurnReaction | null) => {
     if (forSession !== shownSession.current) return;
     setTurns(ts => ts.map(x => (x.seq === seq ? { ...x, reaction } : x)));
@@ -386,7 +402,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   return {
     markTurn, markMemories, markVoice, regenerate, stop, redoing, pickVariant, editReply, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
-    attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, clear, compact, adopt, archive,
+    attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, attachText, clear, compact, adopt, archive, unarchive,
   };
 }
 

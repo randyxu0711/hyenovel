@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
+import Markdown from "react-markdown";
 import { useNavigate } from "react-router-dom";
 import type { Attachment, Turn } from "./api";
 import type { Character } from "./api";
 import Figure, { type FigureState } from "./Figure";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
 import Reaction from "./Reaction";
@@ -17,6 +18,7 @@ import { MAX_CHAT, type Talk as TalkState } from "./useTalk";
 import WhoPick from "./WhoPick";
 
 const FLASH_MS = 1400;
+const ARM_MS = 4000;
 
 /** 要在其前畫「第 n 版」分隔的 index:v 與前一個有值的 v 不同;沒 v 的(剛串流進來)沿用前一則。 */
 export function versionBreaks(turns: Turn[]): Set<number> {
@@ -42,9 +44,27 @@ export function speakerChanges(turns: Turn[], byId: (id: string | null) => Chara
   return out;
 }
 
+/** 壓縮摘要:一小張紙,預設露幾行、點了全開。 */
+function Summary({ text, past, label }: { text: string; past: boolean; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="chat-sum" data-past={past || undefined} data-open={open || undefined} role="button" tabIndex={0}
+      aria-expanded={open} aria-label={label}
+      onClick={() => setOpen(o => !o)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); } }}>
+      <Markdown>{text}</Markdown>
+    </div>
+  );
+}
+
+/** 最後一個清空/壓縮標記的 index;它之前的逐字讀伴看不到(沒有標記 = -1)。 */
+export function lastCut(turns: Turn[]): number {
+  for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "clear" || turns[i].role === "compact") return i;
+  return -1;
+}
+
 export const REACT_MS = 1800;
 
-export type SlashCommand = { name: string; label: string; run: () => unknown };
+export type SlashCommand = { name: string; label: string; icon: IconName; note?: string; run: () => unknown };
 
 export function slashCommands(draft: string, all: SlashCommand[]): SlashCommand[] {
   const m = /^\/(\S*)$/.exec(draft.trim());
@@ -75,16 +95,13 @@ export function useReaction(analyzing: boolean): boolean {
 
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
  *  稿上的痕跡被點時,捲到說那句的訊息並閃一下(onReveal 讓右欄切回對話)。 */
-export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, onFile, above, inputRef, placeholder, whoSize = 72 }: {
+export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, inputRef, placeholder, whoSize = 72 }: {
   talk: TalkState; quotes: string[]; analyzing: boolean;
   /** 正在看的版本號(引文對不到時的說明用)。 */
   version: number;
   onDropQuote: (i: number) => void; onSent: () => void; onReveal: () => void;
   /** 進門用:超過門檻的文字(貼上或按 Enter)交給它,不當聊天送出。 */
   longText?: { min: number; take: (text: string) => void };
-  /** 進門用:拖進來的檔交給它,不當附件。 */
-  onFile?: (f: File) => void;
-  above?: ReactNode;
   inputRef?: RefObject<HTMLTextAreaElement>;
   placeholder?: string;
   whoSize?: number;
@@ -98,9 +115,17 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const [flash, setFlash] = useState<{ i: number; n: number } | null>(null);
   const [editing, setEditing] = useState<{ seq: number; text: string } | null>(null);
   const [asking, setAsking] = useState(false);
+  const [peek, setPeek] = useState<Set<number>>(new Set());
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const id = setTimeout(() => setArming(false), ARM_MS);
+    return () => clearTimeout(id);
+  }, [arming]);
+  const togglePeek = (n: number) => setPeek(p => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
   const editBox = useRef<HTMLTextAreaElement>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => setEditing(null), [talk.session]);
+  useEffect(() => { setEditing(null); setPeek(new Set()); }, [talk.session]);
   useEffect(() => { setAsking(false); }, [editing?.seq]);
   useEffect(() => {
     const el = editBox.current;
@@ -151,8 +176,8 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const live = turns.some(x => x.role === "user" || x.role === "assistant");
   const idle = !session || streaming !== null || working;
   const commands = slashCommands(draft, [
-    { name: "clear", label: t("talk.clear"), run: talk.clear },
-    { name: "compact", label: t("talk.compactCost"), run: talk.compact },
+    { name: "clear", label: t("talk.clear"), icon: "wipe", run: talk.clear },
+    { name: "compact", label: t("talk.compact"), icon: "squeeze", note: t("nc.costs"), run: talk.compact },
   ]);
   const [pick, setPick] = useState(0);
   const chosen = commands[Math.min(pick, commands.length - 1)];
@@ -167,7 +192,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
 
   const submit = async () => {
     const text = draft.trim();
-    if (!text || streaming !== null || legacy) return;
+    if ((!text && !staged) || streaming !== null || legacy) return;
     if (chosen) {
       if (exact) runCommand(chosen); else setDraft(`/${chosen.name}`);
       return;
@@ -201,14 +226,16 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   const drop = (files: FileList | null) => { const f = files?.[0]; if (f) void talk.attach(f); };
   const onDrop = (e: DragEvent) => {
     e.preventDefault(); e.stopPropagation();
-    const f = e.dataTransfer.files[0];
-    if (f && onFile) onFile(f); else drop(e.dataTransfer.files);
+    drop(e.dataTransfer.files);
   };
   const bySeq = new Map<number, Attachment[]>();
   for (const a of attachments) bySeq.set(a.seq, [...(bySeq.get(a.seq) ?? []), a]);
-  const card = (a: Attachment) => (
-    <div key={`a${a.n}`} className="chat-att">
-      <Icon name="sheet2" /><b>{a.name}</b><span>{t("talk.chars", { n: a.chars })}</span>
+  const card = (a: Attachment, past: boolean) => (
+    <div key={`a${a.n}`} className="chat-att" data-past={past || undefined}>
+      <button type="button" className="chat-att-name" aria-expanded={peek.has(a.n)} onClick={() => togglePeek(a.n)}>
+        <Icon name="sheet2" /><b>{a.name}</b><span>{t("talk.chars", { n: a.chars })}</span>
+      </button>
+      {peek.has(a.n) && a.head && <p className="chat-att-head">{a.head}</p>}
       {free && !a.adopted && (
         <button type="button" className="chat-att-adopt" disabled={working || streaming !== null}
           onClick={() => void adopt(a.n)}><Icon name="new" />{t("talk.adopt")}</button>
@@ -216,10 +243,10 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     </div>
   );
   const placed = new Set<number>();
-  const before = (turn: Turn) => {
+  const before = (turn: Turn, past: boolean) => {
     if (turn.seq === undefined || placed.has(turn.seq)) return null;
     placed.add(turn.seq);
-    return bySeq.get(turn.seq)?.map(card) ?? null;
+    return bySeq.get(turn.seq)?.map(a => card(a, past)) ?? null;
   };
 
   const saveEdit = async (turn: Turn) => {
@@ -298,23 +325,23 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     <p className="chat-who"><Figure character={c} size={36} /><b style={{ color: c.colors[mode].text }}>{localized(c.name, lang)}</b></p>
   );
   let lastId: string | null = null;
+  const cut = lastCut(turns);
   const rows = turns.map((turn: Turn, i) => {
+    const past = i < cut || undefined;
     const brk = breaks.has(i) && <div key={`v${i}`} className="chat-ver"><Icon name="sheet2" /><span>{t("talk.versionBreak", { n: turn.v! })}</span></div>;
     if (turn.role === "clear") {
-      return [<div key={i} className="chat-cut" role="separator" title={t("talk.cleared")} aria-label={t("talk.cleared")}><Icon name="wipe" /></div>];
+      return [<div key={i} className="chat-cut" role="separator" aria-label={t("talk.cleared")}><Icon name="wipe" /><span>{t("talk.cleared")}</span></div>];
     }
     if (turn.role === "compact") {
       return [
-        <details key={i} className="chat-cut is-compact">
-          <summary title={t("talk.compacted")} aria-label={t("talk.compacted")}><Icon name="squeeze" /></summary>
-          <p>{turn.text}</p>
-        </details>,
+        <div key={i} className="chat-cut is-compact" role="separator" aria-label={t("talk.compacted")}><Icon name="squeeze" /><span>{t("talk.compacted")}</span></div>,
+        <Summary key={`s${i}`} text={turn.text} past={!!past} label={t("talk.compacted")} />,
       ];
     }
-    const att = before(turn);
+    const att = before(turn, !!past);
     if (turn.role !== "assistant") {
       return [brk, att,
-        <div key={i} className="chat-me">
+        <div key={i} className="chat-me" data-past={past}>
           {turn.quotes.map((q, j) => <blockquote key={j} className="chat-quote">{q}</blockquote>)}
           {session && turn.seq !== undefined
             ? <Remember key={`${session}-${turn.seq}`} slug={bound} session={session} seq={turn.seq} text={turn.text}
@@ -329,7 +356,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
     const redo = redoing !== null && turn.seq === redoing;
     const open = editing !== null && editing.seq === turn.seq;
     return [brk, att,
-      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i} data-last={lastTurn === turn || undefined}
+      <div key={lit ? `${i}-${flash!.n}` : i} className={lit ? "chat-turn is-flash" : "chat-turn"} data-turn={i} data-last={lastTurn === turn || undefined} data-past={past}
         data-editing={open || undefined} onKeyDown={open ? e => onEditKey(e, turn) : undefined}>
         {who.has(i) && whoLine(c)}
         {redo
@@ -351,15 +378,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   });
 
   return (
-    <div className="chat" onDragOver={free || onFile ? e => e.preventDefault() : undefined} onDrop={free || onFile ? onDrop : undefined}>
-      {session && (
-        <div className="chat-tools">
-          <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.clear")} title={t("talk.clear")}
-            onClick={() => void talk.clear()}><Icon name="wipe" /></button>
-          <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.compact")} title={t("talk.compactCost")}
-            onClick={() => void talk.compact()}><Icon name="squeeze" /></button>
-        </div>
-      )}
+    <div className="chat" onDragOver={free ? e => e.preventDefault() : undefined} onDrop={free ? onDrop : undefined}>
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
         {rows}
         {pending && (
@@ -378,14 +397,6 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
       </div>
       {error && <p className="chat-error" role="alert">{t(errorMessage(error.code))}</p>}
       {legacy && <p className="chat-error">{t("err.legacy-session")}</p>}
-      {staged && (
-        <div className="chat-carries">
-          <div className="chat-carry">
-            <div className="chat-att"><Icon name="sheet2" /><b>{staged.name}</b></div>
-            <button type="button" className="ib" aria-label={t("talk.dropAttach")} title={t("talk.dropAttach")} onClick={talk.dropStaged}><Icon name="close" /></button>
-          </div>
-        </div>
-      )}
       {quotes.length > 0 && (
         <div className="chat-carries">
           {quotes.map((q, i) => (
@@ -396,19 +407,24 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
           ))}
         </div>
       )}
-      {above}
       <form className="composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
         {commands.length > 0 && (
           <ul className="slash-menu" role="listbox" aria-label={t("talk.commands")}>
             {commands.map(c => (
               <li key={c.name} role="option" aria-selected={c === chosen} aria-disabled={!usable}>
                 <button type="button" disabled={!usable} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c)}>
-                  <b>/{c.name}</b><span>{c.label}</span>
+                  <Icon name={c.icon} /><b>/{c.name}</b><span>{c.label}</span>{c.note && <small>{c.note}</small>}
                 </button>
               </li>
             ))}
             {!usable && <li className="slash-note" role="status">{t(streaming !== null || working ? "err.busy" : "talk.cmdIdle")}</li>}
           </ul>
+        )}
+        {staged && (
+          <div className="chat-staged">
+            <Icon name="sheet2" /><b>{staged.name}</b><span>{t("talk.chars", { n: [...staged.text.trim()].length })}</span>
+            <button type="button" className="ib" aria-label={t("talk.dropAttach")} title={t("talk.dropAttach")} onClick={talk.dropStaged}><Icon name="close" /></button>
+          </div>
         )}
         <WhoPick me={me} onPick={talk.setWho} size={whoSize} state={composerState({ streaming, analyzing, reacting, typing: draft.trim() !== "" })} />
         <textarea ref={inputRef} value={draft} rows={2} maxLength={MAX_CHAT} disabled={legacy} aria-label={t("talk.input")}
@@ -423,11 +439,23 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
                 disabled={streaming !== null || working || !!staged} onClick={() => picker.current?.click()}><Icon name="clip" /></button>
             </>
           )}
+          {session && (
+            <>
+              <span className="bar-sep" aria-hidden="true" />
+              <button type="button" className="ib" disabled={idle || !live} aria-label={t("talk.clear")} title={`${t("talk.clear")} · /clear`}
+                onClick={() => void talk.clear()}><Icon name="wipe" /></button>
+              <button type="button" className={arming ? "ib bar-arm" : "ib"} disabled={idle || !live} aria-label={t("talk.compact")}
+                title={`${t("talk.compactCost")} · /compact`} onBlur={() => setArming(false)}
+                onClick={() => { if (!arming) { setArming(true); return; } setArming(false); void talk.compact(); }}>
+                <Icon name="squeeze" />{arming && <span>{t("talk.compactSure")}</span>}
+              </button>
+            </>
+          )}
           {streaming !== null
             ? <button key="stop" type="button" className="ib send" aria-label={t("talk.stop")} title={t("talk.stop")}
               onClick={e => { if (e.detail <= 1) talk.stop(); }}><Icon name="stop" /></button>
             : <button key="send" type="submit" className="ib send" aria-label={t("talk.send")} title={t("talk.send")}
-              disabled={legacy || !draft.trim()}><Icon name="send" /></button>}
+              disabled={legacy || (!draft.trim() && !staged)}><Icon name="send" /></button>}
         </div>
       </form>
     </div>

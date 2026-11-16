@@ -112,13 +112,13 @@ export type TalkMessage = {
   variant?: number;
   variants?: number;
 };
-export type Attachment = { n: number; seq: number; name: string; chars: number; adopted: boolean };
+export type Attachment = { n: number; seq: number; name: string; chars: number; adopted: boolean; head?: string };
 export type AttachIn = { name: string; text: string };
 export type Adopted = { slug: string; title: string | null; version: number; reused: boolean };
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
 export type SessionDetail = {
-  session: string; slug: string | null; title: string | null; turns: Turn[]; legacy: boolean; version: number | null;
+  session: string; slug: string | null; title: string | null; turns: Turn[]; legacy: boolean; version: number | null; archived?: boolean;
   attachments: Attachment[];
 };
 export type WorkMap = {

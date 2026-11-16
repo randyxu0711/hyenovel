@@ -985,7 +985,7 @@ def test_storyless_session_turns(c, fake_chat):
     c.post(f"/api/sessions/{sid}/clear")
     got = c.get(f"/api/sessions/{sid}").json()
     assert (got["slug"], got["title"], got["version"]) == (None, None, None)
-    assert got["attachments"] == [{"n": 1, "seq": 0, "name": "海", "chars": len(SEA), "adopted": False}]
+    assert got["attachments"] == [{"n": 1, "seq": 0, "name": "海", "chars": len(SEA), "head": SEA.strip()[:120], "adopted": False}]
     assert [t["role"] for t in got["turns"]] == ["user", "assistant", "user", "assistant", "compact", "clear"]
     assert all(t["spans"] == [] for t in got["turns"][:4])
     assert got["turns"][4] == {"seq": 4, "role": "compact", "text": "「她站在堤上沒有動」", "ts": got["turns"][4]["ts"]}

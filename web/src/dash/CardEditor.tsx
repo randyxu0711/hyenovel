@@ -9,11 +9,13 @@ export const SAVED_LIMITS: CardLimits = { name: 64, line: 200, reading: 6000, ex
 export const candidateLimits = (lang: Lang): CardLimits =>
   lang === "en" ? { name: 32, line: 80, reading: 600, depth: 600, lineRequired: true } : { name: 16, line: 40, reading: 600, depth: 600, lineRequired: true };
 
-export default function CardEditor({ draft, limits, onSave, onCancel, sheet = false, selectName = false }: {
+export default function CardEditor({ draft, limits, onSave, onCancel, onTitle, sheet = false, selectName = false }: {
   draft: Omit<CardDraft, "examples" | "depth"> & { examples?: unknown; depth?: unknown }; limits: CardLimits;
   /** 回傳要作者確認的 warnings;空陣列 = 存好了。 */
   onSave: (draft: CardDraft, confirm: boolean) => Promise<string[]>;
   onCancel: () => void;
+  /** 名字/一句話改動時通知(卡上即時跟著變)。 */
+  onTitle?: (name: string, line: string) => void;
   sheet?: boolean;
   selectName?: boolean;
 }) {
@@ -40,6 +42,7 @@ export default function CardEditor({ draft, limits, onSave, onCancel, sheet = fa
   const onPending = useCallback((p: boolean) => setPending(p), []);
   useEffect(() => { if (selectName) nameRef.current?.select(); }, [selectName]);
   useEffect(() => { if (asking) keepRef.current?.focus(); }, [asking]);
+  useEffect(() => { onTitle?.(name, line); }, [name, line, onTitle]);
   const leave = () => { if (dirty) setAsking(true); else onCancel(); };
   const keys = (e: KeyboardEvent<HTMLFormElement>) => {
     if (!sheet || e.key !== "Escape" || e.nativeEvent.isComposing) return;

@@ -323,7 +323,7 @@ def discussions_with_utterances(conn, story_id: int, archived: bool = True) -> l
     return [_row(r) for r in conn.execute(
         "SELECT d.external_id AS external_id, u.seq AS seq, u.role AS role, u.text AS text, "
         "u.ts AS ts, u.anchors AS anchors, u.character AS character, "
-        "u.quotes AS quotes, u.analysis_fp AS analysis_fp FROM utterance u JOIN discussion d "
+        "u.quotes AS quotes, u.analysis_fp AS analysis_fp, d.archived_at AS archived_at FROM utterance u JOIN discussion d "
         "ON d.id = u.discussion_id WHERE d.story_id = ? AND u.role IN ('user', 'assistant') "
         + hide + "ORDER BY u.ts, u.seq", (story_id,))]
 

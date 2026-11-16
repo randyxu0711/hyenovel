@@ -18,6 +18,8 @@ let worksFetch: (() => Promise<Response>) | null;
 function Where() { const l = useLocation(); return <output data-testid="loc">{l.pathname}{l.search}</output>; }
 let recent: object[];
 let chat: Record<string, object>;
+let boxed: object[];
+let discussDown: boolean;
 const sse = (...evs: [string, unknown][]) => new Response(new ReadableStream({
   start(c) {
     const enc = new TextEncoder();
@@ -37,6 +39,8 @@ function mount(path = "/") {
     if (u === "/api/jobs") return json({ job_id: 5 });
     if (u.endsWith("/sessions")) return json({ sessions: sessionRows });
     if (u.startsWith("/api/sessions?")) return json({ sessions: recent });
+    if (u === "/api/archived-sessions") return json({ sessions: boxed });
+    if (u === "/api/discuss" && discussDown) return json({ code: "usage-limit" }, 429);
     if (u === "/api/discuss") return sse(["message", { role: "assistant", text: "嗨,你好", session_id: "c1", seq: 1, character: "hyena", spans: [], v: null, attachment: null }],
       ["done", { ok: true, session_id: "c1" }]);
     if (u.startsWith("/api/sessions/")) return json(chat[decodeURIComponent(u.split("/").pop()!)] ?? {});
@@ -51,6 +55,7 @@ function mount(path = "/") {
         <Route path="/" element={<Dash />} />
         <Route path="/c/:session" element={<Dash />} />
         <Route path="/w/:slug" element={<Dash />} />
+        <Route path="/settings" element={<Dash />} />
       </Routes>
     </MemoryRouter>
   );
@@ -61,7 +66,7 @@ const confirmBtn = () => screen.queryByRole("button", { name: "分析" });
 
 beforeEach(() => {
   setLang("zh-Hant"); localStorage.clear(); serverDefault = "hyena"; calls = [];
-  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null; recent = []; chat = {};
+  works = [W("d2", "海", 200), W("d1", "山", 100)]; sessionRows = []; worksFetch = null; recent = []; chat = {}; boxed = []; discussDown = false;
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -82,19 +87,16 @@ describe("進門只有一欄聊天", () => {
     await waitFor(() => expect(document.querySelector(".home svg.fig")!.getAttribute("data-who")).toBe("deer"));
     await waitFor(() => expect(b.getAttribute("placeholder")).toMatch(/貼上一篇稿/));
   });
-  it("打很長的字按 Enter → 交稿確認條,不送聊天;短字按 Enter 照常聊天;組字中不觸發", async () => {
+  it("打很長的字按 Enter → 當附件送出,不是交稿;短字照常聊天;組字中不觸發", async () => {
     mount();
     const b = await box();
     fireEvent.change(b, { target: { value: "字".repeat(2001) } });
     fireEvent.keyDown(b, { key: "Enter", isComposing: true });
-    expect(confirmBtn()).toBeNull();
-    fireEvent.keyDown(b, { key: "Enter" });
-    expect(await screen.findByText("2001 字")).toBeTruthy();
-    expect(confirmBtn()).not.toBeNull();
     expect(calls.some(c => c.url === "/api/discuss")).toBe(false);
-    fireEvent.change(b, { target: { value: "短短五個字" } });
     fireEvent.keyDown(b, { key: "Enter" });
-    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ message: "短短五個字" }));
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body)
+      .toMatchObject({ message: "", attach: { name: "字".repeat(40), text: "字".repeat(2001) } }));
+    expect(calls.some(c => c.url === "/api/stories")).toBe(false);
   });
   it("交新稿:從作品頁回到 / 並把游標放進輸入框", async () => {
     localStorage.setItem("hyenovel.shelf", "open");
@@ -110,39 +112,32 @@ describe("進門只有一欄聊天", () => {
 
 describe("沒有作品", () => {
   beforeEach(() => { works = []; });
-  it("拖 .md 檔:輸入框上方出現字數與「分析」確認鈕,確認後打 /api/stories 並導到新作品", async () => {
+  it("拖 .md 檔進門 → 當附件送出,不交稿也不出分析確認", async () => {
     mount();
     await box();
-    const home = document.querySelector(".home")!;
-    fireEvent.drop(home, { dataTransfer: { files: [new File(["x"], "海.md")] } });
-    expect(await screen.findByText("4 字")).toBeTruthy();
-    expect(screen.queryByText(/預估/)).toBeNull();
-    expect(screen.getByText("會使用額度")).toBeTruthy();
-    expect(document.querySelector(".chat-att")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "分析" }));
-    await waitFor(() => expect(calls.some(c => c.url === "/api/stories")).toBe(true));
-    expect(calls.find(c => c.url === "/api/stories")!.body).toMatchObject({ text: "檔案內容", title: "海" });
-    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d9"));
+    fireEvent.drop(document.querySelector(".home")!, { dataTransfer: { files: [Object.assign(new File(["檔案內容"], "海.md"), { text: async () => "檔案內容" })] } });
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ attach: { name: "海", text: "檔案內容" } }));
+    expect(confirmBtn()).toBeNull();
+    expect(calls.some(c => c.url === "/api/stories")).toBe(false);
   });
-  it("拖到對話區上也是交稿確認,不是附件", async () => {
+  it("貼上的稿以第一行當名字(去掉 # 記號);附件送不出去時稿留著當待送附件", async () => {
     mount();
-    await box();
-    fireEvent.drop(document.querySelector(".home .chat")!, { dataTransfer: { files: [new File(["x"], "海.md")] } });
-    expect(await screen.findByText("4 字")).toBeTruthy();
-    expect(calls.some(c => c.url.includes("/attach"))).toBe(false);
+    const b = await box() as HTMLTextAreaElement;
+    const text = "\n# 海邊\n" + "字".repeat(2001);
+    discussDown = true;
+    fireEvent.paste(b, { clipboardData: { getData: () => text } });
+    expect(await screen.findByRole("button", { name: "不帶這份稿" })).toBeTruthy();
+    expect(document.querySelector(".composer .chat-staged")!.textContent).toContain("海邊");
+    expect((screen.getByRole("button", { name: "送出" }) as HTMLButtonElement).disabled).toBe(false);
   });
-  it("貼上 > 2000 字進交稿確認,不進輸入框;短文字照常留在輸入框", async () => {
+  it("貼上 > 2000 字當附件,不進輸入框;短文字照常留在輸入框", async () => {
     mount();
     const b = await box() as HTMLTextAreaElement;
     fireEvent.paste(b, { clipboardData: { getData: () => "短短的" } });
-    expect(confirmBtn()).toBeNull();
+    expect(calls.some(c => c.url === "/api/discuss")).toBe(false);
     fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(2001) } });
-    expect(await screen.findByText("2001 字")).toBeTruthy();
-    expect(await screen.findByText("約 5 分")).toBeTruthy();
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ attach: { name: "字".repeat(40) } }));
     expect(b.value).toBe("");
-    fireEvent.click(screen.getByRole("button", { name: "取消" }));
-    await waitFor(() => expect(confirmBtn()).toBeNull());
-    expect(await box()).toBeTruthy();
   });
 });
 
@@ -250,6 +245,34 @@ describe("進門聊天", () => {
     expect(screen.queryByText("c1 的話")).toBeNull();
   });
 
+  it("archiving shows an undo line; undo restores the open chat and goes back to it", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    recent = [free("c1", "聊海")];
+    chat = { c1: detail("c1") };
+    mount("/c/c1");
+    await screen.findByText("c1 的話");
+    const group = within(screen.getByRole("region", { name: "聊天" }));
+    fireEvent.click(await group.findByRole("button", { name: "封存這局" }));
+    const undo = await screen.findByRole("button", { name: "復原" });
+    expect(screen.getByText("已封存")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
+    fireEvent.click(undo);
+    await waitFor(() => expect(calls.some(c => c.url === "/api/sessions/c1/unarchive")).toBe(true));
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/c/c1"));
+    expect(screen.queryByRole("button", { name: "復原" })).toBeNull();
+  });
+
+  it("shelf shows how many chats are archived; clicking opens the archive section in settings", async () => {
+    localStorage.setItem("hyenovel.shelf", "open");
+    boxed = [{ session: "z1", slug: null, title: null, archived_at: 1, last_at: 1, preview: "舊的" }];
+    mount();
+    const entry = await within(await screen.findByRole("region", { name: "聊天" })).findByRole("button", { name: /封存的局/ });
+    expect(entry.textContent).toContain("1");
+    fireEvent.click(entry);
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/settings"));
+    expect(screen.getByRole("button", { name: "封存" }).getAttribute("aria-current")).toBe("true");
+  });
+
   it("before any chat, /clear explains it has nothing to do and sends nothing", async () => {
     mount();
     const b = await box();
@@ -260,20 +283,14 @@ describe("進門聊天", () => {
     expect(calls.some(c => c.url === "/api/discuss" || c.url.endsWith("/clear"))).toBe(false);
   });
 
-  it("once the chat has started, a long paste stays a message; over the chat limit it becomes a submit bar", async () => {
+  it("once the chat has started, a long paste stays a message; over the chat limit it becomes an attachment", async () => {
     recent = [free("c1", "聊海")];
     chat = { c1: detail("c1") };
     mount("/c/c1");
     await screen.findByText("c1 的話");
     const b = await box() as HTMLTextAreaElement;
     fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(8001) } });
-    expect(await screen.findByText("8001 字")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "取消" }));
-    await waitFor(() => expect(confirmBtn()).toBeNull());
-    fireEvent.paste(b, { clipboardData: { getData: () => "字".repeat(2001) } });
-    fireEvent.change(b, { target: { value: "字".repeat(2001) } });
-    fireEvent.keyDown(b, { key: "Enter" });
-    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ session_id: "c1" }));
+    await waitFor(() => expect(calls.find(c => c.url === "/api/discuss")?.body).toMatchObject({ session_id: "c1", attach: { name: "字".repeat(40) } }));
     expect(confirmBtn()).toBeNull();
   });
 

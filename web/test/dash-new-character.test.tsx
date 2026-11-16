@@ -78,12 +78,15 @@ describe("問卷資料", () => {
 });
 
 describe("作答", () => {
-  it("只問兩題,都可留白直接生成", async () => {
+  it("兩題都空不能生成(會花額度);只寫第二題也能生成", async () => {
     mount();
+    expect(go().disabled).toBe(true);
+    expect(screen.getByText("先寫一題,或按骰子")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("你想要它怎麼讀?"), { target: { value: "慢慢來" } });
     expect(go().disabled).toBe(false);
     fireEvent.click(go());
     await screen.findByRole("tab", { name: /^門縫1/ });
-    expect(bodies[0]).toEqual({ answers: { form: "", wish: "" }, lang: "zh-Hant" });
+    expect(bodies[0]).toEqual({ answers: { form: "", wish: "慢慢來" }, lang: "zh-Hant" });
   });
   it("送出兩題的答案,去掉前後空白", async () => {
     mount();
@@ -234,6 +237,7 @@ describe("面板", () => {
   it("英文介面卡上用英文名", async () => {
     setLang("en");
     mount();
+    fireEvent.change(document.getElementById("nc-form")!, { target: { value: "crack" } });
     fireEvent.click(button("Generate candidates"));
     await screen.findByRole("tab", { name: /^Crack 1/ });
     fireEvent.click(screen.getByRole("tab", { name: /^Crack 1/ }));
@@ -323,6 +327,7 @@ describe("答案條", () => {
   it("英文介面上一批用英文名和介紹", async () => {
     setLang("en");
     mount();
+    fireEvent.change(document.getElementById("nc-form")!, { target: { value: "crack" } });
     fireEvent.click(button("Generate candidates"));
     await screen.findByRole("tab", { name: /^Crack 1/ });
     fireEvent.click(button("Another batch"));
@@ -431,7 +436,7 @@ describe("改候選與存卡", () => {
   const revise = (n: number, text = "再冷一點") => {
     const p = pick(n);
     fireEvent.change(box(p), { target: { value: text } });
-    fireEvent.click(p.getByRole("button", { name: "修改" }));
+    fireEvent.click(p.getByRole("button", { name: "送出修改" }));
     return p;
   };
   const last = () => bodies[bodies.length - 1] as unknown as Record<string, any>;
@@ -440,7 +445,7 @@ describe("改候選與存卡", () => {
     await toResults();
     const p = pick(1);
     box(p);
-    const send = p.getByRole("button", { name: "修改" }) as HTMLButtonElement;
+    const send = p.getByRole("button", { name: "送出修改" }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
     fireEvent.change(box(p), { target: { value: "   " } });
     expect(send.disabled).toBe(true);
@@ -488,8 +493,9 @@ describe("改候選與存卡", () => {
     await toResults();
     replies = [new Promise<Response>(() => {}) as unknown as Response];
     const p = revise(1);
+    expect(tab(1).querySelector(".nc-clock")).toBeNull();
     fireEvent.click(p.getByRole("button", { name: "停下" }));
-    await waitFor(() => expect(panel().getByRole("button", { name: "修改" })).toBeTruthy());
+    await waitFor(() => expect(panel().getByRole("button", { name: "送出修改" })).toBeTruthy());
     expect(tab(1)).toBeTruthy();
     expect((box(panel())).value).toBe("再冷一點");
     expect(screen.queryByRole("alert")).toBeNull();
@@ -508,7 +514,7 @@ describe("改候選與存卡", () => {
     await toResults();
     replies = [{ ok: true, status: 200, json: () => Promise.reject(new DOMException("aborted", "AbortError")) } as unknown as Response];
     revise(1);
-    await waitFor(() => expect(panel().getByRole("button", { name: "修改" })).toBeTruthy());
+    await waitFor(() => expect(panel().getByRole("button", { name: "送出修改" })).toBeTruthy());
     expect(screen.queryByRole("alert")).toBeNull();
   });
   it("失敗時原內容和回饋都留著,原因顯示在那張的面板", async () => {
@@ -535,12 +541,14 @@ describe("改候選與存卡", () => {
     await waitFor(() => expect(tab(9).hasAttribute("data-draw")).toBe(true));
     expect(tab(7).hasAttribute("data-draw")).toBe(false);
   });
-  it("存之前可改名字,名字只在面板裡;改過的會送出,存完回清單並帶新角色 id", async () => {
+  it("存之前可改名字,卡上即時跟著變;改過的會送出,存完回清單並帶新角色 id", async () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     expect(tabs()[0].hasAttribute("data-using")).toBe(true);
     fireEvent.change(screen.getByLabelText("名字"), { target: { value: "我取的" } });
     fireEvent.change(screen.getByLabelText("一句介紹"), { target: { value: "慢慢聽" } });
+    expect(tabs()[0].querySelector(".nc-name")!.textContent).toBe("我取的");
+    expect(tabs()[0].querySelector(".nc-line")!.textContent).toBe("慢慢聽");
     fireEvent.change(screen.getByLabelText("讀法"), { target: { value: "我改的讀法" } });
     replies = [json({ created: true, character: { id: "new1" } }, 201)];
     fireEvent.click(button("存"));
@@ -728,6 +736,7 @@ describe("離開再回來", () => {
     let release = (_: Response) => {};
     replies = [new Promise<Response>(r => { release = r; }) as unknown as Response];
     const view = mount();
+    fireEvent.change(formBox(), { target: { value: "門縫" } });
     fireEvent.click(go());
     view.unmount();
     release(json({ seed: 1, candidates: [candidate(1), candidate(2), candidate(3)] }));
@@ -785,7 +794,7 @@ describe("離開再回來", () => {
     const view = mount();
     const p = pick(2);
     fireEvent.change(box(p), { target: { value: "再冷一點" } });
-    fireEvent.click(p.getByRole("button", { name: "修改" }));
+    fireEvent.click(p.getByRole("button", { name: "送出修改" }));
     view.unmount();
     mount();
     expect(tab(2).getAttribute("aria-selected")).toBe("true");

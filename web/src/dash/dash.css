@@ -40,8 +40,9 @@
 @media (prefers-reduced-motion:reduce){ .dash-key{transition:none} }
 .dash button, .dash select{font:inherit; color:inherit}
 .dash-note{display:grid; place-items:center}
-.dash-desk{padding:0; color:var(--dash-ink-2); overflow:auto; min-width:0}
-.dash-desk:not(:has(.reader)){padding:32px}
+.dash-desk{--desk-pad:32px; padding:0; color:var(--dash-ink-2); overflow:auto; min-width:0; scrollbar-gutter:stable}
+.dash-desk:not(:has(.reader)){padding:var(--desk-pad)}
+.dash[data-narrow="true"] .dash-desk{--desk-pad:16px}
 .dash .rail-title{font-family:var(--serif); font-size:var(--dash-t-md)}
 .dash .rail-dot{flex:none; width:7px; height:7px; border-radius:50%}
 .dash .rail-dot[data-state="fresh"]{background:var(--dash-accent)}
@@ -81,25 +82,39 @@
   text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
 .dash .chat-ver{display:flex; align-items:center; justify-content:center; gap:4px; margin:2px 0 4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .chat-ver .ico{width:14px; height:14px}
-.dash .chat-tools{box-sizing:border-box; display:flex; justify-content:flex-end; gap:2px; width:calc(100% - 32px); max-width:36em; margin:0 auto; padding:6px 0 0; color:var(--dash-ink-2)}
 .dash .chat-cut{display:flex; align-items:center; gap:10px; margin-block:6px; color:var(--dash-ink-2)}
 .dash .chat-cut::before, .dash .chat-cut::after{content:""; flex:1; height:1px; background:color-mix(in srgb, var(--dash-ink-2) 40%, transparent)}
 .dash .chat-cut > .ico{width:14px; height:14px; opacity:.7}
-.dash .chat-cut.is-compact{display:block}
-.dash .chat-cut.is-compact::before, .dash .chat-cut.is-compact::after{content:none}
-.dash .chat-cut.is-compact > summary{display:flex; align-items:center; gap:10px; list-style:none; cursor:pointer; color:var(--dash-ink-2)}
-.dash .chat-cut.is-compact > summary::before, .dash .chat-cut.is-compact > summary::after{content:""; flex:1; height:1px; background:color-mix(in srgb, var(--dash-ink-2) 40%, transparent)}
-.dash .chat-cut.is-compact > summary:hover{color:var(--dash-ink)}
-.dash .chat-cut.is-compact > summary:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px; border-radius:4px}
-.dash .chat-cut.is-compact > summary::-webkit-details-marker{display:none}
-.dash .chat-cut.is-compact > summary .ico{width:14px; height:14px}
-.dash .chat-cut.is-compact > p{margin:8px 0 0; padding-left:12px; border-left:1px solid color-mix(in srgb, var(--dash-ink-2) 40%, transparent); white-space:pre-wrap; font-family:var(--serif); font-size:var(--dash-t-sm); line-height:1.7; color:var(--dash-ink-2)}
-.dash .chat-att{display:flex; align-items:center; gap:6px; box-sizing:border-box; padding:8px 12px; border:1px solid var(--dash-line); border-radius:6px;
-  background:var(--dash-desk-2); box-shadow:var(--dash-sh-raise); font-size:var(--dash-t-sm)}
-.dash .chat-att > span{color:var(--dash-ink-2)}
+.dash .chat-cut > span{font-size:var(--dash-t-xs); letter-spacing:.04em}
+.dash .chat-sum{flex:none; align-self:center; box-sizing:border-box; width:calc(100% - 32px); max-width:36em; max-height:10.5em; margin:-6px auto 0; padding:10px 14px 10px 16px; overflow:hidden; cursor:pointer;
+  border-left:2px solid color-mix(in srgb, var(--dash-ink-2) 45%, transparent); background:var(--dash-paper); font-family:var(--serif); line-height:1.75; color:var(--dash-paper-ink);
+  -webkit-mask-image:linear-gradient(to bottom, black 60%, transparent); mask-image:linear-gradient(to bottom, black 60%, transparent)}
+.dash .chat-sum[data-open]{max-height:none; -webkit-mask-image:none; mask-image:none}
+.dash .chat-sum > *{margin:0 0 .5em; font-size:var(--dash-t-sm)}
+.dash .chat-sum > :last-child{margin-bottom:0}
+.dash .chat-sum :is(ul, ol){padding-left:1.4em}
+.dash .chat-sum strong{font-weight:600}
+.dash .chat-sum:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.dash .chat-log [data-past]:not(.chat-att, .chat-sum){opacity:.5; transition:opacity .2s}
+.dash .chat-log [data-past]:not(.chat-att, .chat-sum):is(:hover, :focus-within){opacity:.8}
+.dash .chat-log :is(.chat-att, .chat-sum)[data-past]{color:var(--dash-paper-ink-2)}
+.dash .chat-att{display:flex; flex-wrap:wrap; align-items:center; gap:6px; box-sizing:border-box; padding:8px 12px; border-radius:2px 10px 2px 2px;
+  background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:0 1px 0 var(--dash-line)}
+.dash .chat-att > *{font-size:var(--dash-t-sm)}
+.dash .chat-att-name{display:inline-flex; flex:1 1 auto; align-items:center; gap:6px; min-width:0; padding:0; border:0; background:none; font:inherit; color:inherit; cursor:pointer; text-align:left}
+.dash .chat-att-name b{min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600}
+.dash .chat-att-name > span{flex:none; white-space:nowrap}
+.dash .chat-att-name:hover b{text-decoration:underline; text-decoration-color:var(--dash-line); text-underline-offset:3px}
+.dash .chat-att-name:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px; border-radius:3px}
+.dash .chat-att-head{flex-basis:100%; margin:2px 0 0; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; white-space:pre-wrap;
+  font-family:var(--serif); line-height:1.7; color:var(--dash-paper-ink-2)}
+.dash .chat-log > .chat-att + .chat-me{margin-top:-14px}
+.dash .chat-att-name > span{color:var(--dash-ink-2)}
 .dash .chat-att .ico{width:14px; height:14px}
-.dash .chat-att-adopt{margin-left:auto; display:inline-flex; align-items:center; gap:4px; padding:3px 8px; cursor:pointer; border:1px solid var(--dash-line);
-  border-radius:6px; background:transparent; color:var(--dash-ink); font-size:var(--dash-t-xs)}
+.dash .chat-att-adopt{margin-left:auto; display:inline-flex; align-items:center; gap:4px; padding:2px 4px; cursor:pointer; border:0;
+  border-radius:4px; background:transparent; color:var(--dash-accent); font-size:var(--dash-t-xs)}
+.dash .chat-att-adopt:hover:not(:disabled){text-decoration:underline; text-underline-offset:3px}
+.dash .chat-att-adopt:disabled{cursor:not-allowed; opacity:.5}
 .dash .chat-log > .chat-att{width:auto; max-width:min(30em, 85%); margin-right:max(0px, calc((100% - 36em) / 2)); align-self:flex-end}
 .dash .chat-turn{border-radius:8px; font-family:var(--serif)}
 .dash .chat-text .dash-iq{text-decoration:underline wavy color-mix(in srgb, var(--dash-paper-ink-2) 75%, transparent); text-decoration-thickness:1px; text-underline-offset:.42em; text-decoration-skip-ink:none}
@@ -181,10 +196,26 @@
 .dash .composer textarea:disabled{cursor:not-allowed}
 .dash .slash-menu{position:absolute; right:0; bottom:calc(100% + 8px); z-index:6; min-width:220px; margin:0; padding:4px; list-style:none; background:var(--dash-paper); border-radius:8px; box-shadow:var(--dash-sh-float)}
 .dash .slash-menu button{display:flex; align-items:baseline; gap:10px; width:100%; padding:6px 10px; border:0; border-radius:6px; background:none; text-align:left; font:inherit; font-size:var(--dash-t-sm); color:var(--dash-ink-2); cursor:pointer}
+.dash .slash-menu .ico{width:14px; height:14px; align-self:center; color:var(--dash-ink-2)}
+.dash .slash-menu small{margin-left:auto; padding-left:12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2); white-space:nowrap}
 .dash .slash-menu b{font-weight:600; color:var(--dash-ink); font-variant-numeric:tabular-nums}
 .dash .slash-menu [aria-selected="true"] button, .dash .slash-menu button:hover{background:var(--dash-line)}
 .dash .slash-menu button:disabled{cursor:not-allowed; opacity:.5}
 .dash .slash-menu .slash-note{padding:4px 10px 2px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .shelf-boxed{display:flex; align-items:center; gap:6px; width:100%; margin-top:2px; padding:4px 16px 4px 8px; border:0; border-radius:6px; background:none; font:inherit; font-size:var(--dash-t-xs); color:var(--dash-ink-2); cursor:pointer; text-align:left}
+.dash .shelf-boxed:hover{color:var(--dash-ink); background:var(--dash-line)}
+.dash .shelf-boxed .ico{width:13px; height:13px}
+.dash .shelf-boxed > span:last-child{margin-left:auto; font-variant-numeric:tabular-nums}
+.dash .shelf-sess .shelf-gone{display:flex; align-items:center; gap:8px; padding:4px 8px; font-size:var(--dash-t-sm); color:var(--dash-ink-2); white-space:nowrap; animation:nc-in .2s ease-out both}
+.dash .shelf-sess .shelf-gone button{width:auto; margin-left:auto; padding:0 2px; border-radius:0; background:none; font:inherit; color:var(--dash-accent)}
+.dash .shelf-sess .shelf-gone button:hover{background:none; text-decoration:underline; text-underline-offset:3px}
+.dash .chat-staged{display:flex; align-items:center; gap:6px; margin:8px 10px 0; padding:6px 4px 6px 10px; border-radius:2px 8px 2px 2px; background:var(--dash-desk-2); font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .chat-staged .ico{width:14px; height:14px; flex:none}
+.dash .chat-staged b{min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600}
+.dash .chat-staged > span{flex:none; color:var(--dash-ink-2)}
+.dash .chat-staged .ib{margin-left:auto}
+.dash .composer .bar-sep{width:1px; height:14px; margin:0 8px; background:var(--dash-line)}
+.dash .composer .bar-arm{display:inline-flex; align-items:center; width:auto; gap:6px; padding:0 10px 0 8px; white-space:nowrap; border-radius:6px; background:var(--dash-desk-2); color:var(--dash-ink); font-size:var(--dash-t-xs)}
 .dash .composer .bar{display:flex; align-items:center; gap:2px; padding:0 8px 6px}
 .dash .composer .bar .send{margin-left:auto; color:var(--dash-accent)}
 .dash .composer .bar .send:disabled{cursor:not-allowed; color:var(--dash-ink-2); opacity:.5}
@@ -208,8 +239,6 @@
 .dash .home-talk .composer{margin-top:136px}
 .dash .home-talk .composer > .who{width:172px; height:152px; margin-bottom:-26px; left:-44px}
 .dash .home-talk .composer textarea{min-height:78px; font-size:var(--dash-t-md); padding:14px 16px 4px}
-.dash .home-draft{display:flex; flex-direction:column; gap:8px; margin:0 16px; padding:14px 18px 10px; background:var(--dash-paper); border-radius:10px; box-shadow:var(--dash-sh-float)}
-.dash .home-draft-msg{margin:0 16px}
 @media (max-width:860px){
   .dash .home-talk .composer{margin-top:100px}
   .dash .home-talk .composer > .who{width:120px; height:106px; margin-bottom:-18px; left:10px}
@@ -373,7 +402,7 @@
 .dash .dash-set-archive section{margin:0 0 26px}
 .dash .dash-set-archive .dash-set-count{margin:-16px 0 24px}
 .dash .dash-set-archive > .set-group-h + .dash-set-count{margin:0 0 20px}
-.dash .dash-set-archive h2{font-size:var(--dash-t-sm); letter-spacing:0; color:var(--dash-ink)}
+.dash .dash-set-archive h2:not(.set-group-h){font-size:var(--dash-t-sm); letter-spacing:0; color:var(--dash-ink)}
 .dash .dash-set-archive h2 .dash-dm{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .dash-set-archive li{list-style:none; margin:0}
 .dash .dash-set-archived{margin:0 0 32px}
@@ -457,7 +486,8 @@
 .dash .shelf-chats{padding:0 8px 6px; margin-bottom:6px; border-bottom:1px solid var(--dash-line)}
 .dash .shelf-chats-h{display:flex; align-items:center; justify-content:space-between; padding:2px 0 2px 8px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .shelf-chats-h b{font-weight:500}
-.dash .shelf-chats .shelf-sess{margin:0; max-height:9.5em; overflow:auto}
+.dash .shelf-chats .shelf-sess{margin:0}
+.dash .shelf-chats .shelf-sess[data-all]{max-height:14em; overflow:auto}
 .dash .shelf-works{list-style:none; margin:0; padding:2px 8px 16px; overflow:auto; flex:1 1 auto; min-height:0}
 .dash .shelf-work > button{
   display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px; width:100%; padding:8px 8px 6px; cursor:pointer;
@@ -516,7 +546,7 @@
 .dash .nc-mark{flex:none; width:9px; height:9px; border:1px solid var(--dash-paper-ink-2); border-radius:50%}
 .dash .nc-edit{display:block; flex:1; width:100%; min-width:0; margin:4px 10px 4px 0; padding:4px 0; border:0; border-bottom:1px solid var(--dash-accent); outline:0; border-radius:0; background:none; resize:none; field-sizing:content; font-family:var(--serif); font-size:var(--dash-t-md); line-height:1.7; color:inherit}
 .dash .nc-foot{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:20px}
-.dash .nc-foot .dash-key:disabled{cursor:not-allowed; color:var(--dash-ink-2); box-shadow:none; transform:none}
+.dash .nc-foot .dash-key:disabled{cursor:not-allowed; color:var(--dash-ink-2); box-shadow:none; transform:none; opacity:.5}
 .dash .nc-note{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .nc-err{margin:14px 0 0; font-size:var(--dash-t-sm); color:var(--dash-ink)}
 .dash :is(.char-card, .char-pop, .char-sheet) .fig{--dash-ink:var(--dash-paper-ink)}
@@ -545,7 +575,7 @@
 .dash .nc-state .nc-note{color:var(--dash-paper-ink-2)}
 .dash .nc-ghost .fig{--fig-lead:var(--dash-paper-ink-2)}
 .dash .nc-ghost .fig .lid{animation:none}
-.dash .nc-ghost-fig{animation:nc-hold 4.2s linear both}
+.dash .nc-ghost-fig{display:inline-block; vertical-align:top; animation:nc-hold 4.2s linear both}
 .dash .nc-ghost .fig[data-state] .shape{animation:none}
 .dash .nc-ghost .fig path{stroke-dasharray:320; stroke-dashoffset:320; animation:nc-sketch 1.5s cubic-bezier(.4,0,.3,1) both; animation-delay:calc(var(--nc-d, 0s) + var(--nc-g, 0s))}
 .dash :is(.nc-ghost, .nc-tab[data-draw]) .fig .tail{--nc-g:.2s}
@@ -558,12 +588,12 @@
 .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:nc-in .5s ease-out both; animation-delay:calc(var(--nc-d, 0s) + 1.6s)}
 @keyframes nc-sketch{to{stroke-dashoffset:0}}
 @keyframes nc-fill{from{fill-opacity:0}}
-@keyframes nc-hold{0%,82%{opacity:1} 100%{opacity:0}}
+@keyframes nc-hold{0%,80%{clip-path:inset(0 0 0 0)} 100%{clip-path:inset(0 0 0 100%)}}
 @keyframes nc-in{from{opacity:0}}
 @keyframes nc-fold{from{opacity:0; transform:perspective(700px) rotateX(-70deg)}}
 @keyframes nc-open{from{opacity:0; transform:translateY(-6px)}}
 @media (prefers-reduced-motion:reduce){
-  .dash .nc-ghost-fig, .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path, .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:none}
+  .dash .nc-tab[data-retitle] :is(.nc-name, .nc-line), .dash .nc-ghost-fig, .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path, .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:none}
   .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path{stroke-dasharray:none; stroke-dashoffset:0}
 }
 .dash .nc-againline{flex:1 1 22em; display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--dash-paper-ink-2)}
@@ -579,6 +609,15 @@
 .dash .nc-home{--nc-fig:168px; --nc-gap:16px; max-width:816px}
 .dash .nc-strip{display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin:0 0 22px; padding:12px 12px 12px 20px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink);
   box-shadow:var(--dash-sh-raise), 0 3px 0 -1px var(--dash-paper), 0 3px 0 0 var(--dash-line); transform-origin:50% 0}
+.dash .nc-strip{position:sticky; top:0; z-index:3; transition:box-shadow .2s, padding .2s}
+.dash .nc-strip[data-stuck]::before{content:""; position:absolute; left:-2px; right:-2px; bottom:100%; height:var(--desk-pad); background:var(--dash-desk)}
+.dash .nc-panel .char-edit.is-sheet .char-edit-foot::after{content:""; position:absolute; left:0; right:0; top:100%; height:var(--desk-pad); background:var(--dash-desk)}
+.dash .nc-strip[data-stuck]{box-shadow:var(--dash-sh-float); padding-block:8px}
+.dash .nc-strip[data-stuck] .nc-asked span{display:none}
+.dash .nc-pin{display:block; height:0}
+.dash .nc-strip .nc-swap:disabled{opacity:.5}
+.dash .nc-stop{color:var(--dash-paper-ink); font-size:var(--dash-t-sm)}
+.dash .nc-state > .nc-note{flex-basis:100%; text-align:right; font-size:var(--dash-t-xs)}
 .dash .nc-strip[data-anim="fold"], .dash .nc-ans[data-anim="unfold"] .nc-sheet{animation:nc-fold .3s ease-out both; transform-origin:50% 0}
 .dash .nc-ans{margin:0 0 22px}
 .dash .nc-fold{position:absolute; top:10px; right:10px; color:var(--dash-paper-ink-2)}
@@ -643,8 +682,11 @@
 .dash .nc-ex .nc-talk:first-of-type{padding-top:4px}
 .dash .nc-revise input:read-only{color:var(--dash-paper-ink-2)}
 .dash .nc-panel .char-edit.is-sheet .char-edit-foot{position:sticky; bottom:0; z-index:1; margin:8px -28px -22px; padding:24px 28px 16px; background:linear-gradient(to bottom, transparent, var(--dash-paper) 22px)}
-.dash .nc-tab[data-using] :is(.nc-name, .nc-line){visibility:hidden}
 .dash .nc-tab:disabled{cursor:default}
+.dash .nc-tab:disabled:not([data-using]){opacity:.45}
+.dash .nc-tab[data-retitle] :is(.nc-name, .nc-line){animation:nc-in .5s ease-out both}
+.dash .nc-clock{margin-top:4px; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
+.dash .nc-panel .char-edit.is-sheet .char-edit-foot:not([data-asking]){flex-direction:row-reverse; justify-content:flex-start}
 .dash .char-new-slot > .nc-mini{display:flex; align-items:flex-end; justify-content:center; gap:2px; width:auto; height:64px; border:0; border-radius:0}
 .dash .nc-mini .dash-dm{align-self:center; margin-left:4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .char-pop[data-fresh="true"] .char-stage .fig{animation:char-standup .6s cubic-bezier(.2, .9, .3, 1.2) both}
@@ -658,6 +700,21 @@
   .dash .nc-panel{padding:18px 16px}
   .dash .nc-panel .char-edit.is-sheet .char-edit-foot{margin:8px -16px -18px; padding:24px 16px 14px}
   .dash .nc-strip{padding-left:14px}
+  .dash .nc-tabs{grid-template-columns:minmax(0, 1fr)}
+  .dash .nc-card{display:grid; grid-template-columns:var(--nc-fig) minmax(0, 1fr); grid-template-rows:1fr auto auto auto 1fr; column-gap:14px; padding:0; text-align:left}
+  .dash .nc-card .char-stage{grid-row:1 / -1; align-self:stretch}
+  .dash .nc-card :is(.nc-name, .nc-line, .nc-clock, .nc-blank){grid-column:2; margin:0; padding:0 12px 0 0}
+  .dash .nc-card :is(.nc-name, .nc-blank){grid-row:2}
+  .dash .nc-card .nc-line{grid-row:3}
+  .dash .nc-card .nc-clock{grid-row:4}
+  .dash .nc-name{margin-top:0}
+  .dash .nc-line{-webkit-line-clamp:1}
+  .dash .nc-blank{height:calc(var(--dash-t-md) * 1.3 + var(--dash-t-xs) * 1.6)}
+  .dash .nc-tab[aria-selected="true"]{margin-bottom:0; padding-bottom:0; border-radius:4px; clip-path:none; outline:2px solid color-mix(in srgb, var(--dash-accent) 50%, transparent); outline-offset:0}
+  .dash .nc-tabs{padding-bottom:12px}
+  .dash .nc-panel, .dash .nc-panel[data-at]{border-radius:4px}
+  .dash .nc-strip[data-stuck] .nc-swap-t{display:none}
+  .dash .nc-strip[data-stuck] .nc-asked{flex:1 1 0}
 }
 @media (prefers-reduced-motion:reduce){
   .dash .nc-tab, .dash .nc-tab:hover, .dash .nc-tab[aria-selected="true"]{--lift:0px; transition:none}
