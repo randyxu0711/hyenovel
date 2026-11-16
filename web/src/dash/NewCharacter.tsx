@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 import { api, DashError, type CardDraft, type Candidate, type CandidateAgain, type Character } from "./api";
 import Figure, { type FigureState } from "./Figure";
 import CardEditor, { candidateLimits } from "./CardEditor";
@@ -50,14 +50,14 @@ function FormingSlip({ slot }: { slot: number }) {
     const first = setTimeout(() => {
       setK(n => n + 1);
       id = setInterval(() => setK(n => n + 1), SKETCH);
-    }, SKETCH + slot * 700);
+    }, SKETCH + slot * 250);
     return () => { clearTimeout(first); clearInterval(id); };
   }, [slot]);
   const pose = poses[k % poses.length];
   return (
     <div className="nc-card nc-ghost">
       <span className="char-stage">
-        <span key={k} className="nc-ghost-fig" style={k === 0 ? { animationDelay: `${slot * 0.7}s`, "--nc-d": `${slot * 0.7}s` } as CSSProperties : undefined}>
+        <span key={k} className="nc-ghost-fig" style={k === 0 ? { animationDelay: `${slot * 0.25}s`, "--nc-d": `${slot * 0.25}s` } as CSSProperties : undefined}>
           <Figure character={placeholder(`slot${slot}-${pose}`, pose)} size={FIG} />
         </span>
       </span>
@@ -122,6 +122,10 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   const [revised, setRevised] = useState<number | null>(null);
   const [speaking, setSpeaking] = useState<number | null>(null);
   const [err, setErr] = useState<Fault | null>(null);
+  const [mirror, setMirror] = useState<{ name: string; line: string } | null>(null);
+  const [stuck, setStuck] = useState(false);
+  const pin = useRef<HTMLSpanElement>(null);
+  const onTitle = useCallback((name: string, line: string) => setMirror({ name, line }), []);
   const live = useRef(true);
   const done = useRef(false);
   const landed = useRef(false);
@@ -219,6 +223,14 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
   }, [fold]);
 
   const home = batch !== null || generating;
+  useEffect(() => {
+    const el = pin.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [home, fold]);
+  useEffect(() => { if (using === null) setMirror(null); }, [using]);
   const stale = !!batch && !!asked && !generating && (form.trim() !== asked.form || wish.trim() !== asked.wish);
 
   const generate = (again?: CandidateAgain) => {
@@ -319,14 +331,15 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
       </div>
       {pageAlert}
       <div className="nc-foot">
-        <button type="button" className="dash-key" disabled={revising !== null} onClick={() => generate()}>{t("nc.generate")}</button>
+        <button type="button" className="dash-key" disabled={revising !== null || (!form.trim() && !wish.trim())}
+          title={!form.trim() && !wish.trim() ? t("nc.needAnswer") : undefined} onClick={() => generate()}>{t("nc.generate")}</button>
         <span className="nc-note">{t("nc.costs")}</span>
       </div>
     </div>
   );
 
   const strip = (
-    <div className="nc-strip" data-anim={anim === "fold" ? "fold" : undefined}>
+    <div className="nc-strip" data-anim={anim === "fold" ? "fold" : undefined} data-stuck={stuck || undefined}>
       <p className="nc-asked">
         {form.trim() || wish.trim()
           ? <>{form.trim() && <b>{form.trim()}</b>}{wish.trim() && <span>{wish.trim()}</span>}</>
@@ -335,17 +348,17 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
       <div className="nc-strip-acts">
         {generating ? (
           <p className="nc-state" role="status">
-            {t("nc.generating")} <span className="dash-dm">{clock(elapsed)}</span>
-            <button type="button" className="ib" aria-label={t("run.stop")} title={t("run.stop")} onClick={stop}><Icon name="stop" /></button>
             <span className="nc-note">{t("nc.leaveOk")}</span>
+            {t("nc.generating")} <span className="dash-dm">{clock(elapsed)}</span>
+            <button type="button" className="nc-swap nc-stop" onClick={stop}><Icon name="stop" />{t("run.stop")}</button>
           </p>
         ) : fold === "again" ? (
           <button type="button" className="ib" aria-label={t("nc.fold")} title={t("nc.fold")} onClick={closeFold}><Icon name="close" /></button>
         ) : (
           <>
-            <button type="button" ref={editRef} className="ib" aria-label={t("nc.editAnswers")} title={t("nc.editAnswers")} disabled={using !== null} onClick={openAnswers}><Icon name="edit" /></button>
+            <button type="button" ref={editRef} className="nc-swap" disabled={using !== null} onClick={openAnswers}><Icon name="edit" />{t("nc.editAnswers")}</button>
             <button type="button" ref={swapRef} className="nc-swap" aria-expanded={false} disabled={revising !== null || using !== null}
-              onClick={() => { setErr(null); setFold("again"); }}><Icon name="swap" />{t("nc.again")}</button>
+              onClick={() => { setErr(null); setFold("again"); }}><Icon name="again" />{t("nc.again")}</button>
           </>
         )}
       </div>
@@ -363,7 +376,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
           </div>
           <div className="nc-again-foot">
             <span className="nc-note">{t("nc.costs")}</span>
-            <button type="submit" className="dash-key" disabled={revising !== null}><Icon name="swap" />{t("nc.again")}</button>
+            <button type="submit" className="dash-key" disabled={revising !== null}><Icon name="again" />{t("nc.again")}</button>
           </div>
         </form>
       )}
@@ -371,9 +384,10 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     </div>
   );
 
-  const title = (c: Candidate) => {
-    const name = localized(c.name, lang);
-    const line = localized(c.line, lang);
+  const title = (c: Candidate, i: number) => {
+    const typed = using === i ? mirror : null;
+    const name = typed?.name ?? localized(c.name, lang);
+    const line = typed?.line ?? localized(c.line, lang);
     if (name === localized(c.form, lang)) return <b className="nc-name" data-lined="true">{line}</b>;
     return <><b className="nc-name">{name}</b><span className="nc-line">{line}</span></>;
   };
@@ -387,7 +401,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
     return (
       <section role="tabpanel" id="nc-panel" aria-labelledby={`nc-tab-${i}`} className="nc-panel" data-at={i}>
         {using === i ? (
-          <CardEditor key={`${batchNo}-${i}`} sheet draft={c} limits={candidateLimits(lang)}
+          <CardEditor key={`${batchNo}-${i}`} sheet draft={c} limits={candidateLimits(lang)} onTitle={onTitle}
             onSave={(d, confirm) => save(i, d, confirm)} onCancel={() => setUsing(null)} />
         ) : (
           <div key={`${i}-${lookKey(c)}-${localized(c.line, lang)}`} className="nc-panel-body" data-fresh={revised === i || undefined}>
@@ -425,13 +439,12 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
                     {busy ? (
                       <p className="nc-state" role="status">
                         <span className="dash-dm">{clock(elapsed)}</span>
-                        <button type="button" className="ib" aria-label={t("run.stop")} title={t("run.stop")}
-                          onClick={e => { if (e.detail <= 1) stop(); }}><Icon name="stop" /></button>
+                        <button type="button" className="nc-swap nc-stop" onClick={e => { if (e.detail <= 1) stop(); }}><Icon name="stop" />{t("run.stop")}</button>
                       </p>
                     ) : (
                       <>
                         <span className="nc-note">{t("nc.costs")}</span>
-                        <button type="submit" className="dash-key" disabled={locked || !text.trim()}><Icon name="again" />{t("nc.revise")}</button>
+                        <button type="submit" className="dash-key" disabled={locked || !text.trim()}>{t("nc.reviseSend")}</button>
                       </>
                     )}
                   </div>
@@ -441,7 +454,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
                   {err?.card === i && <p className="nc-err" role="alert">{t(err.key)}</p>}
                   <div className="nc-acts-row">
                     <button type="button" ref={reviseKey} className="nc-swap" disabled={locked} onClick={() => { setErr(null); setReviseOpen(i); }}>
-                      <Icon name="again" />{t("nc.revise")}
+                      {t("nc.revise")}
                     </button>
                     <button type="button" ref={useKey} className="dash-key nc-use" disabled={locked} onClick={() => setUsing(i)}>{t("nc.use")}</button>
                   </div>
@@ -465,14 +478,15 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
             return (
               <button key={`${batchNo}-${i}`} ref={el => { tabs.current[i] = el; }} type="button" role="tab" id={`nc-tab-${i}`}
                 className="nc-card nc-tab" aria-selected={picked === i} aria-controls={picked === i ? "nc-panel" : undefined}
-                tabIndex={(picked ?? 0) === i ? 0 : -1} data-draw={draw || undefined}
+                tabIndex={(picked ?? 0) === i ? 0 : -1} data-draw={draw || undefined} data-retitle={(revised === i && !draw) || undefined}
                 disabled={using !== null && using !== i} data-using={using === i || undefined}
                 style={draw && drawn.stagger ? { "--nc-d": `${i * 0.3}s` } as CSSProperties : undefined}
                 onClick={() => (picked === i && using !== i ? setPicked(null) : choose(i))} onKeyDown={e => onTabKey(e, i)}>
                 <span className="char-stage">
                   <span key={lookKey(c)} className="nc-fig"><Figure character={figureOf(c, lang)} size={FIG} state={figureState(i)} /></span>
                 </span>
-                {title(c)}
+                {title(c, i)}
+                {revising === i && <span className="dash-dm nc-clock" aria-hidden="true">{clock(elapsed)}</span>}
               </button>
             );
           })}
@@ -487,6 +501,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
       <button type="button" className="nc-back" onClick={onClose}><Icon name="back" />{t("nc.backToList")}</button>
       {home ? (
         <div className="nc-home">
+          <span ref={pin} className="nc-pin" aria-hidden="true" />
           {fold === "answers" && !generating ? questionnaire : strip}
           {lineup}
         </div>

@@ -553,7 +553,7 @@
 .dash .nc-state .nc-note{color:var(--dash-paper-ink-2)}
 .dash .nc-ghost .fig{--fig-lead:var(--dash-paper-ink-2)}
 .dash .nc-ghost .fig .lid{animation:none}
-.dash .nc-ghost-fig{animation:nc-hold 4.2s linear both}
+.dash .nc-ghost-fig{display:inline-block; vertical-align:top; animation:nc-hold 4.2s linear both}
 .dash .nc-ghost .fig[data-state] .shape{animation:none}
 .dash .nc-ghost .fig path{stroke-dasharray:320; stroke-dashoffset:320; animation:nc-sketch 1.5s cubic-bezier(.4,0,.3,1) both; animation-delay:calc(var(--nc-d, 0s) + var(--nc-g, 0s))}
 .dash :is(.nc-ghost, .nc-tab[data-draw]) .fig .tail{--nc-g:.2s}
@@ -566,12 +566,12 @@
 .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:nc-in .5s ease-out both; animation-delay:calc(var(--nc-d, 0s) + 1.6s)}
 @keyframes nc-sketch{to{stroke-dashoffset:0}}
 @keyframes nc-fill{from{fill-opacity:0}}
-@keyframes nc-hold{0%,82%{opacity:1} 100%{opacity:0}}
+@keyframes nc-hold{0%,80%{clip-path:inset(0 0 0 0)} 100%{clip-path:inset(0 0 0 100%)}}
 @keyframes nc-in{from{opacity:0}}
 @keyframes nc-fold{from{opacity:0; transform:perspective(700px) rotateX(-70deg)}}
 @keyframes nc-open{from{opacity:0; transform:translateY(-6px)}}
 @media (prefers-reduced-motion:reduce){
-  .dash .nc-ghost-fig, .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path, .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:none}
+  .dash .nc-tab[data-retitle] :is(.nc-name, .nc-line), .dash .nc-ghost-fig, .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path, .dash .nc-tab[data-draw] :is(.nc-name, .nc-line){animation:none}
   .dash .nc-ghost .fig path, .dash .nc-tab[data-draw] .fig .v0 path{stroke-dasharray:none; stroke-dashoffset:0}
 }
 .dash .nc-againline{flex:1 1 22em; display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--dash-paper-ink-2)}
@@ -587,6 +587,13 @@
 .dash .nc-home{--nc-fig:168px; --nc-gap:16px; max-width:816px}
 .dash .nc-strip{display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin:0 0 22px; padding:12px 12px 12px 20px; border-radius:3px; background:var(--dash-paper); color:var(--dash-paper-ink);
   box-shadow:var(--dash-sh-raise), 0 3px 0 -1px var(--dash-paper), 0 3px 0 0 var(--dash-line); transform-origin:50% 0}
+.dash .nc-strip{position:sticky; top:0; z-index:3; transition:box-shadow .2s}
+.dash .nc-strip[data-stuck]{box-shadow:var(--dash-sh-float); padding-block:8px}
+.dash .nc-strip[data-stuck] .nc-asked span{display:none}
+.dash .nc-pin{display:block; height:0}
+.dash .nc-strip .nc-swap:disabled{opacity:.5}
+.dash .nc-stop{color:var(--dash-paper-ink); font-size:var(--dash-t-sm)}
+.dash .nc-state > .nc-note{flex-basis:100%; text-align:right; font-size:var(--dash-t-xs)}
 .dash .nc-strip[data-anim="fold"], .dash .nc-ans[data-anim="unfold"] .nc-sheet{animation:nc-fold .3s ease-out both; transform-origin:50% 0}
 .dash .nc-ans{margin:0 0 22px}
 .dash .nc-fold{position:absolute; top:10px; right:10px; color:var(--dash-paper-ink-2)}
@@ -651,8 +658,11 @@
 .dash .nc-ex .nc-talk:first-of-type{padding-top:4px}
 .dash .nc-revise input:read-only{color:var(--dash-paper-ink-2)}
 .dash .nc-panel .char-edit.is-sheet .char-edit-foot{position:sticky; bottom:0; z-index:1; margin:8px -28px -22px; padding:24px 28px 16px; background:linear-gradient(to bottom, transparent, var(--dash-paper) 22px)}
-.dash .nc-tab[data-using] :is(.nc-name, .nc-line){visibility:hidden}
 .dash .nc-tab:disabled{cursor:default}
+.dash .nc-tab:disabled:not([data-using]){opacity:.45}
+.dash .nc-tab[data-retitle] :is(.nc-name, .nc-line){animation:nc-in .5s ease-out both}
+.dash .nc-clock{margin-top:4px; font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
+.dash .nc-panel .char-edit.is-sheet .char-edit-foot:not([data-asking]){flex-direction:row-reverse; justify-content:flex-start}
 .dash .char-new-slot > .nc-mini{display:flex; align-items:flex-end; justify-content:center; gap:2px; width:auto; height:64px; border:0; border-radius:0}
 .dash .nc-mini .dash-dm{align-self:center; margin-left:4px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .char-pop[data-fresh="true"] .char-stage .fig{animation:char-standup .6s cubic-bezier(.2, .9, .3, 1.2) both}
