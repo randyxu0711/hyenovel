@@ -277,6 +277,12 @@ describe("Paper 對照", () => {
     expect(container.querySelector("del.cmp-del")?.textContent).toBe("長".repeat(34));
   });
 
+  it("opened pinned delete has no collapse handle", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(40), true)], open: new Set(["d0"]) });
+    expect(container.querySelector("del.cmp-del")).not.toBeNull();
+    expect(container.querySelector("button.cmp-fold")).toBeNull();
+  });
+
   it("clean folds everything without count", () => {
     const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "丙。", true)], clean: true });
     const b = container.querySelector("button.cmp-fold")!;

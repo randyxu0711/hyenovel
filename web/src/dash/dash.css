@@ -433,7 +433,8 @@
 .dash .trace-title{padding:0; border:0; background:none; cursor:pointer; font:inherit; color:inherit; text-align:start}
 .dash .trace-q{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin:2px 0; font-family:var(--serif)}
 .dash .trace-q del, .dash .trace-old{color:var(--dash-ink-2); text-decoration:line-through; text-decoration-thickness:1px}
-.dash .trace-changed{flex-direction:column; gap:0}
+.dash .trace-changed{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px}
+.dash .trace-changed .trace-qstate{grid-column:2; grid-row:1}
 .dash .trace-gone{cursor:pointer}
 .dash .trace-qstate{margin-inline-start:auto; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .side-question{color:var(--dash-ink-2)}

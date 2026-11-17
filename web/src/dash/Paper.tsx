@@ -336,12 +336,16 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   };
 
   const hoverKey = hover ? bare(hover) : null;
+  const foldable = (id: string) => {
+    const r = cmp?.runs.find(x => x.id === id);
+    return !!r && r.op === "del" && foldOf(r, cmp!.clean, new Set());
+  };
   const cmpBody = (seg: CmpSeg) => chunks(seg).map(c => {
     if (c.kind === "text") return <span key={`t${c.at}`} data-at={c.pos}>{typeset(c.text, flow)}</span>;
     if (c.kind === "ins") return <ins key={`i${c.at}`} className="cmp-ins" data-run={c.id!} data-at={c.pos}>{typeset(c.text, flow)}</ins>;
     if (c.kind === "del") return (
       <Fragment key={`d${c.at}`}>
-        {cmp!.open.has(c.id!) && (
+        {cmp!.open.has(c.id!) && foldable(c.id!) && (
           <button type="button" className="cmp-fold" aria-expanded="true" aria-label={t("compare.unfold")} title={t("compare.unfold")}
             onClick={() => cmp!.onToggle(c.id!)}><Caret /></button>
         )}
