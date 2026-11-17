@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, DashError, type WorkDetail } from "./api";
+import { api, DashError, type Compare, type WorkDetail } from "./api";
 import { clock, stepOf } from "./clock";
+import CompareBar from "./CompareBar";
 import DropSheet from "./DropSheet";
 import Icon from "./Icon";
 import { errorMessage, useLang, useT, type MsgKey } from "./i18n";
+import { useLinks } from "./links";
+
+const narrowNow = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width:1100px)").matches;
 import Paper, { type Mark, type ObSpan } from "./Paper";
 import { useJob } from "./useJob";
 import { useSubmitDraft } from "./useSubmitDraft";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
+import { defaultOld, useCompare } from "./useCompare";
 import { whenLabel } from "./when";
 
 const ANALYZING = ["running", "notes-running"];
@@ -45,7 +50,7 @@ function VDot({ d }: { d: ReturnType<typeof dotOf> }) {
 }
 
 /** 稿窗格:頂列(標題、版本條、交新版、分析、排法)+ 紙。 */
-export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, onRenamed, marks = [], obs = [], drawing, reload = 0, focus = false, onFocus }: {
+export default function Reader({ slug, version, onQuote, onFinished, onAnalysed, onPaper, onNewVersion, onRenamed, marks = [], obs = [], drawing, reload = 0, focus = false, onFocus, onCompare }: {
   slug: string;
   onQuote: (q: string) => void;
   /** 指定版本(?v=);沒給就是最新。 */
@@ -67,6 +72,8 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   onNewVersion?: (r: { same: boolean; version: number; analyzing: boolean }) => void;
   /** 改了名字:外面重抓作品清單。 */
   onRenamed?: () => void;
+  /** 對照資料(離開對照 = null)。 */
+  onCompare?: (c: Compare | null) => void;
 }) {
   const t = useT();
   const [, setSearch] = useSearchParams();
@@ -80,12 +87,18 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   const submit = useSubmitDraft(slug);
   const slugNow = useRef(slug);
   slugNow.current = slug;
-  const [keeping, setKeeping] = useState(false);   // 送出中的是「只存版」那顆
+  const [keeping, setKeeping] = useState(false);
+  const [born, setBorn] = useState(false);   // 送出中的是「只存版」那顆
   const [naming, setNaming] = useState<string | null>(null);
   const nameDone = useRef(false);   // 按了 Enter/Esc 之後輸入框被拿掉時,Chrome 還會補一次 blur
   const fileInput = useRef<HTMLInputElement>(null);
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
+  const cmp = useCompare(slug, work?.version ?? null, onCompare);
+  const { registerRun, setPane } = useLinks();
+  const jumpRun = useRef(cmp.jumpRun);
+  jumpRun.current = cmp.jumpRun;
+  useEffect(() => registerRun(id => jumpRun.current(id)), [registerRun]);
   const job = useJob(analyzing ? work!.job_id : null);
 
   const { cancel: dropDraft } = submit;
@@ -128,6 +141,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
   const history = work.history ?? work.versions.map(n => ({ n, at: 0, analysed: false, noted: false }));
   const dot = (n: number) => dotOf(history.find(h => h.n === n) ?? { analysed: false, noted: false }, n === latest ? work.state : undefined);
   const shown = shownVersions(work.versions, work.version);
+  const oldN = defaultOld(history, work.version);
   const pickVersion = (n: number) => setSearch(prev => {   // 只動 ?v=,其他參數(?s= 目前這局)留著
     const p = new URLSearchParams(prev);
     if (n === latest) p.delete("v"); else p.set("v", String(n));
@@ -143,6 +157,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
     const r = await submit.confirm({ analyze });
     if (!r || r.slug !== slugNow.current) return;   // 等確認的時候換了作品:別對別篇通知
     if (r.jobError) setResumeErr(r.jobError);   // 新版存下了但沒開成分析:回最新版,頂列有「分析這版」可重按
+    if (!r.same) setBorn(true);
     onNewVersion?.({ same: r.same, version: r.version, analyzing: analyze && !r.same && !r.jobError });
   };
 
@@ -178,6 +193,7 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
               if (e.key === "Escape") { e.stopPropagation(); nameDone.current = true; setNaming(null); }
             }} />
         )}
+        {cmp.on ? <CompareBar c={cmp} history={history} /> : <>
         <div className="paper-vers" role="group" aria-label={t("paper.versions")}>
           {shown.more && (
             <button type="button" className="ib" aria-label={t("paper.allVersions")} title={t("paper.allVersions")}
@@ -202,8 +218,14 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
             </ul>
           )}
         </div>
+        {oldN !== null && (
+          <button type="button" className={born ? "ib cmp-toggle is-born" : "ib cmp-toggle"} aria-pressed="false"
+            onAnimationEnd={() => setBorn(false)} aria-label={t("compare.open", { n: oldN })}
+            title={t("compare.open", { n: oldN })} onClick={cmp.toggle}><Icon name="compare" /></button>
+        )}
         <button type="button" className="ib" aria-label={t("newver.open")} title={t("newver.open")}
           onClick={() => fileInput.current?.click()}><Icon name="stack" /></button>
+        </>}
         <input ref={fileInput} type="file" accept=".md,.txt" hidden
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && !submit.busy) void submit.fromFile(f); }} />
         {work.version !== latest && <span className="paper-state paper-old">{t("paper.old")}</span>}
@@ -211,10 +233,11 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
           ? <Running jobId={work.job_id!} state={work.state} sseStep={job.step} onStopped={() => { setRev(r => r + 1); onFinished?.(); }} />
           : stateText(work.state) && <span className="paper-state" role="status">{t(stateText(work.state)!)}</span>}
         {STOPPED.includes(work.state) && <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug, { resumeOnly: true }))}>{t("paper.resume")}</button>}
-        {work.version === latest && UNANALYZED.includes(work.state) && (
+        {!cmp.on && work.version === latest && UNANALYZED.includes(work.state) && (
           <button type="button" className="paper-resume" onClick={() => start(() => api.startJob(slug))}>{t("newver.analyze")}</button>
         )}
         {resumeErr && <span className="paper-state" role="alert">{t(errorMessage(resumeErr))}</span>}
+        {cmp.err && <span className="paper-state" role="alert">{t(errorMessage(cmp.err))}</span>}
         <div className="set-seg paper-flow" role="group" aria-label={t("set.flow")}>
           {(["v", "h"] as const).map(f => (
             <button key={f} type="button" aria-pressed={flow === f} aria-label={t(`flow.${f}`)} title={t(`flow.${f}`)}
@@ -252,7 +275,9 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
         </div>
       )}
       <Paper text={work.text} title={work.title} marks={marks} drawing={drawing} onBring={onQuote}
-        old={work.version !== latest} obs={obs} />
+        old={work.version !== latest} obs={obs}
+        cmp={cmp.data ? { runs: cmp.data.runs, clean: cmp.clean, open: cmp.open, onToggle: cmp.toggleRun, focus: cmp.focus,
+          points: cmp.data.points, onPick: () => { if (focus) onFocus?.(false); if (narrowNow()) setPane("side"); } } : undefined} />
     </div>
   );
 }

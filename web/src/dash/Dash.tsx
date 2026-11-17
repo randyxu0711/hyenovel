@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, DashError, type Character, type Work, type WorkMap } from "./api";
+import { api, DashError, type Character, type Compare, type Work, type WorkMap } from "./api";
 import { errorMessage, useT } from "./i18n";
 import { flushSync } from "react-dom";
 import { LinksProvider, useLinks, useNarrow } from "./links";
@@ -126,6 +126,13 @@ function Shell({ chars }: { chars: Characters }) {
   const searchKey = search.toString();
   useEffect(() => { setDrawer(false); }, [pathname, routeSession, searchKey, narrow]);
   const [focus, setFocus] = useState(false);
+  const [cmpData, setCmpData] = useState<Compare | null>(null);
+  const comparing = search.has("cmp");
+  useEffect(() => { if (cmpData) setOb(null); }, [cmpData]);
+  const comparingRef = useRef(comparing);
+  comparingRef.current = comparing;
+  const setCmp = (fn: (p: URLSearchParams) => void) => setSearch(prev => { const p = new URLSearchParams(prev); fn(p); return p; });
+  const toggleCompare = () => setCmp(p => { if (p.has("cmp")) { p.delete("cmp"); p.delete("clean"); } else p.set("cmp", ""); });
   const focused = focus && view === "work" && !narrow;
   useEffect(() => { if (view !== "work") setFocus(false); }, [view]);
   const hidePaper = narrow && view === "work" && pane !== "paper";
@@ -141,7 +148,7 @@ function Shell({ chars }: { chars: Characters }) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === "\\") { e.preventDefault(); toggleShelf.current(); return; }
       if (e.key === "Escape" && drawn && !palette) { setDrawer(false); return; }
-      if (e.key === "Escape" && focused && !palette) { setFocus(false); return; }
+      if (e.key === "Escape" && focused && !palette && !comparingRef.current) { setFocus(false); return; }
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
@@ -174,7 +181,7 @@ function Shell({ chars }: { chars: Characters }) {
           {view === "work" && (
             <div className="dash-pane-switch" role="group" aria-label={t("pane.label")}>
               <button type="button" aria-pressed={pane === "paper"} onClick={() => setPane("paper")}>{t("pane.paper")}</button>
-              <button type="button" aria-pressed={pane === "side"} onClick={() => setPane("side")}>{t("pane.talk")}</button>
+              <button type="button" aria-pressed={pane === "side"} onClick={() => setPane("side")}>{t(cmpData?.mode === "notes" ? "pane.trace" : "pane.talk")}</button>
             </div>
           )}
           <button type="button" className="ib dash-bar-palette" aria-haspopup="dialog" aria-label={t("palette.open")} title={t("palette.open")}
@@ -189,7 +196,7 @@ function Shell({ chars }: { chars: Characters }) {
       <main className="dash-desk" hidden={hidePaper}>
         {view === "work" && <Reader slug={slug!} version={version} reload={reload} marks={marks} obs={obs} drawing={talk.drawing ?? undefined}
           onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion} onRenamed={bump}
-          focus={focused} onFocus={narrow ? undefined : setFocus}
+          focus={focused} onFocus={narrow ? undefined : setFocus} onCompare={setCmpData}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           onQuote={q => {
             setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
@@ -212,7 +219,8 @@ function Shell({ chars }: { chars: Characters }) {
       {view === "work" && (
         <aside className="dash-side" hidden={hideSide || focused}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
-            talk={talk} quotes={quotes} ob={ob} onOb={setOb} analyzing={analyzing}
+            talk={talk} quotes={quotes} ob={cmpData ? null : ob} onOb={setOb} analyzing={analyzing}
+            cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>
@@ -223,7 +231,8 @@ function Shell({ chars }: { chars: Characters }) {
         </button>
       )}
       {palette && <Palette works={works} chars={chars} onOpen={open} onSettings={() => nav("/settings")}
-        onToggle={toggleDayNight} onClose={() => setPalette(false)} />}
+        onToggle={toggleDayNight} onClose={() => setPalette(false)}
+        compare={view === "work" && (comparing || (version ?? work?.version ?? 0) > 1) ? { on: comparing, run: toggleCompare } : undefined} />}
     </div>
   );
 }

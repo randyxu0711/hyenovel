@@ -48,6 +48,8 @@ const PATHS = {
   prev: <path d="M11 4.5L6.5 9l4.5 4.5" />,
   next: <path d="M7 4.5L11.5 9 7 13.5" />,
   sheet2: <><path d="M6 2.5h6.5l2.5 2.5v10H6z" /><path d="M3 5v11.5h9" opacity=".55" /></>,
+  compare: <><path d="M2.5 4.5h5v10h-5z" strokeDasharray="1.6 1.7" /><path d="M10 3.5h3.5l2 2v9H10z" /><path d="M13.5 3.5v2h2" /></>,
+  clean: <><path d="M3 4.5h12M3 13.5h12" /><path d="M6.8 10.6L9 7.6l2.2 3" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

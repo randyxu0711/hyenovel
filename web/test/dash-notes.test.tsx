@@ -82,3 +82,18 @@ describe("筆記分頁", () => {
     expect(screen.getByText("載入中……")).toBeTruthy();
   });
 });
+
+describe("筆記眉頭的對照入口", () => {
+  it("notes older than viewed version → compare button calls onCompare", () => {
+    setLang("zh-Hant");
+    const on = vi.fn();
+    render(<LinksProvider><NotesTab map={map({ version: 3, notes_version: 2, notes })} state="ready" onCompare={on} /></LinksProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "對照 v2" }));
+    expect(on).toHaveBeenCalledWith(2);
+  });
+  it("same version → no button", () => {
+    setLang("zh-Hant");
+    render(<LinksProvider><NotesTab map={map({ notes })} state="ready" onCompare={vi.fn()} /></LinksProvider>);
+    expect(screen.queryByRole("button", { name: /對照/ })).toBeNull();
+  });
+});

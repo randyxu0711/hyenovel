@@ -4,6 +4,8 @@ import type { Span } from "./api";
 type Pane = "paper" | "side";
 type PaperFn = (span: Span) => void;
 type TalkFn = (quote: string) => boolean;
+type RunFn = (id: string) => void;
+export type Trace = { hover: number | null; picked: number | null; setHover(i: number | null): void; setPicked(i: number | null): void };
 
 export type Links = {
   hover: string | null;
@@ -14,6 +16,11 @@ export type Links = {
   jumpToTalk(quote: string): void;
   registerPaper(fn: PaperFn): () => void;
   registerTalk(fn: TalkFn): () => void;
+  /** 對照中跳到某段刪字/新字(去向清單 → 稿)。 */
+  jumpToRun(id: string): void;
+  registerRun(fn: RunFn): () => void;
+  /** 去向清單滑過/選中的那一點(稿上括號跟著亮)。 */
+  trace: Trace;
   pane: Pane;
   setPane(p: Pane): void;
 };
@@ -42,6 +49,9 @@ export function LinksProvider({ children }: { children: ReactNode }) {
   const [pane, setPane] = useState<Pane>("side");
   const paper = useRef<PaperFn | null>(null);
   const talk = useRef<TalkFn | null>(null);
+  const run = useRef<RunFn | null>(null);
+  const [traceHover, setTraceHover] = useState<number | null>(null);
+  const [tracePicked, setTracePicked] = useState<number | null>(null);
 
   const registerPaper = useCallback((fn: PaperFn) => {
     paper.current = fn;
@@ -55,13 +65,23 @@ export function LinksProvider({ children }: { children: ReactNode }) {
     if (isNarrow()) setPane("paper");
     paper.current?.(span);
   }, []);
+  const registerRun = useCallback((fn: RunFn) => {
+    run.current = fn;
+    return () => { if (run.current === fn) run.current = null; };
+  }, []);
+  const jumpToRun = useCallback((id: string) => {
+    if (isNarrow()) setPane("paper");
+    run.current?.(id);
+  }, []);
+  const trace = useMemo<Trace>(() => ({ hover: traceHover, picked: tracePicked, setHover: setTraceHover, setPicked: setTracePicked }),
+    [traceHover, tracePicked]);
   const jumpToTalk = useCallback((quote: string) => {
     if (talk.current?.(quote) && isNarrow()) setPane("side");
   }, []);
 
   const value = useMemo<Links>(
-    () => ({ hover: hovered.q, hoverAt: hovered.at, setHover, jumpToPaper, jumpToTalk, registerPaper, registerTalk, pane, setPane }),
-    [hovered, setHover, jumpToPaper, jumpToTalk, registerPaper, registerTalk, pane],
+    () => ({ hover: hovered.q, hoverAt: hovered.at, setHover, jumpToPaper, jumpToTalk, registerPaper, registerTalk, jumpToRun, registerRun, trace, pane, setPane }),
+    [hovered, setHover, jumpToPaper, jumpToTalk, registerPaper, registerTalk, jumpToRun, registerRun, trace, pane],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

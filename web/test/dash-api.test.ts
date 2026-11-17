@@ -62,6 +62,13 @@ describe("dash api", () => {
       "/api/works/d1?v=2", "/api/works/d1/map", "/api/works/d1/map?v=3", "/api/sessions/s1?v=2",
       "/api/works/d1/sessions?legacy=1", "/api/sessions?limit=5&legacy=1"]);
   });
+  it("compare 查詢參數", async () => {
+    const f = vi.fn(async (_u: string) => json({}));
+    vi.stubGlobal("fetch", f);
+    await api.compare("d1"); await api.compare("d1", 3); await api.compare("d1", 3, 1); await api.compare("d1", undefined, 1);
+    expect(f.mock.calls.map(c => c[0])).toEqual([
+      "/api/works/d1/compare", "/api/works/d1/compare?v=3", "/api/works/d1/compare?v=3&from=1", "/api/works/d1/compare?from=1"]);
+  });
   it("startJob 打 critique job", async () => {
     const f = vi.fn(async (_u: string, _i?: RequestInit) => json({ job_id: 7 }, 202));
     vi.stubGlobal("fetch", f);

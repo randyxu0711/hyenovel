@@ -358,3 +358,60 @@ def test_map_unknown_version_and_work(c):
         views.work_map(c, "x1", v=9)
     with pytest.raises(LookupError):
         views.work_map(c, "nope")
+
+
+def _versions(c, texts, noted=(), analysed=()):
+    sid = repo.ensure_story(c, "cv", "燈", 0)
+    ids = [repo.add_source_version(c, sid, t, float(i))[0] for i, t in enumerate(texts, 1)]
+    for n in analysed:
+        repo.add_artifact(c, sid, ids[n - 1], "analysis", 1,
+                          {"nodes": [{"id": "m1", "label": "燈"}]}, {}, 9.0)
+    for n in noted:
+        repo.add_artifact(c, sid, ids[n - 1], "notes", 1, {"points": [
+            {"kind": "moved", "title": "m1 亮著", "body": "b", "question": None, "quotes": ["她看了很久"]}]}, {}, 9.0)
+    return sid
+
+
+V1 = "甲。她看了很久。乙。"
+
+
+def test_compare_defaults_to_newest_noted_older_version(c):
+    _versions(c, [V1, V1 + "丙。", "甲。乙。"], noted=[1], analysed=[1])
+    out = views.work_compare(c, "cv", 3, None)
+    assert (out["new"], out["old"], out["mode"], out["notes_version"]) == (3, 1, "notes", 1)
+    assert out["olds"] == [{"n": 1, "noted": True}] and out["text"] == "甲。乙。" and out["same"] is False
+    [p] = out["points"]
+    assert p["title"] == "〈燈〉 亮著" and p["label"] == "gone"
+    [d] = [r for r in out["runs"] if r["op"] == "del"]
+    assert d["pinned"] is True and "old" not in d and set(out) >= {"hunks"}
+    assert "pairs" not in out
+
+
+def test_compare_latest_when_v_omitted_and_no_relabel_without_analysis(c):
+    _versions(c, [V1, "甲。乙。"], noted=[1])
+    out = views.work_compare(c, "cv", None, None)
+    assert out["new"] == 2 and out["points"][0]["title"] == "m1 亮著"
+
+
+def test_compare_text_mode_when_no_older_notes(c):
+    _versions(c, ["甲。", "乙。", "丙。"])
+    out = views.work_compare(c, "cv", 3, None)
+    assert (out["mode"], out["old"], out["notes_version"], out["points"]) == ("text", 2, None, [])
+    assert out["olds"] == [{"n": 2, "noted": False}, {"n": 1, "noted": False}]
+    assert views.work_compare(c, "cv", 3, 1)["old"] == 1
+
+
+def test_compare_rejects_from_not_in_olds(c):
+    _versions(c, [V1, "甲。", "乙。"], noted=[1])
+    with pytest.raises(views.UnknownVersion):
+        views.work_compare(c, "cv", 3, 2)
+    with pytest.raises(views.UnknownVersion):
+        views.work_compare(c, "cv", 9, None)
+
+
+def test_compare_single_version_is_unknown_version(c):
+    _versions(c, ["甲。"])
+    with pytest.raises(views.UnknownVersion):
+        views.work_compare(c, "cv", None, None)
+    with pytest.raises(LookupError):
+        views.work_compare(c, "nope", None, None)

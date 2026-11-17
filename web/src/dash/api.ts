@@ -122,6 +122,23 @@ export type SessionDetail = {
   session: string; slug: string | null; title: string | null; turns: Turn[]; legacy: boolean; version: number | null; archived?: boolean;
   attachments: Attachment[];
 };
+export type DelRun = { op: "del"; id: string; at: number; text: string; chars: number; pinned: boolean };
+export type InsRun = { op: "ins"; id: string; start: number; end: number };
+export type Run = DelRun | InsRun;
+export type QuoteFate = "kept" | "changed" | "gone" | "lost";
+export type TraceQuote = {
+  quote: string; fate: QuoteFate; old: { start: number; end: number } | null;
+  new: { start: number; end: number } | null; new_text: string | null; del: string | null;
+};
+export type TracePoint = {
+  i: number; kind: string; title: string; body: string | null; question: string | null;
+  fate: "kept" | "changed" | "untracked"; label: "kept" | "changed" | "gone" | "mixed" | null; quotes: TraceQuote[];
+};
+export type Compare = {
+  new: number; old: number; mode: "notes" | "text"; olds: { n: number; noted: boolean }[]; same: boolean; text: string;
+  runs: Run[]; hunks: { ids: string[]; at: number }[]; notes_version: number | null; points: TracePoint[];
+};
+
 export type WorkMap = {
   version: number; analysis_version: number | null; notes_version: number | null;
   beats: { id: string; label: string; intensity: number | null; span: Span | null }[];
@@ -177,6 +194,13 @@ export const api = {
   works: async () => (await request<{ works: Work[] }>("/api/works")).works,
   work: (slug: string, v?: number) => request<WorkDetail>(`/api/works/${encodeURIComponent(slug)}${vq(v)}`),
   map: (slug: string, v?: number) => request<WorkMap>(`/api/works/${encodeURIComponent(slug)}/map${vq(v)}`),
+  compare: (slug: string, v?: number, from?: number) => {
+    const q = new URLSearchParams();
+    if (v !== undefined) q.set("v", String(v));
+    if (from !== undefined) q.set("from", String(from));
+    const qs = q.toString();
+    return request<Compare>(`/api/works/${encodeURIComponent(slug)}/compare${qs ? `?${qs}` : ""}`);
+  },
   sessions: async (slug: string, opts: { legacy?: boolean } = {}) =>
     (await request<{ sessions: SessionRow[] }>(
       `/api/works/${encodeURIComponent(slug)}/sessions${opts.legacy ? "?legacy=1" : ""}`)).sessions,

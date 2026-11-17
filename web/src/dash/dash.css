@@ -307,6 +307,15 @@
 @media (prefers-reduced-motion:reduce){ .dash .drop-paper{animation:none} }
 .dash .paper-vers .paper-v{height:24px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-vers .paper-v[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .cmp-vers .cmp-old{gap:3px; background:color-mix(in srgb, var(--dash-paper) 86%, var(--dash-desk-2)); color:var(--dash-ink-2)}
+.dash .cmp-vers .cmp-new{display:inline-flex; align-items:center; cursor:default; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .cmp-caret{font-size:.8em; opacity:.7}
+.dash .cmp-nav{display:inline-flex; align-items:center; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .cmp-count{min-width:2.6em; text-align:center; font-variant-numeric:tabular-nums}
+.dash .cmp-same{color:var(--dash-ink-2)}
+.dash .cmp-toggle.is-born{animation:cmp-slide var(--d-soft) var(--ease-house) both}
+@keyframes cmp-slide{from{transform:translateX(-14px); opacity:0}}
+@media (prefers-reduced-motion:reduce){ .dash .cmp-toggle.is-born{animation:none} }
 .dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-resume{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
 .dash .paper-newbar{max-width:34em; margin:4px auto 10px}
@@ -340,6 +349,45 @@
 }
 .dash .paper-ob{text-decoration:underline solid color-mix(in srgb, var(--dash-paper-ink-2) 90%, transparent); text-decoration-thickness:1.5px; text-underline-offset:.24em}
 .dash .paper-sheet[data-flow="v"] .dash-mark, .dash .paper-sheet[data-flow="v"] .paper-ob{text-underline-position:left}
+.dash{--cmp-ins:5%}
+.dash[data-mode="dark"]{--cmp-ins:6%}
+.dash .cmp-del, .dash .cmp-ins{text-decoration:none}
+.dash .cmp-del{color:color-mix(in srgb, var(--dash-paper-ink) 40%, var(--dash-paper));
+  text-decoration:line-through currentColor; text-decoration-thickness:1px; text-decoration-skip-ink:none;
+  animation:cmp-in var(--d-quick) var(--ease-house) both}
+.dash .cmp-del + .cmp-ins, .dash .cmp-ins:has(+ .cmp-del){margin-inline:.35em}
+.dash .cmp-ins{background-color:color-mix(in srgb, var(--dash-paper-ink) var(--cmp-ins), transparent); border-radius:2px;
+  -webkit-box-decoration-break:clone; box-decoration-break:clone; animation:cmp-ins-in var(--d-quick) var(--ease-house) both}
+.dash .cmp-fold{display:inline-flex; align-items:baseline; gap:3px; padding:0 2px; margin:0 1px; border:0; border-radius:3px; background:none; cursor:pointer;
+  font-family:var(--sans); font-size:var(--dash-t-xs); line-height:1; text-indent:0; letter-spacing:0; vertical-align:baseline;
+  color:color-mix(in srgb, var(--dash-paper-ink) 55%, var(--dash-paper)); animation:cmp-in var(--d-quick) var(--ease-house) both}
+.dash .cmp-fold svg{width:9px; height:8px; stroke:currentColor; fill:none; stroke-width:1.3; stroke-linecap:round; stroke-linejoin:round; transform:translateY(3px)}
+.dash .cmp-fold[aria-expanded="true"]{color:var(--dash-paper-ink-2)}
+.dash .cmp-fold:hover{background:color-mix(in srgb, var(--dash-paper-ink-2) 12%, transparent)}
+.dash .paper-sheet[data-flow="v"] .cmp-fold{padding:4px 1px; margin:2px 0; border:1px dashed currentColor; letter-spacing:.12em; vertical-align:middle; text-combine-upright:none}
+.dash .paper-sheet[data-flow="v"] .cmp-fold svg{display:none}
+.dash .paper-sheet[data-flow="v"] .cmp-fold:not(:has(span)){width:.8em; height:.8em; padding:0}
+.dash .paper-sheet.dash-paper{position:relative}
+.dash .cmp-layer{position:absolute; inset:0; pointer-events:none}
+.dash .cmp-lit{position:absolute; border-radius:2px; background:color-mix(in srgb, var(--dash-paper-ink-2) 18%, transparent); transition:background-color var(--d-quick)}
+.dash .cmp-bracket{position:absolute; z-index:2; padding:0; border:0; background:none; cursor:pointer; pointer-events:auto;
+  color:color-mix(in srgb, var(--dash-paper-ink) 50%, var(--dash-paper)); animation:cmp-in var(--d-quick) var(--ease-house) both}
+.dash .cmp-bracket::before{content:""; position:absolute; inset:-8px}
+.dash .cmp-bracket i{position:absolute; inset:0; border:1px solid currentColor; pointer-events:none}
+.dash .cmp-bracket[data-axis="y"]{right:18px; width:4px}
+.dash .cmp-bracket[data-axis="y"] i{border-left:0}
+.dash .cmp-bracket[data-axis="x"]{top:30px; height:6px}
+.dash .cmp-bracket[data-axis="x"] i{border-bottom:0}
+.dash .cmp-bracket.is-heavy{color:color-mix(in srgb, var(--dash-paper-ink) 68%, var(--dash-paper))}
+.dash .cmp-bracket.is-lit{z-index:3; color:var(--dash-paper-ink)}
+.dash .cmp-bracket.is-lit i{border-width:1.5px}
+.dash .cmp-bracket.is-lit[data-axis="y"] i{border-left:0}
+.dash .cmp-bracket.is-lit[data-axis="x"]{height:20px}
+.dash .cmp-bracket.is-lit[data-axis="x"] i{border-bottom:0}
+.dash .cmp-bracket.is-dim{opacity:.3}
+@keyframes cmp-in{from{opacity:0}}
+@keyframes cmp-ins-in{from{background-color:transparent}}
+@media (prefers-reduced-motion:reduce){ .dash .cmp-del, .dash .cmp-ins, .dash .cmp-fold, .dash .cmp-bracket{animation:none} .dash .cmp-lit{transition:none} }
 .dash .dash-mark:hover, .dash .dash-mark.is-hover{background-color:color-mix(in srgb, var(--dash-paper-ink-2) 12%, transparent)}
 .dash .dash-mark:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .dash-mark.is-drawing{animation:dash-mark-draw var(--dash-draw) ease-out both}
@@ -372,6 +420,23 @@
 .dash .side-note p{margin:0 0 6px}
 .dash .side-note p:last-child{margin-bottom:0}
 .dash .side-quotes{display:flex; flex-wrap:wrap; gap:4px 8px; font-family:var(--serif)}
+.dash .trace-group{display:flex; flex-direction:column; gap:10px}
+.dash .trace-group-h{display:inline-flex; align-items:baseline; gap:6px; align-self:flex-start; padding:0; border:0; background:none; cursor:pointer;
+  font-size:var(--dash-t-sm); font-weight:600; color:var(--dash-ink)}
+.dash .trace-group-h .dash-dm{font-weight:400; color:var(--dash-ink-2)}
+.dash .trace-card{cursor:default}
+.dash .trace-card.is-raised{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
+.dash .trace-card[data-sel]{outline:1px solid var(--dash-line); outline-offset:2px}
+.dash .trace-top{display:flex; justify-content:space-between; margin:0}
+.dash .trace-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .trace-card.is-raised .trace-state{color:var(--dash-ink); font-weight:600}
+.dash .trace-title{padding:0; border:0; background:none; cursor:pointer; font:inherit; color:inherit; text-align:start}
+.dash .trace-q{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin:2px 0; font-family:var(--serif)}
+.dash .trace-q del, .dash .trace-old{color:var(--dash-ink-2); text-decoration:line-through; text-decoration-thickness:1px}
+.dash .trace-changed{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px}
+.dash .trace-changed .trace-qstate{grid-column:2; grid-row:1}
+.dash .trace-gone{cursor:pointer}
+.dash .trace-qstate{margin-inline-start:auto; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .side-question{color:var(--dash-ink-2)}
 /* 引文:虛底線,滑過變實線;這一版對不到 → 灰虛線 */
 .dash .dash-iq{

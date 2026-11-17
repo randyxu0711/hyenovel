@@ -75,6 +75,19 @@ async def work_map(slug: str, request: Request, v: int | None = Query(None, ge=1
         raise ApiError(404, "unknown-version", "沒有這個版本") from None
 
 
+@router.get("/works/{slug}/compare")
+async def work_compare(slug: str, request: Request, v: int | None = Query(None, ge=1),
+                       frm: int | None = Query(None, ge=1, alias="from")):
+    slug_ok(slug, "work-compare")
+    try:
+        return views.work_compare(request.app.state.mgr.conn, slug, v, frm)
+    except LookupError:
+        raise unknown_work("work-compare") from None
+    except views.UnknownVersion:
+        log.info("event=reject where=work-compare reason=unknown-version v=%s from=%s", v, frm)
+        raise ApiError(404, "unknown-version", "沒有這個版本") from None
+
+
 @router.get("/estimate")
 async def get_estimate(request: Request, chars: int = Query(ge=0)):
     conn = request.app.state.mgr.conn

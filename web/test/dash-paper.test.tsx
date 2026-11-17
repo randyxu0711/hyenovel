@@ -9,7 +9,7 @@ import { setLang } from "../src/dash/i18n";
 import { LinksProvider, useLinks, type Links } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import { setPaperFlow } from "../src/dash/paperFlow";
-import type { Character } from "../src/dash/api";
+import type { Character, DelRun, TracePoint, TraceQuote } from "../src/dash/api";
 import { hyena, buffalo, deer, ch } from "./dash-fixtures";
 
 const odd = { ...ch("fox", "狐", "Fox"), mark: "zigzag" as unknown as Character["mark"] };
@@ -228,5 +228,224 @@ describe("直排頁的 CSS", () => {
   });
   it("頁碼不能被選進引文", () => {
     expect(css).toMatch(/\.dash \.paper-folio\{[^}]*user-select:none/);
+  });
+});
+
+describe("Paper 對照", () => {
+  type Cmp = NonNullable<Parameters<typeof Paper>[0]["cmp"]>;
+  const del = (id: string, at: number, text: string, pinned = false): DelRun =>
+    ({ op: "del", id, at, text, chars: [...text].filter(c => !/\s/.test(c)).length, pinned });
+  const mountCmp = (text: string, cmp: Partial<Cmp>, marks: Mark[] = [], obs: { start: number; end: number }[] = []) => {
+    setLang("zh-Hant");
+    setPaperFlow("h");
+    const onToggle = vi.fn();
+    const full: Cmp = { runs: [], clean: false, open: new Set(), onToggle, focus: null, ...cmp };
+    const r = render(
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={text} title="海" marks={marks} onBring={vi.fn()} obs={obs} cmp={full} />
+        </LinksProvider>
+      </CharactersProvider>);
+    return { ...r, onToggle };
+  };
+
+  it("renders del and ins in compare", () => {
+    const { container } = mountCmp("父親站著。丙。", { runs: [del("d0", 5, "乙。"), { op: "ins", id: "i0", start: 0, end: 2 }] });
+    expect(container.querySelector("del.cmp-del")?.textContent).toBe("乙。");
+    expect(container.querySelector("del.cmp-del")?.getAttribute("data-run")).toBe("d0");
+    expect(container.querySelector("ins.cmp-ins")?.textContent).toBe("父親");
+  });
+
+  it("hides marks and obs in compare", () => {
+    const { container } = mountCmp("她走到岸邊。", { runs: [] }, [mk(0, 2)], [{ start: 2, end: 4 }]);
+    expect(container.querySelector(".dash-mark")).toBeNull();
+    expect(container.querySelector(".paper-ob")).toBeNull();
+  });
+
+  it("folds long unpinned delete and toggles", () => {
+    const { container, onToggle } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))] });
+    const b = container.querySelector<HTMLButtonElement>("button.cmp-fold")!;
+    expect(b.textContent).toContain("刪 34 字");
+    expect(b.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(b);
+    expect(onToggle).toHaveBeenCalledWith("d0");
+    expect(container.querySelector("del")).toBeNull();
+  });
+
+  it("opened fold shows deleted text with a collapse handle", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))], open: new Set(["d0"]) });
+    expect(container.querySelector("del.cmp-del")?.textContent).toBe("長".repeat(34));
+  });
+
+  it("opened pinned delete has no collapse handle", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(40), true)], open: new Set(["d0"]) });
+    expect(container.querySelector("del.cmp-del")).not.toBeNull();
+    expect(container.querySelector("button.cmp-fold")).toBeNull();
+  });
+
+  it("clean folds everything without count", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "丙。", true)], clean: true });
+    const b = container.querySelector("button.cmp-fold")!;
+    expect(b.textContent).not.toMatch(/\d/);
+    expect(container.querySelector("del")).toBeNull();
+  });
+
+  it("no bring for selection containing deleted text", () => {
+    const { container } = mountCmp("甲。丙。", { runs: [del("d0", 2, "乙。")] });
+    const p = container.querySelector("p")!;
+    const range = document.createRange();
+    range.setStart(p, 0); range.setEnd(p, p.childNodes.length);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges(); sel.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    expect(container.querySelector(".paper-bring")).toBeNull();
+  });
+
+  it("focus scrolls to run and flashes its paragraph", () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    const { container, rerender } = mountCmp("甲。\n丙。", { runs: [del("d0", 3, "乙。\n")] });
+    const el = container.querySelector('[data-run="d0"]')!;
+    rerender(
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={"甲。\n丙。"} title="海" marks={[]} onBring={vi.fn()}
+            cmp={{ runs: [del("d0", 3, "乙。\n")], clean: false, open: new Set(), onToggle: vi.fn(), focus: { id: "d0", n: 1 } }} />
+        </LinksProvider>
+      </CharactersProvider>);
+    expect(spy.mock.instances.some(x => x === el.closest("p"))).toBe(true);
+    expect(el.closest("p")!.classList.contains("is-flash")).toBe(true);
+  });
+
+  it("whole-paragraph delete does not duplicate paragraph keys", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    mountCmp("甲。\n丙。", { runs: [del("d0", 3, "乙。\n")] });
+    expect(err.mock.calls.some(c => String(c[0]).includes("same key"))).toBe(false);
+    err.mockRestore();
+  });
+
+  it("no bring for selection across a fold marker", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))] });
+    const p = container.querySelector("p")!;
+    const range = document.createRange();
+    range.setStart(p, 0); range.setEnd(p, p.childNodes.length);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges(); sel.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    expect(container.querySelector(".paper-bring")).toBeNull();
+  });
+
+  it("vertical: entering compare never shows stale pages and anchors on real text", () => {
+    const texts: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { texts.push(this.textContent ?? ""); };
+    setLang("zh-Hant");
+    setPaperFlow("v");
+    const tree = (cmp?: Cmp) => (
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={"甲。\n丙。"} title="海" marks={[]} onBring={vi.fn()} cmp={cmp} />
+        </LinksProvider>
+      </CharactersProvider>);
+    const { container, rerender } = render(tree());
+    texts.length = 0;
+    rerender(tree({ runs: [del("d0", 0, "零。\n")], clean: false, open: new Set(), onToggle: vi.fn(), focus: null }));
+    expect(texts.length).toBeGreaterThan(0);
+    expect(texts.every(x => x !== "")).toBe(true);
+    expect(container.querySelector("del")).not.toBeNull();
+  });
+
+  it("keeps scroll anchor when entering compare", () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    setPaperFlow("h");
+    const tree = (cmp?: Cmp) => (
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={"甲。\n丙。"} title="海" marks={[]} onBring={vi.fn()} cmp={cmp} />
+        </LinksProvider>
+      </CharactersProvider>);
+    const { container, rerender } = render(tree());
+    rerender(tree({ runs: [del("d0", 0, "零。\n")], clean: false, open: new Set(), onToggle: vi.fn(), focus: null }));
+    const target = spy.mock.instances[spy.mock.instances.length - 1] as HTMLElement;
+    expect(target.dataset.start).toBe("0");
+    expect(container.querySelector("del")).not.toBeNull();
+  });
+});
+
+describe("頁邊括號", () => {
+  type Cmp = NonNullable<Parameters<typeof Paper>[0]["cmp"]>;
+  const rect = (a: number, b: number) => ({ left: 0, right: 100, top: a * 10, bottom: b * 10, width: 100, height: (b - a) * 10, x: 0, y: a * 10, toJSON() {} });
+  const at = (n: Node | null): number => {
+    const el = (n instanceof Element ? n : n?.parentElement)?.closest<HTMLElement>("[data-at]");
+    return el ? Number(el.dataset.at) : 0;
+  };
+  beforeEach(() => {
+    (Range.prototype as unknown as { getClientRects: () => unknown }).getClientRects = function (this: Range) {
+      const a = at(this.startContainer) + this.startOffset, b = at(this.endContainer) + this.endOffset;
+      return [rect(a, b)];
+    };
+    Element.prototype.getClientRects = function (this: Element) {
+      const r = (this as HTMLElement).dataset.run === "d0" ? 50 : 70;
+      return [rect(r, r + 2)] as unknown as DOMRectList;
+    };
+  });
+  const Q = (quote: string, fate: TraceQuote["fate"], start: number, end: number, del: string | null = null): TraceQuote =>
+    ({ quote, fate, old: { start, end }, new: fate === "gone" ? null : { start, end }, new_text: null, del });
+  const P = (i: number, title: string, fate: TracePoint["fate"], quotes: TraceQuote[], kind = "confused"): TracePoint =>
+    ({ i, kind, title, body: null, question: null, fate, label: null, quotes });
+  const TEXT = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸";
+  const mountB = (points: TracePoint[], extra: Partial<Cmp> = {}) => {
+    setLang("zh-Hant"); setPaperFlow("h");
+    const onPick = vi.fn();
+    const full: Cmp = { runs: [{ op: "del", id: "d0", at: 20, text: "刪", chars: 1, pinned: true }], clean: false, open: new Set(),
+      onToggle: vi.fn(), focus: null, points, onPick, ...extra };
+    const r = render(
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider><Probe /><Paper text={TEXT} title="海" marks={[]} onBring={vi.fn()} cmp={full} /></LinksProvider>
+      </CharactersProvider>);
+    return { ...r, onPick };
+  };
+  const brk = () => [...document.querySelectorAll<HTMLElement>(".cmp-bracket")];
+
+  it("draws brackets only for changed quotes", () => {
+    mountB([P(0, "沒動", "kept", [Q("一二", "kept", 0, 2)]), P(1, "改了", "changed", [Q("五六", "changed", 4, 6)])]);
+    expect(brk().length).toBe(1);
+    expect(brk()[0].getAttribute("aria-label")).toContain("改了");
+  });
+
+  it("merges overlapping brackets", () => {
+    mountB([P(0, "甲點", "changed", [Q("一二三", "changed", 0, 3)]), P(1, "乙點", "changed", [Q("二三四", "changed", 1, 4)], "moved")]);
+    expect(brk().length).toBe(1);
+    const label = brk()[0].getAttribute("aria-label")!;
+    expect(label.indexOf("乙點")).toBeLessThan(label.indexOf("甲點"));
+    expect(brk()[0].classList.contains("is-heavy")).toBe(true);
+  });
+
+  it("gone quote brackets its deleted run", () => {
+    mountB([P(0, "刪了", "changed", [Q("刪", "gone", 0, 1, "d0")])]);
+    expect(brk().length).toBe(1);
+    expect(brk()[0].style.top).toBe("500px");
+  });
+
+  it("hover lights only that point", () => {
+    mountB([P(0, "甲點", "changed", [Q("一二", "kept", 0, 2), Q("五六", "changed", 4, 6)]), P(1, "乙點", "changed", [Q("十甲", "changed", 9, 11)])]);
+    act(() => links.trace.setHover(0));
+    expect(document.querySelectorAll(".cmp-bracket.is-lit").length).toBe(2);
+    expect(document.querySelectorAll(".cmp-bracket.is-dim").length).toBe(1);
+    expect(document.querySelectorAll(".cmp-lit").length).toBe(2);
+  });
+
+  it("bracket click picks point and tells the reader", () => {
+    const { onPick } = mountB([P(3, "甲點", "changed", [Q("五六", "changed", 4, 6)])]);
+    fireEvent.click(brk()[0]);
+    expect(links.trace.picked).toBe(3);
+    expect(onPick).toHaveBeenCalledWith(3);
+  });
+
+  it("click on blank paper clears picked", () => {
+    mountB([P(3, "甲點", "changed", [Q("五六", "changed", 4, 6)])]);
+    act(() => links.trace.setPicked(3));
+    fireEvent.click(document.querySelector(".paper-sheet")!);
+    expect(links.trace.picked).toBeNull();
   });
 });
