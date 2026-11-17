@@ -307,6 +307,15 @@
 @media (prefers-reduced-motion:reduce){ .dash .drop-paper{animation:none} }
 .dash .paper-vers .paper-v{height:24px; padding:0 9px; border:0; border-radius:7px; background:none; cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-vers .paper-v[aria-pressed="true"]{background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .cmp-vers .cmp-old{gap:3px; background:color-mix(in srgb, var(--dash-paper) 86%, var(--dash-desk-2)); color:var(--dash-ink-2)}
+.dash .cmp-vers .cmp-new{display:inline-flex; align-items:center; cursor:default; background:var(--dash-paper); color:var(--dash-paper-ink); box-shadow:var(--dash-sh-raise)}
+.dash .cmp-caret{font-size:.8em; opacity:.7}
+.dash .cmp-nav{display:inline-flex; align-items:center; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .cmp-count{min-width:2.6em; text-align:center; font-variant-numeric:tabular-nums}
+.dash .cmp-same{color:var(--dash-ink-2)}
+.dash .cmp-toggle.is-born{animation:cmp-slide var(--d-soft) var(--ease-house) both}
+@keyframes cmp-slide{from{transform:translateX(-14px); opacity:0}}
+@media (prefers-reduced-motion:reduce){ .dash .cmp-toggle.is-born{animation:none} }
 .dash .paper-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .paper-resume{padding:2px 10px; border:1px solid var(--dash-line); border-radius:6px; background:var(--dash-paper); cursor:pointer; font-size:var(--dash-t-xs); color:var(--dash-paper-ink)}
 .dash .paper-newbar{max-width:34em; margin:4px auto 10px}
