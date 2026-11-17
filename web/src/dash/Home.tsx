@@ -36,7 +36,7 @@ export default function Home({ works: loaded, error: listError = null, talk }: {
       onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void talk.attach(f); }}>
       <section className="home-talk" aria-label={t("home.chat")} data-live={live ? "" : undefined}>
         <Talk talk={talk} version={0} quotes={[]} analyzing={false} onDropQuote={() => {}} onSent={() => {}} onReveal={() => {}}
-          longText={{ min: live ? MAX_CHAT : DRAFT_MIN_CHARS, take: paste }} inputRef={area} whoSize={172}
+          longText={{ min: live ? MAX_CHAT : DRAFT_MIN_CHARS, take: paste }} inputRef={area} whoSize={live ? 72 : 172}
           placeholder={t("home.say", { name: localized(chars.byId(talk.whoId).name, lang) })} />
       </section>
       {loaded === null && (listError

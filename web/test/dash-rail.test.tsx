@@ -75,6 +75,13 @@ describe("Rail(展開)", () => {
     expect(screen.getByRole("button", { name: "切換晝夜" })).toBeTruthy();
     expect(screen.queryByText("交一篇新的")).toBeNull();
   });
+  it("設定頁:書架不放開一局聊天的 +,也不放晝夜鍵(外觀裡就有)", () => {
+    render(<MemoryRouter><Rail mode="open" works={WORKS} current={null} talk={fakeTalk()} view="settings" settingsNav={<p>nav</p>}
+      onOpen={vi.fn()} onNew={vi.fn()} onFind={vi.fn()} onChat={vi.fn()} onToggle={vi.fn()} /></MemoryRouter>);
+    expect(screen.queryByRole("button", { name: "開一局聊天" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "切換晝夜" })).toBeNull();
+    expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
+  });
   it("列出作品標題,點了開那篇;目前那篇 aria-current;分析中那篇的點叫「分析中」", () => {
     const { onOpen } = mount({ current: "d1" });
     fireEvent.click(screen.getByRole("button", { name: /山/ }));

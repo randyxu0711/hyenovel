@@ -192,7 +192,7 @@ describe("設定頁", () => {
     await go("讀伴");
     fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
-    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
     const who = () => document.querySelector(".home form.composer svg.fig")?.getAttribute("data-who");
     await waitFor(() => expect(who()).toBe("hyena"));
     release();
@@ -249,7 +249,7 @@ describe("設定頁", () => {
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && i?.method === "PUT" && i.body === JSON.stringify({ character: "buffalo" }))).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
     await waitFor(() => expect(document.querySelector(".home form.composer svg.fig")!.getAttribute("data-who")).toBe("buffalo"));
   });
 

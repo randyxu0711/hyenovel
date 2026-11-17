@@ -44,6 +44,7 @@ export default function ChartTab({ map, marks, error = null, ob = null, onOb }: 
       )}
       <Curve beats={map.beats} marks={marks} />
       {map.motifs.length > 0 && <p className="side-kind">{t("chart.motifs")}</p>}
+      <div className="side-obs">
       {map.motifs.map(mo => {
         const at = [...new Set(mo.spans.flatMap(s => {
           const i = beatAt(map.beats, s.start);
@@ -58,11 +59,12 @@ export default function ChartTab({ map, marks, error = null, ob = null, onOb }: 
           </button>
         );
       })}
+      </div>
     </div>
   );
 }
 
-const H = 60;
+const H = 88;
 
 /** 張力曲線:鉛筆折線,一個節拍一欄可點的熱區;陪讀者提過的段在段號上畫波浪線。 */
 export function Curve({ beats, marks }: { beats: Beat[]; marks: Mark[] }) {

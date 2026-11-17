@@ -61,6 +61,14 @@ describe("MemoryPage", () => {
     expect(screen.queryByText("手打")).toBeNull();
   });
 
+  it("記的就是整句原話時不重複列,改標「出自對話」,一樣能跳回去", async () => {
+    memories.mockResolvedValue(list(mem({ text: "同一句", quote: "同一句 ", slug: "d1", session: "s1", seq: 0 })));
+    mount();
+    expect(await screen.findAllByText("同一句")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("link", { name: "出自對話" }));
+    expect(screen.getByTestId("loc").textContent).toBe("/w/d1?s=s1");
+  });
+
   it("沒有來源的顯示手寫標記", async () => {
     memories.mockResolvedValue(list(mem({ text: "手打的" })));
     mount();

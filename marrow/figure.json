@@ -3,7 +3,7 @@
   "view": [120, 100],
   "pens": {
     "apricot": {"light": "#cc8650", "dark": "#dc9a66", "text": {"light": "#925a2b", "dark": "#dc9a66"}},
-    "pine": {"light": "#253122", "dark": "#6f8a64", "text": {"light": "#253122", "dark": "#93ad86"}},
+    "pine": {"light": "#253122", "dark": "#3f5039", "text": {"light": "#253122", "dark": "#93ad86"}},
     "olive": {"light": "#7f9466", "dark": "#a9b98e", "text": {"light": "#56683f", "dark": "#a9b98e"}},
     "moss": {"light": "#8a9a5b", "dark": "#b3c08a", "text": {"light": "#616c40", "dark": "#b3c08a"}},
     "sand": {"light": "#c9a26a", "dark": "#d8b77f", "text": {"light": "#7b6341", "dark": "#d8b77f"}},

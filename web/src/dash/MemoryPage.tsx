@@ -44,7 +44,8 @@ function Row({ chain, act }: { chain: Chain; act: Act }) {
           onChange={e => setEditing(e.target.value)} />
       )}
       {m.quote && m.slug && m.session
-        ? <Link className="dash-mem-source" to={`/w/${encodeURIComponent(m.slug)}?s=${encodeURIComponent(m.session)}`}>{m.quote}</Link>
+        ? <Link className="dash-mem-source" to={`/w/${encodeURIComponent(m.slug)}?s=${encodeURIComponent(m.session)}`}>
+            {m.quote.trim() === m.text.trim() ? <><Icon name="talk" />{t("memory.fromChat")}</> : m.quote}</Link>
         : <span className="dash-mem-source">{t("memory.typed")}</span>}
       <div className="dash-mem-bar">
         {editing === null

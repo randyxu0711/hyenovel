@@ -224,7 +224,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
       <div className="shelf-top">
         <IB icon="panel" label={t(open ? "shelf.collapse" : "shelf.expand")} aria-expanded={open} onClick={onToggle} />
         {open && <Link to="/" className="shelf-brand"><Logo />{t("brand")}</Link>}
-        {(!open || settingsNav) && <IB icon="plus" label={t("shelf.newChat")} onClick={onNew} />}
+        {!open && !settingsNav && <IB icon="plus" label={t("shelf.newChat")} onClick={onNew} />}
         {!open && (
           <IB icon="find" label={t("shelf.find")} onClick={onFind}>
             {news && <span className="rail-dot rail-news" data-state="fresh" role="img" aria-label={t("rail.fresh")} />}
@@ -271,7 +271,7 @@ export default function Rail({ mode, onToggle, works, current, talk, view, onOpe
         </ul>
       )}
       <div className="shelf-foot">
-        <IB icon={themeMode === "dark" ? "sun" : "moon"} label={t("palette.dayNight")} onClick={toggleDayNight} />
+        {view !== "settings" && <IB icon={themeMode === "dark" ? "sun" : "moon"} label={t("palette.dayNight")} onClick={toggleDayNight} />}
         <IB icon="gear" label={t("rail.settings")} aria-current={view === "settings" ? "page" : undefined}
           onClick={() => nav("/settings")} />
       </div>
