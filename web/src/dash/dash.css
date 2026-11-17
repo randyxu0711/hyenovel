@@ -402,6 +402,22 @@
 .dash .side-note p{margin:0 0 6px}
 .dash .side-note p:last-child{margin-bottom:0}
 .dash .side-quotes{display:flex; flex-wrap:wrap; gap:4px 8px; font-family:var(--serif)}
+.dash .trace-group{display:flex; flex-direction:column; gap:10px}
+.dash .trace-group-h{display:inline-flex; align-items:baseline; gap:6px; align-self:flex-start; padding:0; border:0; background:none; cursor:pointer;
+  font-size:var(--dash-t-sm); font-weight:600; color:var(--dash-ink)}
+.dash .trace-group-h .dash-dm{font-weight:400; color:var(--dash-ink-2)}
+.dash .trace-card{cursor:default}
+.dash .trace-card.is-raised{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
+.dash .trace-card[data-sel]{outline:1px solid var(--dash-line); outline-offset:2px}
+.dash .trace-top{display:flex; justify-content:space-between; margin:0}
+.dash .trace-state{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .trace-card.is-raised .trace-state{color:var(--dash-ink); font-weight:600}
+.dash .trace-title{padding:0; border:0; background:none; cursor:pointer; font:inherit; color:inherit; text-align:start}
+.dash .trace-q{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; margin:2px 0; font-family:var(--serif)}
+.dash .trace-q del, .dash .trace-old{color:var(--dash-ink-2); text-decoration:line-through; text-decoration-thickness:1px}
+.dash .trace-changed{flex-direction:column; gap:0}
+.dash .trace-gone{cursor:pointer}
+.dash .trace-qstate{margin-inline-start:auto; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .side-question{color:var(--dash-ink-2)}
 /* 引文:虛底線,滑過變實線;這一版對不到 → 灰虛線 */
 .dash .dash-iq{

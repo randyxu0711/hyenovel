@@ -1,11 +1,12 @@
-import { useCallback, useState } from "react";
-import type { Turn, WorkMap } from "./api";
+import { useCallback, useEffect, useState } from "react";
+import type { Compare, Turn, WorkMap } from "./api";
 import ChartTab from "./ChartTab";
 import { useT, type MsgKey } from "./i18n";
 import Icon, { type IconName } from "./Icon";
 import NotesTab from "./NotesTab";
 import { markId, type Mark } from "./Paper";
 import Talk from "./Talk";
+import TraceTab from "./TraceTab";
 import type { Characters } from "./useCharacters";
 import type { Talk as TalkState } from "./useTalk";
 
@@ -29,7 +30,7 @@ export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
 }
 
 /** 右欄:對話 | 筆記 | 結構圖。對話一直掛著(切走也不丟草稿、稿上痕跡點得回來),另兩頁切到才畫。 */
-export default function Side({ version, map, mapError, state, marks, talk, quotes, analyzing = false, onDropQuote, onSent, ob = null, onOb }: {
+export default function Side({ version, map, mapError, state, marks, talk, quotes, analyzing = false, onDropQuote, onSent, ob = null, onOb, cmp = null, onCompare }: {
   /** 正在看的版本號。 */
   version: number;
   map: WorkMap | null;
@@ -42,20 +43,35 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
   onDropQuote: (i: number) => void; onSent: () => void;
   /** 結構圖選中的觀察。 */
   ob?: string | null; onOb?: (id: string | null) => void;
+  /** 對照資料:有上一版筆記時筆記分頁換成「去向」。 */
+  cmp?: Compare | null;
+  /** 筆記眉頭的對照鍵。 */
+  onCompare?: (n: number) => void;
 }) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("talk");
   const reveal = useCallback(() => setTab("talk"), []);
+  const tracing = cmp?.mode === "notes";
+  const comparing = !!cmp;
+  useEffect(() => {
+    if (tracing) setTab("notes");
+    else if (comparing) setTab(x => (x === "chart" ? "notes" : x));
+  }, [tracing, comparing]);
   return (
     <div className="side">
       <header className="side-head">
         <div className="side-tabs" role="tablist" aria-label={t("side.tabs")}>
-          {TABS.map(([k, label, icon]) => (
-            <button key={k} type="button" role="tab" id={`side-tab-${k}`} aria-controls={`side-panel-${k}`}
-              aria-selected={tab === k} aria-label={t(label)} title={tab === k ? undefined : t(label)}
-              data-empty={k === "notes" ? !!map && !map.notes : k === "chart" ? !!map && map.analysis_version === null : undefined}
-              onClick={() => setTab(k)}><Icon name={icon} />{tab === k && <span>{t(label)}</span>}</button>
-          ))}
+          {TABS.map(([k, base, baseIcon]) => {
+            const [label, icon]: [MsgKey, IconName] = k === "notes" && tracing ? ["side.trace", "compare"] : [base, baseIcon];
+            const off = k === "chart" && !!cmp;
+            return (
+              <button key={k} type="button" role="tab" id={`side-tab-${k}`} aria-controls={`side-panel-${k}`}
+                aria-selected={tab === k} aria-label={t(label)} title={off ? t("trace.chartOff") : tab === k ? undefined : t(label)}
+                disabled={off}
+                data-empty={off || (k === "notes" ? !tracing && !!map && !map.notes : k === "chart" ? !!map && map.analysis_version === null : undefined)}
+                onClick={() => setTab(k)}><Icon name={icon} />{tab === k && <span>{t(label)}</span>}</button>
+            );
+          })}
         </div>
       </header>
       <div className="side-panel" role="tabpanel" id="side-panel-talk" aria-labelledby="side-tab-talk" hidden={tab !== "talk"}>
@@ -63,7 +79,7 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
       </div>
       {tab !== "talk" && (
         <div className="side-panel side-scroll" role="tabpanel" id={`side-panel-${tab}`} aria-labelledby={`side-tab-${tab}`}>
-          {tab === "notes" ? <NotesTab map={map} state={state} error={mapError} /> : <ChartTab map={map} marks={marks} error={mapError} ob={ob} onOb={onOb} />}
+          {tab === "notes" ? (tracing ? <TraceTab cmp={cmp!} /> : <NotesTab map={map} state={state} error={mapError} onCompare={onCompare} />) : <ChartTab map={map} marks={marks} error={mapError} ob={ob} onOb={onOb} />}
         </div>
       )}
     </div>

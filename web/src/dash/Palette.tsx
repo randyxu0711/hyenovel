@@ -12,9 +12,11 @@ type Item = { id: string; label: string; text: string; group: Group; lead?: Reac
 const HEADS: Partial<Record<Group, MsgKey>> = { works: "palette.g.works", companions: "palette.g.companions" };
 
 /** ⌘K / Ctrl+K 的指令框:搜作品、換預設陪讀者、開設定、切晝夜。方向鍵移動、Enter 執行、Esc 關(焦點還給開之前的元素)。 */
-export default function Palette({ works, chars, onOpen, onSettings, onToggle, onClose }: {
+export default function Palette({ works, chars, onOpen, onSettings, onToggle, onClose, compare }: {
   works: Work[]; chars: Characters;
   onOpen: (slug: string) => void; onSettings: () => void; onToggle: () => void; onClose: () => void;
+  /** 作品頁:對照上一版 / 結束對照。 */
+  compare?: { on: boolean; run: () => void };
 }) {
   const t = useT();
   const lang = useLang();
@@ -39,6 +41,8 @@ export default function Palette({ works, chars, onOpen, onSettings, onToggle, on
       return { id: `c-${c.id}`, group: "companions", text: name, label: t("palette.companion", { name }), lead: <Figure character={c} size={20} />, run: () => setCompanion(chars, c.id) };
     }),
     { id: "settings", group: "misc", text: t("palette.settings"), label: t("palette.settings"), lead: <Icon name="gear" />, run: onSettings },
+    ...(compare ? [{ id: "compare", group: "misc" as const, text: t(compare.on ? "palette.compareEnd" : "palette.compare"),
+      label: t(compare.on ? "palette.compareEnd" : "palette.compare"), lead: <Icon name="compare" />, run: compare.run }] : []),
     { id: "daynight", group: "misc", text: t("palette.dayNight"), label: t("palette.dayNight"), lead: <Icon name={mode === "dark" ? "sun" : "moon"} />, run: onToggle },
   ];
   const needle = q.trim().toLowerCase();

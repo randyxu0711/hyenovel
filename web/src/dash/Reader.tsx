@@ -6,6 +6,7 @@ import CompareBar from "./CompareBar";
 import DropSheet from "./DropSheet";
 import Icon from "./Icon";
 import { errorMessage, useLang, useT, type MsgKey } from "./i18n";
+import { useLinks } from "./links";
 import Paper, { type Mark, type ObSpan } from "./Paper";
 import { useJob } from "./useJob";
 import { useSubmitDraft } from "./useSubmitDraft";
@@ -92,6 +93,10 @@ export default function Reader({ slug, version, onQuote, onFinished, onAnalysed,
 
   const analyzing = !!work && work.job_id !== null && ANALYZING.includes(work.state);
   const cmp = useCompare(slug, work?.version ?? null, onCompare);
+  const { registerRun } = useLinks();
+  const jumpRun = useRef(cmp.jumpRun);
+  jumpRun.current = cmp.jumpRun;
+  useEffect(() => registerRun(id => jumpRun.current(id)), [registerRun]);
   const job = useJob(analyzing ? work!.job_id : null);
 
   const { cancel: dropDraft } = submit;
