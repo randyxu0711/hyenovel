@@ -6,7 +6,7 @@ den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的�
 import bisect
 
 from den import memory, spans, works
-from marrow import gate, labels, repo, vizdata
+from marrow import compare, gate, labels, repo, vizdata
 
 
 def _current(art: dict | None) -> dict | None:
@@ -118,6 +118,40 @@ def work_detail(conn, slug: str, v: int | None = None) -> dict:
                         for x in svs],
             "state": row["state"], "job_id": row["job_id"],
             "notes_ready": notes is not None and notes["source_version_id"] == row["latest_sv_id"]}
+
+
+def work_compare(conn, slug: str, v: int | None, frm: int | None) -> dict:
+    st = repo.story_by_slug(conn, slug)
+    if st is None:
+        raise LookupError(slug)
+    shown = repo.latest_source_version(conn, st["id"]) if v is None else repo.source_version_by_n(conn, st["id"], v)
+    if shown is None:
+        raise UnknownVersion(v)
+    noted = repo.artifact_versions(conn, st["id"], "notes")
+    older = [sv for sv in reversed(repo.source_versions(conn, st["id"])) if sv["n"] < shown["n"]]
+    cands = [sv for sv in older if sv["n"] in noted]
+    mode = "notes" if cands else "text"
+    cands = cands or older
+    old = next((sv for sv in cands if frm is None or sv["n"] == frm), None)
+    if old is None:
+        raise UnknownVersion(frm if frm is not None else v)
+    d = compare.diff(old["text"], shown["text"])
+    points = []
+    if mode == "notes":
+        notes = repo.artifact_at(conn, st["id"], "notes", old["id"])
+        ana = repo.artifact_at(conn, st["id"], "analysis", old["id"])
+        names = labels.label_map(ana["body"] if ana else None)
+
+        def lab(t):
+            return labels.relabel(t, names) if isinstance(t, str) else t
+        raw = [{**p, "title": lab(p.get("title")), "body": lab(p.get("body")), "question": lab(p.get("question"))}
+               for p in notes["body"].get("points") or []]
+        points = compare.trace(raw, old["text"], shown["text"], d)
+    compare.pin(d["runs"], points)
+    return {"new": shown["n"], "old": old["n"], "mode": mode,
+            "olds": [{"n": sv["n"], "noted": sv["n"] in noted} for sv in cands],
+            "text": shown["text"], **compare.public(d),
+            "notes_version": old["n"] if mode == "notes" else None, "points": points}
 
 
 def _drift(nodes: list[dict], text: str) -> dict:

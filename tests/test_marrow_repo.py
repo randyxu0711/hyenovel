@@ -594,3 +594,13 @@ def test_delete_story_removes_everything_of_it_and_nothing_else(conn):
     assert repo.discussion_by_session(conn, "K")["id"] == kd
     assert repo.latest_source_version(conn, keep)["id"] == kv
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_artifact_at_returns_latest_for_that_version(conn):
+    sid = repo.ensure_story(conn, "s", "t", 0)
+    v1, _ = repo.add_source_version(conn, sid, "一", 1)
+    v2, _ = repo.add_source_version(conn, sid, "二", 2)
+    repo.add_artifact(conn, sid, v1, "notes", 1, {"n": "old"}, {}, 3)
+    repo.add_artifact(conn, sid, v1, "notes", 1, {"n": "new"}, {}, 4)
+    assert repo.artifact_at(conn, sid, "notes", v1)["body"] == {"n": "new"}
+    assert repo.artifact_at(conn, sid, "notes", v2) is None

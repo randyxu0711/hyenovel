@@ -1031,3 +1031,13 @@ def test_map_route_not_shadowed(data, caplog):
         r = c.get("/api/works/nope/map", headers=h)
         assert r.status_code == 404 and r.json()["code"] == "unknown-work"
         assert c.get("/api/works/mini/source", headers=h).status_code == 200
+
+
+def test_compare_route(data):
+    with _client(data) as c:
+        h = _auth(data[1])
+        r = c.get("/api/works/mini/compare", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+        r = c.get("/api/works/nope/compare", headers=h)
+        assert r.status_code == 404 and r.json()["code"] == "unknown-work"
+        assert c.get("/api/works/mini/compare", params={"from": 0}, headers=h).status_code == 422

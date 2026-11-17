@@ -170,6 +170,12 @@ def current_artifact(conn, story_id: int, kind: str) -> dict | None:
         "WHERE c.story_id = ? AND c.kind = ?", (story_id, kind)).fetchone())
 
 
+def artifact_at(conn, story_id: int, kind: str, source_version_id: int) -> dict | None:
+    return _row(conn.execute(
+        "SELECT * FROM artifact WHERE story_id = ? AND kind = ? AND source_version_id = ? "
+        "ORDER BY id DESC LIMIT 1", (story_id, kind, source_version_id)).fetchone())
+
+
 # ── discussion / utterance ──
 
 def ensure_discussion(conn, story_id: int | None, external_id: str, home: str, client: str | None,
