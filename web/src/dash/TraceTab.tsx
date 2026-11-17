@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Compare, TracePoint, TraceQuote } from "./api";
 import { useT, type MsgKey } from "./i18n";
 import Iq from "./Iq";
@@ -36,9 +36,15 @@ function Card({ p, cmp }: { p: TracePoint; cmp: Compare }) {
   const t = useT();
   const { trace } = useLinks();
   const [open, setOpen] = useState(false);
+  const self = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (trace.picked !== p.i) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    self.current?.scrollIntoView?.({ block: "nearest", behavior: still ? "auto" : "smooth" });
+  }, [trace.picked, p.i]);
   const raised = p.kind === "moved" && p.fate === "changed";
   return (
-    <section className={["side-note", "trace-card", raised && "is-raised"].filter(Boolean).join(" ")}
+    <section ref={self} className={["side-note", "trace-card", raised && "is-raised"].filter(Boolean).join(" ")}
       data-sel={trace.picked === p.i ? "" : undefined} data-point={p.i}
       onMouseEnter={() => trace.setHover(p.i)} onMouseLeave={() => trace.setHover(null)}
       onClick={() => trace.setPicked(p.i)}>

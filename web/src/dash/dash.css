@@ -367,9 +367,27 @@
 .dash .paper-sheet[data-flow="v"] .cmp-fold{padding:4px 1px; margin:2px 0; border:1px dashed currentColor; letter-spacing:.12em; vertical-align:middle; text-combine-upright:none}
 .dash .paper-sheet[data-flow="v"] .cmp-fold svg{display:none}
 .dash .paper-sheet[data-flow="v"] .cmp-fold:not(:has(span)){width:.8em; height:.8em; padding:0}
+.dash .paper-sheet.dash-paper{position:relative}
+.dash .cmp-layer{position:absolute; inset:0; pointer-events:none}
+.dash .cmp-lit{position:absolute; border-radius:2px; background:color-mix(in srgb, var(--dash-paper-ink-2) 18%, transparent); transition:background-color var(--d-quick)}
+.dash .cmp-bracket{position:absolute; z-index:2; padding:0; border:0; background:none; cursor:pointer; pointer-events:auto;
+  color:color-mix(in srgb, var(--dash-paper-ink) 50%, var(--dash-paper)); animation:cmp-in var(--d-quick) var(--ease-house) both}
+.dash .cmp-bracket::before{content:""; position:absolute; inset:-8px}
+.dash .cmp-bracket i{position:absolute; inset:0; border:1px solid currentColor; pointer-events:none}
+.dash .cmp-bracket[data-axis="y"]{right:18px; width:4px}
+.dash .cmp-bracket[data-axis="y"] i{border-left:0}
+.dash .cmp-bracket[data-axis="x"]{top:30px; height:6px}
+.dash .cmp-bracket[data-axis="x"] i{border-bottom:0}
+.dash .cmp-bracket.is-heavy{color:color-mix(in srgb, var(--dash-paper-ink) 68%, var(--dash-paper))}
+.dash .cmp-bracket.is-lit{z-index:3; color:var(--dash-paper-ink)}
+.dash .cmp-bracket.is-lit i{border-width:1.5px}
+.dash .cmp-bracket.is-lit[data-axis="y"] i{border-left:0}
+.dash .cmp-bracket.is-lit[data-axis="x"]{height:20px}
+.dash .cmp-bracket.is-lit[data-axis="x"] i{border-bottom:0}
+.dash .cmp-bracket.is-dim{opacity:.3}
 @keyframes cmp-in{from{opacity:0}}
 @keyframes cmp-ins-in{from{background-color:transparent}}
-@media (prefers-reduced-motion:reduce){ .dash .cmp-del, .dash .cmp-ins, .dash .cmp-fold{animation:none} }
+@media (prefers-reduced-motion:reduce){ .dash .cmp-del, .dash .cmp-ins, .dash .cmp-fold, .dash .cmp-bracket{animation:none} .dash .cmp-lit{transition:none} }
 .dash .dash-mark:hover, .dash .dash-mark.is-hover{background-color:color-mix(in srgb, var(--dash-paper-ink-2) 12%, transparent)}
 .dash .dash-mark:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
 .dash .dash-mark.is-drawing{animation:dash-mark-draw var(--dash-draw) ease-out both}
