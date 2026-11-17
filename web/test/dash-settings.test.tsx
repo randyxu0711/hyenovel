@@ -192,7 +192,7 @@ describe("設定頁", () => {
     await go("讀伴");
     fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
-    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
     const who = () => document.querySelector(".home form.composer svg.fig")?.getAttribute("data-who");
     await waitFor(() => expect(who()).toBe("hyena"));
     release();
@@ -249,7 +249,7 @@ describe("設定頁", () => {
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && i?.method === "PUT" && i.body === JSON.stringify({ character: "buffalo" }))).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
     await waitFor(() => expect(document.querySelector(".home form.composer svg.fig")!.getAttribute("data-who")).toBe("buffalo"));
   });
 
@@ -264,6 +264,19 @@ describe("設定頁", () => {
     expect(tagged()).toEqual([card(p, "鹿")]);
     expect(s.queryByRole("button", { name: /預設/ })).toBeNull();
     expect(s.getByText("預設", { selector: ".char-tag" })).toBeTruthy();
+  });
+
+  it("預設是蓋上去的章:用角色自己的顏色;剛按下才播蓋章,打開本來就是預設的不播", async () => {
+    mount();
+    const p = await page();
+    await go("讀伴");
+    const already = sheet(p, "鬣狗").getByText("預設", { selector: ".char-stamp" });
+    expect(already.hasAttribute("data-fresh")).toBe(false);
+    expect(already.style.color).not.toBe("");
+    fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
+    const s = sheet(p, "鹿");
+    fireEvent.click(s.getByRole("button", { name: "設為預設" }));
+    expect(s.getByText("預設", { selector: ".char-stamp" }).hasAttribute("data-fresh")).toBe(true);
   });
 
   it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {

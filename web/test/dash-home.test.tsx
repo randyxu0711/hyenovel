@@ -175,6 +175,16 @@ describe("進門聊天", () => {
     expect(await talk.findByText("嗨,你好")).toBeTruthy();
   });
 
+  it("開聊前讀伴是舞台大小,開聊後縮成作品欄的大小", async () => {
+    mount();
+    const talk = within(await screen.findByRole("region", { name: "對話" }));
+    const fig = () => document.querySelector(".home form.composer svg.fig")!.getAttribute("width");
+    expect(fig()).toBe("172");
+    fireEvent.change(talk.getByLabelText("對話輸入"), { target: { value: "隨便聊聊" } });
+    fireEvent.click(talk.getByRole("button", { name: "送出" }));
+    await waitFor(() => expect(fig()).toBe("72"));
+  });
+
   it("free chat waiting line does not mention a draft", async () => {
     mount();
     const real = fetch;

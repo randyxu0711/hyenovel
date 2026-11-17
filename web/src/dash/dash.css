@@ -16,7 +16,7 @@
   color:var(--dash-ink);
   font-family:var(--sans); font-size:var(--dash-t-md); line-height:1.6;
 }
-.dash[data-view="home"]{background-image:var(--dash-spots,none); background-size:480px 480px, 624px 624px}
+.dash[data-view="home"]:not(:has(.home-talk[data-live])){background-image:var(--dash-spots,none); background-size:480px 480px, 624px 624px}
 /* 點陣字:只用在品牌、版本、時間、段號;要讀的字不用 */
 .dash .vh{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
 .dash .notes-meta{display:flex; align-items:center; gap:6px}
@@ -232,16 +232,17 @@
 /* 進門 */
 .dash .home{height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; box-sizing:border-box}
 .dash .home-talk{width:min(720px,100%); min-height:0; display:flex; flex-direction:column}
-.dash .home-talk[data-live]{flex:1}
+.dash .home-talk[data-live]{flex:1; width:100%}
+.dash .home:has(.home-talk[data-live]){padding-inline:0}
 .dash .home-talk > .chat{flex:1; min-height:0}
 .dash .home-talk:not([data-live]) .chat-log{display:none}
 .dash .home-talk:not([data-live]) .composer{margin-bottom:12vh}
-.dash .home-talk .composer{margin-top:136px}
-.dash .home-talk .composer > .who{width:172px; height:152px; margin-bottom:-26px; left:-44px}
-.dash .home-talk .composer textarea{min-height:78px; font-size:var(--dash-t-md); padding:14px 16px 4px}
+.dash .home-talk:not([data-live]) .composer{margin-top:136px}
+.dash .home-talk:not([data-live]) .composer > .who{width:172px; height:152px; margin-bottom:-26px; left:-44px}
+.dash .home-talk:not([data-live]) .composer textarea{min-height:78px; font-size:var(--dash-t-md); padding:14px 16px 4px}
 @media (max-width:860px){
-  .dash .home-talk .composer{margin-top:100px}
-  .dash .home-talk .composer > .who{width:120px; height:106px; margin-bottom:-18px; left:10px}
+  .dash .home-talk:not([data-live]) .composer{margin-top:100px}
+  .dash .home-talk:not([data-live]) .composer > .who{width:120px; height:106px; margin-bottom:-18px; left:10px}
 }
 @media (max-width:700px){
   .dash .home{padding:12px 0}
@@ -381,9 +382,9 @@
 .dash .dash-iq.is-lost{cursor:help; color:var(--dash-ink-2); text-decoration:underline dashed var(--dash-line); background:none}
 /* 印字頭:分析中在紙頂來回(只表示在跑,不畫點陣、不顯示進度);analyst 完成時把點陣張力一欄一欄印一次 */
 .dash .side-curve{position:relative; display:grid; grid-template-columns:repeat(var(--dash-cols), minmax(0, 1fr)); padding:0 4px}
-.dash .side-line{position:absolute; left:4px; right:4px; top:0; width:calc(100% - 8px); height:60px; overflow:visible; color:var(--dash-ink); pointer-events:none}
+.dash .side-line{position:absolute; left:4px; right:4px; top:0; width:calc(100% - 8px); height:88px; overflow:visible; color:var(--dash-ink); pointer-events:none}
 .dash .side-line polyline{fill:none; stroke:currentColor; stroke-width:1.4; stroke-linejoin:round; stroke-linecap:round; vector-effect:non-scaling-stroke}
-.dash .dash-mcol{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; height:92px; padding:0 0 4px; border:0; border-radius:6px; background:none; cursor:pointer}
+.dash .dash-mcol{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; height:120px; padding:0 0 4px; border:0; border-radius:6px; background:none; cursor:pointer}
 .dash .dash-mcol:hover:not(:disabled), .dash .dash-mcol:focus-visible{background:color-mix(in srgb, var(--dash-ink-2) 10%, transparent)}
 .dash .dash-mcol:disabled{cursor:default}
 .dash .dash-mcol.is-peak .side-n{color:var(--dash-ink); font-weight:800}
@@ -391,11 +392,12 @@
 .dash .side-wave path{fill:none; stroke:currentColor; stroke-width:1; stroke-linecap:round}
 .dash .side-ob:disabled{opacity:.45; cursor:default}
 .dash .side-ob:disabled:hover{background:none}
-.dash .side-ob{display:grid; gap:2px; width:100%; margin:0 0 4px; padding:10px 12px; border:0; border-radius:10px; background:none; text-align:left; cursor:pointer; color:inherit; font:inherit}
+.dash .side-obs{display:flex; flex-direction:column; gap:2px}
+.dash .side-ob{display:grid; grid-template-columns:minmax(4em, 1fr) minmax(0, auto); align-items:baseline; gap:12px; width:100%; margin:0; padding:8px 12px; border:0; border-radius:10px; background:none; text-align:left; cursor:pointer; color:inherit; font:inherit}
 .dash .side-ob:hover{background:var(--dash-desk-2)}
 .dash .side-ob[aria-pressed="true"]{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .side-ob-name{font-family:var(--serif)}
-.dash .side-ob-sub{font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .side-ob-sub{text-align:right; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 
 /* ── 設定頁 ── */
@@ -766,7 +768,13 @@
 .dash .char-pop:hover .char-stage .fig{transform:translateZ(28px) translateY(-2px)}
 .dash .char-name{margin:12px 14px 2px; font-family:var(--serif); font-size:var(--dash-t-lg); font-weight:500; line-height:1.3}
 .dash .char-pop .char-line{margin:0; padding:0 14px; min-height:2.6em; text-wrap:balance}
-.dash .char-tag{margin-top:10px; padding:1px 9px; border-radius:99px; background:var(--dash-accent); color:var(--dash-accent-ink); font-size:var(--dash-t-xs)}
+.dash .char-stamp{display:inline-block; margin-top:10px; padding:2px 6px 2px calc(6px + .24em); border:1.5px solid currentColor; border-radius:3px;
+  box-shadow:inset 0 0 0 1.5px var(--dash-paper), inset 0 0 0 2.4px currentColor; font-family:var(--serif); font-size:var(--dash-t-xs); font-weight:600; letter-spacing:.24em; line-height:1.5;
+  transform:rotate(-4deg); opacity:.88; -webkit-mask-image:radial-gradient(120% 140% at 28% 30%, black 55%, transparent 160%); mask-image:radial-gradient(120% 140% at 28% 30%, black 55%, transparent 160%)}
+.dash[data-mode="light"] .char-stamp{mix-blend-mode:multiply}
+.dash .char-stamp[data-fresh]{animation:char-stamp .18s cubic-bezier(.3, 0, .4, 1) both}
+@keyframes char-stamp{from{transform:rotate(-4deg) scale(1.15); opacity:0}}
+@media (prefers-reduced-motion:reduce){ .dash .char-stamp[data-fresh]{animation:none} }
 .dash .char-lineup .char-new{align-items:stretch; justify-content:center; gap:4px; padding:16px; border:1.5px dashed var(--dash-line); border-radius:4px}
 .dash .char-new .char-new-slot{display:flex; flex-direction:column; gap:10px; padding:12px 8px; color:var(--dash-ink)}
 .dash .char-new-slot > span{display:grid; place-items:center; width:64px; height:64px; border:1.5px dashed var(--dash-line); border-radius:50%}
@@ -792,7 +800,8 @@
 .dash :is(.char-reading > p, .char-scroll, .char-edit-long textarea)::-webkit-scrollbar-thumb{background-color:color-mix(in srgb, var(--dash-paper-ink) 22%, transparent)}
 .dash .char-sheet-foot{display:flex; align-items:center; justify-content:space-between; gap:8px}
 .dash .char-sheet :is(.char-sheet-foot, .char-edit.is-sheet .char-edit-foot){position:sticky; bottom:-22px; z-index:1; margin:8px -28px -22px; padding:24px 28px 16px; background:linear-gradient(to bottom, transparent, var(--dash-paper) 22px)}
-.dash .char-sheet-foot .char-tag{margin:0}
+.dash .char-sheet-foot .char-tag{margin:0 0 0 4px; font-size:var(--dash-t-sm)}
+.dash .char-sheet-foot .dash-key{padding:4px 14px; font-weight:500; color:var(--dash-paper-ink)}
 .dash .char-sheet .ib{color:var(--dash-paper-ink-2)}
 @keyframes char-standup{from{transform:rotateX(84deg)} to{transform:rotateX(0)}}
 @keyframes char-veil-in{from{opacity:0}}
@@ -961,7 +970,7 @@
 .dash .dash-mem-empty{margin:0 0 12px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .dash-mem-row{margin:0 0 14px}
 .dash .dash-mem-row p, .dash .dash-mem-old p{margin:0 0 4px; white-space:pre-wrap}
-.dash .dash-mem-source{display:block; margin:0 0 6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .dash-mem-source{display:flex; align-items:center; gap:4px; width:fit-content; margin:0 0 6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .dash-mem-bar{display:flex; flex-wrap:wrap; align-items:center; gap:6px}
 .dash .dash-mem textarea{box-sizing:border-box; width:100%; margin:0 0 6px; padding:6px 8px; border:1px solid var(--dash-line); border-radius:6px; background:none; color:inherit; font:inherit; resize:vertical}
 .dash .dash-mem select{padding:4px 6px; border:1px solid var(--dash-line); border-radius:6px; background:none; color:inherit; font:inherit}
