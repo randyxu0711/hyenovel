@@ -1,7 +1,7 @@
 """兩版原文對照:切句後句內逐字 diff(空白、全半形標點差異不算),與上一版筆記引文的去向。位置一律 code point。"""
 from difflib import SequenceMatcher
 
-from marrow.gate import _PUNCT
+from marrow.gate import _PUNCT, locate
 
 _ENDS = "。！？"
 _CLOSERS = "」』）”’"
@@ -111,3 +111,57 @@ def diff(old: str, new: str) -> dict:
 def _ordered(r: dict) -> dict:
     keys = ("op", "id", "at", "text", "chars", "old") if r["op"] == "del" else ("op", "id", "start", "end")
     return {k: r[k] for k in keys}
+
+
+def _fate(quote: str, old: str, new: str, d: dict, hunk_of: dict, runs: dict) -> dict:
+    out = {"quote": quote, "fate": "lost", "old": None, "new": None, "new_text": None, "del": None}
+    hit = locate(quote, old) if quote.strip() else None
+    if hit is None:
+        return out
+    s, e = hit
+    out["old"] = {"start": s, "end": e}
+    chars = [i for i in range(s, e) if not old[i].isspace()]
+    matched = [d["pairs"][i] for i in chars if i in d["pairs"]]
+    if len(matched) == len(chars):
+        out.update(fate="kept", new={"start": min(matched), "end": max(matched) + 1})
+        return out
+    moved = locate(quote, new)
+    if moved is not None:
+        out.update(fate="kept", new={"start": moved[0], "end": moved[1]})
+        return out
+    dels = [r for r in d["runs"] if r["op"] == "del" and r["old"]["start"] < e and s < r["old"]["end"]]
+    out["del"] = dels[0]["id"] if dels else None
+    ins = [runs[i] for r in dels for i in hunk_of[r["id"]] if runs[i]["op"] == "ins"]
+    if not matched and not ins:
+        out["fate"] = "gone"
+        return out
+    lo = min([*matched, *(r["start"] for r in ins)])
+    hi = max([*(m + 1 for m in matched), *(r["end"] for r in ins)])
+    out.update(fate="changed", new={"start": lo, "end": hi}, new_text=new[lo:hi])
+    return out
+
+
+def trace(points: list[dict], old: str, new: str, d: dict) -> list[dict]:
+    hunk_of = {i: h["ids"] for h in d["hunks"] for i in h["ids"]}
+    runs = {r["id"]: r for r in d["runs"]}
+    out = []
+    for n, p in enumerate(points):
+        qs = [_fate(q, old, new, d, hunk_of, runs) for q in p.get("quotes") or []]
+        states = {q["fate"] for q in qs} - {"lost"}
+        fate = "untracked" if not states else "kept" if states == {"kept"} else "changed"
+        label = None if not states else next(iter(states)) if len(states) == 1 else "mixed"
+        out.append({"i": n, "kind": p.get("kind"), "title": p.get("title"), "body": p.get("body"),
+                    "question": p.get("question"), "fate": fate, "label": label, "quotes": qs})
+    return out
+
+
+def pin(runs: list[dict], points: list[dict]) -> None:
+    spans = [q["old"] for p in points for q in p["quotes"] if q["old"] is not None]
+    for r in runs:
+        if r["op"] == "del":
+            r["pinned"] = any(sp["start"] < r["old"]["end"] and r["old"]["start"] < sp["end"] for sp in spans)
+
+
+def public(d: dict) -> dict:
+    return {"runs": [{k: v for k, v in r.items() if k != "old"} for r in d["runs"]],
+            "hunks": d["hunks"], "same": d["same"]}
