@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 import type { Compare, Turn, WorkMap } from "./api";
 import ChartTab from "./ChartTab";
 import { useT, type MsgKey } from "./i18n";
@@ -53,7 +53,7 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
   const reveal = useCallback(() => setTab("talk"), []);
   const tracing = cmp?.mode === "notes";
   const comparing = !!cmp;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (tracing) setTab("notes");
     else if (comparing) setTab(x => (x === "chart" ? "notes" : x));
   }, [tracing, comparing]);
