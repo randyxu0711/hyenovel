@@ -770,7 +770,7 @@
 .dash .char-pop .char-line{margin:0; padding:0 14px; min-height:2.6em; text-wrap:balance}
 .dash .char-stamp{display:inline-block; margin-top:10px; padding:2px 6px 2px calc(6px + .24em); border:1.5px solid currentColor; border-radius:3px;
   box-shadow:inset 0 0 0 1.5px var(--dash-paper), inset 0 0 0 2.4px currentColor; font-family:var(--serif); font-size:var(--dash-t-xs); font-weight:600; letter-spacing:.24em; line-height:1.5;
-  transform:rotate(-4deg); opacity:.88; -webkit-mask-image:radial-gradient(120% 140% at 28% 30%, #000 55%, rgb(0 0 0 / .72) 100%); mask-image:radial-gradient(120% 140% at 28% 30%, #000 55%, rgb(0 0 0 / .72) 100%)}
+  transform:rotate(-4deg); opacity:.88; -webkit-mask-image:radial-gradient(120% 140% at 28% 30%, black 55%, transparent 160%); mask-image:radial-gradient(120% 140% at 28% 30%, black 55%, transparent 160%)}
 .dash[data-mode="light"] .char-stamp{mix-blend-mode:multiply}
 .dash .char-stamp[data-fresh]{animation:char-stamp .18s cubic-bezier(.3, 0, .4, 1) both}
 @keyframes char-stamp{from{transform:rotate(-4deg) scale(1.15); opacity:0}}
