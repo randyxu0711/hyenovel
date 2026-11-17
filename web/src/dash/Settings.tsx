@@ -395,6 +395,12 @@ function Companions() {
 }
 
 /** 讀伴卡:立體書的紙卡,角色立在摺線上;整張可點,打開資訊面板。 */
+function Stamp({ character: c, fresh = false }: { character: Character; fresh?: boolean }) {
+  const t = useT();
+  const { mode } = useThemeState();
+  return <span className="char-tag char-stamp" data-fresh={fresh || undefined} style={{ color: c.colors[mode].text }}>{t("set.default")}</span>;
+}
+
 function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on: boolean; fresh: boolean; onOpen: () => void }) {
   const t = useT();
   const lang = useLang();
@@ -417,7 +423,7 @@ function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on
       <span className="char-stage" aria-hidden="true"><Figure character={c} size={96} /></span>
       <b className="char-name">{name}</b>
       <span className="char-line">{localized(c.line, lang)}</span>
-      {on && <span className="char-tag">{t("set.default")}</span>}
+      {on && <Stamp character={c} />}
     </button>
   );
 }
@@ -433,6 +439,7 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
   const plist = c.depth_prompt ? parsePlist(c.depth_prompt.prompt) : null;
   const examples = c.examples.trim() ? parseExamples(c.examples) : null;
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [stamped, setStamped] = useState(false);
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     if (!editing) closeRef.current?.focus();
@@ -494,8 +501,8 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
             </section>
           )}
           <div className="char-sheet-foot">
-            {on ? <span className="char-tag">{t("set.default")}</span>
-              : <button type="button" className="dash-key" onClick={onPick}>{t("set.makeDefault")}</button>}
+            {on ? <Stamp character={c} fresh={stamped} />
+              : <button type="button" className="dash-key" onClick={() => { setStamped(true); onPick(); }}>{t("set.makeDefault")}</button>}
             <span className="char-acts">
               <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
                 aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
