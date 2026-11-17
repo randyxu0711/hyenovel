@@ -4,10 +4,11 @@ import { segments } from "./Paper";
 
 export const FOLD_MIN = 34;
 const FOLD_PAD = 5;
-const PAD = "";
+const PAD = "\uE000";
 
 export type Cell =
-  | { kind: "text" | "ins"; at: number }
+  | { kind: "text"; at: number }
+  | { kind: "ins"; id: string; at: number }
   | { kind: "del"; id: string; at: number }
   | { kind: "fold"; id: string; at: number; chars: number };
 export type CmpSeg = Segment & { cells: Cell[] };
@@ -37,7 +38,8 @@ export function overlay(text: string, title: string, runs: Run[], folded: (r: De
   chars.forEach((c, i) => {
     put(i);
     out.push(c);
-    cells.push({ kind: ins.some(r => r.start <= i && i < r.end) ? "ins" : "text", at: i });
+    const hit = ins.find(r => r.start <= i && i < r.end);
+    cells.push(hit ? { kind: "ins", id: hit.id, at: i } : { kind: "text", at: i });
   });
   put(chars.length);
 

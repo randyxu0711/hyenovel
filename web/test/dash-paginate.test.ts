@@ -6,6 +6,14 @@ const upTo = (n: number) => (page: PageSeg[]) => page.reduce((a, s) => a + cpLen
 const lens = (pages: PageSeg[][]) => pages.map(p => p.map(s => cpLength(s.text)));
 
 describe("paginate", () => {
+  it("cut 決定怎麼切段(帶 cells 的段跟著切)", () => {
+    type C = PageSeg & { cells: number[] };
+    const cut = (x: C, a: number, b: number): C => ({ ...x, text: [...x.text].slice(a, b).join(""), cells: x.cells.slice(a, b), start: x.cells[a] });
+    const pages = paginate<C>([{ start: 0, text: "甲乙丙丁", cells: [0, 1, 7, 8] }], upTo(3), cut);
+    expect(pages[0][0].cells).toEqual([0, 1, 7]);
+    expect(pages[1][0]).toEqual({ start: 8, text: "丁", cells: [8], cont: true });
+  });
+
   it("全部放得下 → 一頁、cont 全 false", () => {
     const pages = paginate([{ start: 0, text: "一二" }, { start: 3, text: "三四" }], upTo(10));
     expect(lens(pages)).toEqual([[2, 2]]);

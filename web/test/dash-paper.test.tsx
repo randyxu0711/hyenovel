@@ -9,7 +9,7 @@ import { setLang } from "../src/dash/i18n";
 import { LinksProvider, useLinks, type Links } from "../src/dash/links";
 import { CharactersProvider, makeCharacters } from "../src/dash/useCharacters";
 import { setPaperFlow } from "../src/dash/paperFlow";
-import type { Character } from "../src/dash/api";
+import type { Character, DelRun } from "../src/dash/api";
 import { hyena, buffalo, deer, ch } from "./dash-fixtures";
 
 const odd = { ...ch("fox", "狐", "Fox"), mark: "zigzag" as unknown as Character["mark"] };
@@ -228,5 +228,103 @@ describe("直排頁的 CSS", () => {
   });
   it("頁碼不能被選進引文", () => {
     expect(css).toMatch(/\.dash \.paper-folio\{[^}]*user-select:none/);
+  });
+});
+
+describe("Paper 對照", () => {
+  type Cmp = NonNullable<Parameters<typeof Paper>[0]["cmp"]>;
+  const del = (id: string, at: number, text: string, pinned = false): DelRun =>
+    ({ op: "del", id, at, text, chars: [...text].filter(c => !/\s/.test(c)).length, pinned });
+  const mountCmp = (text: string, cmp: Partial<Cmp>, marks: Mark[] = [], obs: { start: number; end: number }[] = []) => {
+    setLang("zh-Hant");
+    setPaperFlow("h");
+    const onToggle = vi.fn();
+    const full: Cmp = { runs: [], clean: false, open: new Set(), onToggle, focus: null, ...cmp };
+    const r = render(
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={text} title="海" marks={marks} onBring={vi.fn()} obs={obs} cmp={full} />
+        </LinksProvider>
+      </CharactersProvider>);
+    return { ...r, onToggle };
+  };
+
+  it("renders del and ins in compare", () => {
+    const { container } = mountCmp("父親站著。丙。", { runs: [del("d0", 5, "乙。"), { op: "ins", id: "i0", start: 0, end: 2 }] });
+    expect(container.querySelector("del.cmp-del")?.textContent).toBe("乙。");
+    expect(container.querySelector("del.cmp-del")?.getAttribute("data-run")).toBe("d0");
+    expect(container.querySelector("ins.cmp-ins")?.textContent).toBe("父親");
+  });
+
+  it("hides marks and obs in compare", () => {
+    const { container } = mountCmp("她走到岸邊。", { runs: [] }, [mk(0, 2)], [{ start: 2, end: 4 }]);
+    expect(container.querySelector(".dash-mark")).toBeNull();
+    expect(container.querySelector(".paper-ob")).toBeNull();
+  });
+
+  it("folds long unpinned delete and toggles", () => {
+    const { container, onToggle } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))] });
+    const b = container.querySelector<HTMLButtonElement>("button.cmp-fold")!;
+    expect(b.textContent).toContain("刪 34 字");
+    expect(b.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(b);
+    expect(onToggle).toHaveBeenCalledWith("d0");
+    expect(container.querySelector("del")).toBeNull();
+  });
+
+  it("opened fold shows deleted text with a collapse handle", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))], open: new Set(["d0"]) });
+    expect(container.querySelector("del.cmp-del")?.textContent).toBe("長".repeat(34));
+  });
+
+  it("clean folds everything without count", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "丙。", true)], clean: true });
+    const b = container.querySelector("button.cmp-fold")!;
+    expect(b.textContent).not.toMatch(/\d/);
+    expect(container.querySelector("del")).toBeNull();
+  });
+
+  it("no bring for selection containing deleted text", () => {
+    const { container } = mountCmp("甲。丙。", { runs: [del("d0", 2, "乙。")] });
+    const p = container.querySelector("p")!;
+    const range = document.createRange();
+    range.setStart(p, 0); range.setEnd(p, p.childNodes.length);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges(); sel.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    expect(container.querySelector(".paper-bring")).toBeNull();
+  });
+
+  it("focus scrolls to run and flashes its paragraph", () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    const { container, rerender } = mountCmp("甲。\n丙。", { runs: [del("d0", 3, "乙。\n")] });
+    const el = container.querySelector('[data-run="d0"]')!;
+    rerender(
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={"甲。\n丙。"} title="海" marks={[]} onBring={vi.fn()}
+            cmp={{ runs: [del("d0", 3, "乙。\n")], clean: false, open: new Set(), onToggle: vi.fn(), focus: { id: "d0", n: 1 } }} />
+        </LinksProvider>
+      </CharactersProvider>);
+    expect(spy.mock.instances.some(x => x === el.closest("p"))).toBe(true);
+    expect(el.closest("p")!.classList.contains("is-flash")).toBe(true);
+  });
+
+  it("keeps scroll anchor when entering compare", () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    setPaperFlow("h");
+    const tree = (cmp?: Cmp) => (
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={"甲。\n丙。"} title="海" marks={[]} onBring={vi.fn()} cmp={cmp} />
+        </LinksProvider>
+      </CharactersProvider>);
+    const { container, rerender } = render(tree());
+    rerender(tree({ runs: [del("d0", 0, "零。\n")], clean: false, open: new Set(), onToggle: vi.fn(), focus: null }));
+    const target = spy.mock.instances[spy.mock.instances.length - 1] as HTMLElement;
+    expect(target.dataset.start).toBe("0");
+    expect(container.querySelector("del")).not.toBeNull();
   });
 });

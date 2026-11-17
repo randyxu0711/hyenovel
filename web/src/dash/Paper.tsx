@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { DelRun, Run } from "./api";
+import { foldOf, overlay, sliceCells, type Cell, type CmpSeg } from "./compareFlow";
 import { cpLength, cpSlice } from "./cp";
 import { useT } from "./i18n";
 import { useLinks } from "./links";
@@ -68,6 +70,17 @@ function typeset(text: string, flow: PaperFlow): ReactNode {
   return tcyRuns(text).map((r, i) => r.tcy ? <span key={i} className="paper-tcy">{r.text}</span> : <Fragment key={i}>{r.text}</Fragment>);
 }
 
+const Caret = () => (
+  <svg viewBox="0 0 10 8" aria-hidden="true"><path d="M1.5 7L5 1.5 8.5 7" /></svg>
+);
+
+function hasDel(box: HTMLElement | null): boolean {
+  const s = document.getSelection();
+  if (!box || !s || s.rangeCount === 0) return false;
+  const r = s.getRangeAt(0);
+  return [...box.querySelectorAll("del")].some(d => r.intersectsNode(d));
+}
+
 /** 量測用:在隱藏的同尺寸頁裡放這些段,看有沒有溢出(直排往左長 → 比寬)。 */
 function measurer(box: HTMLElement) {
   return (page: PageSeg[]) => {
@@ -81,8 +94,33 @@ function measurer(box: HTMLElement) {
   };
 }
 
+export type PaperCmp = {
+  runs: Run[]; clean: boolean; open: Set<string>; onToggle(id: string): void;
+  focus: { id: string; n: number } | null;
+};
+
+type Chunk = { kind: Cell["kind"]; id: string | null; text: string; at: number; chars: number };
+
+function chunks(seg: CmpSeg): Chunk[] {
+  const out: Chunk[] = [];
+  const chars = [...seg.text];
+  seg.cells.forEach((c, k) => {
+    const id = "id" in c ? c.id : null;
+    const prev = out[out.length - 1];
+    if (prev && prev.kind === c.kind && prev.id === id) { if (c.kind !== "fold") prev.text += chars[k]; return; }
+    out.push({ kind: c.kind, id, text: c.kind === "fold" ? "" : chars[k], at: k, chars: c.kind === "fold" ? c.chars : 0 });
+  });
+  return out;
+}
+
+function firstVisible(box: HTMLElement | null): number | null {
+  const ps = [...(box?.querySelectorAll<HTMLElement>("p[data-start]") ?? [])];
+  const el = ps.find(p => p.getBoundingClientRect().bottom > 0) ?? ps[0];
+  return el ? Number(el.dataset.start) : null;
+}
+
 /** 稿:直排一頁頁往下疊、橫排一張長紙。陪讀者提到的句子畫鉛筆波浪線(舊版不畫),選中的觀察畫直線;選字 → 浮出「帶進對話」。 */
-export default function Paper({ text, title, marks, drawing, onBring, old = false, obs = [] }: {
+export default function Paper({ text, title, marks, drawing, onBring, old = false, obs = [], cmp }: {
   text: string; title: string; marks: Mark[];
   /** 正在畫的那道痕跡 id(一筆畫上去的動畫)。 */
   drawing?: string;
@@ -91,6 +129,8 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   old?: boolean;
   /** 結構圖選中的觀察在這版原文的位置。 */
   obs?: ObSpan[];
+  /** 對照中:刪字/新字/摺記,鉛筆線全不畫。 */
+  cmp?: PaperCmp;
 }) {
   const t = useT();
   const flow = usePaperFlow();
@@ -100,11 +140,14 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   const measure = useRef<HTMLDivElement>(null);
   const { quote, tooLong, rect, clear } = useSelectionQuote(box);
   const [flash, setFlash] = useState<{ start: number; n: number } | null>(null);
-  const segs = segments(text, title);
-  const shownMarks = old ? [] : marks;
+  const runsKey = cmp ? JSON.stringify([cmp.runs.map(r => r.id), cmp.clean, [...cmp.open]]) : "";
+  const folded = (r: DelRun) => !!cmp && foldOf(r, cmp.clean, cmp.open);
+  const segs: CmpSeg[] = cmp ? overlay(text, title, cmp.runs, folded) : segments(text, title).map(x => ({ ...x, cells: [] }));
+  const shownMarks = old || cmp ? [] : marks;
+  const shownObs = cmp ? [] : obs;
 
   // 直排切頁:原文、排法、字級、窗格寬改了就重排
-  const [pages, setPages] = useState<PageSeg[][] | null>(null);
+  const [pages, setPages] = useState<(CmpSeg & PageSeg)[][] | null>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
     const el = box.current;
@@ -115,9 +158,39 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   }, []);
   useLayoutEffect(() => {
     if (flow !== "v" || !measure.current) { setPages(null); return; }
-    setPages(paginate(segments(text, title), measurer(measure.current)));
+    const fits = measurer(measure.current);
+    setPages(cmp ? paginate<CmpSeg & PageSeg>(segs, fits, sliceCells) : paginate<CmpSeg & PageSeg>(segs, fits,
+      (x, a, b) => ({ ...x, start: x.start + a, text: cpSlice(x.text, a, b) })));
     measure.current.replaceChildren();
-  }, [text, title, flow, size, width]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, title, flow, size, width, runsKey]);
+
+  // 進出對照時稿會重排:render 期間(DOM 還是舊的)記下第一個看得到的段,排好後捲回同一段
+  const cmpOn = !!cmp;
+  const wasCmp = useRef(cmpOn);
+  const anchor = useRef<number | null>(null);
+  if (wasCmp.current !== cmpOn) { anchor.current = firstVisible(box.current); wasCmp.current = cmpOn; }
+  useLayoutEffect(() => {
+    if (anchor.current === null || (flow === "v" && !pages)) return;
+    const ps = [...(box.current?.querySelectorAll<HTMLElement>("p[data-start]") ?? [])];
+    const el = last(ps.filter(p => Number(p.dataset.start) <= anchor.current!)) ?? ps[0];
+    anchor.current = null;
+    el?.scrollIntoView?.({ block: "start" });
+  }, [cmpOn, pages, flow]);
+
+  const focusKey = cmp?.focus ? `${cmp.focus.id}:${cmp.focus.n}` : null;
+  useEffect(() => {
+    if (!focusKey) return;
+    const el = box.current?.querySelector<HTMLElement>(`[data-run="${focusKey.split(":")[0]}"]`);
+    const p = el?.closest<HTMLElement>("p[data-start]");
+    if (!p) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    p.scrollIntoView?.({ block: "center", behavior: still ? "auto" : "smooth" });
+    const at = Number(p.dataset.start);
+    setFlash(f => ({ start: at, n: (f?.n ?? 0) + 1 }));
+    const timer = setTimeout(() => setFlash(null), FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [focusKey]);
 
   // 跳到稿:找起點不超過 span 起點的最後一段(含續段),捲過去並閃一下
   const textRef = useRef(text);
@@ -149,12 +222,32 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   }, [drawing]);
 
   const hoverKey = hover ? bare(hover) : null;
-  const para = (seg: PageSeg) => (
+  const cmpBody = (seg: CmpSeg) => chunks(seg).map(c => {
+    if (c.kind === "text") return <Fragment key={`t${c.at}`}>{typeset(c.text, flow)}</Fragment>;
+    if (c.kind === "ins") return <ins key={`i${c.at}`} className="cmp-ins" data-run={c.id!}>{typeset(c.text, flow)}</ins>;
+    if (c.kind === "del") return (
+      <Fragment key={`d${c.at}`}>
+        {cmp!.open.has(c.id!) && (
+          <button type="button" className="cmp-fold" aria-expanded="true" aria-label={t("compare.unfold")} title={t("compare.unfold")}
+            onClick={() => cmp!.onToggle(c.id!)}><Caret /></button>
+        )}
+        <del className="cmp-del" data-run={c.id!}>{typeset(c.text, flow)}</del>
+      </Fragment>
+    );
+    const label = t("compare.fold", { n: c.chars });
+    return (
+      <button key={`f${c.at}`} type="button" className="cmp-fold" data-run={c.id!} aria-expanded="false"
+        aria-label={label} title={label} onClick={() => cmp!.onToggle(c.id!)}>
+        <Caret />{!cmp!.clean && <span>{flow === "v" ? typeset(label.replace(/\s+/g, ""), flow) : label}</span>}
+      </button>
+    );
+  });
+  const para = (seg: CmpSeg & PageSeg) => (
     // 段落 key 不跟著閃動變(重掛載會重播畫線、丟掉選取);要重播閃動只換裡面那層的 key
     <p key={seg.start} data-start={seg.start} data-cont={seg.cont ? "" : undefined}
       className={flash?.start === seg.start ? "is-flash" : undefined}>
       {flash?.start === seg.start && <span key={flash.n} className="paper-flash" aria-hidden="true" />}
-      {pieces(seg, shownMarks, obs).map(pc => {
+      {cmp ? cmpBody(seg) : pieces(seg, shownMarks, shownObs).map(pc => {
         const inner = pc.ob ? <span className="paper-ob">{typeset(pc.text, flow)}</span> : typeset(pc.text, flow);
         if (!pc.mark) return <Fragment key={`t${pc.at}`}>{inner}</Fragment>;
         const m = pc.mark;
@@ -173,6 +266,7 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
     </p>
   );
   const plain = segs.map(s => ({ ...s, cont: false }));
+  const bring = quote && !(cmp && hasDel(box.current));
   return (
     <article className={["paper-sheet", flow === "h" && "dash-paper", old && "is-old"].filter(Boolean).join(" ")}
       data-size={size} data-flow={flow}>
@@ -185,7 +279,7 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
         ))}
       </div>
       {flow === "v" && <div ref={measure} className="paper-cols paper-measure" aria-hidden="true" />}
-      {quote && (
+      {bring && (
         <div className="dash-float paper-bring" style={rect ? { position: "fixed", left: rect.left, top: rect.bottom + 8 } : undefined}>
           <button type="button" disabled={tooLong} onMouseDown={e => e.preventDefault()}
             onClick={() => { onBring(quote); clear(); }}>

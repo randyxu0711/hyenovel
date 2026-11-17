@@ -37,7 +37,7 @@ describe("overlay", () => {
   it("folded run becomes placeholder", () => {
     const r = del("d0", 1, "長".repeat(40));
     const [s] = overlay("甲乙", "", [r], () => true);
-    expect(s.text).toBe("甲" + "".repeat(5) + "乙");
+    expect(s.text).toBe("甲" + "\uE000".repeat(5) + "乙");
     expect(s.cells[1]).toEqual({ kind: "fold", id: "d0", at: 1, chars: 40 });
   });
 
@@ -50,7 +50,7 @@ describe("overlay", () => {
 
   it("counts code points beyond BMP", () => {
     const [s] = overlay("😀甲", "", [{ op: "ins", id: "i0", start: 1, end: 2 }], never);
-    expect(s.cells).toEqual([{ kind: "text", at: 0 }, { kind: "ins", at: 1 }]);
+    expect(s.cells).toEqual([{ kind: "text", at: 0 }, { kind: "ins", id: "i0", at: 1 }]);
   });
 
   it("trims paragraph whitespace like segments()", () => {
