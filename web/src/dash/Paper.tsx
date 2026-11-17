@@ -70,6 +70,11 @@ function typeset(text: string, flow: PaperFlow): ReactNode {
   return tcyRuns(text).map((r, i) => r.tcy ? <span key={i} className="paper-tcy">{r.text}</span> : <Fragment key={i}>{r.text}</Fragment>);
 }
 
+const paraKey = (seg: CmpSeg) => {
+  const c = seg.cells[0];
+  return c && (c.kind === "del" || c.kind === "fold") ? `${seg.start}-${c.id}` : String(seg.start);
+};
+
 const Caret = () => (
   <svg viewBox="0 0 10 8" aria-hidden="true"><path d="M1.5 7L5 1.5 8.5 7" /></svg>
 );
@@ -78,7 +83,7 @@ function hasDel(box: HTMLElement | null): boolean {
   const s = document.getSelection();
   if (!box || !s || s.rangeCount === 0) return false;
   const r = s.getRangeAt(0);
-  return [...box.querySelectorAll("del")].some(d => r.intersectsNode(d));
+  return [...box.querySelectorAll("del, .cmp-fold")].some(d => r.intersectsNode(d));
 }
 
 /** 量測用:在隱藏的同尺寸頁裡放這些段,看有沒有溢出(直排往左長 → 比寬)。 */
@@ -193,7 +198,8 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   const shownObs = cmp ? [] : obs;
 
   // 直排切頁:原文、排法、字級、窗格寬改了就重排
-  const [pages, setPages] = useState<(CmpSeg & PageSeg)[][] | null>(null);
+  const [paged, setPages] = useState<{ key: string; list: (CmpSeg & PageSeg)[][] } | null>(null);
+  const pages = paged && paged.key === runsKey ? paged.list : null;
   const [width, setWidth] = useState(0);
   useEffect(() => {
     const el = box.current;
@@ -205,8 +211,8 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   useLayoutEffect(() => {
     if (flow !== "v" || !measure.current) { setPages(null); return; }
     const fits = measurer(measure.current);
-    setPages(cmp ? paginate<CmpSeg & PageSeg>(segs, fits, sliceCells) : paginate<CmpSeg & PageSeg>(segs, fits,
-      (x, a, b) => ({ ...x, start: x.start + a, text: cpSlice(x.text, a, b) })));
+    setPages({ key: runsKey, list: cmp ? paginate<CmpSeg & PageSeg>(segs, fits, sliceCells) : paginate<CmpSeg & PageSeg>(segs, fits,
+      (x, a, b) => ({ ...x, start: x.start + a, text: cpSlice(x.text, a, b) })) });
     measure.current.replaceChildren();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, title, flow, size, width, runsKey]);
@@ -362,7 +368,7 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
   });
   const para = (seg: CmpSeg & PageSeg) => (
     // 段落 key 不跟著閃動變(重掛載會重播畫線、丟掉選取);要重播閃動只換裡面那層的 key
-    <p key={seg.start} data-start={seg.start} data-cont={seg.cont ? "" : undefined}
+    <p key={paraKey(seg)} data-start={seg.start} data-cont={seg.cont ? "" : undefined}
       className={flash?.start === seg.start ? "is-flash" : undefined}>
       {flash?.start === seg.start && <span key={flash.n} className="paper-flash" aria-hidden="true" />}
       {cmp ? cmpBody(seg) : pieces(seg, shownMarks, shownObs).map(pc => {

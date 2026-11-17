@@ -72,14 +72,16 @@ def _del_run(old: str, new: str, idx: list[int], pairs: dict[int, int]) -> dict:
     s, e = idx[0], idx[-1] + 1
     prev = [pairs[i] for i in pairs if i < s]
     at = max(prev) + 1 if prev else 0
+    nxt = min((pairs[i] for i in pairs if i >= e), default=len(new))
+    cut = new.find("\n", at, nxt) if prev else -1
     whole_head, whole_tail = _line_bounds(old, s, e)
+    if whole_head and cut != -1:
+        at = cut + 1
     if whole_head and whole_tail:
         nl = old.find("\n", e)
-        cut = new.find("\n", at) if prev else -1
         if nl != -1 and (not prev or cut != -1):
             e = nl + 1
-            at = cut + 1 if prev else 0
-        elif s > 0:
+        elif s > 0 and nxt >= len(new):
             s = old.rfind("\n", 0, s)
     text = old[s:e]
     return {"op": "del", "at": at, "text": text, "chars": sum(1 for c in text if not c.isspace()),
@@ -123,7 +125,10 @@ def _fate(quote: str, old: str, new: str, d: dict, hunk_of: dict, runs: dict) ->
     chars = [i for i in range(s, e) if not old[i].isspace()]
     matched = [d["pairs"][i] for i in chars if i in d["pairs"]]
     if len(matched) == len(chars):
-        out.update(fate="kept", new={"start": min(matched), "end": max(matched) + 1})
+        lo, hi = min(matched), max(matched) + 1
+        inside = any(r["op"] == "ins" and r["start"] < hi and lo < r["end"] for r in d["runs"])
+        out.update(fate="changed" if inside else "kept", new={"start": lo, "end": hi},
+                   new_text=new[lo:hi] if inside else None)
         return out
     moved = locate(quote, new)
     if moved is not None:

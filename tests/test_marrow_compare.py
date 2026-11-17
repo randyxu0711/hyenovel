@@ -163,3 +163,27 @@ def test_pin_leaves_ins_runs_alone():
     d, ps = _trace("甲。", "甲。乙。", [P(["甲"])])
     pin(d["runs"], ps)
     assert "pinned" not in d["runs"][0]
+
+
+def test_partial_delete_at_paragraph_start_stays_in_its_paragraph():
+    d = diff("甲段。\n他慢慢地走。", "甲段。\n慢慢地走。")
+    [r] = d["runs"]
+    assert (r["at"], r["text"]) == (4, "他")
+
+
+def test_rewritten_paragraph_head_stays_in_its_paragraph():
+    new = "甲段。\n全新的一段。\n丙段。"
+    d = diff("甲段。\n乙段舊的。\n丙段。", new)
+    assert all(r["at"] >= 4 for r in d["runs"] if r["op"] == "del")
+
+
+def test_deleted_paragraph_between_merged_paragraphs_keeps_order():
+    d = diff("甲。\n乙。\n丙。\n丁。", "甲。丙。\n丁。")
+    [r] = [r for r in d["runs"] if r["op"] == "del"]
+    assert (r["at"], r["text"]) == (2, "乙。")
+
+
+def test_insertion_inside_quote_is_changed():
+    _, [p] = _trace("我很快樂。", "我很不快樂。", [P(["我很快樂"])])
+    q = p["quotes"][0]
+    assert (q["fate"], q["new"], q["new_text"], q["del"]) == ("changed", {"start": 0, "end": 5}, "我很不快樂", None)

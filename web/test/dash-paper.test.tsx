@@ -317,6 +317,43 @@ describe("Paper 對照", () => {
     expect(el.closest("p")!.classList.contains("is-flash")).toBe(true);
   });
 
+  it("whole-paragraph delete does not duplicate paragraph keys", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    mountCmp("甲。\n丙。", { runs: [del("d0", 3, "乙。\n")] });
+    expect(err.mock.calls.some(c => String(c[0]).includes("same key"))).toBe(false);
+    err.mockRestore();
+  });
+
+  it("no bring for selection across a fold marker", () => {
+    const { container } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))] });
+    const p = container.querySelector("p")!;
+    const range = document.createRange();
+    range.setStart(p, 0); range.setEnd(p, p.childNodes.length);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges(); sel.addRange(range);
+    act(() => { document.dispatchEvent(new Event("selectionchange")); });
+    expect(container.querySelector(".paper-bring")).toBeNull();
+  });
+
+  it("vertical: entering compare never shows stale pages and anchors on real text", () => {
+    const texts: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { texts.push(this.textContent ?? ""); };
+    setLang("zh-Hant");
+    setPaperFlow("v");
+    const tree = (cmp?: Cmp) => (
+      <CharactersProvider value={makeCharacters([hyena, buffalo, deer], "hyena")}>
+        <LinksProvider>
+          <Paper text={"甲。\n丙。"} title="海" marks={[]} onBring={vi.fn()} cmp={cmp} />
+        </LinksProvider>
+      </CharactersProvider>);
+    const { container, rerender } = render(tree());
+    texts.length = 0;
+    rerender(tree({ runs: [del("d0", 0, "零。\n")], clean: false, open: new Set(), onToggle: vi.fn(), focus: null }));
+    expect(texts.length).toBeGreaterThan(0);
+    expect(texts.every(x => x !== "")).toBe(true);
+    expect(container.querySelector("del")).not.toBeNull();
+  });
+
   it("keeps scroll anchor when entering compare", () => {
     const spy = vi.fn();
     Element.prototype.scrollIntoView = spy;
