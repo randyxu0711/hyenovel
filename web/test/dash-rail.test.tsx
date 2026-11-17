@@ -82,6 +82,12 @@ describe("Rail(展開)", () => {
     expect(screen.queryByRole("button", { name: "切換晝夜" })).toBeNull();
     expect(screen.getByRole("button", { name: "設定" })).toBeTruthy();
   });
+  it("設定頁的窄條:+ 也藏起來", () => {
+    render(<MemoryRouter><Rail mode="rail" works={WORKS} current={null} talk={fakeTalk()} view="settings" settingsNav={<p>nav</p>}
+      onOpen={vi.fn()} onNew={vi.fn()} onFind={vi.fn()} onChat={vi.fn()} onToggle={vi.fn()} /></MemoryRouter>);
+    expect(screen.queryByRole("button", { name: "開一局聊天" })).toBeNull();
+    expect(screen.getByRole("button", { name: "找作品" })).toBeTruthy();
+  });
   it("列出作品標題,點了開那篇;目前那篇 aria-current;分析中那篇的點叫「分析中」", () => {
     const { onOpen } = mount({ current: "d1" });
     fireEvent.click(screen.getByRole("button", { name: /山/ }));

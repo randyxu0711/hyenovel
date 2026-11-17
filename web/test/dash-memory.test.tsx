@@ -69,6 +69,14 @@ describe("MemoryPage", () => {
     expect(screen.getByTestId("loc").textContent).toBe("/w/d1?s=s1");
   });
 
+  it("沒綁作品的局記下的,連回那一局", async () => {
+    memories.mockResolvedValue(list(mem({ text: "在聊天說的", quote: "在聊天說的", slug: null, session: "c/9", seq: 0 })));
+    mount();
+    fireEvent.click(await screen.findByRole("link", { name: "出自對話" }));
+    expect(screen.getByTestId("loc").textContent).toBe("/c/c%2F9");
+    expect(screen.queryByText("手打")).toBeNull();
+  });
+
   it("沒有來源的顯示手寫標記", async () => {
     memories.mockResolvedValue(list(mem({ text: "手打的" })));
     mount();

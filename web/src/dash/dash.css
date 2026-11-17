@@ -237,14 +237,12 @@
 .dash .home-talk > .chat{flex:1; min-height:0}
 .dash .home-talk:not([data-live]) .chat-log{display:none}
 .dash .home-talk:not([data-live]) .composer{margin-bottom:12vh}
-.dash .home-talk .composer{margin-top:136px}
-.dash .home-talk .composer > .who{width:172px; height:152px; margin-bottom:-26px; left:-44px}
-.dash .home-talk[data-live] .composer{margin-top:64px}
-.dash .home-talk[data-live] .composer > .who{width:72px; height:64px; margin-bottom:-12px; left:14px}
-.dash .home-talk .composer textarea{min-height:78px; font-size:var(--dash-t-md); padding:14px 16px 4px}
+.dash .home-talk:not([data-live]) .composer{margin-top:136px}
+.dash .home-talk:not([data-live]) .composer > .who{width:172px; height:152px; margin-bottom:-26px; left:-44px}
+.dash .home-talk:not([data-live]) .composer textarea{min-height:78px; font-size:var(--dash-t-md); padding:14px 16px 4px}
 @media (max-width:860px){
-  .dash .home-talk .composer{margin-top:100px}
-  .dash .home-talk .composer > .who{width:120px; height:106px; margin-bottom:-18px; left:10px}
+  .dash .home-talk:not([data-live]) .composer{margin-top:100px}
+  .dash .home-talk:not([data-live]) .composer > .who{width:120px; height:106px; margin-bottom:-18px; left:10px}
 }
 @media (max-width:700px){
   .dash .home{padding:12px 0}
@@ -395,11 +393,11 @@
 .dash .side-ob:disabled{opacity:.45; cursor:default}
 .dash .side-ob:disabled:hover{background:none}
 .dash .side-obs{display:flex; flex-direction:column; gap:2px}
-.dash .side-ob{display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:12px; width:100%; margin:0; padding:8px 12px; border:0; border-radius:10px; background:none; text-align:left; cursor:pointer; color:inherit; font:inherit}
+.dash .side-ob{display:grid; grid-template-columns:minmax(4em, 1fr) minmax(0, auto); align-items:baseline; gap:12px; width:100%; margin:0; padding:8px 12px; border:0; border-radius:10px; background:none; text-align:left; cursor:pointer; color:inherit; font:inherit}
 .dash .side-ob:hover{background:var(--dash-desk-2)}
 .dash .side-ob[aria-pressed="true"]{background:var(--dash-paper); box-shadow:var(--dash-sh-raise)}
 .dash .side-ob-name{font-family:var(--serif)}
-.dash .side-ob-sub{font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .side-ob-sub{text-align:right; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 .dash .side-n{margin-top:6px; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
 
 /* ── 設定頁 ── */
