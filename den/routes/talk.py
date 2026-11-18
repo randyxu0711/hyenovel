@@ -304,7 +304,8 @@ async def compact_session(session: str, request: Request):
             log.info("event=reject where=compact reason=nothing-to-compact")
             raise ApiError(422, "nothing-to-compact", "這局沒有可以壓縮的對話")
         try:
-            text, usage = await compact.summarize(state.chat, compact.transcript(rows))
+            made = repo.source_versions(conn, d["story_id"]) if d["story_id"] is not None else []
+            text, usage = await compact.summarize(state.chat, compact.transcript(rows, made))
         except Exception:
             log.exception("event=compact-failed session=%s", session)
             raise ApiError(502, "compact-failed", "壓縮失敗,對話沒有改動") from None

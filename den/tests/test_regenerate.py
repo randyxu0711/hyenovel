@@ -244,3 +244,16 @@ def test_pick_and_edit_reject_legacy_session(c, fake_chat):
     in_loop(c, legacy)
     assert c.put("/api/sessions/old/turns/0/variant", json={"n": 1}).json()["code"] == "legacy-session"
     assert c.put("/api/sessions/old/turns/0/text", json={"text": "x"}).json()["code"] == "legacy-session"
+
+
+def test_redo_rebuilds_compare_layer(c, fake_chat):
+    def add(conn):
+        with conn:
+            repo.add_source_version(conn, repo.story_by_slug(conn, "mini")["id"], "新的稿。", 9e9)
+    in_loop(c, add)
+    sid = events(c.post("/api/discuss/mini", json={"message": "嗨", "cmp": 1}))[-1]["data"]["session_id"]
+    regen_events(c, sid, 1)
+    system, user = fake_chat.calls[-1]
+    assert "## 作者開著對照" in system and "對照" not in user
+    rec = rows(c, sid)[-1]["recipe"]
+    assert (rec["cmp"], rec["home"]) == (1, "web")

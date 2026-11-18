@@ -1040,3 +1040,39 @@ def test_quote_only_in_old_version_needs_cmp(c):
 
 def test_cmp_ignored_for_unbound_session(c):
     assert c.post("/api/discuss", json={"message": "嗨", "cmp": 1}).status_code == 200
+
+
+def _recipe(c, sid, seq):
+    return in_loop(c, lambda conn: repo.utterance(conn, repo.discussion_by_session(conn, sid)["id"], seq)["recipe"])
+
+
+def test_recipe_records_v_cmp_home(c, fake_chat):
+    _add_v2(c)
+    sid = events(c.post("/api/discuss/mini", json={"message": "嗨", "cmp": 1}))[-1]["data"]["session_id"]
+    assert {k: _recipe(c, sid, 1)[k] for k in ("v", "cmp", "home")} == {"v": 2, "cmp": 1, "home": "web"}
+    assert "## 作者開著對照" in fake_chat.calls[-1][0]
+
+
+def test_cmp_turns_mark_on_and_off_in_history(c, fake_chat):
+    _add_v2(c)
+    sid = events(c.post("/api/discuss/mini", json={"message": "一", "cmp": 1}))[-1]["data"]["session_id"]
+    events(c.post("/api/discuss/mini", json={"session_id": sid, "message": "二"}))
+    user = fake_chat.calls[-1][1]
+    assert user.index("你:AB") < user.index("(作者在這裡關掉了對照。)") < user.index("作者這一輪說")
+
+
+def test_submit_mid_stream_no_mark_between_q_and_a(c, fake_chat):
+    sid = first_turn(c)
+
+    async def submit_then_reply():
+        conn = c.app.state.mgr.conn
+        with conn:
+            repo.add_source_version(conn, repo.story_by_slug(conn, "mini")["id"], "新的稿。", time.time())
+        yield ("delta", "C")
+        yield ("result", RunResult("ok", None, "", "claude-x", {"output": 1}, 1, None, 1, "C", None, 1))
+    fake_chat.override = submit_then_reply
+    events(c.post("/api/discuss/mini", json={"session_id": sid, "message": "二"}))
+    fake_chat.override = None
+    events(c.post("/api/discuss/mini", json={"session_id": sid, "message": "三"}))
+    user = fake_chat.calls[-1][1]
+    assert user.index("作者:二") < user.index("你:C") < user.index("(這裡起你讀的是第 2 版;前面的對話對著的是第 1 版。)")
