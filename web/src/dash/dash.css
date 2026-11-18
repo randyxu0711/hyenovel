@@ -437,6 +437,13 @@
 .dash .trace-changed .trace-qstate{grid-column:2; grid-row:1}
 .dash .trace-gone{cursor:pointer}
 .dash .trace-qstate{margin-inline-start:auto; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .trace-bring{width:24px; height:24px; align-self:center; opacity:0; transition:opacity .12s}
+.dash .trace-q > .trace-bring:first-of-type{margin-inline-start:auto}
+.dash .trace-q > .trace-qstate + .trace-bring{margin-inline-start:0}
+.dash .trace-changed .trace-bring{grid-column:2; grid-row:2; justify-self:end}
+.dash .trace-card:hover .trace-bring, .dash .trace-card[data-sel] .trace-bring, .dash .trace-bring:focus-visible{opacity:1}
+@media (hover:none){ .dash .trace-bring{opacity:.6} }
+@media (prefers-reduced-motion:reduce){ .dash .trace-bring{transition:none} }
 .dash .side-question{color:var(--dash-ink-2)}
 /* 引文:虛底線,滑過變實線;這一版對不到 → 灰虛線 */
 .dash .dash-iq{

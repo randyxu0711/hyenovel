@@ -30,7 +30,7 @@ export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
 }
 
 /** 右欄:對話 | 筆記 | 結構圖。對話一直掛著(切走也不丟草稿、稿上痕跡點得回來),另兩頁切到才畫。 */
-export default function Side({ version, map, mapError, state, marks, talk, quotes, analyzing = false, onDropQuote, onSent, ob = null, onOb, cmp = null, onCompare }: {
+export default function Side({ version, map, mapError, state, marks, talk, quotes, analyzing = false, onDropQuote, onSent, ob = null, onOb, cmp = null, onCompare, onBring }: {
   /** 正在看的版本號。 */
   version: number;
   map: WorkMap | null;
@@ -47,6 +47,8 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
   cmp?: Compare | null;
   /** 筆記眉頭的對照鍵。 */
   onCompare?: (n: number) => void;
+  /** 去向卡上的舊版引文帶進對話。 */
+  onBring?: (quote: string) => void;
 }) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("talk");
@@ -79,7 +81,7 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
       </div>
       {tab !== "talk" && (
         <div className="side-panel side-scroll" role="tabpanel" id={`side-panel-${tab}`} aria-labelledby={`side-tab-${tab}`}>
-          {tab === "notes" ? (tracing ? <TraceTab cmp={cmp!} /> : <NotesTab map={map} state={state} error={mapError} onCompare={onCompare} />) : <ChartTab map={map} marks={marks} error={mapError} ob={ob} onOb={onOb} />}
+          {tab === "notes" ? (tracing ? <TraceTab cmp={cmp!} onBring={onBring && (q => { onBring(q); setTab("talk"); })} /> : <NotesTab map={map} state={state} error={mapError} onCompare={onCompare} />) : <ChartTab map={map} marks={marks} error={mapError} ob={ob} onOb={onOb} />}
         </div>
       )}
     </div>

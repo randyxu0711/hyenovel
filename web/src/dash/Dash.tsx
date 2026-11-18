@@ -70,7 +70,9 @@ function Shell({ chars }: { chars: Characters }) {
     }, { replace: true });
   }, [nav]);
   const [talkReload, setTalkReload] = useState(0);   // 交了新版:目前這局的逐字稿重抓(畫線位置對到新稿)
-  const talk = useTalk(slug, version, source, slug ? search.get("s") : routeSession ?? null, onSession, talkReload);
+  const [cmpData, setCmpData] = useState<Compare | null>(null);
+  const cmpSend = cmpData && paper && paper.slug === slug && paper.latest ? cmpData.old : null;
+  const talk = useTalk(slug, version, source, slug ? search.get("s") : routeSession ?? null, onSession, talkReload, cmpSend);
   const shownRoute = useRef(routeSession);
   useEffect(() => {
     if (view !== "home" || shownRoute.current === routeSession) return;
@@ -120,13 +122,16 @@ function Shell({ chars }: { chars: Characters }) {
   const split = useSplit(SHELF_W[shelf.mode]);
   const narrow = useNarrow();
   const { pane, setPane } = useLinks();
+  const carry = (q: string) => {
+    setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
+    if (narrow) setPane("side");
+  };
   const [palette, setPalette] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const drawn = drawer && narrow;
   const searchKey = search.toString();
   useEffect(() => { setDrawer(false); }, [pathname, routeSession, searchKey, narrow]);
   const [focus, setFocus] = useState(false);
-  const [cmpData, setCmpData] = useState<Compare | null>(null);
   const comparing = search.has("cmp");
   useEffect(() => { if (cmpData) setOb(null); }, [cmpData]);
   const comparingRef = useRef(comparing);
@@ -198,10 +203,7 @@ function Shell({ chars }: { chars: Characters }) {
           onAnalysed={() => setMapRev(n => n + 1)} onPaper={setPaper} onNewVersion={newVersion} onRenamed={bump}
           focus={focused} onFocus={narrow ? undefined : setFocus} onCompare={setCmpData}
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
-          onQuote={q => {
-            setCarried(c => { const list = c.slug === slug ? c.list : []; return { slug: slug!, list: list.includes(q) ? list : [...list, q] }; });
-            if (narrow) setPane("side");
-          }} />}
+          onQuote={carry} />}
         {view === "home" && <Home works={loaded} error={worksErr} talk={talk} />}
         {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
       </main>
@@ -220,7 +222,7 @@ function Shell({ chars }: { chars: Characters }) {
         <aside className="dash-side" hidden={hideSide || focused}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
             talk={talk} quotes={quotes} ob={cmpData ? null : ob} onOb={setOb} analyzing={analyzing}
-            cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))}
+            cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))} onBring={carry}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>

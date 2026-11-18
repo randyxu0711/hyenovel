@@ -280,12 +280,13 @@ export const api = {
   archiveMemory: (id: number) => request<void>(`/api/memory/${id}/archive`, { method: "POST" }),
   revertMemory: (id: number) => request<Memory>(`/api/memory/${id}/revert`, { method: "POST" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回);slug 為 null = 不帶作品的局。 */
-  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn },
+  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn; cmp?: number | null },
     signal?: AbortSignal) =>
     stream(slug === null ? "/api/discuss" : `/api/discuss/${encodeURIComponent(slug)}`, {
       ...post({
         session_id: body.session, message: body.message, character: body.character, quotes: body.quotes,
         ...(body.attach ? { attach: body.attach } : {}),
+        ...(body.cmp != null ? { cmp: body.cmp } : {}),
       }), signal,
     }),
 };

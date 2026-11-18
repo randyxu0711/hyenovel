@@ -6,7 +6,7 @@ import { useT, type MsgKey } from "./i18n";
 import { useLinks } from "./links";
 import { paginate, tcyRuns, type PageSeg, type Segment } from "./paginate";
 import { usePaperFlow, type PaperFlow } from "./paperFlow";
-import { useSelectionQuote } from "./useSelectionQuote";
+import { MAX_QUOTE, useSelectionQuote } from "./useSelectionQuote";
 
 /** 讀者在稿上的一道痕跡:位移是原文的 code point 索引(den 給的)。id = markId(...),同一道痕跡跨重繪不變。 */
 export type Mark = { start: number; end: number; character: string; id: string };
@@ -78,6 +78,14 @@ const paraKey = (seg: CmpSeg) => {
 const Caret = () => (
   <svg viewBox="0 0 10 8" aria-hidden="true"><path d="M1.5 7L5 1.5 8.5 7" /></svg>
 );
+
+function inDel(box: HTMLElement | null): boolean {
+  const s = document.getSelection();
+  if (!box || !s || s.rangeCount === 0) return false;
+  const n = s.getRangeAt(0).commonAncestorContainer;
+  const d = (n.nodeType === Node.ELEMENT_NODE ? n as Element : n.parentElement)?.closest("del.cmp-del");
+  return !!d && box.contains(d);
+}
 
 function hasDel(box: HTMLElement | null): boolean {
   const s = document.getSelection();
@@ -390,7 +398,9 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
     </p>
   );
   const plain = segs.map(s => ({ ...s, cont: false }));
-  const bring = quote && !(cmp && hasDel(box.current));
+  const deleted = !!quote && !!cmp && inDel(box.current);
+  const bring = quote && (deleted || !(cmp && hasDel(box.current)));
+  const long = tooLong && !deleted;
   return (
     <article ref={sheet} className={["paper-sheet", flow === "h" && "dash-paper", old && "is-old"].filter(Boolean).join(" ")}
       onClick={cmp ? e => { if (!(e.target as Element).closest?.(".cmp-bracket, .cmp-fold")) trace.setPicked(null); } : undefined}
@@ -408,11 +418,11 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
       {flow === "v" && <div ref={measure} className="paper-cols paper-measure" aria-hidden="true" />}
       {bring && (
         <div className="dash-float paper-bring" style={rect ? { position: "fixed", left: rect.left, top: rect.bottom + 8 } : undefined}>
-          <button type="button" disabled={tooLong} onMouseDown={e => e.preventDefault()}
-            onClick={() => { onBring(quote); clear(); }}>
+          <button type="button" disabled={long} onMouseDown={e => e.preventDefault()}
+            onClick={() => { onBring(deleted ? [...quote].slice(0, MAX_QUOTE).join("") : quote); clear(); }}>
             {t("reader.bring")}
           </button>
-          {tooLong && <span role="status">{t("reader.tooLong")}</span>}
+          {long && <span role="status">{t("reader.tooLong")}</span>}
         </div>
       )}
     </article>
