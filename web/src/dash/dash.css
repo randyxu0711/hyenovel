@@ -399,10 +399,16 @@
   .dash .dash-mark.is-drawing{animation:none}
   .dash .paper-sheet .paper-flash{animation:none; background:color-mix(in srgb, var(--dash-sig) 18%, transparent)}
 }
-/* 帶進對話:霧面浮層,貼在選取下方(量不到位置時黏在紙底) */
-.dash .paper-bring{position:sticky; bottom:16px; z-index:6; display:inline-flex; align-items:center; gap:10px; padding:4px; border-radius:12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2); text-indent:0}
-.dash .paper-bring button{display:inline-flex; align-items:center; gap:6px; padding:6px 12px 6px 10px; border:0; border-radius:8px; cursor:pointer; font-family:var(--sans); font-size:var(--dash-t-sm); background:var(--dash-accent); color:var(--dash-accent-ink)}
-.dash .paper-bring button:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2)}
+/* 引用至對話:霧面浮層,貼在選取下方(量不到位置時黏在紙底) */
+.dash .paper-bring{position:sticky; bottom:16px; z-index:6; display:inline-flex; align-items:center; gap:6px; text-indent:0; line-height:1}
+.dash .paper-bring > *{background-color:color-mix(in srgb, var(--dash-paper) 90%, var(--dash-paper-ink)); display:inline-flex; align-items:center; gap:6px; box-sizing:border-box; min-height:30px; padding:4px 10px; border-radius:8px; font-family:var(--sans); white-space:nowrap}
+.dash .paper-bring button{cursor:pointer; font-size:var(--dash-t-sm); color:var(--dash-ink)}
+.dash .paper-bring button .ico{width:16px; height:16px; color:var(--dash-accent)}
+.dash .paper-bring button:hover:not(:disabled){background-image:linear-gradient(var(--dash-line), var(--dash-line))}
+.dash .paper-bring button:focus-visible{outline:2px solid var(--dash-sig-t); outline-offset:2px}
+.dash .paper-bring button:disabled{cursor:not-allowed; color:var(--dash-ink-2)}
+.dash .paper-bring button:disabled .ico{color:var(--dash-ink-2)}
+.dash .paper-bring [role="status"]{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 /* 右欄:分頁(對話 | 筆記 | 結構圖)+ 局選單 */
 .dash .side{display:flex; flex-direction:column; height:100%; min-height:0}
 .dash .side-head{display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:54px; padding:8px 20px; box-sizing:border-box}

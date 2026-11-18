@@ -429,12 +429,12 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
       </div>
       {flow === "v" && <div ref={measure} className="paper-cols paper-measure" aria-hidden="true" />}
       {bring && (
-        <div className="dash-float paper-bring" style={rect ? floatAt(rect, flow) : undefined}>
-          <button type="button" disabled={long} onMouseDown={e => e.preventDefault()}
+        <div className="paper-bring" style={rect ? floatAt(rect, flow) : undefined}>
+          <button type="button" className="dash-float" disabled={long} onMouseDown={e => e.preventDefault()}
             onClick={() => { onBring(deleted ? [...quote].slice(0, MAX_QUOTE).join("") : quote); clear(); }}>
             <Icon name="talk" />{t("reader.bring")}
           </button>
-          {long && <span role="status">{t("reader.tooLong")}</span>}
+          {long && <span role="status" className="dash-float">{t("reader.tooLong")}</span>}
         </div>
       )}
     </article>

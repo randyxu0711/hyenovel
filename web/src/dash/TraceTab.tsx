@@ -9,21 +9,14 @@ import { useLinks } from "./links";
 const KINDS = ["moved", "confused", "wondering", "opinion"];
 const STATE: Record<string, MsgKey> = { kept: "trace.kept", changed: "trace.changed", gone: "trace.gone", mixed: "trace.mixed" };
 
-function Old({ q, gone, onBring }: { q: TraceQuote; gone: boolean; onBring?: (q: string) => void }) {
+function Old({ q, onBring }: { q: TraceQuote; onBring?: (q: string) => void }) {
   const t = useT();
-  const { jumpToRun } = useLinks();
-  if (!gone && !onBring) return <del className="trace-old">「{q.quote}」</del>;
-  const quotable = !!onBring;
-  const go = () => {
-    if (gone && q.del) jumpToRun(q.del);
-    onBring?.([...q.quote].slice(0, MAX_QUOTE).join(""));
-  };
+  if (!onBring) return <del className="trace-old">「{q.quote}」</del>;
+  const go = () => onBring([...q.quote].slice(0, MAX_QUOTE).join(""));
   return (
-    <del role="button" tabIndex={0} className={quotable ? "trace-old is-quotable" : "dash-iq trace-old"}
-      aria-label={onBring ? t("trace.quoteIt", { q: q.quote }) : q.quote} title={onBring ? t("reader.bring") : undefined}
-      onClick={go}
-      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }}>
-      「{q.quote}」{onBring && <Icon name="talk" />}
+    <del role="button" tabIndex={0} className="trace-old is-quotable" aria-label={t("trace.quoteIt", { q: q.quote })} title={t("reader.bring")}
+      onClick={go} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }}>
+      「{q.quote}」<Icon name="talk" />
     </del>
   );
 }
@@ -35,10 +28,10 @@ function Quote({ q, version, old, many, onBring }: { q: TraceQuote; version: num
     <p className="trace-q"><span role="button" tabIndex={0} className="dash-iq is-lost" aria-disabled="true"
       title={t("trace.lost", { n: old })}>「{q.quote}」</span></p>
   );
-  if (q.fate === "gone") return <p className="trace-q"><Old q={q} gone onBring={onBring} />{state}</p>;
+  if (q.fate === "gone") return <p className="trace-q"><Old q={q} onBring={onBring} />{state}</p>;
   if (q.fate === "changed") return (
     <p className="trace-q trace-changed">
-      <Old q={q} gone={false} onBring={onBring} />
+      <Old q={q} onBring={onBring} />
       {state}
       <Iq span={{ quote: q.new_text!, start: q.new!.start, end: q.new!.end }} version={version} />
     </p>

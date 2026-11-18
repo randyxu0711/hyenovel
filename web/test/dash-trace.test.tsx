@@ -28,10 +28,7 @@ const POINTS = [
 let links: Links;
 function Probe() { const l = useLinks(); useEffect(() => { links = l; }); return null; }
 const mount = (c: Compare, onBring?: (q: string) => void) => {
-  const runs = vi.fn();
-  function RunSpy() { const { registerRun } = useLinks(); useEffect(() => registerRun(runs), [registerRun]); return null; }
-  render(<LinksProvider><Probe /><RunSpy /><TraceTab cmp={c} onBring={onBring} /></LinksProvider>);
-  return runs;
+  render(<LinksProvider><Probe /><TraceTab cmp={c} onBring={onBring} /></LinksProvider>);
 };
 beforeEach(() => setLang("zh-Hant"));
 
@@ -68,21 +65,18 @@ describe("TraceTab", () => {
     expect(moved.querySelector(".trace-qstate")).toBeNull();
   });
 
-  it("gone quote jumps to its del run", () => {
-    const runs = mount(CMP(POINTS));
-    fireEvent.click(screen.getByRole("button", { name: "被刪句" }));
-    expect(runs).toHaveBeenCalledWith("d0");
-  });
-
-  it("quotable: clicking a gone quote quotes it and still jumps to its del run; changed old text quotes too", () => {
+  it("old text is only quotable with onBring: click quotes it, never jumps", () => {
     const bring = vi.fn();
-    const runs = mount(CMP(POINTS), bring);
+    mount(CMP(POINTS), bring);
     fireEvent.click(screen.getByRole("button", { name: "引用至對話:「被刪句」" }));
-    expect(runs).toHaveBeenCalledWith("d0");
     expect(bring).toHaveBeenLastCalledWith("被刪句");
     fireEvent.click(screen.getByRole("button", { name: "引用至對話:「舊句」" }));
     expect(bring).toHaveBeenLastCalledWith("舊句");
-    expect(runs).toHaveBeenCalledTimes(1);
+  });
+
+  it("without onBring old text is plain struck text", () => {
+    mount(CMP(POINTS));
+    expect(screen.queryByRole("button", { name: /被刪句|舊句/ })).toBeNull();
   });
 
   it("changed quote shows struck old text and new text", () => {
