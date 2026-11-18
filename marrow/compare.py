@@ -88,6 +88,18 @@ def _del_run(old: str, new: str, idx: list[int], pairs: dict[int, int]) -> dict:
             "old": {"start": s, "end": e}}
 
 
+def changes(old: str, new: str) -> list[dict]:
+    a, b = _sentences(old), _sentences(new)
+    sm = SequenceMatcher(None, [_key(s) for s in a], [_key(s) for s in b], autojunk=False)
+
+    def cut(text, ss):
+        return text[ss[0][0][0]:ss[-1][-1][0] + 1] if ss else None
+
+    kinds = {"replace": "edit", "delete": "del", "insert": "ins"}
+    return [{"kind": kinds[tag], "old": cut(old, a[i1:i2]), "new": cut(new, b[j1:j2])}
+            for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag != "equal"]
+
+
 def diff(old: str, new: str) -> dict:
     pairs, dels, inss = _blocks(old, new)
     runs = [_del_run(old, new, d, pairs) for d in dels]

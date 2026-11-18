@@ -1,4 +1,4 @@
-from marrow.compare import diff, pin, public, trace
+from marrow.compare import changes, diff, pin, public, trace
 
 
 def test_identical_after_whitespace_and_punct_is_same():
@@ -187,3 +187,31 @@ def test_insertion_inside_quote_is_changed():
     _, [p] = _trace("我很快樂。", "我很不快樂。", [P(["我很快樂"])])
     q = p["quotes"][0]
     assert (q["fate"], q["new"], q["new_text"], q["del"]) == ("changed", {"start": 0, "end": 5}, "我很不快樂", None)
+
+
+def test_changes_edit_whole_sentence():
+    old = "她把門關上,沒有回頭。窗外下雨。"
+    new = "她把門帶上,回頭看了一眼。窗外下雨。"
+    assert changes(old, new) == [{"kind": "edit", "old": "她把門關上,沒有回頭。", "new": "她把門帶上,回頭看了一眼。"}]
+
+
+def test_changes_del_and_ins():
+    assert changes("甲。乙。丙。", "甲。丙。丁。") == [
+        {"kind": "del", "old": "乙。", "new": None},
+        {"kind": "ins", "old": None, "new": "丁。"}]
+
+
+def test_changes_adjacent_sentences_merge():
+    assert changes("一。二。三。", "一。二改。三改。") == [{"kind": "edit", "old": "二。三。", "new": "二改。三改。"}]
+
+
+def test_changes_ignores_whitespace_and_width():
+    assert changes("她說:「好。」", "她說：「好。」 ") == []
+
+
+def test_changes_end_mark_counts():
+    assert changes("好。", "好!") == [{"kind": "edit", "old": "好。", "new": "好!"}]
+
+
+def test_changes_spans_paragraphs_keep_raw_text():
+    assert changes("甲。\n乙。\n丙。", "甲。\n丙。") == [{"kind": "del", "old": "乙。", "new": None}]
