@@ -398,7 +398,7 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
     </p>
   );
   const plain = segs.map(s => ({ ...s, cont: false }));
-  const deleted = !!quote && !!cmp && inDel(box.current);
+  const deleted = !!quote && !!cmp && !old && inDel(box.current);
   const bring = quote && (deleted || !(cmp && hasDel(box.current)));
   const long = tooLong && !deleted;
   return (

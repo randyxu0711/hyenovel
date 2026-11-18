@@ -289,7 +289,7 @@ CMP = {"old": 1, "new": 2, "hunks": 1, "dels": 1, "inss": 1, "heavy": False, "fa
 def test_compare_layer_only_with_compare():
     t = render(_ctx(compare=CMP, versions=V2, version=2), _c("hyena"))
     assert "## 作者開著對照" in t and "第 1 版改成第 2 版" in t and "- 舊→新:她把門{-關-}{+帶+}上。" in t
-    assert "改了 1 處:刪 1 字,加 1 字。" in t and "這是第 2 版" not in t
+    assert "改了 1 處:刪 1 字,加 1 字。" in t and "這是第 2 版" in t
     assert t.index("## 作者開著對照") < t.index("## 你這個讀者")
     p = render(_ctx(compare=None, versions=V2, version=2), _c("hyena"))
     assert "作者開著對照" not in p and "這是第 2 版。作者提到以前版本的句子時,你手上可能沒有,照實說。" in p
@@ -334,6 +334,15 @@ def test_no_fates_no_heading():
 def test_newlines_flattened():
     c = {**CMP, "changes": [{"kind": "del", "old": "甲。\n乙。", "new": None}]}
     assert "- 整句刪掉:甲。 / 乙。" in companion._compare_block(c)
+
+
+def test_inline_ignores_width_but_keeps_new_chars():
+    assert companion._inline("好,走。", "好，走了。") == "好，走{+了+}。"
+
+
+def test_truncated_edit_closes_open_mark():
+    out = companion._item("- 舊→新:" + "甲" * 290 + "{-" + "乙" * 50 + "-}")
+    assert out.endswith("-}…")
 
 
 def test_inline_marks():

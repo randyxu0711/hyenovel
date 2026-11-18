@@ -222,7 +222,7 @@ function Shell({ chars }: { chars: Characters }) {
         <aside className="dash-side" hidden={hideSide || focused}>
           <Side version={version ?? work?.version ?? 0} map={map} mapError={mapErr} state={String(work?.state ?? "")} marks={marks}
             talk={talk} quotes={quotes} ob={cmpData ? null : ob} onOb={setOb} analyzing={analyzing}
-            cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))} onBring={carry}
+            cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))} onBring={cmpSend !== null ? carry : undefined}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
             onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
         </aside>

@@ -193,7 +193,7 @@ def test_render_old_rows_without_marks_info_are_quiet():
 
 def test_old_quote_labelled_with_version():
     out = render_turn([], "這句", quotes=["沒有回頭", "門"], old_version=lambda q: 1 if q == "沒有回頭" else None)
-    assert "「沒有回頭」(第 1 版的字,這版已經沒有)" in out and "「門」\n" in out + "\n"
+    assert "「沒有回頭」(第 1 版的字,這版已經沒有)" in out and "「門」(第" not in out
 
 
 def test_old_quote_labelled_in_history():

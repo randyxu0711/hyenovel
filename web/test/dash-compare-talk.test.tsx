@@ -78,10 +78,15 @@ describe("對照時的對話", () => {
     expect(bodies[0]).not.toHaveProperty("cmp");
   });
 
-  it("畫面不是最新版:對照開著也不送 cmp", async () => {
+  it("畫面不是最新版:對照開著也不送 cmp,舊字的帶進對話入口都不出現", async () => {
     shown = 2;
     mount("/w/d1?v=2&cmp");
     await screen.findByRole("tab", { name: "去向" });
+    await screen.findAllByText("「浪很大」");
+    expect(screen.queryAllByRole("button", { name: "帶進對話" })).toHaveLength(0);
+    const del = await waitFor(() => { const d = document.querySelector("del.cmp-del"); expect(d).toBeTruthy(); return d!; });
+    select(del, 0, 2);
+    expect(document.querySelector(".paper-bring")).toBeNull();
     await say("嗨");
     expect(bodies[0]).not.toHaveProperty("cmp");
   });

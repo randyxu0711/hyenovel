@@ -25,7 +25,8 @@ def transcript(rows: list[dict], versions: list[dict] = ()) -> str:
     rows = annotate(rows, list(versions))
     lines = []
     for i, r in enumerate(rows):
-        if i and r["role"] == "user" and rows[i - 1]["v"] and r["v"] and rows[i - 1]["v"] < r["v"]:
+        if i and (r["role"] == "user" or rows[i - 1]["role"] == "assistant") \
+                and rows[i - 1]["v"] and r["v"] and rows[i - 1]["v"] < r["v"]:
             lines.append(SUBMITTED.format(new=r["v"], old=rows[i - 1]["v"]))
         lines.append(f"{_ROLE[r['role']]}:{r['text']}")
     return "\n".join(lines)

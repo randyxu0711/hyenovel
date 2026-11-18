@@ -7,6 +7,7 @@ from difflib import SequenceMatcher
 from functools import cache
 from pathlib import Path
 
+from marrow.gate import _PUNCT
 from den.config import MAX_DIFF_CHARS, MAX_DIFF_ITEM_CHARS, MAX_VOICE_SAMPLE_CHARS, MAX_VOICE_SAMPLES
 from marrow.prompt import Layer, Prompt
 from marrow.workpacks import RunConfig
@@ -88,9 +89,10 @@ _FATE = {"kept": "還在", "changed": "改過", "gone": "刪掉"}
 
 def _inline(old: str, new: str) -> str:
     out = []
-    for tag, i1, i2, j1, j2 in SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+    sm = SequenceMatcher(None, old.translate(_PUNCT), new.translate(_PUNCT), autojunk=False)
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
-            out.append(old[i1:i2])
+            out.append(new[j1:j2])
             continue
         if i1 < i2:
             out.append("{-" + old[i1:i2] + "-}")
@@ -101,11 +103,17 @@ def _inline(old: str, new: str) -> str:
 
 def _item(text: str) -> str:
     text = text.replace("\n", " / ")
-    return text if len(text) <= MAX_DIFF_ITEM_CHARS else text[:MAX_DIFF_ITEM_CHARS] + "…"
+    if len(text) <= MAX_DIFF_ITEM_CHARS:
+        return text
+    cut = text[:MAX_DIFF_ITEM_CHARS]
+    for o, c in (("{-", "-}"), ("{+", "+}")):
+        if cut.rfind(o) > cut.rfind(c):
+            cut += c
+    return cut + "…"
 
 
 def _compare_block(c: dict) -> str:
-    head = f"改了 {c['hunks']} 處:刪 {c['dels']} 字,加 {c['inss']} 字。\n"
+    head = f"改了 {len(c['changes'])} 處:刪 {c['dels']} 字,加 {c['inss']} 字。\n"
     fates = [_item(f"- {_SEED_KIND[f['kind']]}「{f['quote']}」:{_FATE[f['fate']]}") for f in c["fates"]]
     if fates:
         fates.insert(0, f"別的讀者在第 {c['old']} 版標過的地方:")
@@ -141,7 +149,7 @@ def assemble(ctx: dict, character: dict, samples: list[dict] = ()) -> Prompt:
     if ctx["slug"] is not None:
         layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
                                     f"{ctx['source'].rstrip()}\n</source>\n", material=True))
-        if ctx.get("compare") is None and len(ctx.get("versions") or ()) > 1:
+        if len(ctx.get("versions") or ()) > 1:
             layers.append(Layer("version", f"\n這是第 {ctx['version']} 版。作者提到以前版本的句子時,你手上可能沒有,照實說。\n"))
     for att in ctx["attachments"]:
         layers.append(Layer(f"attachment_{att['n']}", f"---\n# 作者丟進來的稿〈{att['name']}〉\n<source>\n"

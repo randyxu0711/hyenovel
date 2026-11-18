@@ -92,7 +92,7 @@ def test_companion_context_seeds_carry_only_kind_and_quotes_and_never_opinion(co
         {"kind": "wondering", "quotes": ["wondering句"]}]
 
 
-def test_companion_context_hides_seeds_of_older_version(conn):
+def test_old_seeds_not_in_new_text_are_not_carried(conn):
     st = repo.story_by_slug(conn, "mini")
     _add_notes(conn, st["id"], repo.latest_source_version(conn, st["id"])["id"])
     _ingest(conn, "改過的新稿。", slug="mini")
