@@ -9,35 +9,38 @@ import { useLinks } from "./links";
 const KINDS = ["moved", "confused", "wondering", "opinion"];
 const STATE: Record<string, MsgKey> = { kept: "trace.kept", changed: "trace.changed", gone: "trace.gone", mixed: "trace.mixed" };
 
-function Bring({ quote, onBring }: { quote: string; onBring?: (q: string) => void }) {
+function Old({ q, gone, onBring }: { q: TraceQuote; gone: boolean; onBring?: (q: string) => void }) {
   const t = useT();
-  if (!onBring) return null;
+  const { jumpToRun } = useLinks();
+  if (!gone && !onBring) return <del className="trace-old">「{q.quote}」</del>;
+  const quotable = !!onBring;
+  const go = () => {
+    if (gone && q.del) jumpToRun(q.del);
+    onBring?.([...q.quote].slice(0, MAX_QUOTE).join(""));
+  };
   return (
-    <button type="button" className="ib trace-bring" aria-label={t("reader.bring")} title={t("reader.bring")}
-      onClick={e => { e.stopPropagation(); onBring([...quote].slice(0, MAX_QUOTE).join("")); }}><Icon name="talk" /></button>
+    <del role="button" tabIndex={0} className={quotable ? "trace-old is-quotable" : "dash-iq trace-old"}
+      aria-label={onBring ? t("trace.quoteIt", { q: q.quote }) : q.quote} title={onBring ? t("reader.bring") : undefined}
+      onClick={go}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }}>
+      「{q.quote}」{onBring && <Icon name="talk" />}
+    </del>
   );
 }
 
 function Quote({ q, version, old, many, onBring }: { q: TraceQuote; version: number; old: number; many: boolean; onBring?: (q: string) => void }) {
   const t = useT();
-  const { jumpToRun } = useLinks();
   const state = q.fate !== "lost" && many ? <span className="trace-qstate">{t(STATE[q.fate])}</span> : null;
   if (q.fate === "lost") return (
     <p className="trace-q"><span role="button" tabIndex={0} className="dash-iq is-lost" aria-disabled="true"
       title={t("trace.lost", { n: old })}>「{q.quote}」</span></p>
   );
-  if (q.fate === "gone") return (
-    <p className="trace-q">
-      <del role="button" tabIndex={0} className="dash-iq trace-gone" aria-label={q.quote} onClick={() => jumpToRun(q.del!)}
-        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jumpToRun(q.del!); } }}>「{q.quote}」</del>
-      <Bring quote={q.quote} onBring={onBring} />{state}
-    </p>
-  );
+  if (q.fate === "gone") return <p className="trace-q"><Old q={q} gone onBring={onBring} />{state}</p>;
   if (q.fate === "changed") return (
     <p className="trace-q trace-changed">
-      <del className="trace-old">「{q.quote}」</del>
+      <Old q={q} gone={false} onBring={onBring} />
+      {state}
       <Iq span={{ quote: q.new_text!, start: q.new!.start, end: q.new!.end }} version={version} />
-      {state}<Bring quote={q.quote} onBring={onBring} />
     </p>
   );
   return <p className="trace-q"><Iq span={{ quote: q.quote, start: q.new!.start, end: q.new!.end }} version={version} />{state}</p>;

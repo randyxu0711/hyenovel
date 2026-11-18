@@ -340,6 +340,7 @@
 .dash .paper-sheet.is-old .dash-paper, .dash .paper-sheet.is-old.dash-paper{background:color-mix(in srgb, var(--dash-paper) 86%, var(--dash-desk-2))}
 .dash .paper-sheet p{position:relative; margin:0 0 .95em; text-indent:2em; text-align:justify; border-radius:3px}
 .dash ::selection{background:color-mix(in srgb, var(--dash-sig) 28%, transparent)}
+.dash .cmp-del::selection{color:var(--dash-paper-ink)}
 @media (max-width:979px){ .dash .paper-sheet{padding:32px 22px 44px; max-width:calc(100% - 44px)} .dash .reader{padding:0 12px} }
 /* 兩種鉛筆線(一種記號一種意義):波浪線 = 陪讀者在對話提到;直線 = 結構圖選中的觀察。直排時線在字的左側。 */
 .dash .dash-mark{
@@ -400,7 +401,7 @@
 }
 /* 帶進對話:霧面浮層,貼在選取下方(量不到位置時黏在紙底) */
 .dash .paper-bring{position:sticky; bottom:16px; z-index:6; display:inline-flex; align-items:center; gap:10px; padding:4px; border-radius:12px; font-size:var(--dash-t-xs); color:var(--dash-ink-2); text-indent:0}
-.dash .paper-bring button{padding:6px 12px; border:0; border-radius:8px; cursor:pointer; font-family:var(--sans); font-size:var(--dash-t-sm); background:var(--dash-accent); color:var(--dash-accent-ink)}
+.dash .paper-bring button{display:inline-flex; align-items:center; gap:6px; padding:6px 12px 6px 10px; border:0; border-radius:8px; cursor:pointer; font-family:var(--sans); font-size:var(--dash-t-sm); background:var(--dash-accent); color:var(--dash-accent-ink)}
 .dash .paper-bring button:disabled{cursor:not-allowed; background:var(--dash-desk-2); color:var(--dash-ink-2)}
 /* 右欄:分頁(對話 | 筆記 | 結構圖)+ 局選單 */
 .dash .side{display:flex; flex-direction:column; height:100%; min-height:0}
@@ -435,15 +436,14 @@
 .dash .trace-q del, .dash .trace-old{color:var(--dash-ink-2); text-decoration:line-through; text-decoration-thickness:1px}
 .dash .trace-changed{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px}
 .dash .trace-changed .trace-qstate{grid-column:2; grid-row:1}
-.dash .trace-gone{cursor:pointer}
+.dash .trace-changed > .dash-iq:last-child{grid-column:1}
 .dash .trace-qstate{margin-inline-start:auto; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
-.dash .trace-bring{width:24px; height:24px; align-self:center; opacity:0; transition:opacity .12s}
-.dash .trace-q > .trace-bring{margin-inline-start:auto}
-.dash .trace-q > .trace-bring + .trace-qstate{margin-inline-start:0}
-.dash .trace-changed .trace-bring{grid-column:2; grid-row:2; justify-self:end}
-.dash .trace-card:hover .trace-bring, .dash .trace-card[data-sel] .trace-bring, .dash .trace-bring:focus-visible{opacity:1}
-@media (hover:none){ .dash .trace-bring{opacity:.6} }
-@media (prefers-reduced-motion:reduce){ .dash .trace-bring{transition:none} }
+.dash .trace-old.is-quotable{cursor:pointer; border-radius:2px; transition:color .12s, background-color .12s}
+.dash .trace-old.is-quotable .ico{width:14px; height:14px; margin-inline-start:4px; vertical-align:-2px; opacity:0; transition:opacity .12s}
+.dash .trace-old.is-quotable:hover, .dash .trace-old.is-quotable:focus-visible{color:var(--dash-ink); background:var(--dash-line)}
+.dash .trace-old.is-quotable:hover .ico, .dash .trace-old.is-quotable:focus-visible .ico{opacity:1}
+@media (hover:none){ .dash .trace-old.is-quotable .ico{opacity:.6} }
+@media (prefers-reduced-motion:reduce){ .dash .trace-old.is-quotable, .dash .trace-old.is-quotable .ico{transition:none} }
 .dash .side-question{color:var(--dash-ink-2)}
 /* 引文:虛底線,滑過變實線;這一版對不到 → 灰虛線 */
 .dash .dash-iq{

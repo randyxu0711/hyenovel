@@ -78,12 +78,12 @@ describe("對照時的對話", () => {
     expect(bodies[0]).not.toHaveProperty("cmp");
   });
 
-  it("畫面不是最新版:對照開著也不送 cmp,舊字的帶進對話入口都不出現", async () => {
+  it("畫面不是最新版:對照開著也不送 cmp,舊字的引用至對話入口都不出現", async () => {
     shown = 2;
     mount("/w/d1?v=2&cmp");
     await screen.findByRole("tab", { name: "去向" });
     await screen.findAllByText("「浪很大」");
-    expect(screen.queryAllByRole("button", { name: "帶進對話" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: /^引用至對話/ })).toHaveLength(0);
     const del = await waitFor(() => { const d = document.querySelector("del.cmp-del"); expect(d).toBeTruthy(); return d!; });
     select(del, 0, 2);
     expect(document.querySelector(".paper-bring")).toBeNull();
@@ -91,10 +91,10 @@ describe("對照時的對話", () => {
     expect(bodies[0]).not.toHaveProperty("cmp");
   });
 
-  it("去向卡:改過/刪掉的引文可帶進對話,還在與找不到的沒有;帶了切到對話分頁", async () => {
+  it("去向卡:點改過/刪掉的舊字本身就引用至對話,還在與找不到的不行;引用後切到對話分頁", async () => {
     mount("/w/d1?cmp");
     await screen.findByRole("tab", { name: "去向" });
-    const bring = await screen.findAllByRole("button", { name: "帶進對話" });
+    const bring = await screen.findAllByRole("button", { name: /^引用至對話/ });
     expect(bring).toHaveLength(2);
     fireEvent.click(bring[0]);
     expect(screen.getByRole("tab", { name: "對話" }).getAttribute("aria-selected")).toBe("true");
@@ -102,7 +102,7 @@ describe("對照時的對話", () => {
     expect(bodies[0]).toMatchObject({ quotes: ["浪很大"], cmp: 2 });
   });
 
-  it("稿上:選取跨刪字與新字不出現帶進對話", async () => {
+  it("稿上:選取跨刪字與新字不出現引用至對話", async () => {
     mount("/w/d1?cmp");
     const del = await waitFor(() => { const d = document.querySelector("del.cmp-del"); expect(d).toBeTruthy(); return d!; });
     const after = del.nextSibling ?? del.parentElement!.nextSibling!;
@@ -113,7 +113,7 @@ describe("對照時的對話", () => {
     expect(document.querySelector(".paper-bring")).toBeNull();
   });
 
-  it("稿上:選取全在一段刪字內才出現帶進對話,太長只帶前 400 字", async () => {
+  it("稿上:選取全在一段刪字內才出現引用至對話,太長只帶前 400 字", async () => {
     mount("/w/d1?cmp");
     const dels = await waitFor(() => {
       const d = document.querySelectorAll("del.cmp-del");

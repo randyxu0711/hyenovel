@@ -213,7 +213,7 @@ describe("對話", () => {
     const range = document.createRange(); range.setStart(p, 0); range.setEnd(p, 3);
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     act(() => { document.dispatchEvent(new Event("selectionchange")); });
-    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
+    fireEvent.click(await screen.findByRole("button", { name: "引用至對話" }));
     say("這段怎麼樣");
     await screen.findByText("嗯");
     expect(talkBodies[0]).toMatchObject({ character: "buffalo", quotes: ["第一段"], message: "這段怎麼樣", session_id: null });
@@ -748,7 +748,7 @@ describe("輸入紙與角色狀態", () => {
     const range = document.createRange(); range.setStart(p, 0); range.setEnd(p, 3);
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     act(() => { document.dispatchEvent(new Event("selectionchange")); });
-    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
+    fireEvent.click(await screen.findByRole("button", { name: "引用至對話" }));
     const drop = screen.getByRole("button", { name: "拿掉這段引文" });
     expect(drop.querySelector("svg.ico")).not.toBeNull();
     expect(drop.textContent).toBe("");

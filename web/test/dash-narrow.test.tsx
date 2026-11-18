@@ -104,7 +104,7 @@ describe("窄螢幕單窗格", () => {
     expect(paper().hidden).toBe(false);
     expect(side().hidden).toBe(true);
   });
-  it("在稿上「帶進對話」→ 切到對話窗格", async () => {
+  it("在稿上「引用至對話」→ 切到對話窗格", async () => {
     narrow(true); mount();
     await screen.findByText("海水很藍");
     await waitFor(() => expect(side().hidden).toBe(true));
@@ -112,7 +112,7 @@ describe("窄螢幕單窗格", () => {
     const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 2);
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     act(() => { document.dispatchEvent(new Event("selectionchange")); });
-    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
+    fireEvent.click(await screen.findByRole("button", { name: "引用至對話" }));
     expect(side().hidden).toBe(false);
     expect(paper().hidden).toBe(true);
   });

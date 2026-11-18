@@ -6,6 +6,7 @@ import { useT, type MsgKey } from "./i18n";
 import { useLinks } from "./links";
 import { paginate, tcyRuns, type PageSeg, type Segment } from "./paginate";
 import { usePaperFlow, type PaperFlow } from "./paperFlow";
+import Icon from "./Icon";
 import { MAX_QUOTE, useSelectionQuote } from "./useSelectionQuote";
 
 /** 讀者在稿上的一道痕跡:位移是原文的 code point 索引(den 給的)。id = markId(...),同一道痕跡跨重繪不變。 */
@@ -78,6 +79,17 @@ const paraKey = (seg: CmpSeg) => {
 const Caret = () => (
   <svg viewBox="0 0 10 8" aria-hidden="true"><path d="M1.5 7L5 1.5 8.5 7" /></svg>
 );
+
+function floatAt(r: { left: number; top: number; bottom: number }, flow: string): CSSProperties {
+  if (flow === "v") {
+    const right = Math.max(8, Math.min(window.innerWidth - r.left + 8, window.innerWidth - 168));
+    return { position: "fixed", right, top: Math.max(8, Math.min(r.top, window.innerHeight - 56)), bottom: "auto" };
+  }
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - 168));
+  return r.bottom + 56 < window.innerHeight
+    ? { position: "fixed", left, top: r.bottom + 8, bottom: "auto" }
+    : { position: "fixed", left, top: Math.max(8, r.top - 8), bottom: "auto", transform: "translateY(-100%)" };
+}
 
 function inDel(box: HTMLElement | null): boolean {
   const s = document.getSelection();
@@ -177,7 +189,7 @@ function firstVisible(box: HTMLElement | null): number | null {
   return el ? Number(el.dataset.start) : null;
 }
 
-/** 稿:直排一頁頁往下疊、橫排一張長紙。陪讀者提到的句子畫鉛筆波浪線(舊版不畫),選中的觀察畫直線;選字 → 浮出「帶進對話」。 */
+/** 稿:直排一頁頁往下疊、橫排一張長紙。陪讀者提到的句子畫鉛筆波浪線(舊版不畫),選中的觀察畫直線;選字 → 浮出「引用至對話」。 */
 export default function Paper({ text, title, marks, drawing, onBring, old = false, obs = [], cmp }: {
   text: string; title: string; marks: Mark[];
   /** 正在畫的那道痕跡 id(一筆畫上去的動畫)。 */
@@ -417,10 +429,10 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
       </div>
       {flow === "v" && <div ref={measure} className="paper-cols paper-measure" aria-hidden="true" />}
       {bring && (
-        <div className="dash-float paper-bring" style={rect ? { position: "fixed", left: rect.left, top: rect.bottom + 8 } : undefined}>
+        <div className="dash-float paper-bring" style={rect ? floatAt(rect, flow) : undefined}>
           <button type="button" disabled={long} onMouseDown={e => e.preventDefault()}
             onClick={() => { onBring(deleted ? [...quote].slice(0, MAX_QUOTE).join("") : quote); clear(); }}>
-            {t("reader.bring")}
+            <Icon name="talk" />{t("reader.bring")}
           </button>
           {long && <span role="status">{t("reader.tooLong")}</span>}
         </div>

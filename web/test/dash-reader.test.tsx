@@ -146,23 +146,23 @@ describe("Reader(稿窗格)", () => {
     expect(screen.getByRole("button", { name: "分析" })).toBeTruthy();
     expect(document.querySelector(".paper-state")).toBeNull();
   });
-  it("選一段 → 帶進對話,送出引用", async () => {
+  it("選一段 → 引用至對話,送出引用", async () => {
     const { onQuote } = await mount(detail());
     const range = document.createRange();
     const node = screen.getByText("第一段。").firstChild!;
     range.setStart(node, 0); range.setEnd(node, 3);
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
-    fireEvent.click(await screen.findByRole("button", { name: "帶進對話" }));
+    fireEvent.click(await screen.findByRole("button", { name: "引用至對話" }));
     expect(onQuote).toHaveBeenCalledWith("第一段");
   });
-  it("選到標題不會出現帶進對話的鈕(只收正文)", async () => {
+  it("選到標題不會出現引用至對話的鈕(只收正文)", async () => {
     await mount(detail());
     const range = document.createRange();
     range.selectNodeContents(screen.getByRole("heading", { name: "海" }));
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
-    expect(screen.queryByRole("button", { name: "帶進對話" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "引用至對話" })).toBeNull();
   });
   it("載入失敗顯示對應訊息", async () => {
     setLang("zh-Hant");
