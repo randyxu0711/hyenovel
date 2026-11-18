@@ -24,21 +24,14 @@ Once a work is submitted, two isolated steps run in the background. The first st
 
 ## Interface
 
-**Work page**: the draft appears on the left (vertical text by default) and the conversation with the companion on the right. Sentences the companion quotes are marked on the draft with a pencil-style wavy underline.
-
 ![Work page: vertical draft and companion conversation](assets/shot-work.png)
 
-**Notes**: the neutral reader's notes, each with source quotations and a question. The Structure tab in the same panel shows the tension curve and motif distribution.
+**Work page**: the draft appears on the left (vertical text by default) and the conversation with the companion on the right. Sentences the companion quotes are marked on the draft with a pencil-style wavy underline.
 
-![Notes tab](assets/shot-notes.png)
-
-**Version comparison**: after a new version is submitted, the comparison view shows the draft as a marked-up proof with deleted text struck through. The right panel lists, for each note on the previous version, whether its quoted sentences were kept, changed, or deleted.
-
-![Version comparison: marked-up proof and where each note went](assets/shot-compare.png)
-
-**Companions**: three built-in companions (water buffalo, deer, and hyena), each with its own way of reading. Users can also create new companions or import character cards.
-
-![Companion list in Settings](assets/shot-companions.png)
+| Notes | Version comparison | Companions |
+|:---:|:---:|:---:|
+| <img src="assets/shot-notes.png" alt="Notes tab"> | <img src="assets/shot-compare.png" alt="Version comparison"> | <img src="assets/shot-companions.png" alt="Companion list in Settings"> |
+| The neutral reader's notes, each with source quotations and a question | A marked-up proof; the right panel shows where each previous note's quotations went | Built-in water buffalo, deer, and hyena; create or import more |
 
 ## Features
 
@@ -171,12 +164,12 @@ To back up, copy `hyenovel.db`. While den is running, `sqlite3 hyenovel.db ".bac
 
 ## How it works
 
-```
-submit (dashboard / submit_work) ─▶ den ─ analyst ▶ reviewer ─▶ SQLite (observation + judgment)
-                                                                       │
-                         ┌─────────────────────┬───────────────────────┤
-                         ▼                     ▼                       ▼
-                 dashboard (reads den)   companion (dashboard / MCP)   python -m export ─▶ md + html
+```mermaid
+flowchart LR
+  A["Submit<br>dashboard / submit_work"] --> B["analyst<br>observation"] --> C["reviewer<br>judgment"] --> D[("SQLite")]
+  D --> E["dashboard"]
+  D --> F["Companion<br>dashboard / MCP"]
+  D --> G["python -m export<br>md + html"]
 ```
 
 The analyst (observation) and the reviewer (judgment) run in separate contexts. Discussion with the companion can begin as soon as observation is complete, without waiting for the notes. The companion receives only the source text, a condensed analysis, and the categories and quotations of the notes; it **does not see the content of the notes**, which keeps its reading independent.
