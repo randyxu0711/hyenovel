@@ -30,7 +30,7 @@ function Quote({ q, version, old, many, onBring }: { q: TraceQuote; version: num
     <p className="trace-q">
       <del role="button" tabIndex={0} className="dash-iq trace-gone" aria-label={q.quote} onClick={() => jumpToRun(q.del!)}
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jumpToRun(q.del!); } }}>「{q.quote}」</del>
-      {state}<Bring quote={q.quote} onBring={onBring} />
+      <Bring quote={q.quote} onBring={onBring} />{state}
     </p>
   );
   if (q.fate === "changed") return (
