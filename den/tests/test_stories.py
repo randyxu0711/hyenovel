@@ -69,7 +69,8 @@ def test_ingest_rejects_bad_slug(conn):
 
 def test_companion_context_keys_have_no_judgment_layer(conn):
     out = stories.companion_context(conn, "mini")
-    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds", "memory", "attachments"}
+    assert set(out) == {"slug", "title", "source", "analysis", "progress", "seeds", "memory", "attachments",
+                        "version", "versions", "compare", "old_sources"}
     assert isinstance(out["analysis"], dict) and out["progress"] == "none"
 
 
@@ -166,7 +167,8 @@ def test_companion_context_without_story(conn):
     repo.add_memory(conn, "author", "共用", 1.0)
     out = stories.companion_context(conn, None)
     assert out == {"slug": None, "title": None, "source": "", "analysis": None, "progress": "none",
-                   "seeds": [], "memory": {"author": ["共用"], "work": []}, "attachments": []}
+                   "seeds": [], "memory": {"author": ["共用"], "work": []}, "attachments": [],
+                   "version": None, "versions": [], "compare": None, "old_sources": []}
 
 
 def test_adopted_attachment_not_in_context(conn):
@@ -181,8 +183,8 @@ def test_adopted_attachment_not_in_context(conn):
 
 def test_sources_skips_empty_work_source():
     att = [{"n": 1, "seq": 0, "name": "海", "text": "浪"}]
-    assert stories.sources({"source": "", "attachments": att}) == ["浪"]
-    assert stories.sources({"source": "原文", "attachments": att}) == ["原文", "浪"]
+    assert stories.sources({"source": "", "attachments": att, "old_sources": []}) == ["浪"]
+    assert stories.sources({"source": "原文", "attachments": att, "old_sources": []}) == ["原文", "浪"]
 
 
 def test_memory_load_without_story(conn):
@@ -190,3 +192,92 @@ def test_memory_load_without_story(conn):
     repo.add_memory(conn, "author", "甲", 1.0)
     repo.add_memory(conn, "work", "別篇", 1.0, story_id=repo.story_by_slug(conn, "mini")["id"])
     assert memory.load(conn, None) == {"author": ["甲"], "work": []}
+
+
+V1_TEXT = "甲。她看了很久。乙。門開著。"
+V2_TEXT = "甲。乙。門開著。丙。"
+
+
+def _notes(conn, sid, vid, points, current=False):
+    aid, _ = repo.add_artifact(conn, sid, vid, "notes", 1, {"points": points}, {}, 9.0)
+    if current:
+        repo.set_current(conn, sid, "notes", aid)
+
+
+V1_POINTS = [{"kind": "moved", "title": "t", "body": "b", "question": None, "quotes": ["門開著"]},
+             {"kind": "confused", "title": "t", "body": "b", "question": "q", "quotes": ["她看了很久"]},
+             {"kind": "opinion", "title": "t", "body": "b", "question": None, "quotes": ["甲"]}]
+V2_POINTS = [{"kind": "wondering", "title": "t", "body": "b", "question": None, "quotes": ["丙"]}]
+
+
+def _two(conn, noted=(), current_v2=False):
+    with conn:
+        sid = repo.ensure_story(conn, "d01", "標", 0)
+        ids = [repo.add_source_version(conn, sid, t, float(i))[0] for i, t in enumerate((V1_TEXT, V2_TEXT), 1)]
+        if 1 in noted:
+            _notes(conn, sid, ids[0], V1_POINTS, current=True)
+        if 2 in noted:
+            _notes(conn, sid, ids[1], V2_POINTS, current=current_v2)
+    return sid
+
+
+def test_context_without_cmp_has_no_compare(conn):
+    _two(conn)
+    ctx = stories.companion_context(conn, "d01")
+    assert ctx["compare"] is None and ctx["old_sources"] == []
+    assert ctx["version"] == 2 and [v["n"] for v in ctx["versions"]] == [1, 2]
+    assert ctx["versions"][0]["text"] == V1_TEXT and ctx["versions"][1]["created_at"] == 2.0
+
+
+def test_context_cmp_builds_compare(conn):
+    _two(conn, noted=(1,))
+    ctx = stories.companion_context(conn, "d01", cmp=1)
+    c = ctx["compare"]
+    assert (c["old"], c["new"]) == (1, 2) and c["hunks"] == 2
+    assert c["changes"] == [{"kind": "del", "old": "她看了很久。", "new": None},
+                            {"kind": "ins", "old": None, "new": "丙。"}]
+    assert (c["dels"], c["inss"]) == (6, 2) and c["heavy"] is False
+    assert c["fates"] == [{"kind": "moved", "quote": "門開著", "fate": "kept"},
+                          {"kind": "confused", "quote": "她看了很久", "fate": "gone"}]
+    assert ctx["old_sources"] == [V1_TEXT]
+
+
+def test_context_cmp_heavy_rewrite(conn):
+    with conn:
+        sid = repo.ensure_story(conn, "d01", "標", 0)
+        repo.add_source_version(conn, sid, "甲。乙。", 1.0)
+        repo.add_source_version(conn, sid, "丙。丁。", 2.0)
+    c = stories.companion_context(conn, "d01", cmp=1)["compare"]
+    assert c["heavy"] is True and c["fates"] == []
+
+
+def test_context_cmp_unknown_or_not_older_raises(conn):
+    _two(conn)
+    for bad in (0, 2, 3):
+        with pytest.raises(stories.UnknownVersion):
+            stories.companion_context(conn, "d01", cmp=bad)
+
+
+def test_context_cmp_ignored_without_work(conn):
+    ctx = stories.companion_context(conn, None, cmp=1)
+    assert ctx["compare"] is None and ctx["versions"] == [] and ctx["version"] is None
+
+
+def test_interim_seeds_only_kept_and_in_new_text(conn):
+    _two(conn, noted=(1,))
+    assert stories.companion_context(conn, "d01")["seeds"] == [{"kind": "moved", "quotes": ["門開著"]}]
+
+
+def test_interim_seeds_empty_without_older_notes(conn):
+    _two(conn)
+    assert stories.companion_context(conn, "d01")["seeds"] == []
+
+
+def test_seeds_switch_back_once_latest_has_notes(conn):
+    _two(conn, noted=(1, 2), current_v2=True)
+    assert stories.companion_context(conn, "d01")["seeds"] == [{"kind": "wondering", "quotes": ["丙"]}]
+
+
+def test_sources_include_old_sources(conn):
+    _two(conn)
+    assert stories.sources(stories.companion_context(conn, "d01", cmp=1)) == [V2_TEXT, V1_TEXT]

@@ -1,4 +1,4 @@
-from marrow.compare import changes, diff, pin, public, trace
+from marrow.compare import changes, diff, pin, public, rewrite_share, trace
 
 
 def test_identical_after_whitespace_and_punct_is_same():
@@ -215,3 +215,10 @@ def test_changes_end_mark_counts():
 
 def test_changes_spans_paragraphs_keep_raw_text():
     assert changes("甲。\n乙。\n丙。", "甲。\n丙。") == [{"kind": "del", "old": "乙。", "new": None}]
+
+
+def test_rewrite_share():
+    assert rewrite_share("", "") == 0.0
+    assert rewrite_share("甲。乙。丙。丁。", "甲。乙。丙。丁。") == 0.0
+    assert rewrite_share("甲。乙。丙。丁。", "甲。乙。丙。戊。") == 0.25
+    assert rewrite_share("甲。", "乙。丙。") == 1.0
