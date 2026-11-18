@@ -2,6 +2,7 @@
 
 web 與 MCP talk_to_companion 共用,素材見 den.companion。
 """
+import bisect
 import logging
 import time
 import uuid
@@ -20,10 +21,44 @@ _ROLE = {"user": "作者", "assistant": "你"}
 OPENER = "(作者還沒說話。你先開口。)"
 CONTINUE = "(作者這次沒說話,等你接著說。)"
 ATTACHED = "(作者丟進來一份稿〈{name}〉。)"
+SUBMITTED = "(這裡起你讀的是第 {new} 版;前面的對話對著的是第 {old} 版。)"
+CMP_ON = "(作者在這裡開始對照第 {old} 版。)"
+CMP_OFF = "(作者在這裡關掉了對照。)"
+OLD_QUOTE = "「{q}」(第 {n} 版的字,這版已經沒有)"
 
 
-def _quotes_block(quotes) -> list[str]:
-    return ["作者指著原文的這幾段:", *[f"「{q}」" for q in quotes]] if quotes else []
+def _quotes_block(quotes, old_version=lambda q: None) -> list[str]:
+    def one(q):
+        n = old_version(q)
+        return f"「{q}」" if n is None else OLD_QUOTE.format(q=q, n=n)
+    return ["作者指著原文的這幾段:", *[one(q) for q in quotes]] if quotes else []
+
+
+def annotate(rows: list[dict], versions: list[dict]) -> list[dict]:
+    """每則補上 v(讀伴當時讀的版號)、cmp、home:assistant 取自 recipe,作者取同輪回覆的;沒記的舊列用 ts 推 v。"""
+    made = [v["created_at"] for v in versions]
+
+    def at(ts):
+        return max(bisect.bisect_right(made, ts), 1) if made else None
+
+    out = []
+    for i, r in enumerate(rows):
+        src = r
+        if r["role"] == "user" and i + 1 < len(rows) and rows[i + 1]["role"] == "assistant" \
+                and rows[i + 1]["seq"] == r["seq"] + 1:
+            src = rows[i + 1]
+        rec = src.get("recipe") or {}
+        out.append({**r, "v": rec.get("v") or at(src["ts"]), "cmp": rec.get("cmp"), "home": rec.get("home")})
+    return out
+
+
+def _marks(prev: dict, cur: dict) -> list[str]:
+    out = []
+    if prev.get("v") and cur.get("v") and prev["v"] < cur["v"]:
+        out.append(SUBMITTED.format(new=cur["v"], old=prev["v"]))
+    if prev.get("home") == "web" and cur.get("home") == "web" and prev.get("cmp") != cur.get("cmp"):
+        out.append(CMP_ON.format(old=cur["cmp"]) if cur.get("cmp") is not None else CMP_OFF)
+    return out
 
 
 def _speaker(h: dict, others: dict[str, str]) -> str:
@@ -38,12 +73,15 @@ def note_at(n_history: int, depth: int) -> int:
 
 def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
                 summary: str | None = None, attached: Sequence[dict] = (),
-                others: dict[str, str] | None = None, note: str = "", note_depth: int = 0) -> str:
+                others: dict[str, str] | None = None, note: str = "", note_depth: int = 0,
+                version: int | None = None, cmp: int | None = None, home: str = "web",
+                old_version=lambda q: None) -> str:
     """一輪的輸入:歷史包進 <history>、新訊息放最後;無歷史只回訊息本身。
     作者帶了原文引文,就在新訊息前加「作者指著原文的這幾段」;歷史裡的舊引文照同格式還原。
     notes 是這輪檢索到的細節,只存在這輪,不進歷史。
     note 是角色卡的每輪提醒,插在倒數第 note_depth 則發言前(0 = 作者這一輪說之前)。"""
-    block = [*([notes] if notes else []), *_quotes_block(quotes), *([note] if note and not note_depth else [])]
+    block = [*([notes] if notes else []), *_quotes_block(quotes, old_version),
+             *([note] if note and not note_depth else [])]
     head = [f"之前的對話摘要:\n<summary>\n{summary}\n</summary>", ""] if summary else []
     if not history:
         if not head:
@@ -51,10 +89,15 @@ def render_turn(history: list[dict], message: str, quotes=(), notes: str = "",
         return "\n".join([*head, *block, *([""] if block else []), "作者這一輪說:", message])
     dropped = {a["seq"]: a["name"] for a in attached}
     groups = [[*([ATTACHED.format(name=dropped[h["seq"]])] if h.get("seq") in dropped else []),
-               *_quotes_block(h.get("quotes")), f"{_speaker(h, others or {})}:{h['text']}"] for h in history]
+               *_quotes_block(h.get("quotes"), old_version), f"{_speaker(h, others or {})}:{h['text']}"]
+              for h in history]
+    for i in range(1, len(history)):
+        if history[i]["role"] == "user" or history[i - 1]["role"] == "assistant":
+            groups[i][:0] = _marks(history[i - 1], history[i])
     if note and note_depth:
         groups.insert(len(history) - note_depth, [note])
     lines = [x for g in groups for x in g]
+    lines += _marks(history[-1], {"v": version, "cmp": cmp, "home": home})
     return "\n".join([*head, "以下是這一局到目前為止的對話(作者 = 使用者):",
                       "<history>", *lines, "</history>", "", *block, "作者這一輪說:", message])
 
@@ -136,9 +179,14 @@ def reply_target(conn, session: str, seq: int, *, last: bool) -> dict:
 def prepare_redo(conn, session: str, seq: int) -> dict:
     """重說第 seq 則:定位同 reply_target(last=True);角色固定是那則的,已封存 → characters.UnknownCharacter。"""
     d = reply_target(conn, session, seq, last=True)
-    turn = {"slug": d["slug"], "ctx": stories.companion_context(conn, d["slug"], d["id"]),
+    rec = repo.utterance(conn, d["id"], seq)["recipe"] or {}
+    try:
+        ctx = stories.companion_context(conn, d["slug"], d["id"], rec.get("cmp"))
+    except stories.UnknownVersion:
+        ctx = stories.companion_context(conn, d["slug"], d["id"])
+    turn = {"slug": d["slug"], "ctx": ctx,
             "story_id": d["story_id"], "discussion_id": d["id"], "attach": None, "session_id": session,
-            "redo": seq}
+            "redo": seq, "cmp": ctx["compare"] and ctx["compare"]["old"], "home": rec.get("home")}
     st = repo.story_by_slug(conn, d["slug"]) if d["slug"] is not None else None
     analysis = repo.current_artifact(conn, st["id"], "analysis") if st else None
     turn["analysis_fp"] = analysis["sha256"] if turn["ctx"]["analysis"] is not None else None
@@ -191,7 +239,7 @@ def _attach(ctx: dict, attach: dict) -> dict:
 
 
 def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequence[str] = (),
-                 message: str = "", attach: dict | None = None) -> dict:
+                 message: str = "", attach: dict | None = None, cmp: int | None = None) -> dict:
     """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession /
     LegacySession / TooManyQuotes / QuoteNeedsMessage / QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
     沒分析也能聊(素材分層在 companion_context)。新局只發 id,discussion 列等整輪成功才建。"""
@@ -207,7 +255,7 @@ def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequenc
         slug = row["slug"]
     if attach is not None and slug is not None:
         raise stories.BoundSession(session_id)
-    ctx = stories.companion_context(conn, slug, row["id"] if row else None)
+    ctx = stories.companion_context(conn, slug, row["id"] if row else None, cmp)
     if attach is not None:
         attach = _attach(ctx, attach)
     if len(quotes) > MAX_QUOTES:
@@ -223,7 +271,7 @@ def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequenc
     st = repo.story_by_slug(conn, slug) if slug is not None else None
     analysis = repo.current_artifact(conn, st["id"], "analysis") if st else None
     return {"slug": slug, "ctx": ctx, "story_id": st["id"] if st else None,
-            "discussion_id": row["id"] if row else None, "attach": attach,
+            "discussion_id": row["id"] if row else None, "attach": attach, "cmp": ctx["compare"] and ctx["compare"]["old"],
             "session_id": session_id or uuid.uuid4().hex[:12],
             "analysis_fp": analysis["sha256"] if ctx["analysis"] is not None else None}
 
@@ -266,6 +314,15 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
         dropped = next((a for a in turn["ctx"]["attachments"] if a["seq"] == first), None)
         every = [u for u in every if u["seq"] < first]
     summary, history = live_history(every)
+    ctx = turn["ctx"]
+    history = annotate(history, ctx["versions"])
+    home_now = turn.get("home") or home
+    olds = [v for v in reversed(ctx["versions"][:-1])]
+
+    def old_version(q):
+        if not olds or gate.locate(q, ctx["source"]) is not None:
+            return None
+        return next((v["n"] for v in olds if gate.locate(q, v["text"]) is not None), None)
     seq = every[-1]["seq"] + 1 if every else 0
     attach = turn["attach"] if redo is None else dropped
     character = turn["character"]
@@ -289,7 +346,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                              quotes, retrieve.render(analysis, picked), summary,
                                              [a for a in turn["ctx"]["attachments"] if a["seq"] is not None],
                                              _others(conn, history, character["id"]),
-                                             companion.note_block(note) if note else "", at),
+                                             companion.note_block(note) if note else "", at,
+                                             ctx["version"], turn.get("cmp"), home_now, old_version),
                                  config=companion.CHAT_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "delta":
@@ -321,7 +379,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     fp = turn["analysis_fp"]
     recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
               "retrieved": [n["id"] for n in picked],
-              "depth_prompt": {"sha": repo.sha256_text(note), "at": at} if note else None}
+              "depth_prompt": {"sha": repo.sha256_text(note), "at": at} if note else None,
+              "v": ctx["version"], "cmp": turn.get("cmp"), "home": home_now}
     variant = None
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫

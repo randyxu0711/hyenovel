@@ -46,7 +46,7 @@ describe("對照接到 Dash", () => {
     mount("/w/d1?cmp");
     const tab = await screen.findByRole("tab", { name: "去向" });
     expect(tab.getAttribute("aria-selected")).toBe("true");
-    expect(await screen.findByRole("button", { name: /^還在\s*1/ })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^保留\s*1/ })).toBeTruthy();
     const chart = screen.getByRole("tab", { name: "結構圖" });
     expect(chart.getAttribute("data-empty")).toBe("true");
     expect((chart as HTMLButtonElement).disabled).toBe(true);

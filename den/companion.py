@@ -3,10 +3,12 @@
 人格 = 共同底層 base.md + 角色卡的讀法;底層不在卡上,卡片不能覆蓋。
 """
 import re
+from difflib import SequenceMatcher
 from functools import cache
 from pathlib import Path
 
-from den.config import MAX_VOICE_SAMPLE_CHARS, MAX_VOICE_SAMPLES
+from marrow.gate import _PUNCT
+from den.config import MAX_DIFF_CHARS, MAX_DIFF_ITEM_CHARS, MAX_VOICE_SAMPLE_CHARS, MAX_VOICE_SAMPLES
 from marrow.prompt import Layer, Prompt
 from marrow.workpacks import RunConfig
 
@@ -82,6 +84,62 @@ def _samples_block(samples: list[dict], name: str) -> str:
                    for s in samples)
 
 
+_FATE = {"kept": "還在", "changed": "改過", "gone": "刪掉"}
+
+
+def _inline(old: str, new: str) -> str:
+    out = []
+    sm = SequenceMatcher(None, old.translate(_PUNCT), new.translate(_PUNCT), autojunk=False)
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            out.append(new[j1:j2])
+            continue
+        if i1 < i2:
+            out.append("{-" + old[i1:i2] + "-}")
+        if j1 < j2:
+            out.append("{+" + new[j1:j2] + "+}")
+    return "".join(out)
+
+
+def _item(text: str) -> str:
+    text = text.replace("\n", " / ")
+    if len(text) <= MAX_DIFF_ITEM_CHARS:
+        return text
+    cut = text[:MAX_DIFF_ITEM_CHARS]
+    for o, c in (("{-", "-}"), ("{+", "+}")):
+        if cut.rfind(o) > cut.rfind(c):
+            cut += c
+    return cut + "…"
+
+
+def _compare_block(c: dict) -> str:
+    head = f"改了 {len(c['changes'])} 處:刪 {c['dels']} 字,加 {c['inss']} 字。\n"
+    fates = [_item(f"- {_SEED_KIND[f['kind']]}「{f['quote']}」:{_FATE[f['fate']]}") for f in c["fates"]]
+    if fates:
+        fates.insert(0, f"別的讀者在第 {c['old']} 版標過的地方:")
+    if c["heavy"]:
+        return head + "".join(x + "\n" for x in fates) + "這版大幅改寫,逐處不列;你手上有整份新版。\n"
+    items = [_item("- 舊→新:" + _inline(ch["old"], ch["new"]) if ch["kind"] == "edit"
+                   else "- 整句刪掉:" + ch["old"] if ch["kind"] == "del" else "- 新加:" + ch["new"])
+             for ch in c["changes"]]
+    lines, size = [], len(head)
+    for x in fates:
+        if size + len(x) > MAX_DIFF_CHARS:
+            break
+        lines.append(x)
+        size += len(x) + 1
+    shown = 0
+    for x in items:
+        if shown and size + len(x) > MAX_DIFF_CHARS:
+            break
+        lines.append(x)
+        size += len(x) + 1
+        shown += 1
+    if shown < len(items):
+        lines.append(f"(其餘 {len(items) - shown} 處未列)")
+    return head + "".join(x + "\n" for x in lines)
+
+
 def assemble(ctx: dict, character: dict, samples: list[dict] = ()) -> Prompt:
     """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子、作者標過「像它」的回覆。"""
     layers = _boundary_layers(bool(ctx["source"].strip() or ctx["attachments"]))
@@ -91,6 +149,8 @@ def assemble(ctx: dict, character: dict, samples: list[dict] = ()) -> Prompt:
     if ctx["slug"] is not None:
         layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
                                     f"{ctx['source'].rstrip()}\n</source>\n", material=True))
+        if len(ctx.get("versions") or ()) > 1:
+            layers.append(Layer("version", f"\n這是第 {ctx['version']} 版。作者提到以前版本的句子時,你手上可能沒有,照實說。\n"))
     for att in ctx["attachments"]:
         layers.append(Layer(f"attachment_{att['n']}", f"---\n# 作者丟進來的稿〈{att['name']}〉\n<source>\n"
                                                       f"{att['text'].rstrip()}\n</source>\n", material=True))
@@ -108,6 +168,11 @@ def assemble(ctx: dict, character: dict, samples: list[dict] = ()) -> Prompt:
         layers.append(Layer("seeds", "".join(
             f"- {_SEED_KIND[s['kind']]}" + "".join(f"「{q}」" for q in s["quotes"]) + "\n"
             for s in ctx["seeds"]), material=True))
+    if ctx.get("compare") is not None:
+        c = ctx["compare"]
+        layers.append(Layer("compare_header", "\n" + _read("companion/compare.md").rstrip()
+                            .replace("{old}", str(c["old"])).replace("{new}", str(c["new"])) + "\n"))
+        layers.append(Layer("compare", _compare_block(c), material=True))
     layers.append(Layer("character_header", _CHARACTER_HEADER))
     layers += _character_layers(character["reading"], character["voice"], character.get("examples", ""))
     if samples:

@@ -274,3 +274,77 @@ def test_note_block_escapes_its_close_tag():
         inner = out[len("<character_note>\n"):-len("\n</character_note>")]
         assert re.search(r"[<＜][/／]", inner) is None and "< /" in inner
     assert companion.note_block("  話少 \n") == "<character_note>\n話少\n</character_note>"
+
+
+# ── 版本與對照 ──
+
+from den.config import MAX_DIFF_CHARS, MAX_DIFF_ITEM_CHARS  # noqa: E402
+
+V1 = [{"n": 1, "text": "x", "created_at": 1.0}]
+V2 = [*V1, {"n": 2, "text": "y", "created_at": 2.0}]
+CMP = {"old": 1, "new": 2, "hunks": 1, "dels": 1, "inss": 1, "heavy": False, "fates": [],
+       "changes": [{"kind": "edit", "old": "她把門關上。", "new": "她把門帶上。"}]}
+
+
+def test_compare_layer_only_with_compare():
+    t = render(_ctx(compare=CMP, versions=V2, version=2), _c("hyena"))
+    assert "## 作者開著對照" in t and "第 1 版改成第 2 版" in t and "- 舊→新:她把門{-關-}{+帶+}上。" in t
+    assert "改了 1 處:刪 1 字,加 1 字。" in t and "這是第 2 版" in t
+    assert t.index("## 作者開著對照") < t.index("## 你這個讀者")
+    p = render(_ctx(compare=None, versions=V2, version=2), _c("hyena"))
+    assert "作者開著對照" not in p and "這是第 2 版。作者提到以前版本的句子時,你手上可能沒有,照實說。" in p
+    assert p.index("</source>") < p.index("這是第 2 版")
+
+
+def test_single_version_adds_nothing():
+    assert "這是第" not in render(_ctx(compare=None, versions=V1, version=1), _c("hyena"))
+    assert "這是第" not in render(_ctx(), _c("hyena"))
+
+
+def test_first_change_always_listed_even_if_huge():
+    c = {**CMP, "changes": [{"kind": "ins", "old": None, "new": "字," * 2000}]}
+    out = companion._compare_block(c)
+    assert "- 新加:" in out and "…" in out and "(其餘" not in out
+
+
+def test_truncates_after_cap():
+    c = {**CMP, "changes": [{"kind": "del", "old": "字" * 280, "new": None}] * 10}
+    out = companion._compare_block(c)
+    assert len(out) <= MAX_DIFF_CHARS + MAX_DIFF_ITEM_CHARS and "(其餘 " in out and "- 整句刪掉:" in out
+
+
+def test_heavy_rewrite_summarised():
+    out = companion._compare_block({**CMP, "heavy": True})
+    assert "這版大幅改寫,逐處不列;你手上有整份新版。" in out and "舊→新" not in out
+
+
+def test_fates_listed_before_changes_with_state_words():
+    fates = [{"kind": "moved", "quote": "門", "fate": "changed"}, {"kind": "confused", "quote": "窗", "fate": "gone"},
+             {"kind": "wondering", "quote": "傘", "fate": "kept"}]
+    out = companion._compare_block({**CMP, "fates": fates})
+    assert "別的讀者在第 1 版標過的地方:" in out
+    assert "- 「門」:改過" in out and "- 有人讀不懂:「窗」:刪掉" in out and "- 有人看不出作用:「傘」:還在" in out
+    assert out.index("「門」:改過") < out.index("舊→新")
+
+
+def test_no_fates_no_heading():
+    assert "別的讀者" not in companion._compare_block(CMP)
+
+
+def test_newlines_flattened():
+    c = {**CMP, "changes": [{"kind": "del", "old": "甲。\n乙。", "new": None}]}
+    assert "- 整句刪掉:甲。 / 乙。" in companion._compare_block(c)
+
+
+def test_inline_ignores_width_but_keeps_new_chars():
+    assert companion._inline("好,走。", "好，走了。") == "好，走{+了+}。"
+
+
+def test_truncated_edit_closes_open_mark():
+    out = companion._item("- 舊→新:" + "甲" * 290 + "{-" + "乙" * 50 + "-}")
+    assert out.endswith("-}…")
+
+
+def test_inline_marks():
+    assert companion._inline("她看了很久。", "她看了。") == "她看了{-很久-}。"
+    assert companion._inline("好。", "好!") == "好{-。-}{+!+}"

@@ -49,7 +49,9 @@ const asError = (e: unknown) => (e instanceof DashError ? e : new DashError(0, "
  *  onSession = 使用者選局、開新局、新局第一輪存下時通知(呼叫端寫回網址)。
  *  reloadKey = 外面遞增 → 目前這局照目前版本重抓(交了新版,位置要對到新稿)。 */
 export function useTalk(slug: string | null, version?: number, source: string | null = null,
-  wanted: string | null = null, onSession?: (id: string | null) => void, reloadKey = 0) {
+  wanted: string | null = null, onSession?: (id: string | null) => void, reloadKey = 0, cmp: number | null = null) {
+  const cmpRef = useRef(cmp);
+  cmpRef.current = cmp;
   const chars = useCharacters();
   const { markSeen } = useSeen();
   // 對話裡換人只影響這一局;換作品、開局、開新局就清掉。
@@ -239,7 +241,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     };
     const ctl = abort.current = new AbortController();
     try {
-      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried }, ctl.signal)) {
+      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried, cmp: cmpRef.current }, ctl.signal)) {
         if (!live()) return false;
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") {

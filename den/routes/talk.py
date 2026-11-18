@@ -37,6 +37,7 @@ class DiscussIn(BaseModel):
     home: Literal["web", "mcp"] = "web"
     client: ClientIn | None = None
     attach: AttachIn | None = None
+    cmp: int | None = None
 
 
 _BUSY = {"event": "error", "data": {"where": "discuss", "message": "這一局還有一輪在跑",
@@ -303,7 +304,8 @@ async def compact_session(session: str, request: Request):
             log.info("event=reject where=compact reason=nothing-to-compact")
             raise ApiError(422, "nothing-to-compact", "這局沒有可以壓縮的對話")
         try:
-            text, usage = await compact.summarize(state.chat, compact.transcript(rows))
+            made = repo.source_versions(conn, d["story_id"]) if d["story_id"] is not None else []
+            text, usage = await compact.summarize(state.chat, compact.transcript(rows, made))
         except Exception:
             log.exception("event=compact-failed session=%s", session)
             raise ApiError(502, "compact-failed", "壓縮失敗,對話沒有改動") from None
@@ -355,9 +357,11 @@ def _discuss(slug: str | None, body: DiscussIn, request: Request):
     state = request.app.state
     try:
         turn = discuss.prepare_turn(state.mgr.conn, slug, body.session_id, body.quotes, body.message,
-                                    body.attach.model_dump() if body.attach else None)
+                                    body.attach.model_dump() if body.attach else None, body.cmp)
     except LookupError:
         raise reject(404, "unknown-slug", "這篇不在 DB") from None
+    except stories.UnknownVersion:
+        raise reject(404, "unknown-version", "沒有這個版本") from None
     except discuss.UnknownSession:
         raise reject(404, "unknown-session", "這篇沒有這一局") from None
     except discuss.LegacySession:

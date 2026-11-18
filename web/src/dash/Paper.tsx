@@ -6,7 +6,8 @@ import { useT, type MsgKey } from "./i18n";
 import { useLinks } from "./links";
 import { paginate, tcyRuns, type PageSeg, type Segment } from "./paginate";
 import { usePaperFlow, type PaperFlow } from "./paperFlow";
-import { useSelectionQuote } from "./useSelectionQuote";
+import Icon from "./Icon";
+import { MAX_QUOTE, useSelectionQuote } from "./useSelectionQuote";
 
 /** 讀者在稿上的一道痕跡:位移是原文的 code point 索引(den 給的)。id = markId(...),同一道痕跡跨重繪不變。 */
 export type Mark = { start: number; end: number; character: string; id: string };
@@ -78,6 +79,25 @@ const paraKey = (seg: CmpSeg) => {
 const Caret = () => (
   <svg viewBox="0 0 10 8" aria-hidden="true"><path d="M1.5 7L5 1.5 8.5 7" /></svg>
 );
+
+function floatAt(r: { left: number; top: number; bottom: number }, flow: string): CSSProperties {
+  if (flow === "v") {
+    const right = Math.max(8, Math.min(window.innerWidth - r.left + 8, window.innerWidth - 168));
+    return { position: "fixed", right, top: Math.max(8, Math.min(r.top, window.innerHeight - 56)), bottom: "auto" };
+  }
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - 168));
+  return r.bottom + 56 < window.innerHeight
+    ? { position: "fixed", left, top: r.bottom + 8, bottom: "auto" }
+    : { position: "fixed", left, top: Math.max(8, r.top - 8), bottom: "auto", transform: "translateY(-100%)" };
+}
+
+function inDel(box: HTMLElement | null): boolean {
+  const s = document.getSelection();
+  if (!box || !s || s.rangeCount === 0) return false;
+  const n = s.getRangeAt(0).commonAncestorContainer;
+  const d = (n.nodeType === Node.ELEMENT_NODE ? n as Element : n.parentElement)?.closest("del.cmp-del");
+  return !!d && box.contains(d);
+}
 
 function hasDel(box: HTMLElement | null): boolean {
   const s = document.getSelection();
@@ -169,7 +189,7 @@ function firstVisible(box: HTMLElement | null): number | null {
   return el ? Number(el.dataset.start) : null;
 }
 
-/** 稿:直排一頁頁往下疊、橫排一張長紙。陪讀者提到的句子畫鉛筆波浪線(舊版不畫),選中的觀察畫直線;選字 → 浮出「帶進對話」。 */
+/** 稿:直排一頁頁往下疊、橫排一張長紙。陪讀者提到的句子畫鉛筆波浪線(舊版不畫),選中的觀察畫直線;選字 → 浮出「引用至對話」。 */
 export default function Paper({ text, title, marks, drawing, onBring, old = false, obs = [], cmp }: {
   text: string; title: string; marks: Mark[];
   /** 正在畫的那道痕跡 id(一筆畫上去的動畫)。 */
@@ -390,7 +410,9 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
     </p>
   );
   const plain = segs.map(s => ({ ...s, cont: false }));
-  const bring = quote && !(cmp && hasDel(box.current));
+  const deleted = !!quote && !!cmp && !old && inDel(box.current);
+  const bring = quote && (deleted || !(cmp && hasDel(box.current)));
+  const long = tooLong && !deleted;
   return (
     <article ref={sheet} className={["paper-sheet", flow === "h" && "dash-paper", old && "is-old"].filter(Boolean).join(" ")}
       onClick={cmp ? e => { if (!(e.target as Element).closest?.(".cmp-bracket, .cmp-fold")) trace.setPicked(null); } : undefined}
@@ -407,12 +429,12 @@ export default function Paper({ text, title, marks, drawing, onBring, old = fals
       </div>
       {flow === "v" && <div ref={measure} className="paper-cols paper-measure" aria-hidden="true" />}
       {bring && (
-        <div className="dash-float paper-bring" style={rect ? { position: "fixed", left: rect.left, top: rect.bottom + 8 } : undefined}>
-          <button type="button" disabled={tooLong} onMouseDown={e => e.preventDefault()}
-            onClick={() => { onBring(quote); clear(); }}>
-            {t("reader.bring")}
+        <div className="paper-bring" style={rect ? floatAt(rect, flow) : undefined}>
+          <button type="button" className="dash-float" disabled={long} onMouseDown={e => e.preventDefault()}
+            onClick={() => { onBring(deleted ? [...quote].slice(0, MAX_QUOTE).join("") : quote); clear(); }}>
+            <Icon name="talk" />{t("reader.bring")}
           </button>
-          {tooLong && <span role="status">{t("reader.tooLong")}</span>}
+          {long && <span role="status" className="dash-float">{t("reader.tooLong")}</span>}
         </div>
       )}
     </article>

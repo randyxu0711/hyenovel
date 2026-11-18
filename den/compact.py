@@ -3,7 +3,7 @@ from contextlib import aclosing
 
 from den.companion import _read
 from den.config import COMPACT_MAX_CHARS
-from den.discuss import _ROLE
+from den.discuss import _ROLE, SUBMITTED, annotate
 from marrow.prompt import Layer, Prompt
 from marrow.workpacks import RunConfig
 
@@ -21,8 +21,15 @@ def system() -> Prompt:
     return Prompt((Layer("compact", text),))
 
 
-def transcript(rows: list[dict]) -> str:
-    return "\n".join(f"{_ROLE[r['role']]}:{r['text']}" for r in rows)
+def transcript(rows: list[dict], versions: list[dict] = ()) -> str:
+    rows = annotate(rows, list(versions))
+    lines = []
+    for i, r in enumerate(rows):
+        if i and (r["role"] == "user" or rows[i - 1]["role"] == "assistant") \
+                and rows[i - 1]["v"] and r["v"] and rows[i - 1]["v"] < r["v"]:
+            lines.append(SUBMITTED.format(new=r["v"], old=rows[i - 1]["v"]))
+        lines.append(f"{_ROLE[r['role']]}:{r['text']}")
+    return "\n".join(lines)
 
 
 async def summarize(chat, transcript: str) -> tuple[str, dict]:

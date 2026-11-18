@@ -86,8 +86,8 @@ describe("對照條", () => {
 
   it("same shows identical label and no clean button", async () => {
     await mount(detail(), () => json(cmp({ same: true, runs: [], hunks: [] })), "/w/d1?cmp");
-    await screen.findByText("跟 v2 一字不差");
-    expect(screen.queryByRole("button", { name: "只看新版" })).toBeNull();
+    await screen.findByText("與 v2 完全相同");
+    expect(screen.queryByRole("button", { name: "僅顯示新版" })).toBeNull();
   });
 
   it("hides new-version and analyze buttons while comparing", async () => {
@@ -100,7 +100,7 @@ describe("對照條", () => {
   it("old picker lists olds and sets ?cmp=n", async () => {
     const f = await mount(detail(), undefined, "/w/d1?cmp");
     await screen.findByText("3 處");
-    fireEvent.click(screen.getByRole("button", { name: "換舊版" }));
+    fireEvent.click(screen.getByRole("button", { name: "選擇舊版" }));
     fireEvent.click(screen.getByRole("button", { name: /^v1/ }));
     expect(loc()).toBe("?cmp=1");
     await waitFor(() => expect(compareCalls(f)).toContain("/api/works/d1/compare?v=3&from=1"));
@@ -109,16 +109,16 @@ describe("對照條", () => {
   it("clean toggles &clean", async () => {
     await mount(detail(), undefined, "/w/d1?cmp");
     await screen.findByText("3 處");
-    fireEvent.click(screen.getByRole("button", { name: "只看新版" }));
+    fireEvent.click(screen.getByRole("button", { name: "僅顯示新版" }));
     expect(loc()).toBe("?cmp=&clean=");
-    fireEvent.click(screen.getByRole("button", { name: "只看新版" }));
+    fireEvent.click(screen.getByRole("button", { name: "僅顯示新版" }));
     expect(loc()).toBe("?cmp=");
   });
 
   it("Escape leaves compare (picker first)", async () => {
     await mount(detail(), undefined, "/w/d1?cmp&clean");
     await screen.findByText("3 處");
-    fireEvent.click(screen.getByRole("button", { name: "換舊版" }));
+    fireEvent.click(screen.getByRole("button", { name: "選擇舊版" }));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(loc()).toBe("?cmp&clean");
     expect(screen.queryByRole("dialog")).toBeNull();

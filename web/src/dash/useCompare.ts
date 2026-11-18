@@ -12,7 +12,7 @@ export type CompareState = {
   hunk: number | null; open: Set<string>; focus: { id: string; n: number } | null;
   picker: boolean; setPicker(b: boolean): void;
   toggle(): void; setClean(b: boolean): void; pickOld(n: number): void;
-  step(d: 1 | -1): void; toggleRun(id: string): void; jumpRun(id: string): void;
+  step(d: 1 | -1): void; toggleRun(id: string): void;
 };
 
 const dels = (c: Compare, ids: string[]) => ids.filter(id => c.runs.some(r => r.id === id && r.op === "del"));
@@ -90,10 +90,6 @@ export function useCompare(slug: string, version: number | null, onCompare?: (c:
     toggleRun: id => {
       setTempOpen(o => { const x = new Set(o); x.delete(id); return x; });
       setUserOpen(o => { const x = new Set(o); if (open.has(id)) x.delete(id); else x.add(id); return x; });
-    },
-    jumpRun: id => {
-      const i = data?.hunks.findIndex(h => h.ids.includes(id)) ?? -1;
-      if (i >= 0) go(i);
     },
   };
 }

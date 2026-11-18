@@ -131,3 +131,23 @@ def test_clear_keeps_attachments_in_context(c, fake_chat):
     clear(c, sid)
     events(free(c, sid, "還在嗎"))
     assert SEA in fake_chat.calls[-1][0]
+
+
+def test_transcript_marks_version_change():
+    rows = [{"seq": 0, "role": "user", "text": "a", "ts": 1.0, "recipe": None},
+            {"seq": 1, "role": "assistant", "text": "b", "ts": 2.0, "recipe": {"v": 1}},
+            {"seq": 2, "role": "user", "text": "c", "ts": 3.0, "recipe": None},
+            {"seq": 3, "role": "assistant", "text": "d", "ts": 4.0, "recipe": {"v": 2}}]
+    assert compact.transcript(rows, [{"n": 1, "created_at": 0.0}, {"n": 2, "created_at": 2.5}]) == \
+        "作者:a\n你:b\n(這裡起你讀的是第 2 版;前面的對話對著的是第 1 版。)\n作者:c\n你:d"
+
+
+def test_transcript_marks_between_assistant_only_turns():
+    rows = [{"seq": 0, "role": "assistant", "text": "a", "ts": 1.0, "recipe": {"v": 1}},
+            {"seq": 1, "role": "assistant", "text": "b", "ts": 3.0, "recipe": {"v": 2}}]
+    assert "第 2 版" in compact.transcript(rows)
+
+
+def test_transcript_without_versions_is_plain():
+    rows = [{"seq": 0, "role": "user", "text": "a", "ts": 1.0, "recipe": None}]
+    assert compact.transcript(rows) == "作者:a"

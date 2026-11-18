@@ -137,18 +137,18 @@ describe("Paper", () => {
     act(() => links.jumpToPaper({ quote: "不在", start: null, end: null }));
     expect(document.querySelector(".is-flash")).toBeNull();
   });
-  it("選字 → 出現「帶進對話」,點了送出引文並清掉", () => {
+  it("選字 → 出現「引用至對話」,點了送出引文並清掉", () => {
     const { onBring } = mount("第一段。\n第二段。");
     select(screen.getByText("第一段。").firstChild!, 3);
-    fireEvent.click(screen.getByRole("button", { name: "帶進對話" }));
+    fireEvent.click(screen.getByRole("button", { name: "引用至對話" }));
     expect(onBring).toHaveBeenCalledWith("第一段");
-    expect(screen.queryByRole("button", { name: "帶進對話" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "引用至對話" })).toBeNull();
   });
   it("超過 400 字:鈕 disabled 並提示", () => {
     mount("字".repeat(450));
     select(screen.getByText("字".repeat(450)).firstChild!, 450);
-    expect((screen.getByRole("button", { name: "帶進對話" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("最多 400 字")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "引用至對話" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("引用上限 400 字")).toBeTruthy();
   });
 });
 
@@ -265,7 +265,7 @@ describe("Paper 對照", () => {
   it("folds long unpinned delete and toggles", () => {
     const { container, onToggle } = mountCmp("甲。乙。", { runs: [del("d0", 2, "長".repeat(34))] });
     const b = container.querySelector<HTMLButtonElement>("button.cmp-fold")!;
-    expect(b.textContent).toContain("刪 34 字");
+    expect(b.textContent).toContain("已刪除 34 字");
     expect(b.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(b);
     expect(onToggle).toHaveBeenCalledWith("d0");

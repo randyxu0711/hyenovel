@@ -27,11 +27,8 @@ const POINTS = [
 
 let links: Links;
 function Probe() { const l = useLinks(); useEffect(() => { links = l; }); return null; }
-const mount = (c: Compare) => {
-  const runs = vi.fn();
-  function RunSpy() { const { registerRun } = useLinks(); useEffect(() => registerRun(runs), [registerRun]); return null; }
-  render(<LinksProvider><Probe /><RunSpy /><TraceTab cmp={c} /></LinksProvider>);
-  return runs;
+const mount = (c: Compare, onBring?: (q: string) => void) => {
+  render(<LinksProvider><Probe /><TraceTab cmp={c} onBring={onBring} /></LinksProvider>);
 };
 beforeEach(() => setLang("zh-Hant"));
 
@@ -39,7 +36,7 @@ describe("TraceTab", () => {
   it("groups changed / kept / lost with counts; moved first", () => {
     mount(CMP(POINTS));
     const heads = [...document.querySelectorAll(".trace-group-h")].map(h => h.textContent);
-    expect(heads).toEqual(["有動3", "還在1", "對不到1"]);
+    expect(heads).toEqual(["變動3", "保留1", "無對應1"]);
     const first = document.querySelector(".trace-card")!;
     expect(first.textContent).toContain("打動的那點");
     expect(first.classList.contains("is-raised")).toBe(true);
@@ -49,7 +46,7 @@ describe("TraceTab", () => {
   it("kept and lost groups start collapsed and expand", () => {
     mount(CMP(POINTS));
     expect(screen.queryByText("沒動的那點")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^還在\s*\d/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^保留\s*\d/ }));
     expect(screen.getByText("沒動的那點")).toBeTruthy();
   });
 
@@ -61,17 +58,25 @@ describe("TraceTab", () => {
   it("card head shows label; mixed lists per-quote state, single does not", () => {
     mount(CMP(POINTS));
     const mixed = screen.getByText("想問的那點").closest(".trace-card") as HTMLElement;
-    expect(within(mixed).getByText("有動", { selector: ".trace-state" })).toBeTruthy();
-    expect(within(mixed).getAllByText(/^(還在|刪掉)$/, { selector: ".trace-qstate" }).length).toBe(2);
+    expect(within(mixed).getByText("變動", { selector: ".trace-state" })).toBeTruthy();
+    expect(within(mixed).getAllByText(/^(保留|刪除)$/, { selector: ".trace-qstate" }).length).toBe(2);
     const moved = screen.getByText("打動的那點").closest(".trace-card") as HTMLElement;
-    expect(within(moved).getByText("刪掉", { selector: ".trace-state" })).toBeTruthy();
+    expect(within(moved).getByText("刪除", { selector: ".trace-state" })).toBeTruthy();
     expect(moved.querySelector(".trace-qstate")).toBeNull();
   });
 
-  it("gone quote jumps to its del run", () => {
-    const runs = mount(CMP(POINTS));
-    fireEvent.click(screen.getByRole("button", { name: "被刪句" }));
-    expect(runs).toHaveBeenCalledWith("d0");
+  it("old text is only quotable with onBring: click quotes it, never jumps", () => {
+    const bring = vi.fn();
+    mount(CMP(POINTS), bring);
+    fireEvent.click(screen.getByRole("button", { name: "引用至對話:「被刪句」" }));
+    expect(bring).toHaveBeenLastCalledWith("被刪句");
+    fireEvent.click(screen.getByRole("button", { name: "引用至對話:「舊句」" }));
+    expect(bring).toHaveBeenLastCalledWith("舊句");
+  });
+
+  it("without onBring old text is plain struck text", () => {
+    mount(CMP(POINTS));
+    expect(screen.queryByRole("button", { name: /被刪句|舊句/ })).toBeNull();
   });
 
   it("changed quote shows struck old text and new text", () => {

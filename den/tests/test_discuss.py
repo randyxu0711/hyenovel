@@ -1,4 +1,4 @@
-from den.discuss import ATTACHED, live_history, note_at, render_turn, since_clear
+from den.discuss import ATTACHED, annotate, live_history, note_at, render_turn, since_clear
 
 
 def test_render_turn_first_turn_is_just_message():
@@ -140,3 +140,82 @@ def test_no_note_output_is_unchanged():
     for args, kw in [(([], "C"), {}), (([], "C"), {"summary": "S"}), (([], "C", ["q"]), {"notes": "n"}),
                      ((h, "C"), {}), ((h, "C", ["q"]), {"notes": "n", "summary": "S"})]:
         assert render_turn(*args, **kw, note="") == render_turn(*args, **kw)
+
+
+def _h(role, text, v, cmp=None, home="web"):
+    return {"role": role, "text": text, "v": v, "cmp": cmp, "home": home}
+
+
+def test_render_marks_version_boundary():
+    out = render_turn([_h("user", "a", 1), _h("assistant", "b", 1)], "c", version=2)
+    assert out.index("你:b") < out.index("(這裡起你讀的是第 2 版;前面的對話對著的是第 1 版。)") < out.index("作者這一輪說")
+
+
+def test_render_no_marks_single_version():
+    assert "(這裡起" not in render_turn([_h("user", "a", 1), _h("assistant", "b", 1)], "c", version=1)
+
+
+def test_render_never_marks_inside_one_turn():
+    h = [_h("user", "a", 1), _h("assistant", "b", 1), _h("user", "c", 2), _h("assistant", "d", 2)]
+    out = render_turn(h, "e", version=2)
+    assert out.index("你:b") < out.index("第 2 版") < out.index("作者:c")
+    assert out.count("(這裡起") == 1
+
+
+def test_render_marks_between_assistant_only_turns():
+    out = render_turn([_h("assistant", "a", 1), _h("assistant", "b", 2)], "c", version=2)
+    assert out.index("你:a") < out.index("第 2 版") < out.index("你:b")
+
+
+def test_render_cmp_on_then_off():
+    h = [_h("user", "a", 2), _h("assistant", "b", 2), _h("user", "c", 2, 1), _h("assistant", "d", 2, 1)]
+    out = render_turn(h, "e", version=2, cmp=None)
+    assert out.index("你:b") < out.index("(作者在這裡開始對照第 1 版。)") < out.index("作者:c") \
+        < out.index("你:d") < out.index("(作者在這裡關掉了對照。)") < out.index("作者這一輪說")
+
+
+def test_render_cmp_on_for_this_turn():
+    out = render_turn([_h("user", "a", 2), _h("assistant", "b", 2)], "c", version=2, cmp=1)
+    assert out.index("你:b") < out.index("開始對照第 1 版") < out.index("作者這一輪說")
+
+
+def test_render_mcp_turn_is_not_cmp_off():
+    h = [_h("user", "a", 2, 1), _h("assistant", "b", 2, 1)]
+    assert "關掉了對照" not in render_turn(h, "c", version=2, cmp=None, home="mcp")
+    assert "關掉了對照" not in render_turn([*h, _h("user", "c", 2, None, None), _h("assistant", "d", 2, None, None)],
+                                     "e", version=2)
+
+
+def test_render_old_rows_without_marks_info_are_quiet():
+    out = render_turn([{"role": "user", "text": "a"}, {"role": "assistant", "text": "b"}], "c", version=2, cmp=1)
+    assert "(這裡起" not in out and "對照" not in out
+
+
+def test_old_quote_labelled_with_version():
+    out = render_turn([], "這句", quotes=["沒有回頭", "門"], old_version=lambda q: 1 if q == "沒有回頭" else None)
+    assert "「沒有回頭」(第 1 版的字,這版已經沒有)" in out and "「門」(第" not in out
+
+
+def test_old_quote_labelled_in_history():
+    h = [{**_h("user", "a", 2), "quotes": ["沒有回頭"]}, _h("assistant", "b", 2)]
+    assert "「沒有回頭」(第 1 版的字,這版已經沒有)" in render_turn(h, "c", version=2, old_version=lambda q: 1)
+
+
+VERS = [{"n": 1, "created_at": 10.0}, {"n": 2, "created_at": 20.0}]
+
+
+def test_annotate_prefers_recipe_and_user_takes_its_reply():
+    rows = [{"seq": 0, "role": "user", "ts": 25.0, "recipe": None},
+            {"seq": 1, "role": "assistant", "ts": 26.0, "recipe": {"v": 1, "cmp": None, "home": "web"}}]
+    assert [(r["v"], r["cmp"], r["home"]) for r in annotate(rows, VERS)] == [(1, None, "web"), (1, None, "web")]
+
+
+def test_annotate_falls_back_to_ts_for_old_rows():
+    rows = [{"seq": 0, "role": "user", "ts": 15.0, "recipe": None},
+            {"seq": 1, "role": "assistant", "ts": 21.0, "recipe": {"retrieved": []}},
+            {"seq": 2, "role": "user", "ts": 5.0, "recipe": None}]
+    assert [(r["v"], r["cmp"], r["home"]) for r in annotate(rows, VERS)] == [(2, None, None), (2, None, None), (1, None, None)]
+
+
+def test_annotate_without_versions():
+    assert annotate([{"seq": 0, "role": "user", "ts": 1.0, "recipe": None}], [])[0]["v"] is None
