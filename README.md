@@ -1,115 +1,175 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="hyenovel — 陪你拆解故事骨幹的討論夥伴" width="100%">
+<img src="assets/banner.svg" alt="Hyenovel" width="100%">
 
 <br>
 
 ![runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-d97757?style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square)
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat-square)
-![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square)
 ![runtime](https://img.shields.io/badge/runtime-localhost%20only-6B7280?style=flat-square)
 
 **繁體中文** · [English](README.en.md)
 
 </div>
 
-> 純文學短篇的**評論 / 思考討論工具**,跑在 [Claude Code](https://claude.com/claude-code) —— **吃訂閱、不燒 API token**。
+> Hyenovel 是為中文與台語白話純文學短篇設計的閱讀與討論工具。它在 [Claude Code](https://claude.com/claude-code) 上執行，使用作者本人的訂閱額度，不另按 API token 計費。
 
-## 這是什麼 · 給誰
+## 簡介
 
-給**寫中文 / 台語白話純文學短篇(< 1 萬字)的人**。
+本工具適用於篇幅在一萬字以內的純文學短篇。作者提交作品後，由「讀伴」閱讀全文，並與作者進行多輪討論：讀伴說明自己讀到的內容與困惑之處，也詢問作者寫作時的考量。讀伴不評分，也不代替作者修改稿件。
 
-它不是「貼進去、產一份讀後感」就結束的工具,而是一個**陪讀者**:讀完你的稿、跟你來回聊、把分析視覺化 —— 陪你把一篇讀透、讀出所以然。一篇故事進來,背景有兩個**刻意隔離**的 AI 分工:一個只**觀察**(拆出主題 / 意象 / 技法 / 效果 / 角色 / 節拍,每條掛逐字原文),另一個是**中性讀者**,寫下真的讀到的感受、困惑與判斷(備課筆記,依輕重排序、不諂媚)。觀察與判斷分開,判斷才獨立。跟你聊的陪讀者只拿原文與精簡分析,**不看筆記**,用自己的讀法開口。
+作品提交後，系統在背景執行兩個彼此隔離的步驟。第一步只做**觀察**，拆解出主題、意象、技法、效果、角色與節拍；第二步由**中性讀者**記錄閱讀感受與判斷，整理為依重要性排序的筆記。兩個步驟使用各自獨立的 context，以確保判斷不受觀察過程影響。每一項主張都必須附上**逐字原文**，引用閘門會回到原文比對，無法對應的引用一律阻擋。
 
-## 介面一覽
+## 介面
 
-<!-- 截圖與 demo 待補 -->
+![作品頁：直排稿件與讀伴對話](assets/shot-work.png)
 
-點陣字、斑點、晝夜一鍵切換(`⌘K`)。左邊是**書架**:作品依更新排序、每篇一條張力指紋,目前這篇底下列它的對話局;可收成窄條(`⌘\`)。三個畫面:
+**作品頁**：左側顯示稿件（預設為直排），右側為與讀伴的對話。讀伴引用到的句子，會在稿上以鉛筆波浪線標示。
 
-- **進門**:一句話、一個輸入框。直接交稿或開聊,下方列最近的作品,可以挑今天的陪讀者。
-- **作品**:左邊是稿(預設直排、一頁頁往下疊,可切橫排;陪讀者提到的句子畫鉛筆波浪線;稿頂版本條;按交新版鍵或把檔拖到畫面任何地方就能交下一版,可以只存版先不分析),右欄三個分頁 ——
-  - **對話**:跟陪讀者來回聊;它引到哪一句,稿上就畫線到哪一句。
-  - **筆記**:中性讀者的備課筆記,依輕重排序,每條錨定原文。
-  - **結構圖**:點陣畫出的意圖鏈(技法 → 效果 → 主題)與文本張力。
-- **設定**:外觀(含字級預覽)、陪讀者、舊討論;進設定時書架換成設定分區。
+| 筆記 | 版本對照 | 讀伴設定 |
+|:---:|:---:|:---:|
+| <img src="assets/shot-notes.png" alt="筆記分頁"> | <img src="assets/shot-compare.png" alt="版本對照"> | <img src="assets/shot-companions.png" alt="讀伴設定"> |
+| 中性讀者的筆記，每條附原文引句與一個提問 | 校對稿，右欄列出上一版筆記引句的去向 | 內建水牛、鹿、鬣狗，可建立或匯入角色 |
 
-窄螢幕會變成單窗格切換;`⌘K` 開指令框,支援鍵盤操作。
+## 功能
 
-## 為什麼不同
+- **提交與分析**：支援拖曳或貼上 .md / .txt 稿件。分析在背景執行，稿件上方顯示目前步驟，可隨時停止。
+- **與讀伴討論**：每則回覆皆可重新生成、直接編輯，或標記為「像它」，作為之後對話的語氣範例。對話中可引用稿件中的句子。
+- **筆記與結構圖**：筆記依重要性排序，每條皆錨定原文；結構圖呈現意圖鏈（技法 → 效果 → 主題）與文本張力。
+- **版本管理與對照**：同一篇作品可持續提交新版本，並可選擇只儲存、暫不分析。開啟對照時，讀伴也會讀到本次修改的內容。
+- **記憶**：在對話中按「記住」（整則或選取的段落），即可保存。關於作者的記憶在所有對話中生效，關於作品的記憶只在該作品的對話中生效。記憶可在設定頁檢視、編輯與封存。
+- **不綁作品的對話**：可以不指定作品直接對話；對話中加入的稿件，之後可以轉為正式作品。
+- **角色**：回答兩個問題（角色的形體與閱讀方式）後，系統生成三個候選角色，選定後可再調整。角色卡採用 Character Card V3 格式，支援匯入與匯出。
+- **Claude Code 整合**：透過 MCP，可在任一目錄的 Claude Code session 中提交作品、與讀伴討論。
+- **匯出**：將分析與筆記匯出為 Markdown 與獨立的 HTML 檔。
 
-| 面向 | hyenovel | 一般「貼進 AI」的讀後感 |
+## 與一般 AI 讀後感的差異
+
+| 面向 | Hyenovel | 一般 AI 讀後感 |
 |---|---|---|
-| **觀察 vs 判斷** | 兩個隔離的 subagent:先觀察、再判斷,判斷獨立 | 單一模型一口氣寫完,觀察被判斷污染 |
-| **引用** | 每條主張**必附逐字原文**;硬閘門搜原文驗證,幻覺引用直接擋 | 常憑印象發揮,難回溯到原文 |
-| **計費** | 跑在 Claude Code、**吃訂閱**,整條 pipeline 不另按 token 計價;以 API 價目表估算,單篇 critique 約 **$0.7–0.9**(analyst + reviewer + 確定性層),多輪討論走快取更便宜 —— 這就是訂閱相對按 token 付費省下的部分 | 按 API token 計費,越聊越貴 |
-| **隱私** | 只跑 **localhost、單人**;故事經你自己的 Claude Code 訂閱送給 Anthropic 處理,不進任何第三方審稿服務、也不另存廠商資料庫,創作留在本機資料庫 | 內容上傳雲端第三方審稿網站 |
-| **視覺化** | 意圖鏈(技法→效果→主題)+ 文本張力,陪讀者說到哪句、稿上畫到哪句 | 純文字條列 |
-| **互動** | 陪讀者能就一篇**來回聊**,三種讀法(直說 / 慢讀 / 想像);不附和、不教你改、會反問 | 一次性、傾向諂媚綜述 |
+| **觀察與判斷** | 兩個隔離的步驟，先觀察、後判斷 | 單一模型一次寫完，觀察容易受判斷影響 |
+| **引用** | 每項主張附逐字原文，經引用閘門比對，無法對應即阻擋 | 多憑印象概括，不易回溯原文 |
+| **計費** | 在 Claude Code 上執行，使用訂閱額度，不另按 token 計費 | 依 API token 計費 |
+| **隱私** | 僅在本機執行、單人使用；稿件經作者本人的 Claude Code 送交 Anthropic 處理，資料存放於本機資料庫，不經第三方服務 | 稿件上傳至第三方網站 |
+| **互動** | 可就同一篇作品多輪討論、提交新版本後繼續討論；讀伴可更換、可自行建立 | 一次性的綜合評述 |
 
 ## 安裝
 
-**前置**
+### 系統需求
 
-- [Claude Code](https://claude.com/claude-code) 已安裝並登入 —— 本工具吃訂閱、不走 API 計費。
-- Python 3、Node.js。
+| 項目 | 安裝方式 |
+|---|---|
+| Claude Code（已登入且有訂閱） | 見 [claude.com/claude-code](https://claude.com/claude-code)；安裝後執行 `claude` 完成登入 |
+| git | 使用系統套件管理器安裝，例如 `sudo apt install git` |
+| Python 3.12 以上與 uv | 見 [uv 安裝說明](https://docs.astral.sh/uv/getting-started/installation/);uv 會自動下載所需的 Python 版本 |
+| Node.js 22 | 安裝 [nvm](https://github.com/nvm-sh/nvm) 後，在專案目錄執行 `nvm install`（依 `.nvmrc` 安裝） |
 
-**步驟**
+支援平台：Linux 與 WSL 已驗證；macOS 尚未驗證；Windows 使用者請在 WSL 中執行。
+
+### 安裝步驟
 
 ```bash
 git clone https://github.com/randyxu0711/hyenovel.git
 cd hyenovel
 
-# 後端(Python)
 uv venv --python 3.14
 uv pip install -r pyproject.toml
 
-# 前端(Node);dev.sh 首次啟動也會自動補跑
-cd web && npm install && cd ..
+cd web && npm install && npm run build && cd ..
 ```
 
-## 啟動與使用
+## 使用方式
 
-### Dashboard(主入口)
+### 啟動
 
 ```bash
-cd web && npm run build && cd ..   # 第一次與每次拉新版後
-.venv/bin/python -m den.open       # 確保 den 在跑、開瀏覽器
+.venv/bin/python -m den.open
 ```
 
-`den.open` 會換一張一次性啟動碼(120 秒內有效)並開預設瀏覽器;開不了(WSL 常見)就點它印出的網址。den 同源送出 dashboard,API 都在 `/api`。
+此指令會確認背景服務 den 已啟動，取得一次性的登入碼，並以瀏覽器開啟 dashboard。若無法自動開啟瀏覽器（WSL 環境常見），請手動開啟指令輸出的網址；登入碼的有效時間為 120 秒。den 閒置 3 小時後會自動結束，下次執行 `den.open` 時會重新啟動。
 
-開發前端時改用 `./dev.sh`(確保 den 在跑 + 起 vite,開 http://localhost:5173;Ctrl+C 只收前端)。
+### 首次使用流程
 
-舊用戶:舊 `stories/` 裡的篇要先跑一次 `python -m marrow.importer` 匯入。
+1. 執行 `den.open`，開啟 dashboard。
+2. 將 .md / .txt 稿件拖曳至畫面，或直接貼上。稿件會先加入對話，讀伴可以先行閱讀與討論。
+3. 按「開成作品」，再於作品頁按「分析」。分析進行時，稿件上方會顯示目前步驟。
+4. 分析完成後，可在右欄與讀伴討論，或檢視筆記與結構圖。
+5. 修改稿件後按「交新版」（或將新檔案拖曳至作品頁），再開啟對照檢視修改內容。
 
-> 只跑 localhost、單人使用;訂閱認證綁本機憑證,**別部署到雲端**。
+### 在 Claude Code 中使用
 
-### 在 agent 裡(任何目錄的 Claude Code session)
+首先註冊 MCP（請將路徑替換為 clone 的位置）:
 
-先註冊 hyenovel MCP:`claude mcp add hyenovel -- ~/projects/hyenovel/.venv/bin/python -m den.mcp`
+```bash
+claude mcp add hyenovel -- <clone 的路徑>/.venv/bin/python -m den.mcp
+# 或在專案目錄中執行：
+claude mcp add hyenovel -- "$(pwd)/.venv/bin/python" -m den.mcp
+```
 
-1. `/hyenovel:companion` —— 給一個 .md/.txt 路徑交稿(分析在背景跑),companion 先開口,接著來回聊。
-2. `/hyenovel:continue` —— 接著聊最近那篇。找作品、看分析、停下分析直接用說的(「我有哪些作品」「給我看海那篇的分析」)。
-3. `python -m export <slug>` —— 匯出可分享的 `<slug>.md` 與 `<slug>.html`(意圖鏈 + 文本軸解剖)。
+註冊後，可在任一目錄的 Claude Code 中使用以下指令：
+
+- `/hyenovel:companion`:開始討論。可提供 .md / .txt 檔案路徑以提交作品，或直接討論最近的一篇。
+- `/hyenovel:continue`:接續最近一篇作品的討論。
+
+其他操作以自然語言提出即可，例如「列出我的作品」「顯示〈海〉的筆記」。可用的 tool 如下：
+
+| tool | 用途 |
+|---|---|
+| `submit_work` | 提交作品（.md / .txt 路徑），或續跑未完成的分析 |
+| `talk_to_companion` | 與讀伴對話 |
+| `find_works` | 列出作品及其分析狀態 |
+| `read_work` | 讀取原文、分析或筆記 |
+| `cancel_work` | 停止分析 |
+| `list_characters` | 列出可用的讀伴 |
+| `set_character` | 更換本場對話的讀伴 |
+| `create_character` | 生成新角色的候選 |
+| `save_character` | 儲存選定的候選角色 |
+| `manage_chat` | 清空或壓縮對話，或將對話中的稿件轉為作品 |
+
+### 匯出
+
+```bash
+.venv/bin/python -m export <slug> [--out DIR]
+```
+
+輸出 `<slug>.md`（筆記與分析）與 `<slug>.html`（意圖鏈與文本軸）。`<slug>` 為作品代號，可透過 `find_works` 或 dashboard 網址（`/w/<slug>`）查詢。
+
+### 更新
+
+```bash
+git pull
+uv pip install -r pyproject.toml
+cd web && npm install && npm run build && cd ..
+```
+
+完成後，在 Claude Code 中執行 `/mcp` 重新連線 hyenovel。den 偵測到版本變更時會自動重新啟動；若分析正在進行，會等待完成後再重啟。
+
+### 資料位置
+
+所有資料存放於 `~/.local/share/hyenovel/`（若設定了 `XDG_DATA_HOME`，則為 `$XDG_DATA_HOME/hyenovel/`；亦可透過 `HYENOVEL_DATA_DIR` 指定）:
+
+- `hyenovel.db`:作品、分析、筆記、對話、記憶與角色。
+- `den.token`、`den.json`:den 的連線資訊。
+
+備份時複製 `hyenovel.db` 即可。den 執行期間，建議改用 `sqlite3 hyenovel.db ".backup backup.db"`。
+
+## 開發
+
+```bash
+./dev.sh                         # 確認 den 已啟動，並啟動前端開發伺服器（http://localhost:5173）
+.venv/bin/python -m pytest       # 執行測試（需先執行 uv pip install -r requirements-dev.txt）
+```
 
 ## 運作原理
 
+```mermaid
+flowchart LR
+  A["提交<br>dashboard / submit_work"] --> B["analyst<br>觀察"] --> C["reviewer<br>判斷"] --> D[("SQLite")]
+  D --> E["dashboard"]
+  D --> F["讀伴<br>dashboard / MCP"]
+  D --> G["python -m export<br>md + html"]
 ```
-submit_work(檔案路徑)  ─▶ den ─ analyst ▶ reviewer ─▶ DB(正本:觀察層 + 判斷層)
-                                                        │
-                    ┌──────────────────┬────────────────┴────────────────┐
-                    ▼                  ▼                                 ▼
-            web(讀 den /api)   talk_to_companion(MCP)        python -m export ─▶ md + html
-```
 
-觀察者與判斷者是**兩個各自 context 的獨立步驟**,不在同一 context 兼任 —— 判斷獨立性才不被污染。分析一好陪讀者就能開聊,不必等筆記。兩者的產物再餵給視覺化,把「技法 → 效果 → 主題」的意圖鏈與文本張力曲線畫出來。**每條主張都必須逐字對得上原文**(硬閘門,擋幻覺引用)。
-
-> 想看內部契約與設計:`schemas/analysis.schema.json`、`docs/DESIGN.md`。
-
----
-
-<div align="center">
-<img src="assets/footer.svg" alt="hyenovel" width="100%">
-</div>
+analyst（觀察）與 reviewer（判斷）在各自獨立的 context 中執行。觀察完成後即可與讀伴討論，無須等待筆記。讀伴取得的資料僅限原文、精簡後的分析，以及筆記的類別與引句；讀伴**不會讀到筆記內文**，以維持其閱讀的獨立性。
