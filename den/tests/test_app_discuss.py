@@ -1006,3 +1006,37 @@ def test_recent_sessions_lists_storyless(c):
     c.post(f"/api/sessions/{sid}/clear")
     got = c.get("/api/sessions?limit=1").json()["sessions"][0]
     assert (got["session"], got["slug"], got["title"], got["turns"], got["preview"]) == (sid, None, None, 1, "AB")
+
+
+# ── 對照(cmp) ──
+
+def _add_v2(c, text="新的稿。"):
+    def add(conn):
+        with conn:
+            sid = repo.story_by_slug(conn, "mini")["id"]
+            old = repo.latest_source_version(conn, sid)["text"]
+            repo.add_source_version(conn, sid, text, time.time())
+        return old
+    return in_loop(c, add)
+
+
+def _old_only_sentence(old):
+    return next(s for s in old.replace("\n", "。").split("。") if len(s) > 3 and s not in "新的稿")
+
+
+def test_discuss_cmp_unknown_version_404(c):
+    _add_v2(c)
+    for bad in (2, 5):
+        r = c.post("/api/discuss/mini", json={"message": "嗨", "cmp": bad})
+        assert r.status_code == 404 and r.json()["code"] == "unknown-version"
+
+
+def test_quote_only_in_old_version_needs_cmp(c):
+    q = _old_only_sentence(_add_v2(c))
+    body = {"message": "這句呢", "quotes": [q]}
+    assert c.post("/api/discuss/mini", json=body).json()["code"] == "quote-not-in-source"
+    assert c.post("/api/discuss/mini", json={**body, "cmp": 1}).status_code == 200
+
+
+def test_cmp_ignored_for_unbound_session(c):
+    assert c.post("/api/discuss", json={"message": "嗨", "cmp": 1}).status_code == 200

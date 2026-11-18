@@ -191,7 +191,7 @@ def _attach(ctx: dict, attach: dict) -> dict:
 
 
 def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequence[str] = (),
-                 message: str = "", attach: dict | None = None) -> dict:
+                 message: str = "", attach: dict | None = None, cmp: int | None = None) -> dict:
     """串流開始前的判斷(狀態碼只能在這時定):LookupError 無此篇 / UnknownSession /
     LegacySession / TooManyQuotes / QuoteNeedsMessage / QuoteTooLong / QuoteNotInSource(引文過引用閘門才送陪讀者,對的是 companion 讀的那份最新版原文)。
     沒分析也能聊(素材分層在 companion_context)。新局只發 id,discussion 列等整輪成功才建。"""
@@ -207,7 +207,7 @@ def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequenc
         slug = row["slug"]
     if attach is not None and slug is not None:
         raise stories.BoundSession(session_id)
-    ctx = stories.companion_context(conn, slug, row["id"] if row else None)
+    ctx = stories.companion_context(conn, slug, row["id"] if row else None, cmp)
     if attach is not None:
         attach = _attach(ctx, attach)
     if len(quotes) > MAX_QUOTES:
@@ -223,7 +223,7 @@ def prepare_turn(conn, slug: str | None, session_id: str | None, quotes: Sequenc
     st = repo.story_by_slug(conn, slug) if slug is not None else None
     analysis = repo.current_artifact(conn, st["id"], "analysis") if st else None
     return {"slug": slug, "ctx": ctx, "story_id": st["id"] if st else None,
-            "discussion_id": row["id"] if row else None, "attach": attach,
+            "discussion_id": row["id"] if row else None, "attach": attach, "cmp": ctx["compare"] and ctx["compare"]["old"],
             "session_id": session_id or uuid.uuid4().hex[:12],
             "analysis_fp": analysis["sha256"] if ctx["analysis"] is not None else None}
 
