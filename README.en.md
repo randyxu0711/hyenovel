@@ -46,7 +46,7 @@ Once a work is submitted, two isolated steps run in the background. The first st
 - **Discussion with the companion**: each reply can be regenerated, edited directly, or marked "Sounds like it" to serve as a voice example in later conversations. Sentences from the draft can be quoted in the conversation.
 - **Notes and structure**: notes are ranked by importance and anchored to the source; the structure view shows the chain of intent (technique → effect → theme) and the tension of the text.
 - **Versions and comparison**: new versions of a work can be submitted at any time, optionally saved without analysis. When comparison is open, the companion also receives the changes.
-- **Memory**: press "Remember" in a conversation (on a whole reply or a selected passage), and the companion will take it into account in every later conversation. Memories can be viewed, edited, and archived in Settings.
+- **Memory**: press "Remember" in a conversation (on a whole reply or a selected passage), to save it. Memories about the author apply to every conversation; memories about a work apply only to conversations about that work. Memories can be viewed, edited, and archived in Settings.
 - **Unbound conversations**: conversations do not require a work; a draft added during such a conversation can later be turned into a work.
 - **Companion creation**: after two questions (the companion's form and how it reads), the system generates three candidates; the chosen one can then be adjusted. Character cards use the Character Card V3 format and can be imported and exported.
 - **Claude Code integration**: through MCP, works can be submitted and discussed from a Claude Code session in any directory.
