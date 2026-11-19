@@ -106,6 +106,7 @@ ERROR_CODES: tuple[str, ...] = (
     "unknown-turn", "not-assistant-turn", "bad-mark", "comment-too-long",
     "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
     "unknown-memory", "memory-not-current", "memory-is-current",
+    "unknown-memory-candidate", "memory-candidate-resolved", "memory-candidate-pending",
     "bad-card", "builtin-character",
     "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
     "unknown-digest", "unknown-thread", "blank-digest", "stale-digest",

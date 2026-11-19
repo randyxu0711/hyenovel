@@ -1,5 +1,6 @@
 """記憶 API:狀態碼、code、拒絕留痕、來源不跨篇。"""
 import logging
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -239,3 +240,78 @@ def test_storyless_session_author_memory_ok(c):
 def test_memory_from_compact_mark_rejected(c):
     _storyless(c)
     _assert_err(_post(c, session="free", seq=1, quote="想寫海"), 422, "not-a-turn")
+
+
+def _cand(data, scope="work", session="same"):
+    conn = db.connect(data[0])
+    with conn:
+        d = repo.discussion_by_session(conn, session)
+        cid = repo.add_candidate(conn, d["id"], 0, "我不寫結局,真的", "作者不寫結局", scope, time.time())
+    conn.close()
+    return cid
+
+
+def test_candidates_list_shape(c, data):
+    cid = _cand(data)
+    (row,) = c.get("/api/memory/candidates").json()["candidates"]
+    assert {k: row[k] for k in ("id", "text", "quote", "scope", "session", "seq", "slug")} == {
+        "id": cid, "text": "作者不寫結局", "quote": "我不寫結局,真的", "scope": "work", "session": "same",
+        "seq": 0, "slug": "mini"}
+    assert row["title"] and isinstance(row["at"], float)
+
+
+def test_save_route_201(c, data):
+    cid = _cand(data)
+    r = c.post(f"/api/memory/candidates/{cid}/save", json={"scope": "work", "text": None})
+    assert r.status_code == 201 and (r.json()["scope"], r.json()["text"], r.json()["session"]) == (
+        "work", "作者不寫結局", "same")
+    assert c.get("/api/memory/candidates").json()["candidates"] == []
+
+
+@pytest.mark.parametrize("path,body,status,code", [
+    ("save", {"scope": "character"}, 422, "bad-scope"),
+    ("save", {"scope": "author", "text": "  "}, 422, "blank-memory"),
+])
+def test_save_route_rejects(c, data, caplog, path, body, status, code):
+    cid = _cand(data)
+    with caplog.at_level(logging.INFO):
+        _assert_err(c.post(f"/api/memory/candidates/{cid}/{path}", json=body), status, code)
+    assert f"reason={code}" in caplog.text
+
+
+def test_candidate_route_codes(c, data):
+    _assert_err(c.post("/api/memory/candidates/999/skip"), 404, "unknown-memory-candidate")
+    cid = _cand(data)
+    _assert_err(c.post(f"/api/memory/candidates/{cid}/undo"), 409, "memory-candidate-pending")
+    assert c.post(f"/api/memory/candidates/{cid}/skip").status_code == 204
+    _assert_err(c.post(f"/api/memory/candidates/{cid}/save", json={"scope": "author"}), 409,
+                "memory-candidate-resolved")
+    assert c.post(f"/api/memory/candidates/{cid}/undo").status_code == 204
+    assert [x["id"] for x in c.get("/api/memory/candidates").json()["candidates"]] == [cid]
+
+
+def test_save_route_memory_full(c, data):
+    assert _post(c, text="滿" * 800).status_code == 201
+    _assert_err(c.post(f"/api/memory/candidates/{_cand(data)}/save", json={"scope": "author"}), 422, "memory-full")
+
+
+def test_undo_route_after_edit_409(c, data):
+    cid = _cand(data)
+    mid = c.post(f"/api/memory/candidates/{cid}/save", json={"scope": "author"}).json()["id"]
+    assert c.patch(f"/api/memory/{mid}", json={"text": "改"}).status_code == 200
+    _assert_err(c.post(f"/api/memory/candidates/{cid}/undo"), 409, "memory-not-current")
+
+
+def test_settings_suggest_roundtrip_and_off_hides(c, data):
+    _cand(data)
+    assert c.get("/api/settings/suggest").json() == {"enabled": True}
+    assert c.get("/api/works/mini/prior").json()["pending_memories"] == 1
+    assert c.put("/api/settings/suggest", json={"enabled": False}).status_code == 204
+    assert c.get("/api/settings/suggest").json() == {"enabled": False}
+    assert c.get("/api/memory/candidates").json()["candidates"] == []
+    assert c.get("/api/works/mini/prior").json()["pending_memories"] == 0
+
+
+def test_new_codes_registered():
+    for code in ("unknown-memory-candidate", "memory-candidate-resolved", "memory-candidate-pending"):
+        assert code in den_app.ERROR_CODES

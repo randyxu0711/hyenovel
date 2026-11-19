@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from den import digest
+from den import digest, suggest
 from den.runner import RunResult
 from marrow import repo
 
@@ -24,8 +24,9 @@ class Chat:
                                    self.text if self.outcome == "ok" else None))
 
 
-def out(summary="聊了結尾。", threads=()):
-    return json.dumps({"summary": summary, "threads": list(threads)}, ensure_ascii=False)
+def out(summary="聊了結尾。", threads=(), memories=()):
+    return json.dumps({"summary": summary, "threads": list(threads), "memories": list(memories)},
+                      ensure_ascii=False)
 
 
 def run(coro):
@@ -228,3 +229,54 @@ def test_retryable_failure_not_recorded(conn, disc, chat):
 def test_system_fills_limits():
     text = digest.system().text
     assert "{" not in text.split("只輸出")[0] and str(digest.DIGEST_MAX_CHARS) in text
+    assert "最多 3 條" in text
+
+
+MEM = {"text": "作者在想結尾", "quote": "結尾的海是不是太突然", "scope": "work"}
+
+
+def test_make_stores_candidates_when_enabled(conn, disc):
+    s, d = disc
+    run(digest.make(conn, Chat(out(memories=[MEM])), d, s, now=lambda: 5.0))
+    (c,) = repo.candidates_of_story(conn, s)
+    assert (c["discussion_id"], c["seq"], c["text"], c["created_at"]) == (d, 0, "作者在想結尾", 5.0)
+
+
+def test_make_skips_candidates_when_disabled(conn, disc):
+    s, d = disc
+    suggest.set_enabled(conn, False)
+    run(digest.make(conn, Chat(out(memories=[MEM])), d, s))
+    assert repo.current_digest(conn, d) is not None and repo.candidates_of_story(conn, s) == []
+
+
+def test_make_failed_summary_stores_no_candidates(conn, disc):
+    s, d = disc
+    run(digest.make(conn, Chat(json.dumps({"summary": "", "memories": [MEM]})), d, s))
+    assert repo.candidates_of_story(conn, s) == []
+
+
+def test_make_input_lists_known(conn, disc):
+    s, d = disc
+    repo.add_memory(conn, "work", "想讓結尾留白", 1.0, story_id=s)
+    chat = Chat(out())
+    run(digest.make(conn, chat, d, s))
+    user = chat.calls[0][1]
+    assert user.startswith("已經記住或提過的事:\n<known>\n- 想讓結尾留白\n</known>")
+
+
+def test_make_input_without_known_has_no_block(conn, disc):
+    s, d = disc
+    chat = Chat(out())
+    run(digest.make(conn, chat, d, s))
+    assert "<known>" not in chat.calls[0][1]
+
+
+def test_suggest_off_prompt_has_no_memories(conn, disc):
+    s, d = disc
+    suggest.set_enabled(conn, False)
+    repo.add_memory(conn, "work", "想讓結尾留白", 1.0, story_id=s)
+    chat = Chat(out())
+    run(digest.make(conn, chat, d, s))
+    system, user = chat.calls[0]
+    assert "memories" not in system and "記憶:" not in system and "<known>" not in user
+    assert "memories" in digest.system(True).text and "memories" not in digest.system(False).text

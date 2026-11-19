@@ -3,9 +3,9 @@ import logging
 import time
 from contextlib import aclosing
 
-from den import compact
+from den import compact, suggest
 from den.companion import _read
-from den.config import DIGEST_MAX_CHARS, MIN_QUOTE_CHARS, THREADS_PER_DIGEST
+from den.config import CANDIDATES_PER_DIGEST, DIGEST_MAX_CHARS, MIN_QUOTE_CHARS, THREADS_PER_DIGEST
 from den.discuss import since_clear
 from marrow import gate, jsonout, prompt, repo
 from marrow.prompt import Layer, Prompt
@@ -16,13 +16,18 @@ log = logging.getLogger("hyenovel")
 DIGEST_RUN = RunConfig()
 RETRYABLE = ("usage-limit", "transient", "cancelled", "timeout", "auth")
 PREVIOUS = "上一版摘要:\n<previous>\n{text}\n</previous>\n\n"
+KNOWN = "已經記住或提過的事:\n<known>\n{items}\n</known>\n\n"
 PREVIOUS_THREADS = "上一版待續話題:\n<threads>\n{items}\n</threads>\n\n"
 
 
-def system() -> Prompt:
+def system(memories: bool = True) -> Prompt:
     text = (_read("companion/digest.md").replace("{DIGEST_MAX_CHARS}", str(DIGEST_MAX_CHARS))
             .replace("{THREADS_PER_DIGEST}", str(THREADS_PER_DIGEST)))
-    return Prompt((Layer("digest", text),))
+    layers = [Layer("digest", text)]
+    if memories:
+        layers.append(Layer("memories", _read("companion/digest_memories.md")
+                            .replace("{CANDIDATES_PER_DIGEST}", str(CANDIDATES_PER_DIGEST))))
+    return Prompt(tuple(layers))
 
 
 def parse(raw: str, said: str, sources: list[str]) -> tuple[str, list[dict]] | None:
@@ -65,6 +70,11 @@ def _carry_ended(old: list[dict], new: list[dict]) -> None:
             t["ended_at"] = hit["ended_at"]
 
 
+def _known(conn, story_id: int | None, on: bool) -> str:
+    items = suggest.known(conn, story_id) if on else []
+    return KNOWN.format(items="\n".join(f"- {t}" for t in items)) if items else ""
+
+
 def _previous(base: dict | None, open_threads: list[dict]) -> str:
     if base is None:
         return ""
@@ -92,12 +102,14 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
     open_threads = [t for t in repo.threads_of(conn, base["root_id"]) if t["ended_at"] is None] if base else []
     versions = repo.source_versions(conn, story_id) if story_id is not None else []
     fresh = [u for u in turns if base is None or u["seq"] > base["through_seq"]]
-    user = _previous(base, open_threads) + compact.transcript(fresh, versions)
+    suggesting = story_id is not None and suggest.enabled(conn)
+    sys_prompt = system(suggesting)
+    user = _known(conn, story_id, suggesting) + _previous(base, open_threads) + compact.transcript(fresh, versions)
     said = "\n".join(u["text"] for u in turns)
     sources = [v["text"] for v in versions]
     result = None
     try:
-        async with aclosing(chat(system().text, user, config=DIGEST_RUN)) as stream:
+        async with aclosing(chat(sys_prompt.text, user, config=DIGEST_RUN)) as stream:
             async for kind, val in stream:
                 if kind == "result":
                     result = val
@@ -121,7 +133,9 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
     at = now()
     with conn:
         did = repo.add_digest(conn, discussion_id, summary, last_seq, at, root_id=cur["root_id"] if cur else None,
-                              usage=usage, recipe=prompt.recipe(system(), DIGEST_RUN.as_dict()))
+                              usage=usage, recipe=prompt.recipe(sys_prompt, DIGEST_RUN.as_dict()))
         repo.replace_threads(conn, repo.digest_by_id(conn, did)["root_id"], threads, at)
-    log.info("event=digest-made discussion=%s threads=%s", discussion_id, len(threads))
+        kept = (suggest.store(conn, discussion_id, story_id, suggest.parse(result.text, turns), at)
+                if suggesting and suggest.enabled(conn) else 0)
+    log.info("event=digest-made discussion=%s threads=%s memories=%s", discussion_id, len(threads), kept)
     return did

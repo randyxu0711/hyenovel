@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from den import prior
+from den import prior, suggest
 from den.runner import RunResult
 from marrow import repo
 
@@ -134,3 +134,46 @@ def test_end_replaced_thread_ends_successor(conn):
     assert repo.thread_by_id(conn, same)["ended_at"] is None
     prior.end_thread(conn, other, 6.0)
     assert repo.thread_by_id(conn, other)["ended_at"] == 6.0
+
+
+class Q:
+    def __init__(self, busy=False):
+        self.busy, self.log = busy, []
+
+    def running(self, story_id):
+        return self.busy
+
+    def ensure(self, story_id):
+        self.log.append("ensure")
+
+    async def wait(self, story_id, timeout):
+        self.log.append("wait")
+        return True
+
+
+def _snap(conn, queue, use=True, every=()):
+    s = repo.story_by_slug(conn, "mini")["id"]
+    return asyncio.run(prior.snapshot(conn, queue, s, None, list(every), use, 0.1))
+
+
+def test_first_turn_suggest_only_runs_queue_without_prior(conn):
+    prior.set_enabled(conn, False)
+    q = Q()
+    assert _snap(conn, q) is None and q.log == ["ensure"]
+    q = Q(busy=True)
+    assert _snap(conn, q) is None and q.log == []
+    suggest.set_enabled(conn, False)
+    q = Q()
+    assert _snap(conn, q) is None and q.log == []
+
+
+def test_first_turn_not_use_prior_but_suggest_on(conn):
+    q = Q()
+    assert _snap(conn, q, use=False) is None and q.log == ["ensure"]
+
+
+def test_suggest_only_second_turn_still_none(conn):
+    prior.set_enabled(conn, False)
+    q = Q()
+    every = [{"role": "user", "seq": 0}, {"role": "assistant", "seq": 1, "recipe": {"prior": None}}]
+    assert _snap(conn, q, every=every) is None and q.log == []

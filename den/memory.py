@@ -78,18 +78,23 @@ def _next_in_chain(conn, row: dict, text: str, now: float) -> int:
                            root_id=_chain_id(row))
 
 
+def _remember(conn, scope: str, text: str, now: float, *, story_id: int | None = None,
+              source: dict | None = None) -> int:
+    row_story = story_id if scope == "work" else None
+    d, u = _resolve_source(conn, source) if source else (None, None)
+    if d is not None and scope == "work" and d["story_id"] != story_id:
+        raise BadSource("session-not-of-work")
+    _check_cap(conn, scope, row_story, text)
+    if u is None:
+        return repo.add_memory(conn, scope, text, now, story_id=row_story)
+    return repo.add_memory(conn, scope, text, now, story_id=row_story, quote=source["quote"],
+                           discussion_id=u["discussion_id"], seq=u["seq"], valid_from=u["ts"])
+
+
 def remember(conn, scope: str, text: str, now: float, *, story_id: int | None = None,
              source: dict | None = None) -> int:
-    row_story = story_id if scope == "work" else None
     with conn:
-        d, u = _resolve_source(conn, source) if source else (None, None)
-        if d is not None and scope == "work" and d["story_id"] != story_id:
-            raise BadSource("session-not-of-work")
-        _check_cap(conn, scope, row_story, text)
-        if u is None:
-            return repo.add_memory(conn, scope, text, now, story_id=row_story)
-        return repo.add_memory(conn, scope, text, now, story_id=row_story, quote=source["quote"],
-                               discussion_id=u["discussion_id"], seq=u["seq"], valid_from=u["ts"])
+        return _remember(conn, scope, text, now, story_id=story_id, source=source)
 
 
 def edit(conn, memory_id: int, text: str, now: float) -> int:
@@ -100,10 +105,14 @@ def edit(conn, memory_id: int, text: str, now: float) -> int:
         return _next_in_chain(conn, row, text, now)
 
 
+def _archive(conn, memory_id: int, now: float) -> None:
+    _current_or_raise(conn, memory_id)
+    repo.invalidate_memory(conn, memory_id, now)
+
+
 def archive(conn, memory_id: int, now: float) -> None:
     with conn:
-        _current_or_raise(conn, memory_id)
-        repo.invalidate_memory(conn, memory_id, now)
+        _archive(conn, memory_id, now)
 
 
 def revert(conn, memory_id: int, now: float) -> int:

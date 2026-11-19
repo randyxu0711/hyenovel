@@ -3,6 +3,7 @@ import time
 
 import pytest
 
+from den import suggest
 from den.tests.test_app_discuss import c, fake_chat, in_loop, post_discuss  # noqa: F401
 from marrow import repo
 
@@ -35,9 +36,22 @@ def test_prepare_then_read(c, fake_chat):
     assert [(t["text"], t["stale"]) for t in got["threads"]] == [("結尾的節奏", False)]
 
 
+def test_prepare_runs_when_only_suggest_on(c, fake_chat):
+    talked(c)
+    fake_chat.deltas = [OUT]
+    assert c.put("/api/settings/prior", json={"enabled": False}).status_code == 204
+    assert c.post("/api/works/mini/prior/prepare").status_code == 202
+    for _ in range(200):
+        if c.get("/api/works/mini/prior").json()["digests"]:
+            return
+        time.sleep(0.02)
+    raise AssertionError("digest 沒出現")
+
+
 def test_disabled_prepare_noop(c, fake_chat):
     talked(c)
     n = len(fake_chat.calls)
+    in_loop(c, lambda conn: suggest.set_enabled(conn, False))
     assert c.put("/api/settings/prior", json={"enabled": False}).status_code == 204
     assert c.post("/api/works/mini/prior/prepare").status_code == 204
     assert c.get("/api/works/mini/prior").json()["enabled"] is False

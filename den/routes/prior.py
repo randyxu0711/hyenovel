@@ -5,7 +5,7 @@ import time
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from den import prior
+from den import prior, suggest
 from den.config import DIGEST_MAX_CHARS
 from den.routes.common import ApiError, slug_ok, unknown_work
 from marrow import repo
@@ -54,7 +54,7 @@ def _thread(conn, thread_id: int) -> dict:
 async def prepare(slug: str, request: Request):
     state = request.app.state
     st = _story(state.mgr.conn, slug, "prior")
-    if not prior.enabled(state.mgr.conn):
+    if not prior.enabled(state.mgr.conn) and not suggest.enabled(state.mgr.conn):
         return Response(status_code=204)
     state.prior.ensure(st["id"])
     return {}
@@ -65,7 +65,8 @@ async def read(slug: str, request: Request):
     conn = request.app.state.mgr.conn
     st = _story(conn, slug, "prior")
     latest = repo.latest_source_version(conn, st["id"])
-    return {"enabled": prior.enabled(conn), **prior.gather(conn, st["id"], None, latest["text"] if latest else "")}
+    return {"enabled": prior.enabled(conn), "pending_memories": len(suggest.pending(conn, time.time())),
+            **prior.gather(conn, st["id"], None, latest["text"] if latest else "")}
 
 
 @router.put("/digests/{digest_id}", status_code=201)
