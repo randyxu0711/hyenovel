@@ -628,7 +628,6 @@ def test_add_digest_supersedes(conn):
     old = repo.digest_by_id(conn, a)
     assert old["invalidated_at"] == 2.0 and old["root_id"] == a
     assert (old["session"], old["at"]) == ("sess", None)
-    assert [x["id"] for x in repo.digest_history(conn, a)] == [a, b]
     e = repo.add_digest(conn, d, "改", 5, 3.0, root_id=a, edited=True)
     assert repo.current_digest(conn, d)["edited"] == 1 and repo.digest_by_id(conn, e)["root_id"] == a
     assert repo.current_digest(conn, 999) is None and repo.digest_by_id(conn, 999) is None
@@ -646,16 +645,8 @@ def test_prior_discussions_filters(conn):
     _talked_disc(conn, repo.ensure_story(conn, "s2", None, 0), "other", 70.0)
     got = repo.prior_discussions(conn, s, exclude=new, limit=3, min_user_turns=2)
     assert [g["id"] for g in got] == [b, c, a]
-    assert got[0]["external_id"] == "B" and got[0]["ended_at"] == 30.0 and got[0]["last_seq"] == 3
+    assert got[0]["external_id"] == "B" and got[0]["ended_at"] == 30.0
     assert [g["id"] for g in repo.prior_discussions(conn, s, exclude=None, limit=1, min_user_turns=2)] == [new]
-
-
-def test_last_seq_ignores_markers(conn):
-    s, _ = _disc(conn)
-    d = _talked_disc(conn, s, "A", 10.0)
-    repo.add_utterance(conn, d, 4, "clear", "", 2.0, "den", [], None)
-    repo.add_utterance(conn, d, 5, "compact", "摘", 2.0, "den", [], None)
-    assert repo.prior_discussions(conn, s, exclude=None, limit=3, min_user_turns=2)[0]["last_seq"] == 3
 
 
 def test_threads_roundtrip_and_ended(conn):

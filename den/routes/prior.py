@@ -90,7 +90,7 @@ async def set_ended(thread_id: int, body: EndedIn, request: Request):
     conn = request.app.state.mgr.conn
     _thread(conn, thread_id)
     with conn:
-        repo.set_thread_ended(conn, thread_id, time.time() if body.ended else None)
+        prior.end_thread(conn, thread_id, time.time() if body.ended else None)
 
 
 @router.put("/sessions/{session}/threads/{thread_id}/talked", status_code=204)

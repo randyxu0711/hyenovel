@@ -141,3 +141,13 @@ def mark_talked(conn, shown: dict | None, discussion_id: int, said: str) -> None
         if gate.locate(t["quote"], said) is not None or (
                 t["source_quote"] and gate.locate(t["source_quote"], said) is not None):
             repo.mark_talked(conn, t["id"], discussion_id)
+
+
+def end_thread(conn, thread_id: int, ended_at: float | None) -> None:
+    repo.set_thread_ended(conn, thread_id, ended_at)
+    t = repo.thread_by_id(conn, thread_id)
+    if t["replaced_at"] is None:
+        return
+    for live in repo.threads_of(conn, t["root_id"]):
+        if gate.locate(live["quote"], t["quote"]) is not None or gate.locate(t["quote"], live["quote"]) is not None:
+            repo.set_thread_ended(conn, live["id"], ended_at)

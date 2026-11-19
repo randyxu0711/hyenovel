@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from contextlib import aclosing
@@ -5,7 +6,7 @@ from contextlib import aclosing
 from den import compact
 from den.companion import _read
 from den.config import DIGEST_MAX_CHARS, MIN_QUOTE_CHARS, THREADS_PER_DIGEST
-from den.discuss import _TURNS
+from den.discuss import since_clear
 from marrow import gate, jsonout, prompt, repo
 from marrow.prompt import Layer, Prompt
 from marrow.workpacks import RunConfig
@@ -13,8 +14,9 @@ from marrow.workpacks import RunConfig
 log = logging.getLogger("hyenovel")
 
 DIGEST_RUN = RunConfig()
-RETRYABLE = ("usage-limit", "transient", "cancelled")
+RETRYABLE = ("usage-limit", "transient", "cancelled", "timeout", "auth")
 PREVIOUS = "上一版摘要:\n<previous>\n{text}\n</previous>\n\n"
+PREVIOUS_THREADS = "上一版待續話題:\n<threads>\n{items}\n</threads>\n\n"
 
 
 def system() -> Prompt:
@@ -63,22 +65,36 @@ def _carry_ended(old: list[dict], new: list[dict]) -> None:
             t["ended_at"] = hit["ended_at"]
 
 
+def _previous(base: dict | None, open_threads: list[dict]) -> str:
+    if base is None:
+        return ""
+    out = PREVIOUS.format(text=base["text"])
+    if open_threads:
+        items = "\n".join(json.dumps({k: t[k] for k in ("text", "quote", "source_quote")}, ensure_ascii=False)
+                          for t in open_threads)
+        out += PREVIOUS_THREADS.format(items=items)
+    return out
+
+
 async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.time) -> int | None:
-    turns = [u for u in repo.utterances(conn, discussion_id) if u["role"] in _TURNS]
-    if not turns:
-        return None
-    last_seq = turns[-1]["seq"]
+    every = repo.utterances(conn, discussion_id)
     cur = repo.current_digest(conn, discussion_id)
+    turns = since_clear(every)
+    if not turns:
+        return cur["id"] if cur else None
+    last_seq = turns[-1]["seq"]
     if cur is not None and cur["through_seq"] >= last_seq:
         return cur["id"]
     if repo.digest_failed_seq(conn, discussion_id) == last_seq:
         return None
+    cleared = max((u["seq"] for u in every if u["role"] == "clear"), default=-1)
+    base = cur if cur is not None and cur["through_seq"] > cleared else None
+    open_threads = [t for t in repo.threads_of(conn, base["root_id"]) if t["ended_at"] is None] if base else []
     versions = repo.source_versions(conn, story_id) if story_id is not None else []
-    fresh = [u for u in turns if cur is None or u["seq"] > cur["through_seq"]]
-    user = (PREVIOUS.format(text=cur["text"]) if cur else "") + compact.transcript(fresh, versions)
+    fresh = [u for u in turns if base is None or u["seq"] > base["through_seq"]]
+    user = _previous(base, open_threads) + compact.transcript(fresh, versions)
     said = "\n".join(u["text"] for u in turns)
     sources = [v["text"] for v in versions]
-    old_threads = repo.threads_of(conn, cur["root_id"]) if cur else []
     result = None
     try:
         async with aclosing(chat(system().text, user, config=DIGEST_RUN)) as stream:
@@ -87,6 +103,10 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
                     result = val
     except Exception:
         log.exception("event=digest-failed discussion=%s stage=chat", discussion_id)
+    after = repo.current_digest(conn, discussion_id)
+    if (after and after["id"]) != (cur and cur["id"]) or not repo.utterances(conn, discussion_id):
+        log.info("event=digest-dropped discussion=%s reason=changed-while-running", discussion_id)
+        return None
     parsed = parse(result.text, said, sources) if result is not None and result.outcome == "ok" else None
     if parsed is None:
         log.warning("event=digest-failed discussion=%s outcome=%s", discussion_id,
@@ -96,7 +116,7 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
                 repo.record_digest_failure(conn, discussion_id, last_seq, now())
         return None
     summary, threads = parsed
-    _carry_ended(old_threads, threads)
+    _carry_ended(repo.threads_of(conn, cur["root_id"]) if cur else [], threads)
     usage = {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
     at = now()
     with conn:

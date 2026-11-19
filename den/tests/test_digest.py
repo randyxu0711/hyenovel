@@ -104,13 +104,69 @@ def test_make_empty_discussion_none(conn, disc):
     assert run(digest.make(conn, chat, e, s)) is None and chat.calls == []
 
 
-def test_make_skips_marker_rows(conn, disc):
+def test_make_skips_marker_rows_and_cleared(conn, disc):
     s, d = disc
     repo.add_utterance(conn, d, 4, "compact", "壓縮摘要", 2.0, "den", [], None)
     repo.add_utterance(conn, d, 5, "clear", "", 2.0, "den", [], None)
     chat = Chat(out())
+    assert run(digest.make(conn, chat, d, s)) is None and chat.calls == []
+    repo.add_utterance(conn, d, 6, "user", "清空後的新話", 3.0, "den", [], None)
     run(digest.make(conn, chat, d, s))
-    assert "壓縮摘要" not in chat.calls[0][1] and repo.current_digest(conn, d)["through_seq"] == 3
+    user = chat.calls[0][1]
+    assert "清空後的新話" in user and "壓縮摘要" not in user and "結尾的海" not in user
+    assert repo.current_digest(conn, d)["through_seq"] == 6
+
+
+def test_clear_after_digest_rebuilds_without_previous(conn, disc):
+    s, d = disc
+    run(digest.make(conn, Chat(out("舊摘要", threads=[{"text": "海", "quote": "結尾的海是不是", "source_quote": None}])), d, s))
+    repo.add_utterance(conn, d, 4, "clear", "", 2.0, "den", [], None)
+    repo.add_utterance(conn, d, 5, "user", "重新開始聊", 3.0, "den", [], None)
+    chat = Chat(out("新摘要"))
+    run(digest.make(conn, chat, d, s))
+    assert "舊摘要" not in chat.calls[0][1] and "<threads>" not in chat.calls[0][1]
+    cur = repo.current_digest(conn, d)
+    assert cur["text"] == "新摘要" and repo.threads_of(conn, cur["root_id"]) == []
+
+
+def test_redigest_input_has_open_threads(conn, disc):
+    s, d = disc
+    run(digest.make(conn, Chat(out(threads=[{"text": "開著的", "quote": "結尾的海是不是", "source_quote": None},
+                                             {"text": "結束的", "quote": "海那段停了", "source_quote": None}])), d, s))
+    root = repo.current_digest(conn, d)["root_id"]
+    repo.set_thread_ended(conn, repo.threads_of(conn, root)[1]["id"], 3.0)
+    repo.add_utterance(conn, d, 4, "user", "再聊一下", 3.0, "den", [], None)
+    chat = Chat(out())
+    run(digest.make(conn, chat, d, s))
+    user = chat.calls[0][1]
+    assert "<threads>" in user and "開著的" in user and "結束的" not in user
+
+
+class Racing(Chat):
+    def __init__(self, conn, d, act):
+        super().__init__(out("模型的"))
+        self.conn, self.d, self.act = conn, d, act
+
+    async def __call__(self, system, user, *, config):
+        self.act(self.conn, self.d)
+        async for ev in super().__call__(system, user, config=config):
+            yield ev
+
+
+def test_edit_while_running_is_kept(conn, disc):
+    s, d = disc
+    run(digest.make(conn, Chat(out("第一版")), d, s))
+    repo.add_utterance(conn, d, 4, "user", "再聊一下", 3.0, "den", [], None)
+    cur = repo.current_digest(conn, d)
+    edit = lambda c, x: repo.add_digest(c, x, "作者改的", cur["through_seq"], 9.0, root_id=cur["root_id"], edited=True)
+    assert run(digest.make(conn, Racing(conn, d, edit), d, s)) is None
+    assert repo.current_digest(conn, d)["text"] == "作者改的" and repo.digest_failed_seq(conn, d) is None
+
+
+def test_deleted_while_running_writes_nothing(conn, disc):
+    s, d = disc
+    assert run(digest.make(conn, Racing(conn, d, repo.delete_discussion), d, s)) is None
+    assert conn.execute("SELECT COUNT(*) FROM digest").fetchone()[0] == 0
 
 
 def test_make_incremental_input_has_prev_summary(conn, disc):
@@ -161,7 +217,8 @@ def test_failed_digest_not_retried_until_new_turns(conn, disc):
     assert run(digest.make(conn, good, d, s)) is not None and len(good.calls) == 1
 
 
-@pytest.mark.parametrize("chat", [Chat(boom=True), Chat(outcome="usage-limit")], ids=["raise", "usage-limit"])
+@pytest.mark.parametrize("chat", [Chat(boom=True), Chat(outcome="usage-limit"), Chat(outcome="timeout")],
+                         ids=["raise", "usage-limit", "timeout"])
 def test_retryable_failure_not_recorded(conn, disc, chat):
     s, d = disc
     run(digest.make(conn, chat, d, s))

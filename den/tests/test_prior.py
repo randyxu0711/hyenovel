@@ -119,3 +119,18 @@ def test_gather_caps_and_stale(conn, monkeypatch):
     assert [(x["text"], x["stale"], x["session"]) for x in got["threads"]] == \
         [("b1", False, "B"), ("a1", False, "A"), ("a-stale", True, "A")]
     assert [d["session"] for d in prior.gather(conn, s, b, "海")["digests"]] == ["A"]
+
+
+def test_end_replaced_thread_ends_successor(conn):
+    s = _mini(conn)
+    d = _disc(conn, s, "A", 1.0)
+    root = repo.add_digest(conn, d, "摘", 3, 1.0)
+    t = lambda text, q: {"text": text, "quote": q, "source_quote": None, "ended_at": None}
+    (old,) = repo.replace_threads(conn, root, [t("海", "結尾的海")], 1.0)
+    same, other = repo.replace_threads(conn, root, [t("海2", "結尾的海是不是"), t("別的", "我讀到海那段")], 2.0)
+    prior.end_thread(conn, old, 5.0)
+    assert [x["ended_at"] for x in repo.threads_of(conn, root)] == [5.0, None]
+    prior.end_thread(conn, old, None)
+    assert repo.thread_by_id(conn, same)["ended_at"] is None
+    prior.end_thread(conn, other, 6.0)
+    assert repo.thread_by_id(conn, other)["ended_at"] == 6.0

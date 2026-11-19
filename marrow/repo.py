@@ -486,10 +486,6 @@ def digest_by_id(conn, digest_id: int) -> dict | None:
                              "JOIN discussion d ON d.id = g.discussion_id WHERE g.id = ?", (digest_id,)).fetchone())
 
 
-def digest_history(conn, root_id: int) -> list[dict]:
-    return [_row(r) for r in conn.execute("SELECT * FROM digest WHERE root_id = ? ORDER BY id", (root_id,))]
-
-
 def record_digest_failure(conn, discussion_id: int, through_seq: int, now: float) -> None:
     conn.execute("INSERT INTO digest_failure (discussion_id, through_seq, at) VALUES (?, ?, ?) "
                  "ON CONFLICT (discussion_id) DO UPDATE SET through_seq = excluded.through_seq, at = excluded.at",
@@ -541,8 +537,7 @@ def talked_in(conn, discussion_id: int) -> set[int]:
 def prior_discussions(conn, story_id: int, *, exclude: int | None, limit: int,
                       min_user_turns: int) -> list[dict]:
     return [_row(r) for r in conn.execute(
-        "SELECT d.id AS id, d.external_id AS external_id, d.ended_at AS ended_at, "
-        "(SELECT MAX(seq) FROM utterance WHERE discussion_id = d.id AND role IN ('user', 'assistant')) AS last_seq "
+        "SELECT d.id AS id, d.external_id AS external_id, d.ended_at AS ended_at "
         "FROM discussion d WHERE d.story_id = ? AND d.archived_at IS NULL AND d.id IS NOT ? "
         "AND (SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'user') >= ? "
         "ORDER BY d.ended_at DESC, d.id DESC LIMIT ?",
