@@ -206,3 +206,14 @@ def test_pending_drops_older_than_ttl_and_when_off(conn, disc):
     assert suggest.pending(conn, 2.0 + suggest.CANDIDATE_TTL_S) == []
     suggest.set_enabled(conn, False)
     assert suggest.pending(conn, 1.0) == []
+
+
+def test_author_candidates_dedupe_across_works(conn, disc):
+    s, d = disc
+    other = repo.ensure_story(conn, "other", None, 1.0)
+    od = repo.ensure_discussion(conn, other, "O", "web", None, 0)
+    repo.add_candidate(conn, od, 0, "習慣先寫最後一段", "先寫結尾", "author", 1.0)
+    repo.add_candidate(conn, od, 0, "那篇的事情那篇的", "那篇的事", "work", 1.0)
+    item = {"text": "作者先寫結尾", "quote": "習慣先寫最後一段再往前補", "seq": 2, "scope": "author"}
+    assert suggest.store(conn, d, s, [item], 5.0) == 0
+    assert "先寫結尾" in suggest.known(conn, s) and "那篇的事" not in suggest.known(conn, s)

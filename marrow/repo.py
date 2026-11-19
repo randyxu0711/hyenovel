@@ -479,6 +479,10 @@ def candidates_of_story(conn, story_id: int) -> list[dict]:
     return [dict(r) for r in conn.execute(_CANDIDATE + "WHERE d.story_id = ? ORDER BY c.id DESC", (story_id,))]
 
 
+def candidates_of_scope(conn, scope: str) -> list[dict]:
+    return [dict(r) for r in conn.execute(_CANDIDATE + "WHERE c.scope = ? ORDER BY c.id DESC", (scope,))]
+
+
 def pending_candidates(conn, since: float) -> list[dict]:
     return [dict(r) for r in conn.execute(
         _CANDIDATE + "WHERE c.resolution IS NULL AND c.created_at >= ? AND st.archived_at IS NULL "

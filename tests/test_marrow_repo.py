@@ -771,3 +771,11 @@ def test_delete_discussion_drops_candidates(conn):
     repo.delete_story(conn, s)
     assert conn.execute("SELECT COUNT(*) FROM memory_candidate").fetchone()[0] == 0
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_candidates_of_scope(conn):
+    s, _ = _disc(conn)
+    d = _talked_disc(conn, s, "c1", 1.0)
+    a = repo.add_candidate(conn, d, 0, "引", "一", "author", 1.0)
+    repo.add_candidate(conn, d, 0, "引", "二", "work", 1.0)
+    assert [c["id"] for c in repo.candidates_of_scope(conn, "author")] == [a]

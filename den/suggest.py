@@ -67,9 +67,15 @@ def _live_memories(conn, story_id: int) -> list[dict]:
     return repo.active_memories(conn, "author") + repo.active_memories(conn, "work", story_id)
 
 
+def _proposed(conn, story_id: int) -> list[dict]:
+    mine = repo.candidates_of_story(conn, story_id)
+    seen = {c["id"] for c in mine}
+    return mine + [c for c in repo.candidates_of_scope(conn, "author") if c["id"] not in seen]
+
+
 def store(conn, discussion_id: int, story_id: int, items: list[dict], now: float) -> int:
     live = _live_memories(conn, story_id)
-    quotes = [c["quote"] for c in repo.candidates_of_story(conn, story_id)] + [m["quote"] for m in live if m["quote"]]
+    quotes = ([c["quote"] for c in _proposed(conn, story_id)] + [m["quote"] for m in live if m["quote"]])
     texts = {m["text"] for m in live}
     n = 0
     for m in items:
@@ -84,7 +90,7 @@ def store(conn, discussion_id: int, story_id: int, items: list[dict], now: float
 
 def known(conn, story_id: int) -> list[str]:
     return ([m["text"] for m in _live_memories(conn, story_id)]
-            + [c["text"] for c in repo.candidates_of_story(conn, story_id)])[:KNOWN_MAX]
+            + [c["text"] for c in _proposed(conn, story_id)])[:KNOWN_MAX]
 
 
 def pending(conn, now: float) -> list[dict]:

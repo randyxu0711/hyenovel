@@ -269,3 +269,14 @@ def test_make_input_without_known_has_no_block(conn, disc):
     chat = Chat(out())
     run(digest.make(conn, chat, d, s))
     assert "<known>" not in chat.calls[0][1]
+
+
+def test_suggest_off_prompt_has_no_memories(conn, disc):
+    s, d = disc
+    suggest.set_enabled(conn, False)
+    repo.add_memory(conn, "work", "想讓結尾留白", 1.0, story_id=s)
+    chat = Chat(out())
+    run(digest.make(conn, chat, d, s))
+    system, user = chat.calls[0]
+    assert "memories" not in system and "記憶:" not in system and "<known>" not in user
+    assert "memories" in digest.system(True).text and "memories" not in digest.system(False).text
