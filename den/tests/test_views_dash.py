@@ -135,7 +135,7 @@ def test_session_turns_unknown(c):
          "spans": [{"quote": "原", "start": 0, "end": 1}], "v": 1},
         {"seq": 1, "reaction": None, "memories": [], "role": "assistant", "text": "答", "ts": 2.0, "character": "hyena",
          "quotes": [], "spans": [], "v": 1, "edited": False, "voice": False, "variant": {"n": 1, "total": 1}}],
-        "attachments": [], "archived": False}
+        "attachments": [], "archived": False, "prior": None}
     with pytest.raises(LookupError):
         views.session_turns(c, "nope")
 

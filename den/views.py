@@ -5,7 +5,7 @@ den 的 API 回領域形狀(story / artifact / job),不回某個前端專用的�
 """
 import bisect
 
-from den import memory, spans, works
+from den import memory, prior, spans, works
 from marrow import compare, gate, labels, repo, vizdata
 
 
@@ -310,10 +310,23 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
             "title": _title(conn, d["story_id"]) if d["story_id"] is not None else None,
             "legacy": not any(u["role"] == "assistant" and u["character"] is not None for u in us),
             "version": shown["n"] if shown else None, "turns": turns, "archived": d["archived_at"] is not None,
+            "prior": _prior_view(conn, us, latest, d["id"]),
             "attachments": [{"n": a["n"], "seq": a["seq"], "name": a["name"], "chars": len(a["text"].strip()),
                              "head": a["text"].strip()[:ATTACH_HEAD],
                              "adopted": a["source_version_id"] is not None}
                             for a in repo.attachments(conn, d["id"])]}
+
+
+def _prior_view(conn, us: list[dict], latest: dict | None, discussion_id: int) -> dict | None:
+    last = next((u for u in reversed(us) if u["role"] == "assistant"), None)
+    if last is None or latest is None:
+        return None
+    shown = prior.resolve(conn, (last["recipe"] or {}).get("prior"), latest["text"], discussion_id)
+    if shown is None or not shown["digests"]:
+        return None
+    return {"digests": shown["digests"],
+            "threads": [{k: t[k] for k in ("id", "text", "quote", "at", "session", "ended", "talked")}
+                        for t in shown["threads"]]}
 
 
 def memory_row(conn, row: dict) -> dict:

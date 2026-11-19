@@ -604,3 +604,123 @@ def test_artifact_at_returns_latest_for_that_version(conn):
     repo.add_artifact(conn, sid, v1, "notes", 1, {"n": "new"}, {}, 4)
     assert repo.artifact_at(conn, sid, "notes", v1)["body"] == {"n": "new"}
     assert repo.artifact_at(conn, sid, "notes", v2) is None
+
+
+# ── digest ──
+
+def _talked_disc(conn, s, sid, end, users=2):
+    d = repo.ensure_discussion(conn, s, sid, "web", None, 0)
+    seq = 0
+    for i in range(users):
+        repo.add_utterance(conn, d, seq, "user", f"問{i}", 1.0, "den", [], None)
+        repo.add_utterance(conn, d, seq + 1, "assistant", f"答{i}", 1.0, "den", [], None)
+        seq += 2
+    repo.close_discussion(conn, d, end)
+    return d
+
+
+def test_add_digest_supersedes(conn):
+    s, d = _disc(conn)
+    a = repo.add_digest(conn, d, "一", 3, 1.0)
+    b = repo.add_digest(conn, d, "二", 5, 2.0, root_id=a, usage={"model": "m"})
+    cur = repo.current_digest(conn, d)
+    assert (cur["id"], cur["root_id"], cur["text"], cur["through_seq"], cur["edited"]) == (b, a, "二", 5, 0)
+    old = repo.digest_by_id(conn, a)
+    assert old["invalidated_at"] == 2.0 and old["root_id"] == a
+    assert (old["session"], old["at"]) == ("sess", None)
+    e = repo.add_digest(conn, d, "改", 5, 3.0, root_id=a, edited=True)
+    assert repo.current_digest(conn, d)["edited"] == 1 and repo.digest_by_id(conn, e)["root_id"] == a
+    assert repo.current_digest(conn, 999) is None and repo.digest_by_id(conn, 999) is None
+
+
+def test_prior_discussions_filters(conn):
+    s, _ = _disc(conn)
+    a = _talked_disc(conn, s, "A", 10.0)
+    b = _talked_disc(conn, s, "B", 30.0)
+    c = _talked_disc(conn, s, "C", 20.0)
+    _talked_disc(conn, s, "one", 40.0, users=1)
+    arch = _talked_disc(conn, s, "arch", 50.0)
+    repo.archive_discussion(conn, arch, 51.0)
+    new = _talked_disc(conn, s, "new", 60.0)
+    _talked_disc(conn, repo.ensure_story(conn, "s2", None, 0), "other", 70.0)
+    got = repo.prior_discussions(conn, s, exclude=new, limit=3, min_user_turns=2)
+    assert [g["id"] for g in got] == [b, c, a]
+    assert got[0]["external_id"] == "B" and got[0]["ended_at"] == 30.0
+    assert [g["id"] for g in repo.prior_discussions(conn, s, exclude=None, limit=1, min_user_turns=2)] == [new]
+
+
+def test_threads_roundtrip_and_ended(conn):
+    s, d = _disc(conn)
+    root = repo.add_digest(conn, d, "一", 3, 1.0)
+    t1, t2 = repo.replace_threads(conn, root, [
+        {"text": "甲", "quote": "問一問", "source_quote": None, "ended_at": None},
+        {"text": "乙", "quote": "答一答", "source_quote": "海", "ended_at": 5.0}], 1.0)
+    assert [(t["id"], t["text"], t["source_quote"], t["ended_at"]) for t in repo.threads_of(conn, root)] == \
+        [(t1, "甲", None, None), (t2, "乙", "海", 5.0)]
+    repo.set_thread_ended(conn, t1, 7.0)
+    assert repo.thread_by_id(conn, t1)["ended_at"] == 7.0
+    assert repo.thread_by_id(conn, t1)["session"] == "sess"
+    repo.set_thread_ended(conn, t1, None)
+    assert repo.thread_by_id(conn, t1)["ended_at"] is None
+    (t3,) = repo.replace_threads(conn, root, [{"text": "丙", "quote": "問一問", "source_quote": None,
+                                                "ended_at": None}], 2.0)
+    assert [t["id"] for t in repo.threads_of(conn, root)] == [t3]
+    assert repo.thread_by_id(conn, t1)["replaced_at"] == 2.0
+    assert repo.thread_by_id(conn, 999) is None
+
+
+def test_talked_marks(conn):
+    s, d = _disc(conn)
+    other = repo.ensure_discussion(conn, s, "o", "web", None, 0)
+    root = repo.add_digest(conn, d, "一", 3, 1.0)
+    (t,) = repo.replace_threads(conn, root, [{"text": "甲", "quote": "問一問", "source_quote": None,
+                                               "ended_at": None}], 1.0)
+    repo.mark_talked(conn, t, other)
+    repo.mark_talked(conn, t, other)
+    assert repo.talked_in(conn, other) == {t} and repo.talked_in(conn, d) == set()
+    repo.unmark_talked(conn, t, other)
+    assert repo.talked_in(conn, other) == set()
+
+
+def test_digest_failure_upsert(conn):
+    s, d = _disc(conn)
+    assert repo.digest_failed_seq(conn, d) is None
+    repo.record_digest_failure(conn, d, 3, 1.0)
+    repo.record_digest_failure(conn, d, 5, 2.0)
+    assert repo.digest_failed_seq(conn, d) == 5
+
+
+def _digest_web(conn, s):
+    old = _talked_disc(conn, s, "old", 1.0)
+    new = _talked_disc(conn, s, "new", 2.0)
+    root = repo.add_digest(conn, old, "一", 3, 1.0)
+    repo.add_digest(conn, old, "二", 3, 2.0, root_id=root)
+    (t,) = repo.replace_threads(conn, root, [{"text": "甲", "quote": "問一問", "source_quote": None,
+                                               "ended_at": None}], 1.0)
+    repo.mark_talked(conn, t, new)
+    nr = repo.add_digest(conn, new, "新", 3, 3.0)
+    (nt,) = repo.replace_threads(conn, nr, [{"text": "乙", "quote": "問一問", "source_quote": None,
+                                              "ended_at": None}], 3.0)
+    repo.mark_talked(conn, nt, old)
+    repo.record_digest_failure(conn, old, 3, 1.0)
+    return old, new
+
+
+def test_delete_discussion_removes_digests(conn):
+    s, _ = _disc(conn)
+    old, new = _digest_web(conn, s)
+    repo.delete_discussion(conn, old)
+    for table in ("digest", "digest_failure"):
+        assert conn.execute(f"SELECT COUNT(*) FROM {table} WHERE discussion_id = ?", (old,)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM thread_talked").fetchone()[0] == 0
+    assert [t["text"] for t in conn.execute("SELECT text FROM digest_thread")] == ["乙"]
+    assert repo.current_digest(conn, new)["text"] == "新"
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_delete_story_removes_digests(conn):
+    s, _ = _disc(conn)
+    _digest_web(conn, s)
+    repo.delete_story(conn, s)
+    for table in ("digest", "digest_thread", "thread_talked", "digest_failure"):
+        assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0

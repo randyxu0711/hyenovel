@@ -9,8 +9,9 @@ import uuid
 from collections.abc import Sequence
 from contextlib import aclosing
 
-from den import characters, companion, retrieve, spans, stories
-from den.config import MAX_ATTACHMENT_CHARS, MAX_ATTACHMENTS, MAX_QUOTE_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES
+from den import characters, companion, prior, retrieve, spans, stories
+from den.config import (MAX_ATTACHMENT_CHARS, MAX_ATTACHMENTS, MAX_QUOTE_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES,
+                        PRIOR_WAIT_S)
 from marrow import gate, prompt, repo
 from marrow.ingest import normalize
 
@@ -291,7 +292,7 @@ def _others(conn, history: list[dict], me: str) -> dict[str, str]:
 
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                    home: str = "web", client: dict | None = None, now=time.time,
-                   quotes: Sequence[str] = ()):
+                   quotes: Sequence[str] = (), prior_queue=None, use_prior: bool = True):
     """一輪:重組歷史 → 轉發 delta 為 token → 整輪成功才在同一個 transaction 落 user+assistant。
 
     角色(與其模式)由 pick_character 定好放在 turn。message 空 = companion 先開口:工人收到 OPENER,只落 assistant 一筆。
@@ -300,7 +301,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     歷史在這裡(呼叫者已持該局的鎖)才讀,不在 prepare_turn 讀,免得拿到過期的。
     """
     d = turn["discussion_id"]
-    every = repo.utterances(conn, d) if d is not None else []
+    every = every_all = repo.utterances(conn, d) if d is not None else []
     redo = turn.get("redo")
     if redo is not None:
         if not every or every[-1]["seq"] != redo:
@@ -313,6 +314,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                     else ("", every[-1]["anchors"], ()))
         dropped = next((a for a in turn["ctx"]["attachments"] if a["seq"] == first), None)
         every = [u for u in every if u["seq"] < first]
+    snap = await prior.snapshot(conn, prior_queue, turn["story_id"], d, every_all, use_prior, PRIOR_WAIT_S)
+    shown = prior.resolve(conn, snap, turn["ctx"]["source"])
     summary, history = live_history(every)
     ctx = turn["ctx"]
     history = annotate(history, ctx["versions"])
@@ -331,7 +334,8 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     slug = turn["slug"]
     failed = False
     system = companion.assemble(turn["ctx"], character,
-                                companion.pick_samples(repo.voice_samples(conn, character["id"], d)))
+                                companion.pick_samples(repo.voice_samples(conn, character["id"], d)),
+                                prior.layer_text(shown) if shown and (shown["digests"] or shown["threads"]) else None)
     dp = character.get("depth_prompt")
     note = dp["prompt"].strip() if dp else ""
     at = note_at(len(history), dp["depth"]) if note else 0
@@ -380,7 +384,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
               "retrieved": [n["id"] for n in picked],
               "depth_prompt": {"sha": repo.sha256_text(note), "at": at} if note else None,
-              "v": ctx["version"], "cmp": turn.get("cmp"), "home": home_now}
+              "v": ctx["version"], "cmp": turn.get("cmp"), "home": home_now, "prior": snap}
     variant = None
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫
@@ -404,6 +408,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
                                    usage=usage, character=character["id"], recipe=recipe,
                                    thinking=result.thinking)
+            prior.mark_talked(conn, shown, d, message + "\n" + result.text)
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = (repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
                  if turn["story_id"] is not None else None)

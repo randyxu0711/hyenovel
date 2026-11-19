@@ -26,6 +26,8 @@ const PATHS = {
   close: <path d="M5 5l8 8M13 5l-8 8" />,
   clip: <path d="M12.5 6.5l-5 5a1.8 1.8 0 0 1-2.5-2.5l5.5-5.5a3 3 0 0 1 4.2 4.2L9 13.5a4.2 4.2 0 0 1-6-6l4.5-4.5" />,
   wipe: <><path d="M3 15.5h12" /><rect x="5" y="5.5" width="8" height="6" rx="1" transform="rotate(-20 9 8.5)" /><path d="M6.2 9.9l6.6-2.4" /></>,
+  prior: <path d="M3 4.5h7.5M3 9h5M3 13.5h7.5M11.5 6.5l3 2.5-3 2.5" />,
+  goto: <path d="M5.5 12.5l7-7M7.5 5.5h5v5" />,
   squeeze: <path d="M9 2.5V7M6.5 4.5L9 7l2.5-2.5M9 15.5V11M6.5 13.5L9 11l2.5 2.5M3 9h12" />,
   pause: <path d="M6.5 4v10M11.5 4v10" />,
   offTarget: <><circle cx="9" cy="9" r="6" /><path d="M4.8 13.2l8.4-8.4" /></>,

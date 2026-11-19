@@ -38,6 +38,7 @@ class DiscussIn(BaseModel):
     client: ClientIn | None = None
     attach: AttachIn | None = None
     cmp: int | None = None
+    prior: bool = True
 
 
 _BUSY = {"event": "error", "data": {"where": "discuss", "message": "這一局還有一輪在跑",
@@ -157,7 +158,7 @@ async def regenerate(session: str, seq: Seq, request: Request):
     except characters.UnknownCharacter:
         log.info("event=reject where=regenerate reason=unknown-character")
         raise ApiError(422, "unknown-character", "沒有這隻角色") from None
-    events = discuss.run_turn(state.mgr.conn, state.chat, turn, "", [])
+    events = discuss.run_turn(state.mgr.conn, state.chat, turn, "", [], prior_queue=state.prior)
     return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -393,6 +394,6 @@ def _discuss(slug: str | None, body: DiscussIn, request: Request):
     except characters.UnknownCharacter:
         raise reject(422, "unknown-character", "沒有這隻角色") from None
     events = discuss.run_turn(state.mgr.conn, state.chat, turn, body.message, body.anchors,
-                              body.home, client, quotes=body.quotes)
+                              body.home, client, quotes=body.quotes, prior_queue=state.prior, use_prior=body.prior)
     return StreamingResponse(_chat_stream(state, lock, events), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
