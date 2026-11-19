@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 
+from den import suggest
 from den.config import MAX_THREADS, PRIOR_MIN_USER_TURNS, PRIOR_SESSIONS
 from marrow import gate, repo
 
@@ -106,14 +107,15 @@ async def snapshot(conn, queue, story_id: int | None, discussion_id: int | None,
     if last is not None:
         snap = (last["recipe"] or {}).get("prior")
         return _fresh(conn, story_id, discussion_id) if snap is not None and not snap["digests"] else snap
-    if not use or not enabled(conn):
+    bring = use and enabled(conn)
+    if not bring and not suggest.enabled(conn):
         return None
     if queue is not None:
-        if queue.running(story_id):
-            await queue.wait(story_id, wait_s)
-        else:
+        if not queue.running(story_id):
             queue.ensure(story_id)
-    return _fresh(conn, story_id, discussion_id)
+        elif bring:
+            await queue.wait(story_id, wait_s)
+    return _fresh(conn, story_id, discussion_id) if bring else None
 
 
 def resolve(conn, snap: dict | None, latest_source: str, discussion_id: int | None = None) -> dict | None:
