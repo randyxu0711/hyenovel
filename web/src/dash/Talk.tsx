@@ -7,6 +7,7 @@ import Figure, { type FigureState } from "./Figure";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, useLang, useT } from "./i18n";
 import { quoted } from "./Iq";
+import Prior from "./Prior";
 import Reaction from "./Reaction";
 import Remember from "./Remember";
 import Voice from "./Voice";
@@ -380,6 +381,8 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   return (
     <div className="chat" onDragOver={free ? e => e.preventDefault() : undefined} onDrop={free ? onDrop : undefined}>
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
+        {bound && !session && <Prior mode="live" slug={bound} skipped={talk.skipPrior} onSkip={talk.setSkipPrior} onGoto={talk.open} busy={streaming !== null} />}
+        {bound && session && <Prior key={session} mode="snapshot" session={session} snapshot={talk.prior} onGoto={talk.open} busy={streaming !== null || working} />}
         {rows}
         {pending && (
           <div className="chat-me">

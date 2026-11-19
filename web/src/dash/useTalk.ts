@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, DashError, type Adopted, type AttachIn, type Attachment, type SessionRow, type Turn, type TurnMemory, type TurnReaction, type TalkMessage } from "./api";
+import { api, DashError, type Adopted, type AttachIn, type Attachment, type PriorSnapshot, type SessionRow, type Turn, type TurnMemory, type TurnReaction, type TalkMessage } from "./api";
 import { cpLength } from "./cp";
 import { liveQuotes } from "./liveQuotes";
 import { DRAW_MS, markId, type Mark } from "./Paper";
@@ -72,6 +72,9 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   const [redoing, setRedoing] = useState<number | null>(null);       // 正在重說的那一格(串流的字放在那格)
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<DashError | null>(null);
+  const [prior, setPrior] = useState<PriorSnapshot | null>(null);
+  const [skipPrior, setSkipPrior] = useState(false);
+  const prepared = useRef(false);
   const [draftOf, setDraftOf] = useState<{ slug: string | null; text: string }>(() => ({ slug, text: readDraft(slug) }));
   const draft = draftOf.slug === slug ? draftOf.text : readDraft(slug);
   const abort = useRef<AbortController | null>(null);
@@ -114,6 +117,10 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     const s = now.current.slug;
     const text = typeof v === "function" ? v(now.current.draft) : v;
     now.current.draft = text;
+    if (s && text.trim() && !shownSession.current && !prepared.current) {
+      prepared.current = true;
+      void api.preparePrior(s);
+    }
     if (s) writeDraft(s, text);
     setDraftOf({ slug: s, text });
   }, []);
@@ -127,7 +134,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     api.session(id, v).then(d => {
       if (epoch.current !== mine) return;
       setTurns(d.turns); setSession(d.session); setLegacy(d.legacy); setSpansV(v);
-      setAttachments(d.attachments); setBound(d.slug);
+      setAttachments(d.attachments); setBound(d.slug); setPrior(d.prior ?? null);
     }, e => { if (epoch.current === mine) setError(asError(e)); });
   }, [stopDrawing]);
 
@@ -147,6 +154,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setPicked(null);
     setTurns([]); setSession(null); setLegacy(false); setSessions([]); setStreaming(null); setPending(null); setError(null);
     setAttachments([]); setBound(slug); setStaged(null);
+    setPrior(null); setSkipPrior(false); prepared.current = false;
     if (!slug) {
       if (now.current.wanted) { touched.current = true; load(now.current.wanted); }
       return;
@@ -181,6 +189,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     setPicked(null);
     setTurns([]); setSession(null); setLegacy(false); setError(null); setSpansV(now.current.version);
     setAttachments([]); setBound(now.current.slug); setStaged(null);
+    setPrior(null); setSkipPrior(false); prepared.current = false;
   }, [stopDrawing]);
 
   /** 邊說邊畫:串流中逐字找引文畫線;message 到了把痕跡交給逐字稿,先前沒找到的補畫;看舊版時以 ?v= 重抓位置。 */
@@ -241,7 +250,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     };
     const ctl = abort.current = new AbortController();
     try {
-      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried, cmp: cmpRef.current }, ctl.signal)) {
+      for await (const ev of api.talk(slug, { session, message, character: whoId, quotes, attach: carried, cmp: cmpRef.current, ...(slug && !session ? { prior: !skipPrior } : {}) }, ctl.signal)) {
         if (!live()) return false;
         if (!got) { got = true; setDraft(""); }
         if (ev.event === "token") {
@@ -263,6 +272,9 @@ export function useTalk(slug: string | null, version?: number, source: string | 
             setStaged(null);
           }
           if (slug) markSeen(slug);
+          if (slug && (!session || prior)) {
+            api.session(d.session_id).then(s => { if (live()) setPrior(s.prior ?? null); }, () => {});
+          }
           ok = true;
           live_.settle(d, old, mine);
         } else if (ev.event === "error") {
@@ -279,7 +291,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
     }
     return ok;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, session, whoId, streaming, legacy, working, staged, setDraft, refreshSessions, chars, draw]);
+  }, [slug, session, whoId, streaming, legacy, working, staged, setDraft, refreshSessions, chars, draw, skipPrior, prior]);
 
   /** 重說這局最後一則讀伴回覆:新的字在同一格串流,成功就換上新版;沒成功那格回到舊字。 */
   const regenerate = useCallback(async (seq: number): Promise<boolean> => {
@@ -404,6 +416,7 @@ export function useTalk(slug: string | null, version?: number, source: string | 
   return {
     markTurn, markMemories, markVoice, regenerate, stop, redoing, pickVariant, editReply, slug, turns, streaming, pending, send, whoId, setWho, session, error, draft, setDraft,
     sessions, open, fresh, legacy, spansV, liveMarks, drawing,
+    prior, skipPrior, setSkipPrior,
     attachments, bound, staged, dropStaged: () => setStaged(null), working, attach, attachText, clear, compact, adopt, archive, unarchive,
   };
 }

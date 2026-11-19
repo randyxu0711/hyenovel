@@ -112,6 +112,29 @@ function AddForm({ act }: { act: Act }) {
   );
 }
 
+function PriorSwitch({ fail }: { fail: (e: unknown) => void }) {
+  const t = useT();
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => { api.priorEnabled().then(setOn, () => setOn(null)); }, []);
+  if (on === null) return null;
+  const pick = async (v: boolean) => {
+    if (v === on) return;
+    try { await api.setPriorEnabled(v); setOn(v); } catch (e) { fail(e); }
+  };
+  return (
+    <div className="dash-mem-switch">
+      <span>{t("memory.priorSwitch")}</span>
+      <div className="set-seg" role="group" aria-label={t("memory.priorSwitch")}>
+        {([true, false] as const).map(v => (
+          <button key={String(v)} type="button" aria-pressed={on === v} onClick={() => void pick(v)}>
+            {t(v ? "memory.on" : "memory.off")}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** 記憶頁:生效中的依作者、各篇分組;封存的收在最後。 */
 export default function MemoryPage() {
   const t = useT();
@@ -173,6 +196,7 @@ export default function MemoryPage() {
           })}
         </ul>
       )}
+      <PriorSwitch fail={fail} />
     </div>
   );
 }
