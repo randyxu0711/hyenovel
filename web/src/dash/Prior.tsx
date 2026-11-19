@@ -22,6 +22,7 @@ function Card({ session, digests, threads, open, onOpen, live, busy, onSkip, onE
   const open_ = threads.filter(x => !x.ended).length;
   const now = Date.now() / 1000;
   const when = (at: number) => whenLabel(at, now, lang);
+  const mixed = new Set(threads.map(x => x.session)).size > 1;
 
   const save = async () => {
     if (draft === null || saving) return;
@@ -95,11 +96,12 @@ function Card({ session, digests, threads, open, onOpen, live, busy, onSkip, onE
                     <button type="button" className="chat-prior-ring" aria-pressed={x.ended}
                       aria-label={t(x.ended ? "prior.reopen" : "prior.end")} title={t(x.ended ? "prior.reopen" : "prior.end")}
                       onClick={() => void toggle(x)}>{x.ended ? "✓" : ""}</button>
-                    <span className="chat-prior-q">{x.text}<span className="chat-prior-from">{when(x.at)}</span></span>
+                    <span className="chat-prior-q">{x.text}{mixed && <span className="chat-prior-from">{when(x.at)}</span>}</span>
                     {x.talked
                       ? <span className="chat-prior-state">{t("prior.talked")}
                           <button type="button" className="chat-prior-lnk" onClick={() => void untalk(x)}>{t("prior.undo")}</button></span>
-                      : <button type="button" className="chat-prior-lnk" disabled={busy} onClick={() => onGoto(x.session)}>{t("prior.goto")}</button>}
+                      : <button type="button" className="chat-prior-go" disabled={busy} aria-label={t("prior.goto")} title={t("prior.goto")}
+                          onClick={() => onGoto(x.session)}><Icon name="goto" /></button>}
                   </li>
                 ))}
               </ul>

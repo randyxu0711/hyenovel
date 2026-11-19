@@ -144,6 +144,35 @@ describe("Prior live", () => {
     expect(await screen.findAllByRole("button", { name: "標為已結束" })).toHaveLength(2);
   });
 
+  it("goto is an icon button labelled by prior.goto", async () => {
+    live();
+    await cut();
+    const go = screen.getAllByRole("button", { name: "前往原對話" });
+    expect(go).toHaveLength(2);
+    expect(go[0].textContent).toBe("");
+    expect(go[0].getAttribute("title")).toBe("前往原對話");
+    expect(go[0].querySelector("svg")).toBeTruthy();
+    fireEvent.click(go[0]);
+    expect(onGoto).toHaveBeenCalledWith("s-a");
+  });
+
+  it("thread dates shown only when threads span sessions", async () => {
+    live();
+    await cut();
+    expect(document.querySelectorAll(".chat-prior-from")).toHaveLength(2);
+  });
+
+  it("thread dates hidden when all threads come from one session", async () => {
+    prior.mockResolvedValue(data({ threads: [
+      { id: 21, root_id: 11, text: "湖底的問句是否太直白", quote: "湖底", at: now - 10 * DAY, session: "s-a", stale: false },
+      { id: 22, root_id: 11, text: "海豚是體貼或錯過", quote: "海豚", at: now - 10 * DAY, session: "s-a", stale: false },
+    ] }));
+    live();
+    await cut();
+    expect(screen.getByText("湖底的問句是否太直白").querySelector(".chat-prior-from")).toBeNull();
+    expect(document.querySelectorAll(".chat-prior-from")).toHaveLength(0);
+  });
+
   it("stale threads hidden", async () => {
     prior.mockResolvedValue(data({ threads: [
       { id: 21, root_id: 11, text: "還在的話題", quote: "湖底", at: now, session: "s-a", stale: false },
