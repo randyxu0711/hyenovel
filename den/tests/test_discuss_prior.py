@@ -105,7 +105,26 @@ def test_session_view_includes_prior(c, fake_chat):
 def test_turn_proceeds_without_digest(c, fake_chat):
     sid = sid_of(send(c, None))
     assert "之前和作者聊過的" not in fake_chat.calls[-1][0]
-    assert first_recipe(c, sid)["prior"] is None and c.get(f"/api/sessions/{sid}").json()["prior"] is None
+    assert first_recipe(c, sid)["prior"] == {"digests": [], "threads": []}
+    assert c.get(f"/api/sessions/{sid}").json()["prior"] is None
+
+
+def test_digest_ready_later_joins_next_turn(c, fake_chat):
+    sid = sid_of(send(c, None))
+    ids = seed(c)
+    send(c, sid, "第二句")
+    assert DIGEST in fake_chat.calls[-1][0]
+    assert c.get(f"/api/sessions/{sid}").json()["prior"]["digests"][0]["id"] == ids["digest"]
+    c.put(f"/api/digests/{ids['digest']}", json={"text": "之後改的"})
+    send(c, sid, "第三句")
+    assert DIGEST in fake_chat.calls[-1][0] and "之後改的" not in fake_chat.calls[-1][0]
+
+
+def test_opted_out_stays_out_when_digest_appears(c, fake_chat):
+    sid = sid_of(send(c, None, prior=False))
+    seed(c)
+    send(c, sid, "第二句")
+    assert DIGEST not in fake_chat.calls[-1][0]
 
 
 def test_first_turn_kicks_when_idle_no_wait(c, fake_chat):
@@ -145,7 +164,7 @@ def test_session_view_tolerates_deleted_digest(c, fake_chat):
         repo.delete_discussion(conn, ids["old"])
         conn.commit()
     in_loop(c, drop)
-    assert c.get(f"/api/sessions/{sid}").json()["prior"] == {"digests": [], "threads": []}
+    assert c.get(f"/api/sessions/{sid}").json()["prior"] is None
     send(c, sid, "再一句")
     assert DIGEST not in fake_chat.calls[-1][0]
 
@@ -168,7 +187,7 @@ class Queue:
 def test_snapshot_waits_when_running_else_kicks(conn):
     s = repo.story_by_slug(conn, "mini")["id"]
     busy, idle = Queue(True), Queue(False)
-    assert asyncio.run(prior.snapshot(conn, busy, s, None, [], True, 8.0)) is None
+    assert asyncio.run(prior.snapshot(conn, busy, s, None, [], True, 8.0)) == {"digests": [], "threads": []}
     asyncio.run(prior.snapshot(conn, idle, s, None, [], True, 8.0))
     assert busy.log == [("wait", 8.0)] and idle.log == [("ensure",)]
 

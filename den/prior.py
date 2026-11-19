@@ -92,13 +92,20 @@ def _date(at: float | None) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(at)) if at is not None else ""
 
 
+def _fresh(conn, story_id: int, discussion_id: int | None) -> dict:
+    latest = repo.latest_source_version(conn, story_id)
+    got = gather(conn, story_id, discussion_id, latest["text"] if latest else "")
+    return {"digests": [d["id"] for d in got["digests"]], "threads": [t["id"] for t in got["threads"] if not t["stale"]]}
+
+
 async def snapshot(conn, queue, story_id: int | None, discussion_id: int | None, every: list[dict],
                    use: bool, wait_s: float) -> dict | None:
     if story_id is None:
         return None
-    first = next((u for u in every if u["role"] == "assistant"), None)
-    if first is not None:
-        return (first["recipe"] or {}).get("prior")
+    last = next((u for u in reversed(every) if u["role"] == "assistant"), None)
+    if last is not None:
+        snap = (last["recipe"] or {}).get("prior")
+        return _fresh(conn, story_id, discussion_id) if snap is not None and not snap["digests"] else snap
     if not use or not enabled(conn):
         return None
     if queue is not None:
@@ -106,11 +113,7 @@ async def snapshot(conn, queue, story_id: int | None, discussion_id: int | None,
             await queue.wait(story_id, wait_s)
         else:
             queue.ensure(story_id)
-    latest = repo.latest_source_version(conn, story_id)
-    got = gather(conn, story_id, discussion_id, latest["text"] if latest else "")
-    if not got["digests"]:
-        return None
-    return {"digests": [d["id"] for d in got["digests"]], "threads": [t["id"] for t in got["threads"] if not t["stale"]]}
+    return _fresh(conn, story_id, discussion_id)
 
 
 def resolve(conn, snap: dict | None, latest_source: str, discussion_id: int | None = None) -> dict | None:

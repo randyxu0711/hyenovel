@@ -318,11 +318,11 @@ def session_turns(conn, session: str, v: int | None = None) -> dict:
 
 
 def _prior_view(conn, us: list[dict], latest: dict | None, discussion_id: int) -> dict | None:
-    first = next((u for u in us if u["role"] == "assistant"), None)
-    if first is None or latest is None:
+    last = next((u for u in reversed(us) if u["role"] == "assistant"), None)
+    if last is None or latest is None:
         return None
-    shown = prior.resolve(conn, (first["recipe"] or {}).get("prior"), latest["text"], discussion_id)
-    if shown is None:
+    shown = prior.resolve(conn, (last["recipe"] or {}).get("prior"), latest["text"], discussion_id)
+    if shown is None or not shown["digests"]:
         return None
     return {"digests": shown["digests"],
             "threads": [{k: t[k] for k in ("id", "text", "quote", "at", "session", "ended", "talked")}
