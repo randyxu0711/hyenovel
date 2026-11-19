@@ -454,9 +454,41 @@ def delete_discussion(conn, discussion_id: int) -> None:
                  (discussion_id,))
     conn.execute("UPDATE digest SET root_id = NULL WHERE discussion_id = ?", (discussion_id,))
     for table in ("reaction", "voice_mark", "utterance_variant", "attachment", "settlement", "utterance",
-                  "digest", "digest_failure"):
+                  "memory_candidate", "digest", "digest_failure"):
         conn.execute(f"DELETE FROM {table} WHERE discussion_id = ?", (discussion_id,))
     conn.execute("DELETE FROM discussion WHERE id = ?", (discussion_id,))
+
+
+# ── memory candidate ──
+
+_CANDIDATE = ("SELECT c.*, d.external_id AS session, d.story_id AS story_id, st.slug AS slug, "
+              "COALESCE(st.custom_title, st.title) AS title FROM memory_candidate c "
+              "JOIN discussion d ON d.id = c.discussion_id LEFT JOIN story st ON st.id = d.story_id ")
+
+
+def add_candidate(conn, discussion_id: int, seq: int, quote: str, text: str, scope: str, now: float) -> int:
+    return conn.execute("INSERT INTO memory_candidate (discussion_id, seq, quote, text, scope, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?)", (discussion_id, seq, quote, text, scope, now)).lastrowid
+
+
+def candidate(conn, candidate_id: int) -> dict | None:
+    return _row(conn.execute(_CANDIDATE + "WHERE c.id = ?", (candidate_id,)).fetchone())
+
+
+def candidates_of_story(conn, story_id: int) -> list[dict]:
+    return [dict(r) for r in conn.execute(_CANDIDATE + "WHERE d.story_id = ? ORDER BY c.id DESC", (story_id,))]
+
+
+def pending_candidates(conn, since: float) -> list[dict]:
+    return [dict(r) for r in conn.execute(
+        _CANDIDATE + "WHERE c.resolution IS NULL AND c.created_at >= ? AND st.archived_at IS NULL "
+        "ORDER BY c.created_at DESC, c.id DESC", (since,))]
+
+
+def resolve_candidate(conn, candidate_id: int, resolution: str | None, at: float | None,
+                      memory_id: int | None = None) -> None:
+    conn.execute("UPDATE memory_candidate SET resolution = ?, resolved_at = ?, memory_id = ? WHERE id = ?",
+                 (resolution, at, memory_id, candidate_id))
 
 
 # ── digest ──

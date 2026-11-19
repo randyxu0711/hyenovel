@@ -724,3 +724,51 @@ def test_delete_story_removes_digests(conn):
     repo.delete_story(conn, s)
     for table in ("digest", "digest_thread", "thread_talked", "digest_failure"):
         assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+
+
+# ── memory candidate ──
+
+def test_candidate_roundtrip(conn):
+    s, _ = _disc(conn)
+    d = _talked_disc(conn, s, "c1", 1.0)
+    cid = repo.add_candidate(conn, d, 0, "我想讓結尾留白", "想讓結尾留白", "work", 5.0)
+    c = repo.candidate(conn, cid)
+    assert (c["session"], c["story_id"], c["seq"], c["scope"], c["resolution"]) == ("c1", s, 0, "work", None)
+    assert [x["id"] for x in repo.candidates_of_story(conn, s)] == [cid]
+    assert repo.candidate(conn, 999) is None
+
+
+def test_pending_candidates_filters_resolved_and_old(conn):
+    s, _ = _disc(conn)
+    d = _talked_disc(conn, s, "c1", 1.0)
+    skipped = repo.add_candidate(conn, d, 0, "引一", "一", "author", 10.0)
+    repo.resolve_candidate(conn, skipped, "skipped", 11.0)
+    repo.add_candidate(conn, d, 0, "引二", "二", "author", 1.0)
+    live = repo.add_candidate(conn, d, 0, "引三", "三", "author", 10.0)
+    (row,) = repo.pending_candidates(conn, 5.0)
+    st = repo.story_by_slug(conn, "s1")
+    assert (row["id"], row["session"], row["slug"], row["title"]) == (live, "c1", "s1", st["title"])
+    repo.archive_story(conn, s, 20.0)
+    assert repo.pending_candidates(conn, 5.0) == []
+
+
+def test_resolve_candidate_back_to_pending(conn):
+    s, _ = _disc(conn)
+    d = _talked_disc(conn, s, "c1", 1.0)
+    cid = repo.add_candidate(conn, d, 0, "引", "一", "author", 1.0)
+    mid = repo.add_memory(conn, "author", "一", 2.0)
+    repo.resolve_candidate(conn, cid, "saved", 2.0, mid)
+    assert (repo.candidate(conn, cid)["resolution"], repo.candidate(conn, cid)["memory_id"]) == ("saved", mid)
+    repo.resolve_candidate(conn, cid, None, None, None)
+    c = repo.candidate(conn, cid)
+    assert (c["resolution"], c["resolved_at"], c["memory_id"]) == (None, None, None)
+
+
+def test_delete_discussion_drops_candidates(conn):
+    s, _ = _disc(conn)
+    d = _talked_disc(conn, s, "c1", 1.0)
+    repo.add_digest(conn, d, "一", 3, 1.0)
+    repo.add_candidate(conn, d, 0, "引", "一", "author", 1.0)
+    repo.delete_story(conn, s)
+    assert conn.execute("SELECT COUNT(*) FROM memory_candidate").fetchone()[0] == 0
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
