@@ -14,13 +14,16 @@
 
 </div>
 
-> Hyenovel is a reading and discussion tool for literary short fiction written in Chinese and Taiwanese vernacular. It runs on [Claude Code](https://claude.com/claude-code) and uses the author's own subscription, with no separate per-token API charges.
+<p align="center"><b>A reading and discussion tool for literary short fiction in Chinese and Taiwanese vernacular.</b><br>
+Runs on <a href="https://claude.com/claude-code">Claude Code</a> using the author's own subscription, with no separate per-token API charges.</p>
 
-## Overview
+## Key features
 
-The tool is intended for literary short fiction of up to 10,000 characters. After the author submits a work, a reading companion reads it in full and discusses it with the author over multiple turns: the companion describes what it read and where it was uncertain, and asks about the author's intentions. The companion does not assign scores and does not rewrite the draft.
+- **Companion discussion**: a reading companion reads the full work and discusses it with the author over multiple turns, describing what it read, where it was uncertain, and asking about the author's intentions. It does not assign scores or rewrite the draft.
+- **Observation separated from judgment**: analysis runs as two steps in separate contexts. Structure is observed first; a neutral reader then records its judgments, unshaped by the observation process.
+- **Verbatim citations**: every claim must quote the source. A citation gate checks each quotation against the original and rejects any that cannot be matched.
 
-Once a work is submitted, two isolated steps run in the background. The first step performs **observation** only, identifying themes, motifs, techniques, effects, characters, and beats. The second step acts as a **neutral reader** and records its responses and judgments as notes ranked by importance. The two steps run in separate contexts so that the judgment is not shaped by the observation process. Every claim must cite **verbatim text** from the source; a citation gate checks each quotation against the original and rejects any that cannot be matched.
+Intended for short works of up to 10,000 characters.
 
 ## Interface
 
@@ -113,7 +116,10 @@ After registration, the following commands are available in Claude Code from any
 - `/hyenovel:companion`: start a discussion. Provide a .md / .txt path to submit a work, or discuss the most recent one.
 - `/hyenovel:continue`: continue the discussion of the most recent work.
 
-Other operations can be requested in plain language, for example "list my works" or "show the notes for the sea story". The available tools are:
+Other operations can be requested in plain language, for example "list my works" or "show the notes for the sea story".
+
+<details>
+<summary>Available MCP tools</summary>
 
 | tool | Purpose |
 |---|---|
@@ -127,6 +133,8 @@ Other operations can be requested in plain language, for example "list my works"
 | `create_character` | Generate candidates for a new companion |
 | `save_character` | Save the chosen candidate |
 | `manage_chat` | Clear or compact the conversation, or turn a draft in the conversation into a work |
+
+</details>
 
 ### Export
 
@@ -172,4 +180,4 @@ flowchart LR
   D --> G["python -m export<br>md + html"]
 ```
 
-The analyst (observation) and the reviewer (judgment) run in separate contexts. Discussion with the companion can begin as soon as observation is complete, without waiting for the notes. The companion receives only the source text, a condensed analysis, and the categories and quotations of the notes; it **does not see the content of the notes**, which keeps its reading independent.
+The analyst (observation) identifies themes, motifs, techniques, effects, characters, and beats; the reviewer (judgment) records a neutral reader's responses as notes ranked by importance. The two run in separate contexts. Discussion with the companion can begin as soon as observation is complete, without waiting for the notes. The companion receives only the source text, a condensed analysis, and the categories and quotations of the notes; it **does not see the content of the notes**, which keeps its reading independent.
