@@ -1317,3 +1317,45 @@ def test_set_character_applies_to_storyless_session(cden):
     assert "畫面外面" in cden.chat.calls[-1][0]
     assert [ln for ln in _text(rs[3]).splitlines() if ln.endswith("(目前)")][0].startswith("deer:")
     assert [q for _, q in cden.paths if q.startswith("/api/discuss")] == ["/api/discuss", "/api/discuss"]
+
+
+HINT = "\n\n另有 2 條記憶待確認，請至網頁「設定 · 記憶」處理。"
+
+
+def _seed_pending(den, n=2):
+    c = _conn(den)
+    try:
+        with c:
+            st = repo.story_by_slug(c, "mini")
+            d = repo.ensure_discussion(c, st["id"], "seeded", "web", None, 0)
+            for i in range(n):
+                repo.add_candidate(c, d, 0, f"引文引文引文{i}", f"事{i}", "author", time.time())
+    finally:
+        c.close()
+
+
+def test_talk_appends_pending_hint_once_per_session(cden):
+    _seed_pending(cden)
+    r1, r2, r3 = _session(cden.client(), [("talk_to_companion", {"message": "一", "work": "mini"}),
+                                           ("talk_to_companion", {"message": "二", "work": "mini"}),
+                                           ("talk_to_companion", {"message": "三", "new_chat": True})])
+    assert _text(r1).endswith(HINT) and HINT not in _text(r2) and _text(r3).endswith(HINT)
+
+
+def test_talk_no_hint_when_zero(cden):
+    r = _call(cden.client(), "talk_to_companion", {"message": "一", "work": "mini"})
+    assert "記憶待確認" not in _text(r)
+
+
+def test_hint_on_second_turn_when_first_was_zero(cden):
+    r1, r2 = _session(cden.client(), [("talk_to_companion", {"message": "一", "work": "mini"}),
+                                       ("talk_to_companion", {"message": "二", "work": "mini"})],
+                      between=lambda i: _seed_pending(cden) if i == 0 else None)
+    assert "記憶待確認" not in _text(r1) and _text(r2).endswith(HINT)
+
+
+def test_hint_after_attachment_note(cden, tmp_path):
+    _seed_pending(cden)
+    p = _write(tmp_path, "海.md", "浪一層一層打上來。\n")
+    t = _text(_call(cden.client(), "talk_to_companion", {"new_chat": True, "attach_path": str(p)}))
+    assert t.index("附件第 1 份") < t.index("記憶待確認") and t.endswith(HINT)

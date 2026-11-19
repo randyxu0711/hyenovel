@@ -69,6 +69,7 @@ DESC_CREATE_CHARACTER = (
 DESC_SAVE_CHARACTER = (
     "把作者選定的候選存成陪讀角色。number 是 create_character 回傳的編號,只有作者選定後才用。"
     "name 只在作者自己取了名字時給。回覆說有警告時,把警告告訴作者,作者確認要存才帶 confirm=true 再呼叫一次。")
+_PENDING_HINT = "\n\n另有 {n} 條記憶待確認，請至網頁「設定 · 記憶」處理。"
 _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
 DESC_FIND = ("列出作者的作品(標題、開頭、分析狀態、最近聊的時間)。作者問「我有哪些作品」「上次那篇海的」時用;"
@@ -227,6 +228,7 @@ def build_server(den: DenClient) -> MCPServer:
 
     sessions: dict[str, str] = {}   # 這個 shim 行程(= 一個宿主 session)裡:slug(純聊天 = "")→ 對話 id
     current: list[str] = []         # 最近一次聊的那局(slug 或 "")
+    hinted: set[str] = set()
     picked: dict[str, str] = {}     # 作者點名、還沒講過話的角色:局 key → 角色 id
 
     async def _works(**params) -> list[dict]:
@@ -419,9 +421,14 @@ def build_server(den: DenClient) -> MCPServer:
         current[:] = [key]
         if picked.get(key) == body["character"]:
             picked.pop(key, None)
+        text = data["text"]
         if attach is not None and data.get("attachment"):
-            return data["text"] + f"\n\n(附件第 {data['attachment']} 份已給讀伴看。作者想把它開成作品時用 manage_chat。)"
-        return data["text"]
+            text += f"\n\n(附件第 {data['attachment']} 份已給讀伴看。作者想把它開成作品時用 manage_chat。)"
+        n = data.get("memory_pending", 0)
+        if n and data["session_id"] not in hinted:
+            hinted.add(data["session_id"])
+            text += _PENDING_HINT.format(n=n)
+        return text
 
     @server.tool(description=DESC_TALK)
     async def talk_to_companion(ctx: Context, message: str = "", work: str | None = None,

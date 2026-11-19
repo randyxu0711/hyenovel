@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Sequence
 from contextlib import aclosing
 
-from den import characters, companion, prior, retrieve, spans, stories
+from den import characters, companion, prior, retrieve, spans, stories, suggest
 from den.config import (MAX_ATTACHMENT_CHARS, MAX_ATTACHMENTS, MAX_QUOTE_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES,
                         PRIOR_WAIT_S)
 from marrow import gate, prompt, repo
@@ -427,5 +427,6 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                         "spans": spans.locate_all(
                                             [q for q in spans.quotes_in(result.text)
                                              if gate.locate(q, turn["ctx"]["source"])],
-                                            turn["ctx"]["source"])}}
+                                            turn["ctx"]["source"]),
+                                        "memory_pending": len(suggest.pending(conn, time.time()))}}
     yield {"event": "done", "data": {"ok": True, "session_id": sid}}

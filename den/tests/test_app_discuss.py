@@ -140,7 +140,8 @@ def test_first_turn_creates_session_and_persists_both(c):
     sid = evs[-1]["data"]["session_id"]
     assert len(sid) == 12
     assert evs[2]["data"] == {"role": "assistant", "text": "AB", "session_id": sid, "seq": 1,
-                               "character": "hyena", "spans": [], "v": 1, "attachment": None}
+                               "character": "hyena", "spans": [], "v": 1, "attachment": None,
+                               "memory_pending": 0}
     assert evs[3]["data"] == {"ok": True, "session_id": sid}
     ts = turns(c)
     assert [(t["role"], t["text"], t["session"]) for t in ts] == \
@@ -1076,3 +1077,18 @@ def test_submit_mid_stream_no_mark_between_q_and_a(c, fake_chat):
     events(c.post("/api/discuss/mini", json={"session_id": sid, "message": "三"}))
     user = fake_chat.calls[-1][1]
     assert user.index("作者:二") < user.index("你:C") < user.index("(這裡起你讀的是第 2 版;前面的對話對著的是第 1 版。)")
+
+
+def _message(evs):
+    return next(e["data"] for e in evs if e.get("data", {}).get("role") == "assistant" and "seq" in e["data"])
+
+
+def test_message_event_has_memory_pending(c, fake_chat):
+    assert _message(post_discuss(c, "mini", None, "一"))["memory_pending"] == 0
+
+    def seed(conn):
+        d = repo.ensure_discussion(conn, repo.story_by_slug(conn, "mini")["id"], "seeded", "web", None, 0)
+        repo.add_candidate(conn, d, 0, "引文引文引文引", "事", "author", time.time())
+        conn.commit()
+    in_loop(c, seed)
+    assert _message(post_discuss(c, "mini", None, "二"))["memory_pending"] == 1
