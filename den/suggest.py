@@ -1,12 +1,25 @@
 import logging
 
-from den.config import CANDIDATES_PER_DIGEST, KNOWN_MAX, MEMORY_QUOTE_MIN_CHARS
+from den import memory
+from den.config import CANDIDATE_TTL_S, CANDIDATES_PER_DIGEST, KNOWN_MAX, MEMORY_QUOTE_MIN_CHARS
 from marrow import gate, jsonout, repo
 
 log = logging.getLogger("hyenovel")
 
 SETTING = "suggest.enabled"
 SCOPES = ("author", "work")
+
+
+class UnknownCandidate(Exception):
+    pass
+
+
+class NotPending(Exception):
+    pass
+
+
+class IsPending(Exception):
+    pass
 
 
 def enabled(conn) -> bool:
@@ -72,3 +85,50 @@ def store(conn, discussion_id: int, story_id: int, items: list[dict], now: float
 def known(conn, story_id: int) -> list[str]:
     return ([m["text"] for m in _live_memories(conn, story_id)]
             + [c["text"] for c in repo.candidates_of_story(conn, story_id)])[:KNOWN_MAX]
+
+
+def pending(conn, now: float) -> list[dict]:
+    return repo.pending_candidates(conn, now - CANDIDATE_TTL_S) if enabled(conn) else []
+
+
+def _candidate(conn, candidate_id: int) -> dict:
+    c = repo.candidate(conn, candidate_id)
+    if c is None:
+        raise UnknownCandidate(candidate_id)
+    return c
+
+
+def _pending_or_raise(conn, candidate_id: int) -> dict:
+    c = _candidate(conn, candidate_id)
+    if c["resolution"] is not None:
+        raise NotPending(candidate_id)
+    return c
+
+
+def save(conn, candidate_id: int, scope: str, text: str | None, now: float) -> int:
+    with conn:
+        c = _pending_or_raise(conn, candidate_id)
+        mid = memory._remember(conn, scope, c["text"] if text is None else text, now, story_id=c["story_id"],
+                               source={"session": c["session"], "seq": c["seq"], "quote": c["quote"]})
+        repo.resolve_candidate(conn, candidate_id, "saved", now, mid)
+        return mid
+
+
+def skip(conn, candidate_id: int, now: float) -> None:
+    with conn:
+        _pending_or_raise(conn, candidate_id)
+        repo.resolve_candidate(conn, candidate_id, "skipped", now)
+
+
+def undo(conn, candidate_id: int, now: float) -> None:
+    with conn:
+        c = _candidate(conn, candidate_id)
+        if c["resolution"] is None:
+            raise IsPending(candidate_id)
+        if c["resolution"] == "saved":
+            row = repo.memory(conn, c["memory_id"])
+            if row["invalidated_at"] is None:
+                memory._archive(conn, row["id"], now)
+            elif repo.current_in_chain(conn, memory._chain_id(row)) is not None:
+                raise memory.NotCurrent(row["id"])
+        repo.resolve_candidate(conn, candidate_id, None, None, None)

@@ -65,7 +65,8 @@ async def read(slug: str, request: Request):
     conn = request.app.state.mgr.conn
     st = _story(conn, slug, "prior")
     latest = repo.latest_source_version(conn, st["id"])
-    return {"enabled": prior.enabled(conn), **prior.gather(conn, st["id"], None, latest["text"] if latest else "")}
+    return {"enabled": prior.enabled(conn), "pending_memories": len(suggest.pending(conn, time.time())),
+            **prior.gather(conn, st["id"], None, latest["text"] if latest else "")}
 
 
 @router.put("/digests/{digest_id}", status_code=201)

@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from den import memory, views
+from den import memory, suggest, views
 from den.config import MAX_CHAT_CHARS
 from den.routes.common import ApiError, Seq, slug_ok
 from marrow import repo
@@ -26,6 +26,15 @@ class MemoryIn(BaseModel):
 
 class MemoryEditIn(BaseModel):
     text: str = Field(max_length=MAX_CHAT_CHARS)
+
+
+class CandidateSaveIn(BaseModel):
+    scope: str = Field(max_length=32)
+    text: str | None = Field(default=None, max_length=MAX_CHAT_CHARS)
+
+
+class SuggestIn(BaseModel):
+    enabled: bool
 
 
 def _memory_reject(status: int, code: str, detail: str) -> ApiError:
@@ -55,6 +64,12 @@ def _memory_errors():
         raise _memory_reject(409, "memory-not-current", "這條已不是生效中的版本") from None
     except memory.AlreadyCurrent:
         raise _memory_reject(409, "memory-is-current", "這條已經是生效中的版本") from None
+    except suggest.UnknownCandidate:
+        raise _memory_reject(404, "unknown-memory-candidate", "沒有這條待確認") from None
+    except suggest.NotPending:
+        raise _memory_reject(409, "memory-candidate-resolved", "這條已經處理過") from None
+    except suggest.IsPending:
+        raise _memory_reject(409, "memory-candidate-pending", "這條還沒處理") from None
 
 
 @router.get("/memory")
@@ -107,3 +122,50 @@ async def revert_memory(memory_id: Seq, request: Request):
     with _memory_errors():
         mid = memory.revert(conn, memory_id, time.time())
     return views.memory_row(conn, repo.memory(conn, mid))
+
+
+def candidate_row(conn, c: dict) -> dict:
+    return {"id": c["id"], "text": c["text"], "quote": c["quote"], "scope": c["scope"],
+            "session": c["session"], "seq": c["seq"], "slug": c["slug"],
+            "title": None if c["story_id"] is None else views._title(conn, c["story_id"]), "at": c["created_at"]}
+
+
+@router.get("/memory/candidates")
+async def list_candidates(request: Request):
+    conn = request.app.state.mgr.conn
+    return {"candidates": [candidate_row(conn, c) for c in suggest.pending(conn, time.time())]}
+
+
+@router.post("/memory/candidates/{candidate_id}/save", status_code=201)
+async def save_candidate(candidate_id: Seq, body: CandidateSaveIn, request: Request):
+    if body.scope not in ("author", "work"):
+        raise _memory_reject(422, "bad-scope", "沒有這一層")
+    text = None if body.text is None else _memory_text(body.text)
+    conn = request.app.state.mgr.conn
+    with _memory_errors():
+        mid = suggest.save(conn, candidate_id, body.scope, text, time.time())
+    return views.memory_row(conn, repo.memory(conn, mid))
+
+
+@router.post("/memory/candidates/{candidate_id}/skip", status_code=204)
+async def skip_candidate(candidate_id: Seq, request: Request):
+    with _memory_errors():
+        suggest.skip(request.app.state.mgr.conn, candidate_id, time.time())
+
+
+@router.post("/memory/candidates/{candidate_id}/undo", status_code=204)
+async def undo_candidate(candidate_id: Seq, request: Request):
+    with _memory_errors():
+        suggest.undo(request.app.state.mgr.conn, candidate_id, time.time())
+
+
+@router.put("/settings/suggest", status_code=204)
+async def set_suggest(body: SuggestIn, request: Request):
+    conn = request.app.state.mgr.conn
+    with conn:
+        suggest.set_enabled(conn, body.enabled)
+
+
+@router.get("/settings/suggest")
+async def get_suggest(request: Request):
+    return {"enabled": suggest.enabled(request.app.state.mgr.conn)}

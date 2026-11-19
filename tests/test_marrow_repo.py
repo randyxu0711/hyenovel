@@ -746,8 +746,7 @@ def test_pending_candidates_filters_resolved_and_old(conn):
     repo.add_candidate(conn, d, 0, "引二", "二", "author", 1.0)
     live = repo.add_candidate(conn, d, 0, "引三", "三", "author", 10.0)
     (row,) = repo.pending_candidates(conn, 5.0)
-    st = repo.story_by_slug(conn, "s1")
-    assert (row["id"], row["session"], row["slug"], row["title"]) == (live, "c1", "s1", st["title"])
+    assert (row["id"], row["session"], row["slug"]) == (live, "c1", "s1")
     repo.archive_story(conn, s, 20.0)
     assert repo.pending_candidates(conn, 5.0) == []
 

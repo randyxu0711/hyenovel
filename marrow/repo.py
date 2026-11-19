@@ -461,8 +461,8 @@ def delete_discussion(conn, discussion_id: int) -> None:
 
 # ── memory candidate ──
 
-_CANDIDATE = ("SELECT c.*, d.external_id AS session, d.story_id AS story_id, st.slug AS slug, "
-              "COALESCE(st.custom_title, st.title) AS title FROM memory_candidate c "
+_CANDIDATE = ("SELECT c.*, d.external_id AS session, d.story_id AS story_id, st.slug AS slug "
+              "FROM memory_candidate c "
               "JOIN discussion d ON d.id = c.discussion_id LEFT JOIN story st ON st.id = d.story_id ")
 
 
