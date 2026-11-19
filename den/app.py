@@ -77,7 +77,8 @@ from den import characters, discuss, version  # noqa: F401
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, PHASE_TIMEOUT, PORT,
                         SESSION_MAX_AGE)
 from den.jobs import JobManager
-from den.routes import catalog, jobs, memory, talk, works
+from den.prior import PriorQueue
+from den.routes import catalog, jobs, memory, prior, talk, works
 from den.routes.common import ApiError
 from den.routes.talk import _chat_stream  # noqa: F401
 from den.runner import ClaudePreset, cli_version, find_claude, run_job, stream_chat
@@ -107,6 +108,7 @@ ERROR_CODES: tuple[str, ...] = (
     "unknown-memory", "memory-not-current", "memory-is-current",
     "bad-card", "builtin-character",
     "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
+    "unknown-digest", "unknown-thread", "blank-digest", "stale-digest",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )
@@ -281,6 +283,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)
             mgr.startup()
             app.state.mgr = mgr
+            app.state.prior = PriorQueue(conn, app.state.chat)
             write_den_json(data_dir, port, app.state.version)
             worker = asyncio.create_task(_supervise(mgr))
             watcher = (asyncio.create_task(_watch_idle(app, idle_exit, idle_check, clock, on_idle))
@@ -294,6 +297,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 for t in tasks:
                     t.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
+                await app.state.prior.close()
                 log.info("event=den-stop")
         finally:
             if conn is not None:
@@ -367,7 +371,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 "busy": (request.app.state.candidates_busy
                          or repo.has_pending_jobs(request.app.state.mgr.conn))}
 
-    for module in (catalog, memory, jobs, talk, works):
+    for module in (catalog, memory, jobs, prior, talk, works):
         api.include_router(module.router)
     app.include_router(api)
 
