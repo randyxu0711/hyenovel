@@ -447,9 +447,103 @@ def delete_discussion(conn, discussion_id: int) -> None:
     conn.execute("UPDATE memory SET quote = NULL, discussion_id = NULL, seq = NULL WHERE discussion_id = ?",
                  (discussion_id,))
     conn.execute("UPDATE conclusion SET discussion_id = NULL WHERE discussion_id = ?", (discussion_id,))
-    for table in ("reaction", "voice_mark", "utterance_variant", "attachment", "settlement", "utterance"):
+    mine = "SELECT id FROM digest_thread WHERE root_id IN (SELECT id FROM digest WHERE discussion_id = ?)"
+    conn.execute(f"DELETE FROM thread_talked WHERE discussion_id = ? OR thread_id IN ({mine})",
+                 (discussion_id, discussion_id))
+    conn.execute("DELETE FROM digest_thread WHERE root_id IN (SELECT id FROM digest WHERE discussion_id = ?)",
+                 (discussion_id,))
+    conn.execute("UPDATE digest SET root_id = NULL WHERE discussion_id = ?", (discussion_id,))
+    for table in ("reaction", "voice_mark", "utterance_variant", "attachment", "settlement", "utterance",
+                  "digest", "digest_failure"):
         conn.execute(f"DELETE FROM {table} WHERE discussion_id = ?", (discussion_id,))
     conn.execute("DELETE FROM discussion WHERE id = ?", (discussion_id,))
+
+
+# ── digest ──
+
+def add_digest(conn, discussion_id: int, text: str, through_seq: int, now: float, *,
+               root_id: int | None = None, edited: bool = False, usage: dict | None = None,
+               recipe: dict | None = None) -> int:
+    conn.execute("UPDATE digest SET invalidated_at = ? WHERE discussion_id = ? AND invalidated_at IS NULL",
+                 (now, discussion_id))
+    cur = conn.execute(
+        "INSERT INTO digest (root_id, discussion_id, text, through_seq, edited, usage, recipe, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (root_id, discussion_id, text, through_seq, int(edited),
+         None if usage is None else canonical_json(usage), None if recipe is None else canonical_json(recipe), now))
+    if root_id is None:
+        conn.execute("UPDATE digest SET root_id = id WHERE id = ?", (cur.lastrowid,))
+    return cur.lastrowid
+
+
+def current_digest(conn, discussion_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM digest WHERE discussion_id = ? AND invalidated_at IS NULL",
+                             (discussion_id,)).fetchone())
+
+
+def digest_by_id(conn, digest_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM digest WHERE id = ?", (digest_id,)).fetchone())
+
+
+def digest_history(conn, root_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute("SELECT * FROM digest WHERE root_id = ? ORDER BY id", (root_id,))]
+
+
+def record_digest_failure(conn, discussion_id: int, through_seq: int, now: float) -> None:
+    conn.execute("INSERT INTO digest_failure (discussion_id, through_seq, at) VALUES (?, ?, ?) "
+                 "ON CONFLICT (discussion_id) DO UPDATE SET through_seq = excluded.through_seq, at = excluded.at",
+                 (discussion_id, through_seq, now))
+
+
+def digest_failed_seq(conn, discussion_id: int) -> int | None:
+    return _id(conn, "SELECT through_seq FROM digest_failure WHERE discussion_id = ?", (discussion_id,))
+
+
+def replace_threads(conn, root_id: int, threads: list[dict], now: float) -> list[int]:
+    conn.execute("UPDATE digest_thread SET replaced_at = ? WHERE root_id = ? AND replaced_at IS NULL",
+                 (now, root_id))
+    return [conn.execute("INSERT INTO digest_thread (root_id, text, quote, source_quote, ended_at) "
+                         "VALUES (?, ?, ?, ?, ?)",
+                         (root_id, t["text"], t["quote"], t["source_quote"], t["ended_at"])).lastrowid
+            for t in threads]
+
+
+def threads_of(conn, root_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT * FROM digest_thread WHERE root_id = ? AND replaced_at IS NULL ORDER BY id", (root_id,))]
+
+
+def thread_by_id(conn, thread_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM digest_thread WHERE id = ?", (thread_id,)).fetchone())
+
+
+def set_thread_ended(conn, thread_id: int, ended_at: float | None) -> None:
+    conn.execute("UPDATE digest_thread SET ended_at = ? WHERE id = ?", (ended_at, thread_id))
+
+
+def mark_talked(conn, thread_id: int, discussion_id: int) -> None:
+    conn.execute("INSERT INTO thread_talked (thread_id, discussion_id) VALUES (?, ?) "
+                 "ON CONFLICT (thread_id, discussion_id) DO NOTHING", (thread_id, discussion_id))
+
+
+def unmark_talked(conn, thread_id: int, discussion_id: int) -> None:
+    conn.execute("DELETE FROM thread_talked WHERE thread_id = ? AND discussion_id = ?", (thread_id, discussion_id))
+
+
+def talked_in(conn, discussion_id: int) -> set[int]:
+    return {r[0] for r in conn.execute("SELECT thread_id FROM thread_talked WHERE discussion_id = ?",
+                                       (discussion_id,))}
+
+
+def prior_discussions(conn, story_id: int, *, exclude: int | None, limit: int,
+                      min_user_turns: int) -> list[dict]:
+    return [_row(r) for r in conn.execute(
+        "SELECT d.id AS id, d.external_id AS external_id, d.ended_at AS ended_at, "
+        "(SELECT MAX(seq) FROM utterance WHERE discussion_id = d.id AND role IN ('user', 'assistant')) AS last_seq "
+        "FROM discussion d WHERE d.story_id = ? AND d.archived_at IS NULL AND d.id IS NOT ? "
+        "AND (SELECT COUNT(*) FROM utterance WHERE discussion_id = d.id AND role = 'user') >= ? "
+        "ORDER BY d.ended_at DESC, d.id DESC LIMIT ?",
+        (story_id, exclude, min_user_turns, limit))]
 
 
 # ── conclusion / settlement ──
