@@ -33,10 +33,26 @@ beforeEach(() => {
     { slug: "d1", title: "海", version: 1, chars: 4, updated_at: 1, state: "ready" },
     { slug: "d2", title: "山", version: 1, chars: 4, updated_at: 1, state: "ready" },
   ]);
+  vi.spyOn(api, "priorEnabled").mockResolvedValue(true);
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe("MemoryPage", () => {
+  it("頁底開關:顯示目前設定,點關閉呼叫 setPriorEnabled(false)", async () => {
+    const set = vi.spyOn(api, "setPriorEnabled").mockResolvedValue(undefined);
+    mount();
+    const seg = await screen.findByRole("group", { name: "新對話帶入前次摘要" });
+    expect(within(seg).getByRole("button", { name: "開啟" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(seg).getByRole("button", { name: "關閉" }));
+    await waitFor(() => expect(set).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(within(seg).getByRole("button", { name: "關閉" }).getAttribute("aria-pressed")).toBe("true"));
+  });
+  it("頁底開關:讀不到設定就不顯示", async () => {
+    vi.spyOn(api, "priorEnabled").mockRejectedValue(new DashError(0, "den-down"));
+    mount();
+    await screen.findByText("對話裡按「記住」,或在這裡寫。");
+    expect(screen.queryByRole("group", { name: "新對話帶入前次摘要" })).toBeNull();
+  });
   it("生效中的記憶依作者、各篇分組,顯示已用字數/上限", async () => {
     memories.mockResolvedValue(list(
       mem({ id: 1, text: "😀寫" }),

@@ -19,6 +19,7 @@ export const DEN_ERROR_CODES = [
   "unknown-memory", "memory-not-current", "memory-is-current",
   "bad-card", "builtin-character",
   "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
+  "unknown-digest", "unknown-thread", "blank-digest", "stale-digest",
   "den-down",
 ];
 
@@ -118,9 +119,20 @@ export type AttachIn = { name: string; text: string };
 export type Adopted = { slug: string; title: string | null; version: number; reused: boolean };
 export type Estimate = { seconds: number; output_tokens: number; basis: number };
 export type SubmitResult = { slug: string; title: string; version: number; new_version: boolean; reused: boolean };
+export type PriorDigest = { id: number; session: string; at: number; text: string; edited: boolean };
+export type PriorThread = {
+  id: number; root_id: number; text: string; quote: string; at: number; session: string; stale: boolean;
+  ended?: boolean; talked?: boolean;
+};
+export type Prior = { enabled: boolean; digests: PriorDigest[]; threads: PriorThread[] };
+export type PriorSnapshot = {
+  digests: { id: number; at: number; text: string }[];
+  threads: { id: number; text: string; quote: string; at: number; session: string; ended: boolean; talked: boolean }[];
+};
 export type SessionDetail = {
   session: string; slug: string | null; title: string | null; turns: Turn[]; legacy: boolean; version: number | null; archived?: boolean;
   attachments: Attachment[];
+  prior?: PriorSnapshot | null;
 };
 export type DelRun = { op: "del"; id: string; at: number; text: string; chars: number; pinned: boolean };
 export type InsRun = { op: "ins"; id: string; start: number; end: number };
@@ -280,13 +292,26 @@ export const api = {
   archiveMemory: (id: number) => request<void>(`/api/memory/${id}/archive`, { method: "POST" }),
   revertMemory: (id: number) => request<Memory>(`/api/memory/${id}/revert`, { method: "POST" }),
   /** session 為 null = 開新局(局 id 在 done 事件裡回);slug 為 null = 不帶作品的局。 */
-  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn; cmp?: number | null },
+  prior: async (slug: string): Promise<Prior> => {
+    const d = await request<Partial<Prior>>(`/api/works/${encodeURIComponent(slug)}/prior`);
+    return { enabled: d.enabled ?? true, digests: d.digests ?? [], threads: d.threads ?? [] };
+  },
+  preparePrior: (slug: string) =>
+    request<unknown>(`/api/works/${encodeURIComponent(slug)}/prior/prepare`, { method: "POST" }).then(() => undefined, () => undefined),
+  editDigest: (id: number, text: string) => request<{ id: number }>(`/api/digests/${id}`, { ...post({ text }), method: "PUT" }),
+  setThreadEnded: (id: number, ended: boolean) => request<void>(`/api/threads/${id}`, { ...post({ ended }), method: "PUT" }),
+  setTalked: (session: string, id: number, talked: boolean) =>
+    request<void>(`${sessionUrl(session)}/threads/${id}/talked`, { ...post({ talked }), method: "PUT" }),
+  priorEnabled: async () => (await request<{ enabled: boolean }>("/api/settings/prior")).enabled,
+  setPriorEnabled: (enabled: boolean) => request<void>("/api/settings/prior", { ...post({ enabled }), method: "PUT" }),
+  talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn; cmp?: number | null; prior?: boolean },
     signal?: AbortSignal) =>
     stream(slug === null ? "/api/discuss" : `/api/discuss/${encodeURIComponent(slug)}`, {
       ...post({
         session_id: body.session, message: body.message, character: body.character, quotes: body.quotes,
         ...(body.attach ? { attach: body.attach } : {}),
         ...(body.cmp != null ? { cmp: body.cmp } : {}),
+        ...(body.prior !== undefined ? { prior: body.prior } : {}),
       }), signal,
     }),
 };
