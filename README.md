@@ -14,7 +14,7 @@
 
 </div>
 
-<p align="center"><b>為中文與台語白話純文學短篇設計的閱讀與討論工具。</b><br>
+<p align="center"><b>為純文學短篇設計的閱讀與討論工具。</b><br>
 在 <a href="https://claude.com/claude-code">Claude Code</a> 上執行，使用作者本人的訂閱額度，不另按 API token 計費。</p>
 
 ## 核心特點

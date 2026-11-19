@@ -14,7 +14,7 @@
 
 </div>
 
-<p align="center"><b>A reading and discussion tool for literary short fiction in Chinese and Taiwanese vernacular.</b><br>
+<p align="center"><b>A reading and discussion tool for literary short fiction.</b><br>
 Runs on <a href="https://claude.com/claude-code">Claude Code</a> using the author's own subscription, with no separate per-token API charges.</p>
 
 ## Key features
