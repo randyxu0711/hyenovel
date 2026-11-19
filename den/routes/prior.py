@@ -109,3 +109,8 @@ async def set_prior(body: EnabledIn, request: Request):
     conn = request.app.state.mgr.conn
     with conn:
         prior.set_enabled(conn, body.enabled)
+
+
+@router.get("/settings/prior")
+async def get_prior(request: Request):
+    return {"enabled": prior.enabled(request.app.state.mgr.conn)}

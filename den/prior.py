@@ -1,7 +1,7 @@
 import asyncio
 import logging
+import time
 
-from den import digest
 from den.config import MAX_THREADS, PRIOR_MIN_USER_TURNS, PRIOR_SESSIONS
 from marrow import gate, repo
 
@@ -60,6 +60,7 @@ class PriorQueue:
         self.tasks[story_id] = asyncio.get_running_loop().create_task(self._run(story_id))
 
     async def _run(self, story_id: int) -> None:
+        from den import digest
         try:
             for d in _recent(self.conn, story_id, None):
                 try:
@@ -85,3 +86,58 @@ class PriorQueue:
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def _date(at: float | None) -> str:
+    return time.strftime("%Y-%m-%d", time.localtime(at)) if at is not None else ""
+
+
+async def snapshot(conn, queue, story_id: int | None, discussion_id: int | None, every: list[dict],
+                   use: bool, wait_s: float) -> dict | None:
+    if story_id is None:
+        return None
+    first = next((u for u in every if u["role"] == "assistant"), None)
+    if first is not None:
+        return (first["recipe"] or {}).get("prior")
+    if not use or not enabled(conn):
+        return None
+    if queue is not None:
+        if queue.running(story_id):
+            await queue.wait(story_id, wait_s)
+        else:
+            queue.ensure(story_id)
+    latest = repo.latest_source_version(conn, story_id)
+    got = gather(conn, story_id, discussion_id, latest["text"] if latest else "")
+    if not got["digests"]:
+        return None
+    return {"digests": [d["id"] for d in got["digests"]], "threads": [t["id"] for t in got["threads"] if not t["stale"]]}
+
+
+def resolve(conn, snap: dict | None, latest_source: str, discussion_id: int | None = None) -> dict | None:
+    if not snap:
+        return None
+    talked = repo.talked_in(conn, discussion_id) if discussion_id is not None else set()
+    digests = [{"id": g["id"], "at": g["at"], "text": g["text"]}
+               for g in (repo.digest_by_id(conn, i) for i in snap["digests"]) if g is not None]
+    threads = [{"id": t["id"], "text": t["text"], "quote": t["quote"], "source_quote": t["source_quote"],
+                "at": t["at"], "session": t["session"], "ended": t["ended_at"] is not None, "talked": t["id"] in talked}
+               for t in (repo.thread_by_id(conn, i) for i in snap["threads"])
+               if t is not None and not is_stale(t, latest_source)]
+    return {"digests": digests, "threads": threads}
+
+
+def layer_text(shown: dict) -> str:
+    out = "".join(f"### {_date(d['at'])}\n{d['text'].rstrip()}\n\n" for d in shown["digests"])
+    live = [t for t in shown["threads"] if not t["ended"]]
+    if live:
+        out += "待續話題:\n" + "".join(f"- {t['text']}「{t['quote']}」\n" for t in live)
+    return out + "\n"
+
+
+def mark_talked(conn, shown: dict | None, discussion_id: int, said: str) -> None:
+    for t in (shown or {}).get("threads", ()):
+        if t["ended"]:
+            continue
+        if gate.locate(t["quote"], said) is not None or (
+                t["source_quote"] and gate.locate(t["source_quote"], said) is not None):
+            repo.mark_talked(conn, t["id"], discussion_id)

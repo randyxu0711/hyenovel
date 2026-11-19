@@ -140,12 +140,15 @@ def _compare_block(c: dict) -> str:
     return head + "".join(x + "\n" for x in lines)
 
 
-def assemble(ctx: dict, character: dict, samples: list[dict] = ()) -> Prompt:
+def assemble(ctx: dict, character: dict, samples: list[dict] = (), prior: str | None = None) -> Prompt:
     """companion 的 system prompt:人格、記憶、原文、分析地圖(梗概與標籤)、進度、話題種子、作者標過「像它」的回覆。"""
     layers = _boundary_layers(bool(ctx["source"].strip() or ctx["attachments"]))
     if ctx["memory"]["author"] or ctx["memory"]["work"]:
         layers.append(Layer("memory_header", _MEMORY_HEADER))
         layers.append(Layer("memory", _memory_block(ctx["memory"]), material=True))
+    if prior:
+        layers.append(Layer("prior_header", "---\n" + _read("companion/prior.md").rstrip() + "\n\n"))
+        layers.append(Layer("prior", prior, material=True))
     if ctx["slug"] is not None:
         layers.append(Layer("work", f"---\n# 《{ctx['title'] or ctx['slug']}》\n## 原文\n<source>\n"
                                     f"{ctx['source'].rstrip()}\n</source>\n", material=True))

@@ -482,7 +482,8 @@ def current_digest(conn, discussion_id: int) -> dict | None:
 
 
 def digest_by_id(conn, digest_id: int) -> dict | None:
-    return _row(conn.execute("SELECT * FROM digest WHERE id = ?", (digest_id,)).fetchone())
+    return _row(conn.execute("SELECT g.*, d.external_id AS session, d.ended_at AS at FROM digest g "
+                             "JOIN discussion d ON d.id = g.discussion_id WHERE g.id = ?", (digest_id,)).fetchone())
 
 
 def digest_history(conn, root_id: int) -> list[dict]:
@@ -514,7 +515,9 @@ def threads_of(conn, root_id: int) -> list[dict]:
 
 
 def thread_by_id(conn, thread_id: int) -> dict | None:
-    return _row(conn.execute("SELECT * FROM digest_thread WHERE id = ?", (thread_id,)).fetchone())
+    return _row(conn.execute("SELECT t.*, d.external_id AS session, d.ended_at AS at FROM digest_thread t "
+                             "JOIN digest g ON g.id = t.root_id JOIN discussion d ON d.id = g.discussion_id "
+                             "WHERE t.id = ?", (thread_id,)).fetchone())
 
 
 def set_thread_ended(conn, thread_id: int, ended_at: float | None) -> None:

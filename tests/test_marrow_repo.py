@@ -627,6 +627,7 @@ def test_add_digest_supersedes(conn):
     assert (cur["id"], cur["root_id"], cur["text"], cur["through_seq"], cur["edited"]) == (b, a, "二", 5, 0)
     old = repo.digest_by_id(conn, a)
     assert old["invalidated_at"] == 2.0 and old["root_id"] == a
+    assert (old["session"], old["at"]) == ("sess", None)
     assert [x["id"] for x in repo.digest_history(conn, a)] == [a, b]
     e = repo.add_digest(conn, d, "改", 5, 3.0, root_id=a, edited=True)
     assert repo.current_digest(conn, d)["edited"] == 1 and repo.digest_by_id(conn, e)["root_id"] == a
@@ -667,6 +668,7 @@ def test_threads_roundtrip_and_ended(conn):
         [(t1, "甲", None, None), (t2, "乙", "海", 5.0)]
     repo.set_thread_ended(conn, t1, 7.0)
     assert repo.thread_by_id(conn, t1)["ended_at"] == 7.0
+    assert repo.thread_by_id(conn, t1)["session"] == "sess"
     repo.set_thread_ended(conn, t1, None)
     assert repo.thread_by_id(conn, t1)["ended_at"] is None
     (t3,) = repo.replace_threads(conn, root, [{"text": "丙", "quote": "問一問", "source_quote": None,

@@ -41,6 +41,7 @@ def test_disabled_prepare_noop(c, fake_chat):
     assert c.put("/api/settings/prior", json={"enabled": False}).status_code == 204
     assert c.post("/api/works/mini/prior/prepare").status_code == 204
     assert c.get("/api/works/mini/prior").json()["enabled"] is False
+    assert c.get("/api/settings/prior").json() == {"enabled": False}
     time.sleep(0.05)
     assert len(fake_chat.calls) == n
 
