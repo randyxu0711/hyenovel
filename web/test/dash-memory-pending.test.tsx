@@ -106,6 +106,16 @@ describe("MemoryPending", () => {
     expect(screen.getByText("候選7")).toBeTruthy();
   });
 
+  it("undo refused as gone drops the receipt", async () => {
+    undo.mockRejectedValue(new DashError(404, "unknown-memory-candidate"));
+    mount();
+    fireEvent.click(within(await item("寫作時先有最後一句")).getByRole("button", { name: "略過" }));
+    fireEvent.click(await screen.findByRole("button", { name: "復原" }));
+    await waitFor(() => expect(undo).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "復原" })).toBeNull());
+    expect(screen.queryByText("寫作時先有最後一句")).toBeNull();
+  });
+
   it("undo after edit shows error", async () => {
     undo.mockRejectedValue(new DashError(409, "memory-not-current"));
     mount();
@@ -159,11 +169,11 @@ describe("MemoryPending", () => {
     expect(within(li).queryByRole("textbox")).toBeNull();
     fireEvent.click(within(li).getByRole("button", { name: "編輯" }));
     const box = within(li).getByRole("textbox");
-    fireEvent.change(box, { target: { value: "改過" } });
+    fireEvent.change(box, { target: { value: "已編輯" } });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
     expect(save).not.toHaveBeenCalled();
     fireEvent.keyDown(box, { key: "Enter" });
-    await waitFor(() => expect(save).toHaveBeenCalledWith(1, "work", "改過"));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(1, "work", "已編輯"));
   });
 
   it("focus puts the first slip's main button in focus", async () => {

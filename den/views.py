@@ -339,12 +339,12 @@ def memory_row(conn, row: dict) -> dict:
             "invalidated_at": row["invalidated_at"]}
 
 
-def _analysis_bodies(conn) -> dict[int, dict]:
+def analysis_bodies(conn) -> dict[int, dict]:
     return {c["story_id"]: c["artifact"]["body"] for c in repo.current_artifacts(conn) if c["kind"] == "analysis"}
 
 
 def archived_sessions(conn) -> list[dict]:
-    bodies = _analysis_bodies(conn)
+    bodies = analysis_bodies(conn)
     out = []
     for r in repo.archived_discussions(conn):
         sid = r.pop("story_id")
@@ -356,7 +356,7 @@ def archived_sessions(conn) -> list[dict]:
 
 
 def archived_works(conn) -> list[dict]:
-    bodies = _analysis_bodies(conn)
+    bodies = analysis_bodies(conn)
     return [{"slug": r["slug"], "title": works.title_of(r, bodies.get(r["id"])),
              "archived_at": r["archived_at"], "sessions": r["sessions"]} for r in repo.archived_stories(conn)]
 
@@ -374,7 +374,7 @@ def recent_sessions(conn, limit: int, legacy: bool = False) -> list[dict]:
         if sid not in labs:
             labs[sid] = _labeler(conn, sid)
         d["preview"] = labs[sid](d["preview"], fp)[:60]
-    bodies = _analysis_bodies(conn)
+    bodies = analysis_bodies(conn)
     ids = {st["slug"]: st["id"] for st in repo.stories(conn)}
     for d in out:
         if d["slug"] is not None:

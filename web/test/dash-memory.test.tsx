@@ -178,6 +178,21 @@ describe("MemoryPage", () => {
     await waitFor(() => expect(revert).toHaveBeenCalledWith(1));
   });
 
+  it("重載還沒回來前再按還原,不會再送一次", async () => {
+    memories.mockResolvedValueOnce(list(mem({ id: 1, text: "第一版", invalidated_at: 2 }), mem({ id: 2, root: 1, text: "第二版" })));
+    let done!: (v: MemoryList) => void;
+    memories.mockReturnValueOnce(new Promise<MemoryList>(r => { done = r; }));
+    await mount();
+    await screen.findByText("第二版");
+    fireEvent.click(screen.getByRole("button", { name: "歷史版本" }));
+    fireEvent.click(screen.getByRole("button", { name: "還原" }));
+    await waitFor(() => expect(memories).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "還原" }));
+    await act(async () => {});
+    expect(revert).toHaveBeenCalledTimes(1);
+    await act(async () => { done(list(mem({ id: 3, root: 1, text: "第一版" }))); });
+  });
+
   it("封存再編輯過的 chain 拉回的是最後一版", async () => {
     memories.mockResolvedValue(list(
       mem({ id: 1, text: "第一版", invalidated_at: 2 }),
@@ -227,7 +242,7 @@ describe("MemoryPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "編輯" }));
     fireEvent.change(screen.getByRole("textbox", { name: "記憶內容" }), { target: { value: "很長的字" } });
     fireEvent.click(screen.getByRole("button", { name: "儲存" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("滿了");
+    expect((await screen.findByRole("alert")).textContent).toContain("已滿");
     expect((screen.getByRole("textbox", { name: "記憶內容" }) as HTMLTextAreaElement).value).toBe("很長的字");
   });
 
@@ -237,7 +252,7 @@ describe("MemoryPage", () => {
     addOpen();
     fireEvent.change(screen.getByRole("textbox", { name: "新增記憶" }), { target: { value: "很長" } });
     fireEvent.click(screen.getByRole("button", { name: "新增" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("滿了");
+    expect((await screen.findByRole("alert")).textContent).toContain("已滿");
     expect((screen.getByRole("textbox", { name: "新增記憶" }) as HTMLTextAreaElement).value).toBe("很長");
   });
 

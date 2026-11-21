@@ -98,10 +98,13 @@ export default function MemoryPending({ onChange, onCount, onSaved, onGoto, focu
   const ready = !!list && list.length > 0;
   useEffect(() => { if (focus && ready) sec.current?.scrollIntoView?.({ block: "start" }); }, [focus, ready]);
 
-  const run = async (fn: () => Promise<unknown>) => {
+  const run = async (fn: () => Promise<unknown>, onFail?: (code: string) => void) => {
     if (busy.current) return null;
     busy.current = true; setCode(null);
-    try { return { v: await fn() }; } catch (e) { setCode(e instanceof DashError ? e.code : "unknown"); return null; } finally { busy.current = false; }
+    try { return { v: await fn() }; } catch (e) {
+      const code = e instanceof DashError ? e.code : "unknown";
+      setCode(code); onFail?.(code); return null;
+    } finally { busy.current = false; }
   };
   const finish = async (c: MemoryCandidate, kind: "saved" | "skipped", scope: MemoryScope, text?: string) => {
     const r = await run(() => kind === "saved" ? api.saveCandidate(c.id, scope, text) : api.skipCandidate(c.id));
@@ -118,7 +121,13 @@ export default function MemoryPending({ onChange, onCount, onSaved, onGoto, focu
   };
   const undo = async (c: MemoryCandidate) => {
     const was = done[c.id];
-    if (!(await run(() => api.undoCandidate(c.id)))) return;
+    const gone = (code: string) => {
+      if (code !== "unknown-memory-candidate") return;
+      setList(l => l && l.filter(x => x.id !== c.id));
+      setDone(m => { const n = { ...m }; delete n[c.id]; return n; });
+      setOrder(o => o.filter(x => x !== c.id));
+    };
+    if (!(await run(() => api.undoCandidate(c.id), gone))) return;
     setDone(m => { const n = { ...m }; delete n[c.id]; return n; });
     setOrder(o => o.filter(x => x !== c.id));
     if (was?.kind === "saved") onChange();

@@ -38,7 +38,7 @@ describe("useSubmitDraft", () => {
     expect(r).toMatchObject({ slug: "d3", reused: false });
     expect(result.current.draft).toBeNull();
   });
-  it("reused 但還沒分析(none/stopped/notes-stopped):補開 job", async () => {
+  it("reused 但尚未分析(none/stopped/notes-stopped):補開 job", async () => {
     const { result } = mount();
     sub({ slug: "d1", reused: true, new_version: false });
     vi.spyOn(api, "work").mockResolvedValue({ slug: "d1", title: "t", version: 1, text: "", state: "none", job_id: null, notes_ready: false, versions: [1] });

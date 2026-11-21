@@ -53,7 +53,7 @@ def parse(raw: str, turns: list[dict]) -> list[dict]:
         if seq is None:
             log.info("event=candidate-dropped reason=quote-not-author")
             continue
-        out.append({"text": m["text"].strip(), "quote": quote, "seq": seq, "scope": scope})
+        out.append({"text": m["text"].strip(), "quote": quote.strip(), "seq": seq, "scope": scope})
         if len(out) == CANDIDATES_PER_DIGEST:
             break
     return out
@@ -104,8 +104,14 @@ def _candidate(conn, candidate_id: int) -> dict:
     return c
 
 
-def _pending_or_raise(conn, candidate_id: int) -> dict:
+def _hidden(c: dict, now: float) -> bool:
+    return c["created_at"] < now - CANDIDATE_TTL_S or c["story_archived_at"] is not None
+
+
+def _pending_or_raise(conn, candidate_id: int, now: float) -> dict:
     c = _candidate(conn, candidate_id)
+    if _hidden(c, now):
+        raise UnknownCandidate(candidate_id)
     if c["resolution"] is not None:
         raise NotPending(candidate_id)
     return c
@@ -113,7 +119,7 @@ def _pending_or_raise(conn, candidate_id: int) -> dict:
 
 def save(conn, candidate_id: int, scope: str, text: str | None, now: float) -> int:
     with conn:
-        c = _pending_or_raise(conn, candidate_id)
+        c = _pending_or_raise(conn, candidate_id, now)
         mid = memory._remember(conn, scope, c["text"] if text is None else text, now, story_id=c["story_id"],
                                source={"session": c["session"], "seq": c["seq"], "quote": c["quote"]})
         repo.resolve_candidate(conn, candidate_id, "saved", now, mid)
@@ -122,7 +128,7 @@ def save(conn, candidate_id: int, scope: str, text: str | None, now: float) -> i
 
 def skip(conn, candidate_id: int, now: float) -> None:
     with conn:
-        _pending_or_raise(conn, candidate_id)
+        _pending_or_raise(conn, candidate_id, now)
         repo.resolve_candidate(conn, candidate_id, "skipped", now)
 
 
@@ -131,6 +137,8 @@ def undo(conn, candidate_id: int, now: float) -> None:
         c = _candidate(conn, candidate_id)
         if c["resolution"] is None:
             raise IsPending(candidate_id)
+        if c["resolution"] == "skipped" and _hidden(c, now):
+            raise UnknownCandidate(candidate_id)
         if c["resolution"] == "saved":
             row = repo.memory(conn, c["memory_id"])
             if row["invalidated_at"] is None:

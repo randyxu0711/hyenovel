@@ -41,6 +41,7 @@ def test_parse_drops_short_quote():
     assert suggest.parse(raw(mem(quote="想讓結尾留白,")), TURNS) == []
     assert suggest.parse(raw(mem(quote="想讓結尾留白,不")), TURNS)[0]["seq"] == 0
     assert suggest.parse(raw(mem(quote=" 想讓結尾留白,不要 ")), TURNS)[0]["seq"] == 0
+    assert suggest.parse(raw(mem(quote=" 想讓結尾留白,不要 ")), TURNS)[0]["quote"] == "想讓結尾留白,不要"
     assert suggest.parse(raw(mem(quote="  想讓結尾留白,  ")), TURNS) == []
 
 
@@ -217,3 +218,46 @@ def test_author_candidates_dedupe_across_works(conn, disc):
     item = {"text": "作者先寫結尾", "quote": "習慣先寫最後一段再往前補", "seq": 2, "scope": "author"}
     assert suggest.store(conn, d, s, [item], 5.0) == 0
     assert "先寫結尾" in suggest.known(conn, s) and "那篇的事" not in suggest.known(conn, s)
+
+
+def _acts(conn, cid, now):
+    return (lambda: suggest.save(conn, cid, "work", None, now), lambda: suggest.skip(conn, cid, now))
+
+
+def test_expired_candidate_cannot_be_saved_or_skipped(conn, disc):
+    cid = _cand(conn, disc)
+    for act in _acts(conn, cid, 2.0 + suggest.CANDIDATE_TTL_S):
+        with pytest.raises(suggest.UnknownCandidate):
+            act()
+    assert repo.candidate(conn, cid)["resolution"] is None
+
+
+def test_candidate_of_archived_work_cannot_be_acted_on(conn, disc):
+    cid = _cand(conn, disc)
+    repo.archive_story(conn, disc[0], 2.0)
+    conn.commit()
+    for act in _acts(conn, cid, 3.0):
+        with pytest.raises(suggest.UnknownCandidate):
+            act()
+    assert repo.candidate(conn, cid)["resolution"] is None
+
+
+def test_undo_refused_when_candidate_would_be_invisible(conn, disc):
+    cid = _cand(conn, disc)
+    suggest.skip(conn, cid, 5.0)
+    with pytest.raises(suggest.UnknownCandidate):
+        suggest.undo(conn, cid, 2.0 + suggest.CANDIDATE_TTL_S)
+    repo.archive_story(conn, disc[0], 6.0)
+    conn.commit()
+    with pytest.raises(suggest.UnknownCandidate):
+        suggest.undo(conn, cid, 7.0)
+    assert repo.candidate(conn, cid)["resolution"] == "skipped"
+
+
+def test_undo_saved_still_works_when_candidate_is_hidden(conn, disc):
+    cid = _cand(conn, disc)
+    mid = suggest.save(conn, cid, "work", None, 5.0)
+    repo.archive_story(conn, disc[0], 6.0)
+    conn.commit()
+    suggest.undo(conn, cid, 2.0 + suggest.CANDIDATE_TTL_S)
+    assert repo.memory(conn, mid)["invalidated_at"] == 2.0 + suggest.CANDIDATE_TTL_S

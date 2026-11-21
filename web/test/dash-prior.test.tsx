@@ -267,11 +267,11 @@ describe("Prior pending memories", () => {
     const onMemory = vi.fn();
     render(<Prior mode="live" slug="d1" skipped={false} onSkip={vi.fn()} onGoto={onGoto} onMemory={onMemory} busy={false} />);
     await cut();
-    expect(screen.getByText("另有 2 條記憶待確認")).toBeTruthy();
+    expect(screen.getByText("2 條記憶待確認")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "前往記憶" }));
     expect(onMemory).toHaveBeenCalled();
     fireEvent.click(await cut());
-    expect(screen.queryByText("另有 2 條記憶待確認")).toBeNull();
+    expect(screen.queryByText("2 條記憶待確認")).toBeNull();
   });
 
   it("hides footer when none pending", async () => {

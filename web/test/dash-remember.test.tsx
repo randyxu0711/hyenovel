@@ -115,7 +115,7 @@ describe("Remember", () => {
     const { container } = mount([{ id: 7, scope: "author" }]);
     peekAll();
     fireEvent.click(screen.getByRole("button", { name: "復原" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("不是生效中");
+    expect((await screen.findByRole("alert")).textContent).toContain("非目前版本");
     expect(marks(container)).toHaveLength(1);
   });
 
@@ -125,7 +125,7 @@ describe("Remember", () => {
     fireEvent.click(opener());
     fireEvent.change(box(), { target: { value: "改過的字" } });
     fireEvent.click(screen.getByRole("button", { name: "儲存" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("滿了");
+    expect((await screen.findByRole("alert")).textContent).toContain("已滿");
     expect(marks(container)).toHaveLength(0);
     expect(box().value).toBe("改過的字");
     expect(changed).not.toHaveBeenCalled();

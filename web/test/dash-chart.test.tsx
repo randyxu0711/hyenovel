@@ -37,7 +37,7 @@ describe("結構圖分頁", () => {
   it("有失根 → 顯示 2/3 並列出失根觀察", () => {
     const { container } = mount(map({ drift: { total: 3, lost: 2, orphaned: [{ id: "m1", type: "motif", label: "海" }] } }));
     expect(container.textContent).toContain("2/3");
-    expect(container.textContent).toContain("找不到根據");
+    expect(container.textContent).toContain("找不到依據");
     expect(screen.getByText("海")).toBeTruthy();
   });
   it("lost 為 0 → 不出聲", () => {
@@ -53,7 +53,7 @@ describe("結構圖分頁", () => {
     expect(pts.map(p => p[0])).toEqual([...pts.map(p => p[0])].sort((a, b) => a - b));
     expect(pts[4][1]).toBeLessThan(pts[1][1]);
     expect(pts[3][1]).toBeGreaterThan(pts[0][1]);
-    expect(cs[1].getAttribute("aria-label")).toBe("第 2 段,張力 7");
+    expect(cs[1].getAttribute("aria-label")).toBe("第 2 段，張力 7");
     expect(cs.filter(c => c.classList.contains("is-peak"))).toEqual([cs[4]]);
     expect(cs[0].querySelector(".dash-dm")!.textContent).toBe("1");
   });
@@ -101,7 +101,7 @@ describe("結構圖分頁", () => {
     const b = screen.getByRole("button", { name: /鞋/ }) as HTMLButtonElement;
     expect(b.disabled).toBe(true);
     expect(b.textContent).toBe("鞋");
-    expect(b.title).toBe("這一版的稿上對不到");
+    expect(b.title).toBe("本版稿中找不到");
   });
   it("意象是切換鈕:按了選它、選中的再按 → 取消", () => {
     const shoe = { id: "m1", label: "鞋", spans: [{ quote: "a", start: 2, end: 3 }] };
@@ -117,9 +117,9 @@ describe("結構圖分頁", () => {
     fireEvent.click(b());
     expect(onOb).toHaveBeenLastCalledWith(null);
   });
-  it("沒分析 → 說還沒分析,沒有欄", () => {
+  it("沒分析 → 說尚未分析,沒有欄", () => {
     const { container } = mount(map({ analysis_version: null, beats: [] }));
-    expect(screen.getByText(/還沒分析/)).toBeTruthy();
+    expect(screen.getByText(/尚未分析/)).toBeTruthy();
     expect(cols(container)).toHaveLength(0);
   });
   it("分析屬於別版 → 頂端「這是第 N 版的分析」", () => {
@@ -128,7 +128,7 @@ describe("結構圖分頁", () => {
   });
   it("對位資料抓不到:顯示錯誤,不停在載入中", () => {
     mount(null, [], vi.fn(), "den-down");
-    expect(screen.getByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
+    expect(screen.getByText("無法連線至本機 den，請確認是否在執行。")).toBeTruthy();
     expect(screen.queryByText("載入中……")).toBeNull();
   });
   it("同版就不提示", () => {

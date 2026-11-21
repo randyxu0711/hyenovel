@@ -72,7 +72,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe("純聊天的附件", () => {
   it("attach sends file text with next turn and shows card", async () => {
     mount("/");
-    const input = await screen.findByLabelText("丟一份稿進來", { selector: "input" });
+    const input = await screen.findByLabelText("附上稿", { selector: "input" });
     fireEvent.change(input, { target: { files: [file("海.md", "浪打上來。")] } });
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toMatchObject({ session_id: null, message: "", attach: { name: "海", text: "浪打上來。" } });
@@ -83,7 +83,7 @@ describe("純聊天的附件", () => {
 
   it("a just-sent attachment opens to its first lines without reloading", async () => {
     mount("/");
-    const input = await screen.findByLabelText("丟一份稿進來", { selector: "input" });
+    const input = await screen.findByLabelText("附上稿", { selector: "input" });
     fireEvent.change(input, { target: { files: [file("海.md", "  浪打上來。\n她沒回頭。")] } });
     const name = await screen.findByRole("button", { name: /海/ });
     fireEvent.click(name);
@@ -93,8 +93,8 @@ describe("純聊天的附件", () => {
   it("drafted text waits: the file goes with the next send", async () => {
     mount("/");
     fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "看這篇" } });
-    fireEvent.change(screen.getByLabelText("丟一份稿進來", { selector: "input" }), { target: { files: [file("山.txt", "石頭")] } });
-    await screen.findByRole("button", { name: "不帶這份稿" });
+    fireEvent.change(screen.getByLabelText("附上稿", { selector: "input" }), { target: { files: [file("山.txt", "石頭")] } });
+    await screen.findByRole("button", { name: "移除這份稿" });
     expect(bodies).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "送出" }));
     await waitFor(() => expect(bodies).toHaveLength(1));
@@ -103,7 +103,7 @@ describe("純聊天的附件", () => {
 
   it("only .md / .txt are taken", async () => {
     mount("/");
-    fireEvent.change(await screen.findByLabelText("丟一份稿進來", { selector: "input" }), { target: { files: [file("a.pdf", "x")] } });
+    fireEvent.change(await screen.findByLabelText("附上稿", { selector: "input" }), { target: { files: [file("a.pdf", "x")] } });
     await new Promise(r => setTimeout(r, 10));
     expect(bodies).toHaveLength(0);
   });
@@ -121,7 +121,7 @@ describe("純聊天的附件", () => {
     mount();
     expect(await screen.findByText("海")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "開成作品" })).toBeNull();
-    expect(screen.queryByLabelText("丟一份稿進來", { selector: "input" })).toBeNull();
+    expect(screen.queryByLabelText("附上稿", { selector: "input" })).toBeNull();
   });
 
   it("compact summary renders markdown, starts clamped and opens on click; everything before the last marker is marked past", async () => {
@@ -136,19 +136,19 @@ describe("純聊天的附件", () => {
     expect(sum.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("嗨").closest("[data-past]")).not.toBeNull();
     expect(screen.getByText("之後的話").closest("[data-past]")).toBeNull();
-    expect(screen.getByRole("separator", { name: "對話清空" })).toBeTruthy();
+    expect(screen.getByRole("separator", { name: "對話已清空" })).toBeTruthy();
   });
 
   it("clear and compact buttons post and add a divider", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "壓縮對話" }));
-    expect(screen.getByText("壓縮 · 會使用額度")).toBeTruthy();
+    expect(screen.getByText("確認壓縮（使用額度）")).toBeTruthy();
     expect(posts).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "壓縮對話" }));
     expect(await screen.findByText("摘要文字")).toBeTruthy();
     expect(screen.getByRole("button", { name: "壓縮對話" }).getAttribute("title")).toContain("額度");
     fireEvent.click(screen.getByRole("button", { name: "清空對話" }));
-    await screen.findByRole("separator", { name: "對話清空" });
+    await screen.findByRole("separator", { name: "對話已清空" });
     expect(posts).toEqual(["/api/sessions/c1/compact", "/api/sessions/c1/clear"]);
   });
 
@@ -158,14 +158,14 @@ describe("純聊天的附件", () => {
     const box = screen.getByLabelText("對話輸入");
     fireEvent.change(box, { target: { value: "/" } });
     const menu = screen.getByRole("listbox", { name: "指令" });
-    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話會使用額度"]);
+    expect(within(menu).getAllByRole("option").map(o => o.textContent)).toEqual(["/clear清空對話", "/compact壓縮對話使用額度"]);
     fireEvent.change(box, { target: { value: "/cl" } });
     expect(within(screen.getByRole("listbox", { name: "指令" })).getAllByRole("option")).toHaveLength(1);
     fireEvent.keyDown(box, { key: "Enter" });
     expect((box as HTMLTextAreaElement).value).toBe("/clear");
     expect(posts).toEqual([]);
     fireEvent.keyDown(box, { key: "Enter" });
-    await screen.findByRole("separator", { name: "對話清空" });
+    await screen.findByRole("separator", { name: "對話已清空" });
     expect(posts).toEqual(["/api/sessions/c1/clear"]);
     expect((box as HTMLTextAreaElement).value).toBe("");
     expect(screen.queryByRole("listbox", { name: "指令" })).toBeNull();

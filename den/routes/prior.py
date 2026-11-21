@@ -118,7 +118,7 @@ async def revert_digest(digest_id: int, request: Request):
 @router.get("/memory/works")
 async def memory_works(request: Request):
     conn = request.app.state.mgr.conn
-    bodies = views._analysis_bodies(conn)
+    bodies = views.analysis_bodies(conn)
     return {"works": [{"slug": w["slug"], "title": works.title_of(w, bodies.get(w["id"])),
                        **prior.overview(conn, w["id"], w["latest_text"])}
                       for w in repo.works(conn) if w["archived_at"] is None]}

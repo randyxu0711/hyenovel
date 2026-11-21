@@ -55,7 +55,7 @@ describe("鍵盤", () => {
     fireEvent.change(input, { target: { value: "潮" } });
     const opts = within(dlg).getAllByRole("option");
     expect(opts.map(o => o.textContent)).toEqual(["潮汐"]);
-    expect(opts.map(o => o.getAttribute("aria-label"))).toEqual(["作品:潮汐"]);
+    expect(opts.map(o => o.getAttribute("aria-label"))).toEqual(["作品：潮汐"]);
     expect(input.getAttribute("aria-activedescendant")).toBe(opts[0].id);
     fireEvent.keyDown(input, { key: "Enter" });
     expect(where()).toBe("/w/d2");
@@ -89,7 +89,7 @@ describe("鍵盤", () => {
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
     await waitFor(() => expect(mode()).not.toBe(before));
     ctrlK();
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "讀伴:水牛" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("option", { name: "讀伴：水牛" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
       u === "/api/characters/default" && (i as RequestInit)?.method === "PUT")).toBe(true));
     ctrlK();
@@ -105,8 +105,8 @@ describe("鍵盤", () => {
       : base(u, ...rest));
     ctrlK();
     const dlg = await screen.findByRole("dialog", { name: "指令框" });
-    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴:水牛" }));
-    expect((await within(dlg).findByRole("alert")).textContent).toBe("沒有這位讀伴。");
+    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴：水牛" }));
+    expect((await within(dlg).findByRole("alert")).textContent).toBe("找不到此讀伴。");
     expect(screen.getByRole("dialog", { name: "指令框" })).toBeTruthy();
   });
   it("換讀伴還沒存好就關掉指令框,再開的指令框不會被舊的那次關掉;等待中重按不重送", async () => {
@@ -122,8 +122,8 @@ describe("鍵盤", () => {
     const puts = () => vi.mocked(fetch).mock.calls.filter(([u]) => String(u) === "/api/characters/default").length;
     ctrlK();
     const dlg = await screen.findByRole("dialog", { name: "指令框" });
-    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴:水牛" }));
-    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴:水牛" }));
+    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴：水牛" }));
+    fireEvent.click(within(dlg).getByRole("option", { name: "讀伴：水牛" }));
     expect(puts()).toBe(1);
     fireEvent.keyDown(within(dlg).getByRole("combobox"), { key: "Escape" });
     ctrlK();
@@ -132,12 +132,12 @@ describe("鍵盤", () => {
     await new Promise(r => setTimeout(r, 20));
     expect(screen.getByRole("dialog", { name: "指令框" })).toBeTruthy();
   });
-  it("找不到時說沒有符合", async () => {
+  it("找不到時說無符合項目", async () => {
     mount("/w/d1");
     await screen.findByLabelText("對話輸入");
     ctrlK();
     fireEvent.change(await screen.findByRole("combobox"), { target: { value: "zzzz" } });
-    expect(screen.getByText("沒有符合")).toBeTruthy();
+    expect(screen.getByText("無符合項目")).toBeTruthy();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
   it("窄條的找作品鍵開指令框", async () => {
@@ -188,13 +188,13 @@ describe("專注模式", () => {
     expect(isFocused()).toBe(true);
     expect((document.querySelector(".dash-rail") as HTMLElement).hidden).toBe(true);
     expect((document.querySelector(".dash-side") as HTMLElement).hidden).toBe(true);
-    const peek = screen.getByRole("button", { name: "回到對話" });
+    const peek = screen.getByRole("button", { name: "返回對話" });
     expect(peek.classList.contains("dash-peek")).toBe(true);
     expect(peek.querySelector("svg.fig")).not.toBeNull();
     fireEvent.click(peek);
     expect(isFocused()).toBe(false);
     expect((document.querySelector(".dash-side") as HTMLElement).hidden).toBe(false);
-    expect(screen.queryByRole("button", { name: "回到對話" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "返回對話" })).toBeNull();
   });
   it("Esc 退出專注", async () => {
     mount("/w/d1");
@@ -237,7 +237,7 @@ describe("專注模式", () => {
     mount("/w/d1");
     await enter();
     ctrlK();
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品:潮汐" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品：潮汐" }));
     expect(where()).toBe("/w/d2");
     expect(isFocused()).toBe(true);
     ctrlK();
