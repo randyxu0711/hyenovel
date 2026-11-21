@@ -109,7 +109,7 @@ ERROR_CODES: tuple[str, ...] = (
     "unknown-memory-candidate", "memory-candidate-resolved", "memory-candidate-pending",
     "bad-card", "builtin-character",
     "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
-    "unknown-digest", "unknown-thread", "blank-digest", "stale-digest",
+    "unknown-digest", "unknown-thread", "blank-digest", "stale-digest", "digest-is-current", "candidate-needs-work",
     # 討論 SSE 的 error 事件(den/discuss.py)帶的 code:
     "usage-limit", "no-response", "commit-failed", "chat-failed",
 )

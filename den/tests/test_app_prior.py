@@ -121,3 +121,59 @@ def test_reject_is_logged(c, caplog):
     caplog.set_level("INFO", logger="hyenovel")
     c.put("/api/threads/999", json={"ended": True})
     assert "event=reject where=prior reason=unknown-thread" in caplog.text
+
+
+def test_memory_works_lists_unarchived(c):
+    def seed(conn):
+        with conn:
+            for slug in ("gone", "quiet"):
+                repo.add_source_version(conn, repo.ensure_story(conn, slug, None, 1.0), "一段稿", 1.0)
+    in_loop(c, seed)
+    assert c.post("/api/works/gone/archive").status_code == 204
+    works = {w["slug"]: w for w in c.get("/api/memory/works").json()["works"]}
+    assert "gone" not in works and {"mini", "quiet"} <= works.keys()
+    assert all(w["title"] for w in works.values())
+    assert works["quiet"]["digests"] == [] and works["quiet"]["threads"] == []
+
+
+def test_memory_works_carries_digests_and_threads(c, fake_chat):
+    sid, _ = made(c, fake_chat)
+    (w,) = [w for w in c.get("/api/memory/works").json()["works"] if w["slug"] == "mini"]
+    assert [(d["session"], d["versions"]) for d in w["digests"]] == [(sid, 1)]
+    assert [(t["text"], t["ended"], t["stale"]) for t in w["threads"]] == [("結尾的節奏", False, False)]
+
+
+def test_digest_revert_adds_version(c, fake_chat):
+    _, got = made(c, fake_chat)
+    first = got["digests"][0]["id"]
+    c.put(f"/api/digests/{first}", json={"text": "作者改的"})
+    r = c.post(f"/api/digests/{first}/revert")
+    assert r.status_code == 201
+    vs = c.get(f"/api/digests/{r.json()['id']}/versions").json()["versions"]
+    assert [(v["text"], v["current"]) for v in vs] == [("聊了結尾", True), ("作者改的", False), ("聊了結尾", False)]
+    assert c.get("/api/works/mini/prior").json()["digests"][0]["text"] == "聊了結尾"
+    r2 = c.post(f"/api/digests/{r.json()['id']}/revert")
+    assert (r2.status_code, r2.json()["code"]) == (409, "digest-is-current")
+
+
+def test_digest_versions_unknown(c):
+    for r in (c.get("/api/digests/999/versions"), c.post("/api/digests/999/revert")):
+        assert (r.status_code, r.json()["code"]) == (404, "unknown-digest")
+
+
+def test_digest_revert_keeps_through_seq_and_threads(c, fake_chat):
+    _, got = made(c, fake_chat)
+    first = got["digests"][0]["id"]
+    c.put(f"/api/digests/{first}", json={"text": "作者改的"})
+    cur_id = c.get("/api/works/mini/prior").json()["digests"][0]["id"]
+    cur = in_loop(c, lambda conn: repo.digest_by_id(conn, cur_id))
+    in_loop(c, lambda conn: conn.execute("UPDATE digest SET through_seq = through_seq + 7 WHERE id = ?", (cur["id"],)))
+    threads = in_loop(c, lambda conn: repo.threads_of(conn, cur["root_id"]))
+    new = c.post(f"/api/digests/{first}/revert").json()["id"]
+    row = in_loop(c, lambda conn: repo.digest_by_id(conn, new))
+    assert row["through_seq"] == cur["through_seq"] + 7
+    assert in_loop(c, lambda conn: repo.threads_of(conn, cur["root_id"])) == threads
+    n = len(fake_chat.calls)
+    assert c.post("/api/works/mini/prior/prepare").status_code == 202
+    time.sleep(0.1)
+    assert len(fake_chat.calls) == n

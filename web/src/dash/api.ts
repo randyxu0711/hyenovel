@@ -20,7 +20,7 @@ export const DEN_ERROR_CODES = [
   "unknown-memory-candidate", "memory-candidate-resolved", "memory-candidate-pending",
   "bad-card", "builtin-character",
   "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
-  "unknown-digest", "unknown-thread", "blank-digest", "stale-digest",
+  "unknown-digest", "unknown-thread", "blank-digest", "stale-digest", "digest-is-current", "candidate-needs-work",
   "den-down",
 ];
 

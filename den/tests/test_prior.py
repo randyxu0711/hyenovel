@@ -177,3 +177,25 @@ def test_suggest_only_second_turn_still_none(conn):
     q = Q()
     every = [{"role": "user", "seq": 0}, {"role": "assistant", "seq": 1, "recipe": {"prior": None}}]
     assert _snap(conn, q, every=every) is None and q.log == []
+
+
+def test_overview_keeps_ended_and_all_threads(conn, monkeypatch):
+    monkeypatch.setattr(prior, "MAX_THREADS", 5)
+    s = _mini(conn)
+    d = _disc(conn, s, "A", 1.0)
+    root = repo.add_digest(conn, d, "摘", 3, 1.0)
+    t = lambda text: {"text": text, "quote": "結尾的海", "source_quote": None, "ended_at": None}
+    ids = repo.replace_threads(conn, root, [t(f"t{i}") for i in range(6)], 1.0)
+    prior.end_thread(conn, ids[0], 5.0)
+    got = prior.overview(conn, s, "海")
+    assert [(x["text"], x["ended"]) for x in got["threads"]] == [("t0", True)] + [(f"t{i}", False) for i in range(1, 6)]
+    assert [x["text"] for x in prior.gather(conn, s, None, "海")["threads"]] == [f"t{i}" for i in range(1, 6)]
+
+
+def test_overview_counts_versions(conn):
+    s = _mini(conn)
+    d = _disc(conn, s, "A", 1.0)
+    root = repo.add_digest(conn, d, "摘", 3, 1.0)
+    repo.add_digest(conn, d, "改", 3, 2.0, root_id=root, edited=True)
+    (dg,) = prior.overview(conn, s, "海")["digests"]
+    assert (dg["text"], dg["versions"]) == ("改", 2)
