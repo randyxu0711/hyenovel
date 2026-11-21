@@ -1,31 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, DashError, type MemoryList, type WorkOverview } from "./api";
 import { errorMessage, useT } from "./i18n";
-import Icon from "./Icon";
 import MemoryGroups, { chainsOf, type Act, type Reload } from "./MemoryGroups";
 import MemoryPending from "./MemoryPending";
 
-function PriorSwitch({ fail }: { fail: (e: unknown) => void }) {
+function Switch({ label, on, onLabel, pick }: { label: string; on: boolean; onLabel: string; pick: (v: boolean) => void }) {
   const t = useT();
-  const [on, setOn] = useState<boolean | null>(null);
-  useEffect(() => { api.priorEnabled().then(setOn, () => setOn(null)); }, []);
-  if (on === null) return null;
-  const pick = async (v: boolean) => {
-    if (v === on) return;
-    try { await api.setPriorEnabled(v); setOn(v); } catch (e) { fail(e); }
-  };
   return (
     <div className="dash-mem-switch">
-      <span>{t("memory.priorSwitch")}</span>
-      <div className="set-seg" role="group" aria-label={t("memory.priorSwitch")}>
+      <span>{label}</span>
+      <div className="set-seg" role="group" aria-label={label}>
         {([true, false] as const).map(v => (
-          <button key={String(v)} type="button" aria-pressed={on === v} onClick={() => void pick(v)}>
-            {t(v ? "memory.on" : "memory.off")}
+          <button key={String(v)} type="button" aria-pressed={on === v} onClick={() => { if (v !== on) pick(v); }}>
+            {v ? onLabel : t("memory.off")}
           </button>
         ))}
       </div>
     </div>
   );
+}
+
+function useSetting(get: () => Promise<boolean>, set: (v: boolean) => Promise<void>, fail: (e: unknown) => void, after?: () => void) {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => { get().then(setOn, () => setOn(null)); }, [get]);
+  const pick = async (v: boolean) => {
+    try { await set(v); setOn(v); after?.(); } catch (e) { fail(e); }
+  };
+  return [on, pick] as const;
 }
 
 const noop = () => {};
@@ -57,32 +58,37 @@ export default function MemoryPage({ onPending = noop }: { onPending?: (n: numbe
     return true;
   };
 
+  const [pendKey, setPendKey] = useState(0);
+  const [prior, setPrior] = useSetting(api.priorEnabled, api.setPriorEnabled, fail);
+  const [suggest, setSuggest] = useSetting(api.suggestEnabled, api.setSuggestEnabled, fail, () => setPendKey(k => k + 1));
   const archived = data ? chainsOf(data.memories).filter(c => !c.live) : [];
   return (
     <div className="dash-mem">
-      <MemoryPending onChange={() => void reloadMemories().catch(fail)} onCount={onPending} />
+      <MemoryPending key={pendKey} onChange={() => void reloadMemories().catch(fail)} onCount={onPending} />
       {code && <p role="alert">{t(errorMessage(code))}</p>}
       {data && <MemoryGroups data={data} works={works} act={act} />}
-      {archived.length > 0 && (
-        <button type="button" className="dash-set-opt" aria-expanded={showArchived} onClick={() => setShowArchived(s => !s)}>
-          {t("memory.archived", { n: archived.length })}
-        </button>
-      )}
-      {showArchived && archived.length > 0 && (
-        <ul className="dash-mem-old">
-          {archived.map(c => {
-            const last = c.rows[c.rows.length - 1];
-            return (
-              <li key={last.root}>
-                <p>{last.text}</p>
-                <button type="button" className="ib" aria-label={t("memory.revert")} title={t("memory.revert")}
-                  onClick={() => void act(() => api.revertMemory(last.id))}><Icon name="back" /></button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <PriorSwitch fail={fail} />
+      <footer className="dash-mem-foot">
+        {prior !== null && <Switch label={t("memory.priorSwitch")} on={prior} onLabel={t("memory.on")} pick={v => void setPrior(v)} />}
+        {suggest !== null && <Switch label={t("memory.suggestSwitch")} on={suggest} onLabel={t("memory.suggestOn")} pick={v => void setSuggest(v)} />}
+        {archived.length > 0 && (
+          <button type="button" className="dash-pend-lnk dash-mem-arch" aria-expanded={showArchived} onClick={() => setShowArchived(s => !s)}>
+            {t("memory.archived", { n: archived.length })}
+          </button>
+        )}
+        {showArchived && archived.length > 0 && (
+          <ul className="dash-mem-old dash-mem-archl">
+            {archived.map(c => {
+              const last = c.rows[c.rows.length - 1];
+              return (
+                <li key={last.root}>
+                  <p>{last.text}</p>
+                  <button type="button" className="dash-set-opt" onClick={() => void act(() => api.revertMemory(last.id))}>{t("memory.revert")}</button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </footer>
     </div>
   );
 }

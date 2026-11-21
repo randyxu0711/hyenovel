@@ -59,7 +59,7 @@ describe("MemoryPending", () => {
     mount();
     const li = await item("寫作時先有最後一句");
     expect(within(li).queryByRole("button", { name: "存入本篇" })).toBeNull();
-    expect(within(li).getByText(/純聊天/)).toBeTruthy();
+    expect(within(li).getByText(/未綁定作品的對話/)).toBeTruthy();
   });
 
   it("save then undo restores candidate", async () => {

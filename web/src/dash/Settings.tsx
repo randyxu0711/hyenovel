@@ -193,8 +193,9 @@ const NAV_GROUPS: { key: MsgKey; ids: SettingsSection[] }[] = [
 ];
 
 /** 設定分區:回去鍵 + 各分區。書架在設定頁時畫它;窄螢幕由 Settings 畫在內容上方(橫排)。 */
-export function SettingsNav({ section, onPick, back }: {
+export function SettingsNav({ section, onPick, back, dots = {} }: {
   section: SettingsSection; onPick: (s: SettingsSection) => void; back: { label: string; to: string };
+  dots?: Partial<Record<SettingsSection, boolean>>;
 }) {
   const t = useT();
   const nav = useNavigate();
@@ -209,7 +210,7 @@ export function SettingsNav({ section, onPick, back }: {
           {SECTIONS.filter(x => g.ids.includes(x.id)).map(x => (
             <button key={x.id} type="button" aria-label={t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
               onClick={() => onPick(x.id)}>
-              <Icon name={x.icon} /><span>{t(x.key)}</span>
+              <Icon name={x.icon} /><span>{t(x.key)}</span>{dots[x.id] && <span className="dash-pend" aria-hidden="true" />}
             </button>
           ))}
         </div>
@@ -524,7 +525,9 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
 }
 
 /** 設定內容:只畫目前分區。分區導覽在書架(窄螢幕時 nav 由外面給,畫在內容上方)。 */
-export default function Settings({ section, nav }: { section: SettingsSection; nav: ReactNode | null }) {
+export default function Settings({ section, nav, onPending }: {
+  section: SettingsSection; nav: ReactNode | null; onPending?: (n: number) => void;
+}) {
   const t = useT();
   const title = t(SECTIONS.find(x => x.id === section)!.key);
   return (
@@ -533,7 +536,7 @@ export default function Settings({ section, nav }: { section: SettingsSection; n
       <h1 className="dash-h">{title}</h1>
       {section === "look" && <Look />}
       {section === "companions" && <Companions />}
-      {section === "memory" && <MemoryPage />}
+      {section === "memory" && <MemoryPage onPending={onPending} />}
       {section === "archive" && <Archive />}
     </section>
   );

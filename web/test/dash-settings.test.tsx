@@ -31,9 +31,11 @@ const DETAIL = {
   ],
 };
 
+let pendingCands: unknown[] = [];
 function mount(path = "/settings") {
   setLang("zh-Hant");
   const f = vi.fn(async (u: string) => {
+    if (u === "/api/memory/candidates") return json({ candidates: pendingCands });
     if (u === "/api/themes") return json({ themes: [olive, grass], default: "olive" });
     if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
     if (u === "/api/works") return json({ works: [{ slug: "d1", title: "舊的", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
@@ -68,6 +70,21 @@ describe("設定頁", () => {
     const names = within(nav.getByRole("group", { name: "設定分區" })).getAllByRole("button").map(b => b.getAttribute("aria-label"));
     expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "封存"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
+  });
+  it("有待確認的記憶:導覽的記憶鍵有小圓點;處理完最後一條就消失", async () => {
+    pendingCands = [{ id: 7, text: "甲", quote: "甲", scope: "author", session: "s1", seq: 0, slug: null, title: null, at: 1 }];
+    const f = mount();
+    const nav = await shelf();
+    const key = nav.getByRole("button", { name: "記憶" });
+    await waitFor(() => expect(key.querySelector(".dash-pend")).not.toBeNull());
+    f.mockImplementation(async (u: string) => (u.endsWith("/skip") ? new Response(null, { status: 204 })
+      : u === "/api/memory/candidates" ? json({ candidates: pendingCands })
+      : u === "/api/memory" ? json({ memories: [], caps: { author: 800, work: 600 } })
+      : json({ works: [], sessions: [] })));
+    fireEvent.click(key);
+    fireEvent.click(await screen.findByRole("button", { name: "略過" }));
+    await waitFor(() => expect(key.querySelector(".dash-pend")).toBeNull());
+    pendingCands = [];
   });
   it("記憶分區畫出記憶頁,圖示是記憶專用的", async () => {
     mount();

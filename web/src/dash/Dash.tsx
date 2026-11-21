@@ -116,7 +116,9 @@ function Shell({ chars }: { chars: Characters }) {
   const [last, setLast] = useState<string | null>(null);
   useEffect(() => { if (slug) setLast(slug); }, [slug]);
   const [section, setSection] = useState<SettingsSection>("look");
-  const setNav = <SettingsNav section={section} onPick={setSection}
+  const [pending, setPending] = useState(0);
+  useEffect(() => { if (view === "settings") api.candidates().then(c => setPending(c?.length ?? 0), () => {}); }, [view]);
+  const setNav = <SettingsNav section={section} onPick={setSection} dots={{ memory: pending > 0 }}
     back={{ label: t("set.back.page"), to: last ? `/w/${encodeURIComponent(last)}` : "/" }} />;
   const shelf = useShelf();
   const split = useSplit(SHELF_W[shelf.mode]);
@@ -205,7 +207,7 @@ function Shell({ chars }: { chars: Characters }) {
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           onQuote={carry} />}
         {view === "home" && <Home works={loaded} error={worksErr} talk={talk} />}
-        {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
+        {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} onPending={setPending} />}
       </main>
       {notice && (
         <p className="dash-notice" role="status">

@@ -6,6 +6,10 @@ import { DEN_ERROR_CODES } from "../src/dash/api";
 describe("i18n", () => {
   beforeEach(() => { localStorage.clear(); resetLang(); });
 
+  it("記憶相關字串已正式化:不再用拉回、手打、撤銷、則、這篇、每篇", () => {
+    const old = Object.entries(zhHant).filter(([k, v]) => /^(memory|pend|mg|prior)\./.test(k) && /拉回|手打|撤銷|則|這篇|每篇|^存$/.test(v));
+    expect(old).toEqual([]);
+  });
   it("中英字典的鍵完全一致", () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zhHant).sort());
   });
