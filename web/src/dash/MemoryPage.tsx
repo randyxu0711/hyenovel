@@ -4,6 +4,7 @@ import { api, DashError, type Memory, type MemoryList, type MemoryScope, type Wo
 import { cpLength } from "./cp";
 import { errorMessage, useT } from "./i18n";
 import Icon from "./Icon";
+import MemoryPending from "./MemoryPending";
 import { MAX_CHAT } from "./useTalk";
 
 type Chain = { live: Memory | null; rows: Memory[] };
@@ -135,8 +136,10 @@ function PriorSwitch({ fail }: { fail: (e: unknown) => void }) {
   );
 }
 
+const noop = () => {};
+
 /** 記憶頁:生效中的依作者、各篇分組;封存的收在最後。 */
-export default function MemoryPage() {
+export default function MemoryPage({ onPending = noop }: { onPending?: (n: number) => void }) {
   const t = useT();
   const [data, setData] = useState<MemoryList | null>(null);
   const [code, setCode] = useState<string | null>(null);
@@ -165,6 +168,7 @@ export default function MemoryPage() {
   const archived = chains.filter(c => !c.live);
   return (
     <div className="dash-mem">
+      <MemoryPending onChange={() => void reload().catch(fail)} onCount={onPending} />
       {code && <p role="alert">{t(errorMessage(code))}</p>}
       {data && groups.length === 0 && <p className="dash-mem-empty">{t("memory.empty")}</p>}
       {groups.map(g => {

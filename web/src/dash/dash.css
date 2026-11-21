@@ -1107,6 +1107,25 @@
 .dash .dash-mem-old{margin:8px 0 0; padding-left:12px; border-left:1px solid var(--dash-line)}
 .dash .dash-mem-old li{margin:0 0 10px}
 .dash .char-note-peek{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap}
+.dash .dash-pend{margin:0 0 32px}
+.dash .dash-pend h2{display:flex; align-items:center; gap:8px; margin:0 0 12px; padding:0 0 8px; border-bottom:1px solid var(--dash-line); font-size:var(--dash-t-sm); font-weight:500}
+.dash .dash-pend h2 .dash-dm{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .dash-pend-dot{flex:none; width:6px; height:6px; border-radius:50%; background:currentColor}
+.dash .dash-pend-item{margin:0 0 16px}
+.dash .dash-pend-text{margin:0 0 4px; white-space:pre-wrap}
+.dash .dash-pend-when{margin-left:6px; font-size:var(--dash-t-xs)}
+.dash .dash-pend-bar{display:flex; flex-wrap:wrap; align-items:center; gap:4px}
+.dash .dash-pend-act{height:26px; padding:0 10px; border:1px solid transparent; border-radius:13px; background:none; color:var(--dash-ink-2); font:inherit; font-size:var(--dash-t-xs); cursor:pointer}
+.dash .dash-pend-act.yes{border-color:var(--dash-ink-2); color:var(--dash-ink)}
+.dash .dash-pend-act:hover:not(:disabled){background:var(--dash-line); color:var(--dash-ink)}
+.dash .dash-pend-act:disabled{opacity:.45; cursor:default}
+.dash .dash-pend-bar .ib{opacity:.55}
+.dash .dash-pend-item:hover .dash-pend-bar .ib, .dash .dash-pend-bar .ib:focus-visible{opacity:1}
+.dash .dash-pend-done{display:flex; align-items:center; gap:8px; margin:0; font-size:var(--dash-t-sm); color:var(--dash-ink-2)}
+.dash .dash-pend-lnk{padding:1px 6px; border:0; border-radius:6px; background:none; color:var(--dash-ink-2); font:inherit; font-size:var(--dash-t-xs); cursor:pointer}
+.dash .dash-pend-lnk:hover{background:var(--dash-line); color:var(--dash-ink)}
+.dash .dash-pend-older{margin:0 0 12px; padding-left:0}
+.dash .dash-pend-err{margin:0 0 10px; font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .dash-mem-switch{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:28px 0 0; padding-top:12px; border-top:1px solid var(--dash-line); font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .dash-mem-switch .set-seg{margin-left:auto}
 .dash .dash-mem-switch .set-seg button{height:24px; font-size:var(--dash-t-xs)}

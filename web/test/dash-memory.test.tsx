@@ -34,10 +34,21 @@ beforeEach(() => {
     { slug: "d2", title: "山", version: 1, chars: 4, updated_at: 1, state: "ready" },
   ]);
   vi.spyOn(api, "priorEnabled").mockResolvedValue(true);
+  vi.spyOn(api, "candidates").mockResolvedValue([]);
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe("MemoryPage", () => {
+  it("待確認區在最上面;存入後重新載入記憶", async () => {
+    vi.spyOn(api, "candidates").mockResolvedValue([{ id: 7, text: "先有最後一句", quote: "我都是先有最後一句", scope: "author",
+      session: "s1", seq: 0, slug: "d1", title: "海", at: 1 }]);
+    vi.spyOn(api, "saveCandidate").mockResolvedValue(mem({ id: 7 }));
+    mount();
+    const s = await screen.findByRole("region", { name: "待確認" });
+    const before = memories.mock.calls.length;
+    fireEvent.click(within(s).getByRole("button", { name: "存入關於我" }));
+    await waitFor(() => expect(memories.mock.calls.length).toBe(before + 1));
+  });
   it("頁底開關:顯示目前設定,點關閉呼叫 setPriorEnabled(false)", async () => {
     const set = vi.spyOn(api, "setPriorEnabled").mockResolvedValue(undefined);
     mount();
@@ -105,7 +116,7 @@ describe("MemoryPage", () => {
     memories.mockResolvedValueOnce(list(mem({ id: 1, text: "舊" })));
     memories.mockResolvedValueOnce(list(mem({ id: 1, text: "舊", invalidated_at: 2 }), mem({ id: 2, root: 1, text: "新" })));
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "改" }));
+    fireEvent.click(await screen.findByRole("button", { name: "編輯" }));
     fireEvent.change(screen.getByRole("textbox", { name: "記憶內容" }), { target: { value: "新" } });
     fireEvent.click(screen.getByRole("button", { name: "存" }));
     await waitFor(() => expect(edit).toHaveBeenCalledWith(1, "新"));
@@ -185,7 +196,7 @@ describe("MemoryPage", () => {
     memories.mockResolvedValue(list(mem({ id: 1, text: "舊" })));
     edit.mockRejectedValue(new DashError(422, "memory-full"));
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "改" }));
+    fireEvent.click(await screen.findByRole("button", { name: "編輯" }));
     fireEvent.change(screen.getByRole("textbox", { name: "記憶內容" }), { target: { value: "很長的字" } });
     fireEvent.click(screen.getByRole("button", { name: "存" }));
     expect((await screen.findByRole("alert")).textContent).toContain("滿了");
@@ -218,7 +229,7 @@ describe("MemoryPage", () => {
     memories.mockResolvedValueOnce(list(mem({ id: 1, text: "舊" })));
     memories.mockRejectedValue(new DashError(0, "den-down"));
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "改" }));
+    fireEvent.click(await screen.findByRole("button", { name: "編輯" }));
     fireEvent.change(screen.getByRole("textbox", { name: "記憶內容" }), { target: { value: "新" } });
     fireEvent.click(screen.getByRole("button", { name: "存" }));
     expect((await screen.findByRole("alert")).textContent).toContain("den");
