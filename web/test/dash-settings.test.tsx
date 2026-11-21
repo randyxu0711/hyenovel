@@ -39,6 +39,7 @@ function mount(path = "/settings") {
     if (u === "/api/works") return json({ works: [{ slug: "d1", title: "舊的", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
     if (u === "/api/works/d1") return json({ slug: "d1", title: "舊的", version: 1, versions: [1], text: "內文", state: "ready", job_id: null, notes_ready: false });
     if (u === "/api/memory") return json({ memories: [], caps: { author: 800, work: 600 } });
+    if (u === "/api/memory/works") return json({ works: [] });
     if (u.startsWith("/api/sessions/old1")) return json(DETAIL);
     if (u.startsWith("/api/sessions")) return json({ sessions: [row("old1", true), row("new1", false), row("old2", true)] });
     if (u === "/api/archived-works") return json({ works: [] });
@@ -73,7 +74,7 @@ describe("設定頁", () => {
     const nav = await shelf();
     const key = nav.getByRole("button", { name: "記憶" });
     fireEvent.click(key);
-    expect(await screen.findByRole("textbox", { name: "新增記憶" })).toBeTruthy();
+    expect(await screen.findByRole("group", { name: "關於我" })).toBeTruthy();
     expect(key.getAttribute("aria-current")).toBe("true");
     expect(document.querySelector(".dash-settings")!.getAttribute("data-section")).toBe("memory");
   });
@@ -423,12 +424,14 @@ describe("記憶頁跳回來源", () => {
         id: 1, root: 1, scope: "author", slug: "d1", title: "舊的", text: "記", quote: "那句", session: "s1", seq: 0,
         valid_from: 1, learned_at: 1, invalidated_at: null,
       }], caps: { author: 800, work: 600 } });
+      if (u === "/api/memory/works") return json({ works: [] });
       return json({ sessions: [] });
     }));
     render(<MemoryRouter initialEntries={["/settings"]}><Where />
       <Routes><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
     const nav = within(await screen.findByRole("navigation"));
     fireEvent.click(await nav.findByRole("button", { name: "記憶" }));
+    fireEvent.click(within(await screen.findByRole("group", { name: "關於我" })).getAllByRole("button")[0]);
     fireEvent.click(await screen.findByRole("link", { name: "那句" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d1"));
     expect(await within(await screen.findByRole("log")).findByText("那句我說的話")).toBeTruthy();

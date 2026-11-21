@@ -1107,6 +1107,48 @@
 .dash .dash-mem-old{margin:8px 0 0; padding-left:12px; border-left:1px solid var(--dash-line)}
 .dash .dash-mem-old li{margin:0 0 10px}
 .dash .char-note-peek{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap}
+.dash .dash-mg{margin:0 0 28px; border-top:1px solid var(--dash-line)}
+.dash .dash-mg-group{border-bottom:1px solid var(--dash-line)}
+.dash .dash-mg-head{display:flex; align-items:center; gap:4px; width:100%; padding:11px 4px; border:0; background:none; color:var(--dash-ink); font:inherit; font-size:var(--dash-t-sm); text-align:left; cursor:pointer}
+.dash .dash-mg-head:hover .dash-mg-name{text-decoration:underline; text-decoration-color:var(--dash-line); text-underline-offset:4px}
+.dash .dash-mg-name{flex:1; min-width:0; display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dash .dash-mg-arch{display:inline-flex; color:var(--dash-ink-2)}
+.dash .dash-mg-arch .ico{width:14px; height:14px}
+.dash .dash-mg-c{flex:none; display:inline-flex; align-items:center; justify-content:flex-end; gap:4px; width:44px; color:var(--dash-ink-2)}
+.dash .dash-mg-c .ico{width:15px; height:15px}
+.dash .dash-mg-c .dash-dm{font-size:var(--dash-t-xs)}
+.dash .dash-mg-chev{flex:none; display:inline-flex; margin-left:8px; color:var(--dash-ink-2); transform:rotate(90deg); transition:transform .15s}
+.dash .dash-mg-head[aria-expanded="true"] .dash-mg-chev{transform:rotate(-90deg)}
+.dash .dash-mg-chev .ico{width:14px; height:14px}
+.dash .dash-mg-body-wrap{padding:2px 4px 18px}
+.dash .dash-mg-blk{margin:0 0 18px}
+.dash .dash-mg-blk h3{display:flex; align-items:center; gap:6px; margin:0 0 10px; font-size:var(--dash-t-xs); font-weight:500; color:var(--dash-ink-2)}
+.dash .dash-mg-blk h3 .ico{width:14px; height:14px}
+.dash .dash-mg-blk h3 .dash-mem-use{margin-left:auto}
+.dash .dash-mg-blk h3 .dash-dm{font-size:var(--dash-t-xs)}
+.dash .dash-mg-ring{flex:none; display:inline-grid; place-items:center; box-sizing:border-box; width:13px; height:13px; padding:0; border:1.2px solid currentColor; border-radius:50%; background:none; color:var(--dash-ink-2); font-family:var(--sans); font-size:var(--dash-t-xs); line-height:1}
+.dash button.dash-mg-ring{width:15px; height:15px; margin-top:.35em; color:var(--dash-ink); cursor:pointer}
+.dash button.dash-mg-ring:hover{border-color:var(--dash-ink)}
+.dash .dash-mg-thread{display:flex; align-items:flex-start; gap:8px; margin:0 0 8px; font-size:var(--dash-t-sm)}
+.dash .dash-mg-thread[data-stale] .dash-mg-ring{width:15px; height:15px; margin-top:.35em; border-style:dashed}
+.dash .dash-mg-thread:is([data-ended], [data-stale]) .dash-mg-q{color:var(--dash-ink-2)}
+.dash .dash-mg-q{flex:1; min-width:0}
+.dash .dash-mg-state{flex:none; font-size:var(--dash-t-xs); color:var(--dash-ink-2); white-space:nowrap}
+.dash .dash-mg-go{flex:none; opacity:.55}
+.dash .dash-mg-thread:is(:hover, :focus-within) .dash-mg-go{opacity:1}
+.dash .dash-mg-digest{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:4px 12px; align-items:start; margin:0 0 12px; font-size:var(--dash-t-sm)}
+.dash .dash-mg-when{padding-top:.15em; font-size:var(--dash-t-xs); color:var(--dash-ink-2); white-space:nowrap}
+.dash .dash-mg-sum{margin:0; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; white-space:pre-wrap; cursor:pointer}
+.dash .dash-mg-sum[data-full]{display:block}
+.dash .dash-mg-acts{flex-wrap:nowrap; gap:2px}
+.dash .dash-mg-acts .ib{opacity:.55}
+.dash .dash-mg-digest:is(:hover, :focus-within) .dash-mg-acts .ib{opacity:1}
+.dash .dash-mg-add{display:inline-flex; align-items:center; gap:4px; padding-left:0}
+.dash .dash-mg-add .ico{width:14px; height:14px}
+.dash .dash-mg .dash-mem-add{margin:4px 0 0}
+@media (hover:none){ .dash :is(.dash-mg-go, .dash-mg-acts .ib, .dash-pend-bar .ib){opacity:1} }
+@media (prefers-reduced-motion:reduce){ .dash .dash-mg-chev{transition:none} }
+@media (max-width:520px){ .dash .dash-mg-digest{grid-template-columns:minmax(0,1fr) auto} .dash .dash-mg-when{grid-column:1 / -1} }
 .dash .dash-pend{margin:0 0 32px}
 .dash .dash-pend h2{display:flex; align-items:center; gap:8px; margin:0 0 12px; padding:0 0 8px; border-bottom:1px solid var(--dash-line); font-size:var(--dash-t-sm); font-weight:500}
 .dash .dash-pend h2 .dash-dm{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}

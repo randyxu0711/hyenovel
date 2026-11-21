@@ -1,0 +1,237 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { api, type DigestVersion, type Memory, type MemoryList, type MemoryScope, type WorkDigest, type WorkOverview, type WorkThread } from "./api";
+import { cpLength } from "./cp";
+import { useLang, useT } from "./i18n";
+import Icon from "./Icon";
+import { MAX_CHAT } from "./useTalk";
+import { whenLabel } from "./when";
+
+export type Reload = "memories" | "works" | "none";
+export type Act = (fn: () => Promise<unknown>, reload?: Reload) => Promise<boolean>;
+export type Chain = { live: Memory | null; rows: Memory[] };
+
+type Group = {
+  key: string; name: string; scope: MemoryScope; slug: string | null; archived: boolean;
+  chains: Chain[]; digests: WorkDigest[]; threads: WorkThread[];
+};
+
+const chatLink = (slug: string | null, session: string) =>
+  slug ? `/w/${encodeURIComponent(slug)}?s=${encodeURIComponent(session)}` : `/c/${encodeURIComponent(session)}`;
+
+export function chainsOf(memories: Memory[]): Chain[] {
+  const byRoot = new Map<number, Memory[]>();
+  for (const m of memories) byRoot.set(m.root, [...(byRoot.get(m.root) ?? []), m]);
+  return [...byRoot.values()].map(rows => ({ rows, live: rows.find(m => m.invalidated_at === null) ?? null }));
+}
+
+function groupsOf(chains: Chain[], works: WorkOverview[], authorName: string): Group[] {
+  const base = { chains: [] as Chain[], digests: [] as WorkDigest[], threads: [] as WorkThread[], archived: false };
+  const author: Group = { ...base, chains: [], key: "", name: authorName, scope: "author", slug: null };
+  const bySlug = new Map<string, Group>(works.map(w => [w.slug, {
+    ...base, chains: [], key: w.slug, name: w.title, scope: "work" as const, slug: w.slug, digests: w.digests, threads: w.threads,
+  }]));
+  const gone = new Map<string, Group>();
+  for (const c of chains) {
+    const m = c.live;
+    if (!m) continue;
+    if (m.scope === "author") { author.chains.push(c); continue; }
+    const slug = m.slug!;
+    const g = bySlug.get(slug) ?? gone.get(slug) ?? { ...base, chains: [], key: slug, name: m.title ?? slug, scope: "work" as const, slug, archived: true };
+    if (g.archived) gone.set(slug, g);
+    g.chains.push(c);
+  }
+  return [author, ...bySlug.values(), ...gone.values()];
+}
+
+export function Row({ chain, act }: { chain: Chain; act: Act }) {
+  const t = useT();
+  const m = chain.live!;
+  const [editing, setEditing] = useState<string | null>(null);
+  const [history, setHistory] = useState(false);
+  const old = chain.rows.filter(r => r.id !== m.id).reverse();
+  const save = async () => { if (await act(() => api.editMemory(m.id, editing!))) setEditing(null); };
+  return (
+    <li className="dash-mem-row">
+      {editing === null ? <p>{m.text}</p> : (
+        <textarea aria-label={t("memory.text")} rows={3} maxLength={MAX_CHAT} value={editing}
+          onChange={e => setEditing(e.target.value)} />
+      )}
+      {m.quote && m.session
+        ? <Link className="dash-mem-source" to={chatLink(m.slug, m.session)}>
+            {m.quote.trim() === m.text.trim() ? <><Icon name="talk" />{t("memory.fromChat")}</> : m.quote}</Link>
+        : <span className="dash-mem-source">{t("memory.typed")}</span>}
+      <div className="dash-mem-bar">
+        {editing === null
+          ? <button type="button" className="ib" aria-label={t("memory.edit")} title={t("memory.edit")} onClick={() => setEditing(m.text)}><Icon name="edit" /></button>
+          : <>
+              <button type="button" className="ib" aria-label={t("memory.cancel")} title={t("memory.cancel")} onClick={() => setEditing(null)}><Icon name="close" /></button>
+              <button type="button" className="dash-key" disabled={!editing.trim()} onClick={() => void save()}>{t("memory.store")}</button>
+            </>}
+        <button type="button" className="ib" aria-label={t("memory.archive")} title={t("memory.archive")}
+          onClick={() => void act(() => api.archiveMemory(m.id))}><Icon name="box" /></button>
+        {old.length > 0 && (
+          <button type="button" className="ib dash-mem-hist" aria-label={t("memory.history")} title={t("memory.history")} aria-expanded={history}
+            onClick={() => setHistory(h => !h)}><Icon name="history" /><span className="dash-dm">{old.length}</span></button>
+        )}
+      </div>
+      {history && (
+        <ul className="dash-mem-old">
+          {old.map(r => (
+            <li key={r.id}>
+              <p>{r.text}</p>
+              <button type="button" className="dash-set-opt" onClick={() => void act(() => api.revertMemory(r.id))}>{t("memory.backTo")}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function ThreadRow({ x, slug, act }: { x: WorkThread; slug: string; act: Act }) {
+  const t = useT();
+  const stale = x.stale && !x.ended;
+  return (
+    <li className="dash-mg-thread" data-ended={x.ended || undefined} data-stale={stale || undefined}>
+      {stale
+        ? <span className="dash-mg-ring" aria-hidden="true" />
+        : <button type="button" className="dash-mg-ring" aria-pressed={x.ended} aria-label={t(x.ended ? "prior.reopen" : "prior.end")}
+            title={t(x.ended ? "prior.reopen" : "prior.end")} onClick={() => void act(() => api.setThreadEnded(x.id, !x.ended), "works")}>{x.ended ? "✓" : ""}</button>}
+      <span className="dash-mg-q">{x.text}</span>
+      {stale
+        ? <span className="dash-mg-state">{t("mg.stale")}</span>
+        : <Link className="ib dash-mg-go" to={chatLink(slug, x.session)} aria-label={t("prior.goto")} title={t("prior.goto")}><Icon name="goto" /></Link>}
+    </li>
+  );
+}
+
+function DigestRow({ d, slug, act }: { d: WorkDigest; slug: string; act: Act }) {
+  const t = useT();
+  const lang = useLang();
+  const [full, setFull] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [versions, setVersions] = useState<DigestVersion[] | null>(null);
+  const toggleHistory = async () => {
+    if (versions) { setVersions(null); return; }
+    await act(async () => setVersions(await api.digestVersions(d.id)), "none");
+  };
+  const save = async () => { if (draft && await act(() => api.editDigest(d.id, draft), "works")) setDraft(null); };
+  return (
+    <li className="dash-mg-digest">
+      <span className="dash-mg-when">{whenLabel(d.at, Date.now() / 1000, lang)}</span>
+      <div className="dash-mg-body">
+        {draft === null
+          ? <p className="dash-mg-sum" data-full={full || undefined} onClick={() => setFull(f => !f)}>{d.text}</p>
+          : <textarea aria-label={t("mg.digests")} rows={3} value={draft} autoFocus onChange={e => setDraft(e.target.value)} />}
+        {versions && (
+          <ul className="dash-mem-old">
+            {versions.filter(v => !v.current).map(v => (
+              <li key={v.id}>
+                <p>{v.text}</p>
+                <button type="button" className="dash-set-opt"
+                  onClick={() => void act(() => api.revertDigest(v.id).then(() => setVersions(null)), "works")}>{t("mg.restore")}</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="dash-mem-bar dash-mg-acts">
+        {draft === null
+          ? <button type="button" className="ib" aria-label={t("memory.edit")} title={t("memory.edit")} onClick={() => setDraft(d.text)}><Icon name="edit" /></button>
+          : <>
+              <button type="button" className="ib" aria-label={t("memory.cancel")} title={t("memory.cancel")} onClick={() => setDraft(null)}><Icon name="close" /></button>
+              <button type="button" className="dash-key" disabled={!draft.trim()} onClick={() => void save()}>{t("prior.save")}</button>
+            </>}
+        {d.versions > 1 && (
+          <button type="button" className="ib dash-mem-hist" aria-label={t("memory.history")} title={t("memory.history")} aria-expanded={!!versions}
+            onClick={() => void toggleHistory()}><Icon name="history" /><span className="dash-dm">{d.versions - 1}</span></button>
+        )}
+        <Link className="ib" to={chatLink(slug, d.session)} aria-label={t("prior.goto")} title={t("prior.goto")}><Icon name="talk" /></Link>
+      </div>
+    </li>
+  );
+}
+
+function AddRow({ scope, slug, act }: { scope: MemoryScope; slug: string | null; act: Act }) {
+  const t = useT();
+  const [text, setText] = useState<string | null>(null);
+  if (text === null) {
+    return <button type="button" className="dash-pend-lnk dash-mg-add" onClick={() => setText("")}><Icon name="plus" />{t("mg.addOpen")}</button>;
+  }
+  const add = async () => {
+    const body = scope === "work" ? { scope, slug: slug!, text } : { scope, text };
+    if (await act(() => api.remember(body))) setText(null);
+  };
+  return (
+    <form className="dash-mem-add" onSubmit={e => { e.preventDefault(); if (text.trim()) void add(); }}>
+      <textarea aria-label={t("memory.new")} placeholder={t("memory.new")} rows={2} maxLength={MAX_CHAT} value={text} autoFocus
+        onChange={e => setText(e.target.value)} />
+      <div className="dash-mem-bar">
+        <button type="button" className="ib" aria-label={t("memory.cancel")} title={t("memory.cancel")} onClick={() => setText(null)}><Icon name="close" /></button>
+        <button type="submit" className="dash-key dash-mem-go" disabled={!text.trim()}>{t("memory.add")}</button>
+      </div>
+    </form>
+  );
+}
+
+function Count({ icon, label, n }: { icon: React.ReactNode; label: string; n: number }) {
+  if (n === 0) return <span className="dash-mg-c" />;
+  return <span className="dash-mg-c" role="img" aria-label={`${label} ${n}`} title={label}>{icon}<span className="dash-dm">{n}</span></span>;
+}
+
+export default function MemoryGroups({ data, works, act }: { data: MemoryList; works: WorkOverview[]; act: Act }) {
+  const t = useT();
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const groups = groupsOf(chainsOf(data.memories), works, t("memory.scope.author"));
+  const flip = (k: string) => setOpen(s => { const n = new Set(s); if (!n.delete(k)) n.add(k); return n; });
+  return (
+    <div className="dash-mg">
+      {groups.map(g => {
+        const isOpen = open.has(g.key);
+        const cap = g.scope === "author" ? data.caps.author : data.caps.work;
+        const used = g.chains.reduce((n, c) => n + cpLength(c.live!.text), 0);
+        const openThreads = g.threads.filter(x => !x.ended && !x.stale).length;
+        return (
+          <section key={g.key} role="group" aria-label={g.name} className="dash-mg-group" data-open={isOpen || undefined}>
+            <button type="button" className="dash-mg-head" aria-expanded={isOpen} onClick={() => flip(g.key)}>
+              <span className="dash-mg-name">{g.name}{g.archived && <span className="dash-mg-arch" role="img" aria-label={t("mg.archivedWork")} title={t("mg.archivedWork")}><Icon name="box" /></span>}</span>
+              <Count icon={<Icon name="memory" />} label={t("mg.memories")} n={g.chains.length} />
+              {g.scope === "work" && <>
+                <Count icon={<span className="dash-mg-ring" aria-hidden="true" />} label={t("mg.threads")} n={openThreads} />
+                <Count icon={<Icon name="prior" />} label={t("mg.digests")} n={g.digests.length} />
+              </>}
+              <span className="dash-mg-chev" aria-hidden="true"><Icon name="next" /></span>
+            </button>
+            {isOpen && (
+              <div className="dash-mg-body-wrap">
+                {(g.chains.length > 0 || g.scope === "author") && (
+                  <div className="dash-mg-blk">
+                    <h3>{g.scope === "work" && <><Icon name="memory" />{t("mg.memories")}</>}
+                      <span className="dash-mem-use"><i style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} /></span><span className="dash-dm">{used}/{cap}</span></h3>
+                    {g.chains.length === 0
+                      ? <p className="dash-mem-empty">{t("memory.empty")}</p>
+                      : <ul>{g.chains.map(c => <Row key={c.rows[0].root} chain={c} act={act} />)}</ul>}
+                  </div>
+                )}
+                {g.threads.length > 0 && (
+                  <div className="dash-mg-blk">
+                    <h3><span className="dash-mg-ring" aria-hidden="true" />{t("mg.threads")}</h3>
+                    <ul>{g.threads.map(x => <ThreadRow key={x.id} x={x} slug={g.slug!} act={act} />)}</ul>
+                  </div>
+                )}
+                {g.digests.length > 0 && (
+                  <div className="dash-mg-blk">
+                    <h3><Icon name="prior" />{t("mg.digests")}</h3>
+                    <ul>{g.digests.map(d => <DigestRow key={d.id} d={d} slug={g.slug!} act={act} />)}</ul>
+                  </div>
+                )}
+                {!g.archived && <AddRow scope={g.scope} slug={g.slug} act={act} />}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
