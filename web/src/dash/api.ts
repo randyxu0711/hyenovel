@@ -125,7 +125,15 @@ export type PriorThread = {
   id: number; root_id: number; text: string; quote: string; at: number; session: string; stale: boolean;
   ended?: boolean; talked?: boolean;
 };
-export type Prior = { enabled: boolean; digests: PriorDigest[]; threads: PriorThread[] };
+export type Prior = { enabled: boolean; digests: PriorDigest[]; threads: PriorThread[]; pending_memories?: number };
+export type MemoryCandidate = {
+  id: number; text: string; quote: string; scope: MemoryScope; session: string; seq: number;
+  slug: string | null; title: string | null; at: number;
+};
+export type WorkDigest = PriorDigest & { versions: number };
+export type WorkThread = PriorThread & { ended: boolean };
+export type WorkOverview = { slug: string; title: string; digests: WorkDigest[]; threads: WorkThread[] };
+export type DigestVersion = { id: number; text: string; edited: boolean; created_at: number; current: boolean };
 export type PriorSnapshot = {
   digests: { id: number; at: number; text: string }[];
   threads: { id: number; text: string; quote: string; at: number; session: string; ended: boolean; talked: boolean }[];
@@ -295,7 +303,7 @@ export const api = {
   /** session 為 null = 開新局(局 id 在 done 事件裡回);slug 為 null = 不帶作品的局。 */
   prior: async (slug: string): Promise<Prior> => {
     const d = await request<Partial<Prior>>(`/api/works/${encodeURIComponent(slug)}/prior`);
-    return { enabled: d.enabled ?? true, digests: d.digests ?? [], threads: d.threads ?? [] };
+    return { enabled: d.enabled ?? true, digests: d.digests ?? [], threads: d.threads ?? [], pending_memories: d.pending_memories ?? 0 };
   },
   preparePrior: (slug: string) =>
     request<unknown>(`/api/works/${encodeURIComponent(slug)}/prior/prepare`, { method: "POST" }).then(() => undefined, () => undefined),
@@ -303,6 +311,16 @@ export const api = {
   setThreadEnded: (id: number, ended: boolean) => request<void>(`/api/threads/${id}`, { ...post({ ended }), method: "PUT" }),
   setTalked: (session: string, id: number, talked: boolean) =>
     request<void>(`${sessionUrl(session)}/threads/${id}/talked`, { ...post({ talked }), method: "PUT" }),
+  candidates: () => request<{ candidates: MemoryCandidate[] }>("/api/memory/candidates").then(r => r.candidates),
+  saveCandidate: (id: number, scope: MemoryScope, text?: string) =>
+    request<Memory>(`/api/memory/candidates/${id}/save`, post(text === undefined ? { scope } : { scope, text })),
+  skipCandidate: (id: number) => request<void>(`/api/memory/candidates/${id}/skip`, { method: "POST" }),
+  undoCandidate: (id: number) => request<void>(`/api/memory/candidates/${id}/undo`, { method: "POST" }),
+  suggestEnabled: async () => (await request<{ enabled: boolean }>("/api/settings/suggest")).enabled,
+  setSuggestEnabled: (enabled: boolean) => request<void>("/api/settings/suggest", { ...post({ enabled }), method: "PUT" }),
+  memoryWorks: () => request<{ works: WorkOverview[] }>("/api/memory/works").then(r => r.works),
+  digestVersions: (id: number) => request<{ versions: DigestVersion[] }>(`/api/digests/${id}/versions`).then(r => r.versions),
+  revertDigest: (id: number) => request<{ id: number }>(`/api/digests/${id}/revert`, { method: "POST" }),
   priorEnabled: async () => (await request<{ enabled: boolean }>("/api/settings/prior")).enabled,
   setPriorEnabled: (enabled: boolean) => request<void>("/api/settings/prior", { ...post({ enabled }), method: "PUT" }),
   talk: (slug: string | null, body: { session: string | null; message: string; character: string; quotes: string[]; attach?: AttachIn; cmp?: number | null; prior?: boolean },

@@ -224,7 +224,8 @@ function Shell({ chars }: { chars: Characters }) {
             talk={talk} quotes={quotes} ob={cmpData ? null : ob} onOb={setOb} analyzing={analyzing}
             cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))} onBring={cmpSend !== null ? carry : undefined}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
-            onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
+            onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }}
+            onMemory={() => { setSection("memory"); nav("/settings"); }} />
         </aside>
       )}
       {focused && (

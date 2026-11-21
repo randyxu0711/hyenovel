@@ -132,6 +132,9 @@
 .dash .chat-prior-go:disabled{cursor:default}
 .dash .chat-prior-card li:is(:hover, :focus-within) .chat-prior-go:disabled{opacity:.3}
 @media (hover:none){ .dash .chat-prior-go{opacity:.6} }
+.dash .dash-pend{flex:none; display:inline-block; width:6px; height:6px; border-radius:50%; background:currentColor}
+.dash .chat-prior-foot{display:flex; align-items:center; gap:6px; margin:10px 0 0; padding-top:8px; border-top:1px solid var(--dash-line); font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2)}
+.dash .chat-prior-foot .chat-prior-lnk{margin-left:auto}
 .dash .chat-prior-state{display:inline-flex; align-items:center; gap:2px; padding-left:6px; font-family:var(--sans); font-size:var(--dash-t-xs); color:var(--dash-paper-ink-2); white-space:nowrap}
 .dash .chat-prior-off{margin-block:6px}
 .dash .chat-prior-off::before, .dash .chat-prior-off::after{background:color-mix(in srgb, var(--dash-ink-2) 25%, transparent)}

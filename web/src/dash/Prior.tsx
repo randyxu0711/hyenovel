@@ -7,8 +7,9 @@ import { whenLabel } from "./when";
 type Digest = { id: number; at: number; text: string };
 type Thread = { id: number; text: string; at: number; session: string; ended: boolean; talked: boolean };
 
-function Card({ session, digests, threads, open, onOpen, live, busy, onSkip, onEdited, onGoto, setThreads }: {
+function Card({ session, digests, threads, open, onOpen, live, busy, onSkip, onEdited, onGoto, setThreads, pending = 0, onMemory }: {
   session: string | null; digests: Digest[]; threads: Thread[]; open: boolean; onOpen: (o: boolean) => void;
+  pending?: number; onMemory?: () => void;
   live: boolean; busy?: boolean; onSkip?: () => void; onEdited?: () => Promise<void>;
   onGoto: (session: string) => void; setThreads: (fn: (ts: Thread[]) => Thread[]) => void;
 }) {
@@ -107,14 +108,18 @@ function Card({ session, digests, threads, open, onOpen, live, busy, onSkip, onE
               </ul>
             </>
           )}
+          {live && pending > 0 && (
+            <p className="chat-prior-foot"><span className="dash-pend" aria-hidden="true" />{t("prior.pending", { n: pending })}
+              {onMemory && <button type="button" className="chat-prior-lnk" onClick={onMemory}>{t("prior.toMemory")}</button>}</p>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function Live({ slug, skipped, onSkip, onGoto, busy }: {
-  slug: string; skipped: boolean; onSkip: (on: boolean) => void; onGoto: (session: string) => void; busy: boolean;
+function Live({ slug, skipped, onSkip, onGoto, onMemory, busy }: {
+  slug: string; skipped: boolean; onSkip: (on: boolean) => void; onGoto: (session: string) => void; onMemory?: () => void; busy: boolean;
 }) {
   const t = useT();
   const [data, setData] = useState<PriorData | null>(null);
@@ -136,7 +141,7 @@ function Live({ slug, skipped, onSkip, onGoto, busy }: {
   }
   return (
     <Card session={null} onGoto={onGoto} digests={data.digests} threads={threads} setThreads={setThreads} open={open} onOpen={setOpen}
-      live busy={busy} onSkip={() => onSkip(true)} onEdited={load} />
+      live busy={busy} onSkip={() => onSkip(true)} onEdited={load} pending={data.pending_memories} onMemory={onMemory} />
   );
 }
 
@@ -150,9 +155,9 @@ function Snapshot({ session, snapshot, onGoto, busy }: { session: string; snapsh
 }
 
 export default function Prior(props: { onGoto: (session: string) => void; busy: boolean } & (
-  | { mode: "live"; slug: string; skipped: boolean; onSkip: (on: boolean) => void }
+  | { mode: "live"; slug: string; skipped: boolean; onSkip: (on: boolean) => void; onMemory?: () => void }
   | { mode: "snapshot"; session: string; snapshot: PriorSnapshot | null })) {
-  if (props.mode === "live") return <Live slug={props.slug} skipped={props.skipped} onSkip={props.onSkip} onGoto={props.onGoto} busy={props.busy} />;
+  if (props.mode === "live") return <Live slug={props.slug} skipped={props.skipped} onSkip={props.onSkip} onGoto={props.onGoto} onMemory={props.onMemory} busy={props.busy} />;
   if (!props.snapshot) return null;
   return <Snapshot session={props.session} snapshot={props.snapshot} onGoto={props.onGoto} busy={props.busy} />;
 }
