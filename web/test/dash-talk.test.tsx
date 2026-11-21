@@ -174,7 +174,7 @@ describe("選人", () => {
   });
 });
 
-describe("換預設讀伴在作品頁立即生效", () => {
+describe("換首選讀伴在作品頁立即生效", () => {
   it("作品頁 ⌘K 選「讀伴：水牛」→ 輸入框旁換成水牛,下一輪送給水牛", async () => {
     mount();
     await screen.findByText("第一段。");
@@ -193,7 +193,7 @@ describe("換預設讀伴在作品頁立即生效", () => {
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     fireEvent.click(await within(screen.getByRole("navigation")).findByRole("button", { name: "讀伴" }));
     fireEvent.click(await screen.findByRole("button", { name: "打開鹿" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "鹿" })).getByRole("button", { name: "設為預設" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "鹿" })).getByRole("button", { name: "設為首選" }));
     fireEvent.keyDown(screen.getByRole("dialog", { name: "鹿" }), { key: "Escape" });
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品：海" }));

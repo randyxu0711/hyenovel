@@ -58,7 +58,7 @@ const page = async () => within(await screen.findByRole("region", { name: "設�
 const shelf = async () => within(await screen.findByRole("navigation"));
 const go = async (name: string) => fireEvent.click((await shelf()).getByRole("button", { name }));
 type Q = ReturnType<typeof within>;
-const card = (p: Q, name: string) => p.getByRole("button", { name: `打開${name}` });
+const card = (p: Q, name: string) => p.getByRole("button", { name: new RegExp(`^打開${name}(（首選）)?$`) });
 const isDefault = (p: Q, name: string) => card(p, name).getAttribute("data-on") === "true";
 const sheet = (p: Q, name: string) => { fireEvent.click(card(p, name)); return within(p.getByRole("dialog", { name })); };
 
@@ -210,7 +210,7 @@ describe("設定頁", () => {
     });
     const p = await page();
     await go("讀伴");
-    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為首選" }));
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     const who = () => document.querySelector(".home form.composer svg.fig")?.getAttribute("data-who");
@@ -236,7 +236,7 @@ describe("設定頁", () => {
     Object.defineProperty(file, "text", { value: async () => "{}" });
     fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() => expect(lists).toBe(1));
-    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為首選" }));
     await waitFor(() => expect(f.mock.calls.some(([u]) => u === "/api/characters/default")).toBe(true));
     await new Promise(r => setTimeout(r, 0));
     release();
@@ -254,7 +254,7 @@ describe("設定頁", () => {
         : (base as (...a: unknown[]) => Promise<Response>)(u, ...rest));
     const p = await page();
     await go("讀伴");
-    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為首選" }));
     expect(await p.findByRole("alert")).toBeTruthy();
     expect(isDefault(p, "鬣狗")).toBe(true);
     expect(isDefault(p, "水牛")).toBe(false);
@@ -264,7 +264,7 @@ describe("設定頁", () => {
     const p = await page();
     await go("讀伴");
     expect(p.getAllByText("一句話")).toHaveLength(3);
-    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為預設" }));
+    fireEvent.click(sheet(p, "水牛").getByRole("button", { name: "設為首選" }));
     expect(isDefault(p, "水牛")).toBe(true);
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]) =>
@@ -277,26 +277,28 @@ describe("設定頁", () => {
     mount();
     const p = await page();
     await go("讀伴");
-    const tagged = () => p.getAllByRole("button", { name: /^打開/ }).filter(b => b.querySelector(".char-tag")?.textContent === "預設");
+    const tagged = () => p.getAllByRole("button", { name: /^打開/ }).filter(b => b.querySelector(".char-ribbon"));
     expect(tagged()).toEqual([card(p, "鬣狗")]);
+    expect(card(p, "鬣狗").getAttribute("aria-label")).toBe("打開鬣狗（首選）");
     const s = sheet(p, "鹿");
-    fireEvent.click(s.getByRole("button", { name: "設為預設" }));
+    fireEvent.click(s.getByRole("button", { name: "設為首選" }));
     expect(tagged()).toEqual([card(p, "鹿")]);
     expect(s.queryByRole("button", { name: /預設/ })).toBeNull();
-    expect(s.getByText("預設", { selector: ".char-tag" })).toBeTruthy();
+    expect(s.getByRole("img", { name: "首選" })).toBeTruthy();
+    expect(s.getByText("首選讀伴")).toBeTruthy();
   });
 
-  it("預設是蓋上去的章:用角色自己的顏色;剛按下才播蓋章,打開本來就是預設的不播", async () => {
+  it("預設是書籤緞帶:用角色自己的顏色;剛按下才垂下來,打開本來就是預設的不播", async () => {
     mount();
     const p = await page();
     await go("讀伴");
-    const already = sheet(p, "鬣狗").getByText("預設", { selector: ".char-stamp" });
+    const already = sheet(p, "鬣狗").getByRole("img", { name: "首選" });
     expect(already.hasAttribute("data-fresh")).toBe(false);
-    expect(already.style.color).not.toBe("");
+    expect(already.style.getPropertyValue("--rib")).not.toBe("");
     fireEvent.keyDown(p.getByRole("dialog"), { key: "Escape" });
     const s = sheet(p, "鹿");
-    fireEvent.click(s.getByRole("button", { name: "設為預設" }));
-    expect(s.getByText("預設", { selector: ".char-stamp" }).hasAttribute("data-fresh")).toBe(true);
+    fireEvent.click(s.getByRole("button", { name: "設為首選" }));
+    expect(s.getByRole("img", { name: "首選" }).hasAttribute("data-fresh")).toBe(true);
   });
 
   it("舊討論:只數 legacy 局,進來就列出,看得到逐字,沒有輸入框", async () => {
@@ -580,7 +582,7 @@ describe("設定頁:角色卡", () => {
       const fresh = await p.findByRole("button", { name: "打開門縫" });
       expect(fresh.getAttribute("data-fresh")).toBe("true");
       expect(document.activeElement).toBe(fresh);
-      expect(p.getByRole("button", { name: "打開鬣狗" }).hasAttribute("data-fresh")).toBe(false);
+      expect(card(p, "鬣狗").hasAttribute("data-fresh")).toBe(false);
       expect(p.getByRole("button", { name: "新角色" })).toBeTruthy();
     } finally {
       drop();
