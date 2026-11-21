@@ -122,7 +122,9 @@ function DigestRow({ d, slug, act }: { d: WorkDigest; slug: string; act: Act }) 
       <span className="dash-mg-when">{whenLabel(d.at, Date.now() / 1000, lang)}</span>
       <div className="dash-mg-body">
         {draft === null
-          ? <p className="dash-mg-sum" data-full={full || undefined} onClick={() => setFull(f => !f)}>{d.text}</p>
+          ? <p className="dash-mg-sum" data-full={full || undefined} role="button" tabIndex={0} aria-expanded={full}
+              onClick={() => setFull(f => !f)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFull(f => !f); } }}>{d.text}</p>
           : <textarea aria-label={t("mg.digests")} rows={3} value={draft} autoFocus onChange={e => setDraft(e.target.value)} />}
         {versions && (
           <ul className="dash-mem-old">

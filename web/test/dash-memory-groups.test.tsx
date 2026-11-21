@@ -145,3 +145,55 @@ describe("MemoryGroups", () => {
     expect(names()[names().length - 1]).toBe("舊作");
   });
 });
+
+describe("MemoryGroups review fixes", () => {
+  it("works not loaded yet: work memories are not shown as archived", async () => {
+    let finish!: (w: WorkOverview[]) => void;
+    works.mockImplementation(() => new Promise(r => { finish = r; }));
+    mount();
+    await waitFor(() => expect(memories).toHaveBeenCalled());
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.querySelector(".dash-mg-arch")).toBeNull();
+    finish([sea()]);
+    expect(await screen.findByRole("group", { name: "海" })).toBeTruthy();
+    expect(document.querySelector(".dash-mg-arch")).toBeNull();
+  });
+
+  it("works failing to load shows the reason", async () => {
+    const { DashError } = await import("../src/dash/api");
+    works.mockRejectedValue(new DashError(0, "den-down"));
+    mount();
+    expect((await screen.findByRole("alert")).textContent).toContain("den");
+  });
+
+  it("stale digest edit reloads works so the next save uses the new id", async () => {
+    const { DashError } = await import("../src/dash/api");
+    vi.spyOn(api, "editDigest").mockRejectedValue(new DashError(409, "stale-digest"));
+    mount();
+    const g = await open("海");
+    const w0 = works.mock.calls.length;
+    const li = within(g).getByText("海豚那段。").closest("li") as HTMLElement;
+    fireEvent.click(within(li).getByRole("button", { name: "編輯" }));
+    fireEvent.change(within(li).getByRole("textbox"), { target: { value: "改" } });
+    fireEvent.click(within(li).getByRole("button", { name: "儲存" }));
+    await waitFor(() => expect(works.mock.calls.length).toBe(w0 + 1));
+  });
+
+  it("digest summary expands from the keyboard", async () => {
+    mount();
+    const g = await open("海");
+    const sum = within(g).getByRole("button", { name: "初讀。" });
+    expect(sum.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.keyDown(sum, { key: "Enter" });
+    expect(sum.getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("MemoryPending layout", () => {
+  it("section and dot do not share a class", async () => {
+    vi.spyOn(api, "candidates").mockResolvedValue([{ id: 1, text: "甲", quote: "甲", scope: "author", session: "s", seq: 0, slug: null, title: null, at: now }]);
+    mount();
+    const s = await screen.findByRole("region", { name: "待確認" });
+    expect(s.classList.contains("dash-pend")).toBe(false);
+  });
+});

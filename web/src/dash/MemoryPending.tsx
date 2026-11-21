@@ -82,7 +82,7 @@ export default function MemoryPending({ onChange, onCount }: { onChange: () => v
   const item = (c: MemoryCandidate) =>
     <Item key={c.id} c={c} done={done[c.id]} onDone={(d, text) => finish(c, d, text)} onUndo={() => undo(c)} />;
   return (
-    <section className="dash-pend" aria-label={t("pend.title")}>
+    <section className="dash-pend-sec" aria-label={t("pend.title")}>
       <h2><span className="dash-pend-dot" aria-hidden="true" />{t("pend.title")} <span className="dash-dm">{left}</span></h2>
       {code && <p role="alert" className="dash-pend-err">{t(errorMessage(code))}</p>}
       <ul>{list.slice(0, SHOWN).map(item)}</ul>

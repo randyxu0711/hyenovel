@@ -34,28 +34,29 @@ const noop = () => {};
 export default function MemoryPage({ onPending = noop }: { onPending?: (n: number) => void }) {
   const t = useT();
   const [data, setData] = useState<MemoryList | null>(null);
-  const [works, setWorks] = useState<WorkOverview[]>([]);
+  const [works, setWorks] = useState<WorkOverview[] | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const fail = (e: unknown) => setCode(e instanceof DashError ? e.code : "unknown");
   const reloadMemories = useCallback(() => api.memories().then(setData), []);
   const reloadWorks = useCallback(() => api.memoryWorks().then(setWorks), []);
-  useEffect(() => { reloadMemories().catch(fail); reloadWorks().catch(() => setWorks([])); }, [reloadMemories, reloadWorks]);
+  useEffect(() => { reloadMemories().catch(fail); reloadWorks().catch(fail); }, [reloadMemories, reloadWorks]);
 
   const acting = useRef(false);
   const act: Act = async (fn, reload: Reload = "memories") => {
     if (acting.current) return false;
     acting.current = true;
+    let ok = true;
     try {
       await fn();
+      setCode(null);
     } catch (e) {
       fail(e);
-      return false;
+      ok = false;
     } finally { acting.current = false; }
-    setCode(null);
     if (reload === "memories") await reloadMemories().catch(fail);
     if (reload === "works") await reloadWorks().catch(fail);
-    return true;
+    return ok;
   };
 
   const [pendKey, setPendKey] = useState(0);
@@ -66,7 +67,7 @@ export default function MemoryPage({ onPending = noop }: { onPending?: (n: numbe
     <div className="dash-mem">
       <MemoryPending key={pendKey} onChange={() => void reloadMemories().catch(fail)} onCount={onPending} />
       {code && <p role="alert">{t(errorMessage(code))}</p>}
-      {data && <MemoryGroups data={data} works={works} act={act} />}
+      {data && works && <MemoryGroups data={data} works={works} act={act} />}
       <footer className="dash-mem-foot">
         {prior !== null && <Switch label={t("memory.priorSwitch")} on={prior} onLabel={t("memory.on")} pick={v => void setPrior(v)} />}
         {suggest !== null && <Switch label={t("memory.suggestSwitch")} on={suggest} onLabel={t("memory.suggestOn")} pick={v => void setSuggest(v)} />}

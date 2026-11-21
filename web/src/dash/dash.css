@@ -1143,6 +1143,7 @@
 .dash .dash-mg-when{padding-top:.15em; font-size:var(--dash-t-xs); color:var(--dash-ink-2); white-space:nowrap}
 .dash .dash-mg-sum{margin:0; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; white-space:pre-wrap; cursor:pointer}
 .dash .dash-mg-sum[data-full]{display:block}
+.dash .dash-mg-sum:focus-visible{outline:2px solid var(--dash-ink-2); outline-offset:2px; border-radius:2px}
 .dash .dash-mg-acts{flex-wrap:nowrap; gap:2px}
 .dash .dash-mg-acts .ib{opacity:.55}
 .dash .dash-mg-digest:is(:hover, :focus-within) .dash-mg-acts .ib{opacity:1}
@@ -1152,9 +1153,9 @@
 @media (hover:none){ .dash :is(.dash-mg-go, .dash-mg-acts .ib, .dash-pend-bar .ib){opacity:1} }
 @media (prefers-reduced-motion:reduce){ .dash .dash-mg-chev{transition:none} }
 @media (max-width:520px){ .dash .dash-mg-digest{grid-template-columns:minmax(0,1fr) auto} .dash .dash-mg-when{grid-column:1 / -1} }
-.dash .dash-pend{margin:0 0 32px}
-.dash .dash-pend h2{display:flex; align-items:center; gap:8px; margin:0 0 12px; padding:0 0 8px; border-bottom:1px solid var(--dash-line); font-size:var(--dash-t-sm); font-weight:500}
-.dash .dash-pend h2 .dash-dm{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
+.dash .dash-pend-sec{margin:0 0 32px}
+.dash .dash-pend-sec h2{display:flex; align-items:center; gap:8px; margin:0 0 12px; padding:0 0 8px; border-bottom:1px solid var(--dash-line); font-size:var(--dash-t-sm); font-weight:500}
+.dash .dash-pend-sec h2 .dash-dm{font-size:var(--dash-t-xs); color:var(--dash-ink-2)}
 .dash .dash-pend-dot{flex:none; width:6px; height:6px; border-radius:50%; background:currentColor}
 .dash .dash-pend-item{margin:0 0 16px}
 .dash .dash-pend-text{margin:0 0 4px; white-space:pre-wrap}
