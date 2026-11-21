@@ -53,9 +53,11 @@ export default function MemoryPage({ onPending = noop, toPending = false }: { on
     } catch (e) {
       fail(e);
       ok = false;
+    }
+    try {
+      if (reload === "memories") await reloadMemories().catch(fail);
+      if (reload === "works") await reloadWorks().catch(fail);
     } finally { acting.current = false; }
-    if (reload === "memories") await reloadMemories().catch(fail);
-    if (reload === "works") await reloadWorks().catch(fail);
     return ok;
   };
 

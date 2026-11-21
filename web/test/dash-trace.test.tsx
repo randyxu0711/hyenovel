@@ -68,9 +68,9 @@ describe("TraceTab", () => {
   it("old text is only quotable with onBring: click quotes it, never jumps", () => {
     const bring = vi.fn();
     mount(CMP(POINTS), bring);
-    fireEvent.click(screen.getByRole("button", { name: "引用至對話:「被刪句」" }));
+    fireEvent.click(screen.getByRole("button", { name: "引用至對話：「被刪句」" }));
     expect(bring).toHaveBeenLastCalledWith("被刪句");
-    fireEvent.click(screen.getByRole("button", { name: "引用至對話:「舊句」" }));
+    fireEvent.click(screen.getByRole("button", { name: "引用至對話：「舊句」" }));
     expect(bring).toHaveBeenLastCalledWith("舊句");
   });
 

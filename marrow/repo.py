@@ -461,7 +461,8 @@ def delete_discussion(conn, discussion_id: int) -> None:
 
 # ── memory candidate ──
 
-_CANDIDATE = ("SELECT c.*, d.external_id AS session, d.story_id AS story_id, st.slug AS slug "
+_CANDIDATE = ("SELECT c.*, d.external_id AS session, d.story_id AS story_id, st.slug AS slug, "
+              "st.archived_at AS story_archived_at "
               "FROM memory_candidate c "
               "JOIN discussion d ON d.id = c.discussion_id LEFT JOIN story st ON st.id = d.story_id ")
 
@@ -519,6 +520,10 @@ def current_digest(conn, discussion_id: int) -> dict | None:
 
 def digest_versions(conn, root_id: int) -> list[dict]:
     return [_row(r) for r in conn.execute("SELECT * FROM digest WHERE root_id = ? ORDER BY id", (root_id,))]
+
+
+def digest_version_count(conn, root_id: int) -> int:
+    return conn.execute("SELECT COUNT(*) FROM digest WHERE root_id = ?", (root_id,)).fetchone()[0]
 
 
 def digest_by_id(conn, digest_id: int) -> dict | None:

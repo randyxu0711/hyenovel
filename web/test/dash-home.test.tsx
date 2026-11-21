@@ -104,7 +104,7 @@ describe("進門只有一欄聊天", () => {
     mount();
     fireEvent.click(within(await screen.findByRole("navigation")).getByRole("button", { name: /^海/ }));
     await screen.findByText("內文一行");
-    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(screen.getByRole("button", { name: "新聊天" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
     const b = await box();
     await waitFor(() => expect(document.activeElement).toBe(b));
@@ -127,7 +127,7 @@ describe("沒有作品", () => {
     const text = "\n# 海邊\n" + "字".repeat(2001);
     discussDown = true;
     fireEvent.paste(b, { clipboardData: { getData: () => text } });
-    expect(await screen.findByRole("button", { name: "不帶這份稿" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "移除這份稿" })).toBeTruthy();
     expect(document.querySelector(".composer .chat-staged")!.textContent).toContain("海邊");
     expect((screen.getByRole("button", { name: "送出" }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -152,8 +152,8 @@ describe("作品清單還沒到 / 抓不到", () => {
   it("抓失敗:顯示錯誤", async () => {
     worksFetch = async () => { throw new TypeError("down"); };
     mount();
-    expect(await screen.findByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toBe("連不上本機的 den,請確認它有在跑。");
+    expect(await screen.findByText("無法連線至本機 den，請確認是否在執行。")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toBe("無法連線至本機 den，請確認是否在執行。");
   });
 });
 
@@ -193,7 +193,7 @@ describe("進門聊天", () => {
     const talk = within(await screen.findByRole("region", { name: "對話" }));
     fireEvent.change(talk.getByLabelText("對話輸入"), { target: { value: "隨便聊聊" } });
     fireEvent.click(talk.getByRole("button", { name: "送出" }));
-    expect((await talk.findByText("鬣狗在想")).closest("[role=status]")).toBeTruthy();
+    expect((await talk.findByText("鬣狗思考中")).closest("[role=status]")).toBeTruthy();
     expect(talk.queryByText(/稿/)).toBeNull();
   });
 
@@ -214,7 +214,7 @@ describe("進門聊天", () => {
     chat = { c1: detail("c1") };
     mount("/c/c1");
     expect(await screen.findByText("c1 的話")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(screen.getByRole("button", { name: "新聊天" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
     await waitFor(() => expect(screen.queryByText("c1 的話")).toBeNull());
   });
@@ -225,7 +225,7 @@ describe("進門聊天", () => {
     chat = { w1: { ...detail("w1"), slug: "d2", title: "海", version: 1 } };
     mount("/w/d2?s=w1");
     await screen.findByText("w1 的話");
-    fireEvent.click(within(screen.getByRole("region", { name: "聊天" })).getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "聊天" })).getByRole("button", { name: "新聊天" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("對話輸入")));
     await new Promise(r => setTimeout(r, 50));
@@ -249,7 +249,7 @@ describe("進門聊天", () => {
     await screen.findByText("c1 的話");
     const group = within(screen.getByRole("region", { name: "聊天" }));
     await group.findByText("聊海");
-    fireEvent.click(group.getByRole("button", { name: "封存這局" }));
+    fireEvent.click(group.getByRole("button", { name: "封存對話" }));
     await waitFor(() => expect(group.queryByText("聊海")).toBeNull());
     expect(calls.some(c => c.url === "/api/sessions/c1/archive")).toBe(true);
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
@@ -263,7 +263,7 @@ describe("進門聊天", () => {
     mount("/c/c1");
     await screen.findByText("c1 的話");
     const group = within(screen.getByRole("region", { name: "聊天" }));
-    fireEvent.click(await group.findByRole("button", { name: "封存這局" }));
+    fireEvent.click(await group.findByRole("button", { name: "封存對話" }));
     const undo = await screen.findByRole("button", { name: "復原" });
     expect(screen.getByText("已封存")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/"));
@@ -277,7 +277,7 @@ describe("進門聊天", () => {
     localStorage.setItem("hyenovel.shelf", "open");
     boxed = [{ session: "z1", slug: null, title: null, archived_at: 1, last_at: 1, preview: "舊的" }];
     mount();
-    const entry = await within(await screen.findByRole("region", { name: "聊天" })).findByRole("button", { name: /封存的局/ });
+    const entry = await within(await screen.findByRole("region", { name: "聊天" })).findByRole("button", { name: /已封存的對話/ });
     expect(entry.textContent).toContain("1");
     fireEvent.click(entry);
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/settings"));
@@ -288,7 +288,7 @@ describe("進門聊天", () => {
     mount();
     const b = await box();
     fireEvent.change(b, { target: { value: "/clear" } });
-    expect(within(screen.getByRole("listbox", { name: "指令" })).getByText("現在沒有對話可以清空或壓縮")).toBeTruthy();
+    expect(within(screen.getByRole("listbox", { name: "指令" })).getByText("目前沒有可清空或壓縮的對話")).toBeTruthy();
     fireEvent.keyDown(b, { key: "Enter" });
     expect((b as HTMLTextAreaElement).value).toBe("/clear");
     expect(calls.some(c => c.url === "/api/discuss" || c.url.endsWith("/clear"))).toBe(false);

@@ -214,7 +214,7 @@ export function SettingsNav({ section, onPick, back, dots = {} }: {
         <div key={g.key} className="set-nav-g">
           <p className="set-nav-h" aria-hidden="true">{t(g.key)}</p>
           {SECTIONS.filter(x => g.ids.includes(x.id)).map(x => (
-            <button key={x.id} type="button" aria-label={t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
+            <button key={x.id} type="button" aria-label={dots[x.id] ? t("set.nav.pending", { name: t(x.key) }) : t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
               data-dot={dots[x.id] || undefined} onClick={() => onPick(x.id)}>
               <Icon name={x.icon} /><span>{t(x.key)}</span>{dots[x.id] && <span className="dash-pend" aria-hidden="true" />}
             </button>

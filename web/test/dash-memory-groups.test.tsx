@@ -62,7 +62,7 @@ describe("MemoryGroups", () => {
     expect(within(h).getByLabelText("對話摘要 3")).toBeTruthy();
     expect(screen.queryByText("括號是牠沒說的")).toBeNull();
     expect(names()).toEqual(["關於我", "海"]);
-    const rest = screen.getByRole("button", { name: "另 1 篇沒有記錄" });
+    const rest = screen.getByRole("button", { name: "另有 1 篇無記錄" });
     expect(rest.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(rest);
     const quiet = await header("山");
@@ -129,7 +129,7 @@ describe("MemoryGroups", () => {
 
   it("manual add uses group scope", async () => {
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "另 1 篇沒有記錄" }));
+    fireEvent.click(await screen.findByRole("button", { name: "另有 1 篇無記錄" }));
     const g = await open("山");
     fireEvent.click(within(g).getByRole("button", { name: "手動新增" }));
     fireEvent.change(within(g).getByRole("textbox", { name: "新增記憶" }), { target: { value: "關於山" } });

@@ -170,7 +170,7 @@ describe("Reader(稿窗格)", () => {
     render(tree(vi.fn()));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "找不到這篇作品。");
   });
-  it.each([["stopped", "停住了"], ["notes-stopped", "筆記停住了"]])("狀態 %s:說停住了,附續跑(只續跑,不重開)", async (state, line) => {
+  it.each([["stopped", "分析已中斷"], ["notes-stopped", "筆記已中斷"]])("狀態 %s:說停住了,附續跑(只續跑,不重開)", async (state, line) => {
     const { f } = await mount(detail({ state }));
     expect(screen.getByText(line)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "續跑" }));
@@ -203,9 +203,9 @@ describe("Reader(稿窗格)", () => {
 describe("stateText", () => {
   it.each([
     ["running", "分析中"],
-    ["notes-running", "筆記還在寫"],
-    ["notes-stopped", "筆記停住了"],
-    ["stopped", "停住了"],
+    ["notes-running", "筆記撰寫中"],
+    ["notes-stopped", "筆記已中斷"],
+    ["stopped", "分析已中斷"],
   ])("%s → %s", (state, text) => {
     expect(translate("zh-Hant", stateText(state)!)).toBe(text);
   });
@@ -411,7 +411,7 @@ describe("交新版", () => {
     expect(api.extract).toHaveBeenCalled();
     expect(screen.getByText("4 字")).toBeTruthy();
     expect(screen.queryByText(/預估/)).toBeNull();
-    expect(screen.getByText("會使用額度")).toBeTruthy();
+    expect(screen.getByText("使用額度")).toBeTruthy();
   });
   it("在 ?v=1 開交稿條也是第 3 版", async () => {
     const { container } = await mountNew({}, "/w/d1?v=1");
@@ -431,7 +431,7 @@ describe("交新版", () => {
   it("只存版 → 不開 job,onNewVersion 收到 analyzing:false", async () => {
     const { container, onNewVersion } = await mountNew();
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
+    fireEvent.click(await screen.findByRole("button", { name: "僅儲存" }));
     await waitFor(() => expect(onNewVersion).toHaveBeenCalledWith({ same: false, version: 3, analyzing: false }));
     expect(api.startJob).not.toHaveBeenCalled();
   });
@@ -466,7 +466,7 @@ describe("交新版", () => {
     const { container, rerender } = render(el("d1"));
     await screen.findByRole("heading", { name: "海" });
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
+    fireEvent.click(await screen.findByRole("button", { name: "僅儲存" }));
     await waitFor(() => expect(api.submit).toHaveBeenCalled());
     rerender(el("d2"));
     done({ slug: "d1", title: "海", version: 3, new_version: true, reused: false });
@@ -477,8 +477,8 @@ describe("交新版", () => {
     const { container } = await mountNew();
     vi.mocked(api.extract).mockResolvedValue({ filename: "a.md", text: "  \n ", chars: 3 });
     pick(container);
-    expect((await screen.findByRole("alert")).textContent).toBe("稿子是空的。");
-    expect(screen.getByRole("button", { name: "只存" })).toHaveProperty("disabled", true);
+    expect((await screen.findByRole("alert")).textContent).toBe("稿為空白。");
+    expect(screen.getByRole("button", { name: "僅儲存" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "分析" })).toHaveProperty("disabled", true);
   });
   it("新版存下了但開分析失敗 → 照樣回最新版(analyzing:false),頂列顯示錯誤", async () => {
@@ -495,7 +495,7 @@ describe("交新版", () => {
     let done!: (v: never) => void;
     vi.mocked(api.submit).mockImplementation(() => new Promise(r => { done = r as never; }));
     pick(container);
-    fireEvent.click(await screen.findByRole("button", { name: "只存" }));
+    fireEvent.click(await screen.findByRole("button", { name: "僅儲存" }));
     expect(await screen.findByRole("button", { name: "送出中……" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "取消" })).toHaveProperty("disabled", true);
     pick(container);

@@ -55,7 +55,7 @@ function mount(path = "/w/d1", chars = [hyena, buffalo, deer]) {
 }
 function Where() { const l = useLocation(); return <output data-testid="loc" data-nav={useNavigationType()}>{l.pathname}{l.search}</output>; }
 const loc = () => screen.getByTestId("loc").textContent;
-const whoKey = () => screen.getByRole("button", { name: /^讀伴:/ });
+const whoKey = () => screen.getByRole("button", { name: /^讀伴：/ });
 const reply = (t: string, character = "hyena", sid = "s1", spans: Span[] = []) => () => sse(
   ["token", { text: t.slice(0, 1) }], ["token", { text: t.slice(1) }],
   ["message", { role: "assistant", text: t, session_id: sid, character, spans }], ["done", { ok: true, session_id: sid }]);
@@ -134,7 +134,7 @@ describe("選人", () => {
   it("對話裡換人只影響這一局:不動全域預設,重開回到預設", async () => {
     const { unmount } = mount();
     const pick = async () => {
-      fireEvent.click(await screen.findByRole("button", { name: /^讀伴:/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /^讀伴：/ }));
       return within(screen.getByRole("group", { name: "讀伴" })).getByRole("button", { name: "水牛" });
     };
     fireEvent.click(await pick());
@@ -161,7 +161,7 @@ describe("選人", () => {
     mount();
     expect(await (await findLog()).findByText("我是水牛")).toBeTruthy();
     expect(whoKey().getAttribute("aria-label")).toContain("水牛");
-    fireEvent.click(within(await screen.findByRole("list", { name: "這篇的對話" })).getByRole("button", { name: "開一局" }));
+    fireEvent.click(within(await screen.findByRole("list", { name: "這篇的對話" })).getByRole("button", { name: "本篇新對話" }));
     await waitFor(() => expect(whoKey().getAttribute("aria-label")).toContain("鬣狗"));
   });
   it("沒選過人時打開既有的局:直接看逐字,接著由最後說話的那位陪讀", async () => {
@@ -175,12 +175,12 @@ describe("選人", () => {
 });
 
 describe("換預設讀伴在作品頁立即生效", () => {
-  it("作品頁 ⌘K 選「讀伴:水牛」→ 輸入框旁換成水牛,下一輪送給水牛", async () => {
+  it("作品頁 ⌘K 選「讀伴：水牛」→ 輸入框旁換成水牛,下一輪送給水牛", async () => {
     mount();
     await screen.findByText("第一段。");
     expect(whoKey().getAttribute("aria-label")).toContain("鬣狗");
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "讀伴:水牛" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "讀伴：水牛" }));
     await waitFor(() => expect(whoKey().getAttribute("aria-label")).toContain("水牛"));
     say("嗨");
     await waitFor(() => expect(talkBodies[0]?.character).toBe("buffalo"));
@@ -196,7 +196,7 @@ describe("換預設讀伴在作品頁立即生效", () => {
     fireEvent.click(within(screen.getByRole("dialog", { name: "鹿" })).getByRole("button", { name: "設為預設" }));
     fireEvent.keyDown(screen.getByRole("dialog", { name: "鹿" }), { key: "Escape" });
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
-    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品:海" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "指令框" })).getByRole("option", { name: "作品：海" }));
     await screen.findByText("第一段。");
     expect(whoKey().getAttribute("aria-label")).toContain("鹿");
     say("嗨");
@@ -219,7 +219,7 @@ describe("對話", () => {
     expect(talkBodies[0]).toMatchObject({ character: "buffalo", quotes: ["第一段"], message: "這段怎麼樣", session_id: null });
     expect(log().getByText("第一段")).toBeTruthy();
     expect(log().getByText("這段怎麼樣")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "拿掉這段引文" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "移除引文" })).toBeNull();
   });
   it("token 逐段接上、沒有計時器;第一個 token 前說「X 在想」;message 到了換成正式訊息並標說話者", async () => {
     let release!: () => void, start!: () => void;
@@ -248,12 +248,12 @@ describe("對話", () => {
       for (let i = 0; i < 200 && !until(); i++) await act(async () => { await Promise.resolve(); });
     };
     say("嗨");
-    await flush(() => !!screen.queryByText("水牛在想"));
-    expect(screen.getByText("水牛在想").closest("[role=status]")).toBeTruthy();
+    await flush(() => !!screen.queryByText("水牛思考中"));
+    expect(screen.getByText("水牛思考中").closest("[role=status]")).toBeTruthy();
     start();
     await flush(() => !!screen.queryByText("半"));
     expect(screen.getByText("半")).toBeTruthy();
-    expect(screen.queryByText("水牛在想")).toBeNull();
+    expect(screen.queryByText("水牛思考中")).toBeNull();
     expect(vi.getTimerCount()).toBe(0);   // 串流中沒有任何排程計時器
     release();
     await flush(() => !!screen.queryByText("半句"));
@@ -277,7 +277,7 @@ describe("對話", () => {
     mount();
     await screen.findByText("第一段。");
     say("還沒說完的話");
-    expect((await screen.findByRole("alert")).textContent).toBe("這一局還有一輪在進行,稍等一下。");
+    expect((await screen.findByRole("alert")).textContent).toBe("此對話仍有回覆進行中，請稍候。");
     expect((screen.getByLabelText("對話輸入") as HTMLTextAreaElement).value).toBe("還沒說完的話");
   });
   it("沒送出的草稿依作品存著,重掛載後還在;送出成功後清掉", async () => {
@@ -313,7 +313,7 @@ describe("書架上的局", () => {
     const list = await sessList();
     const item = list.getByRole("button", { name: /第一句話/ });
     expect(item.getAttribute("aria-current")).toBe("true");
-    fireEvent.click(list.getByRole("button", { name: "開一局" }));
+    fireEvent.click(list.getByRole("button", { name: "本篇新對話" }));
     expect(log().queryByText("水牛說")).toBeNull();
     say("重來");
     await waitFor(() => expect(talkBodies[0].session_id).toBeNull());
@@ -352,7 +352,7 @@ describe("書架上的局", () => {
     talkReply = reply("嗯", "hyena", "s7");
     mount("/w/d1?s=s1");
     await (await findLog()).findByText("水牛說");
-    fireEvent.click((await sessList()).getByRole("button", { name: "開一局" }));
+    fireEvent.click((await sessList()).getByRole("button", { name: "本篇新對話" }));
     expect(loc()).toBe("/w/d1");
     say("重來");
     await (await findLog()).findByText("嗯");
@@ -374,7 +374,7 @@ describe("書架上的局", () => {
     mount();
     await (await findLog()).findByText("批評家的話");
     expect((screen.getByLabelText("對話輸入") as HTMLTextAreaElement).disabled).toBe(true);
-    expect(screen.getByText("這是改版前的舊討論,只能看,不能接著聊。")).toBeTruthy();
+    expect(screen.getByText("此為改版前的討論，僅供閱讀。")).toBeTruthy();
   });
 });
 
@@ -445,14 +445,14 @@ describe("對話錯誤與上限", () => {
     mount();
     await screen.findByText("第一段。");
     say("嗨");
-    expect((await screen.findByRole("alert")).textContent).toContain("現在重試也沒用");
+    expect((await screen.findByRole("alert")).textContent).toContain("額度恢復後再試");
   });
   it("error 事件沒帶 code 時退回通用訊息", async () => {
     talkReply = () => sse(["error", { where: "discuss", message: "x", recoverable: false }]);
     mount();
     await screen.findByText("第一段。");
     say("嗨");
-    expect((await screen.findByRole("alert")).textContent).toBe("沒成功,再試一次。");
+    expect((await screen.findByRole("alert")).textContent).toBe("操作失敗，請再試一次。");
   });
   it("輸入框有 maxLength,與 den 的訊息上限一致", async () => {
     mount();
@@ -633,7 +633,7 @@ describe("交新版之後", () => {
   });
   it("跟最新版一字不差 → 提示「跟第 2 版一字不差」,逐字稿不重抓", async () => {
     const before = await submitFrom("/w/d1?s=abc", false);
-    expect(await screen.findByText("跟 v2 一樣,沒存新版")).toBeTruthy();
+    expect(await screen.findByText("與 v2 相同，未儲存新版")).toBeTruthy();
     expect(sessionCalls()).toBe(before);
   });
   it("versionBreaks:v 與前一個有值的 v 不同才斷,第一則不畫,沒 v 的沿用前一則", () => {
@@ -723,7 +723,7 @@ describe("輸入紙與角色狀態", () => {
     const { container } = mount();
     await screen.findByText("第一段。");
     say("嗨");
-    expect((await screen.findByText("鬣狗在想")).closest("[role=status]")).toBeTruthy();
+    expect((await screen.findByText("鬣狗思考中")).closest("[role=status]")).toBeTruthy();
     expect(container.querySelector("form.composer svg.fig")!.getAttribute("data-state")).toBe("thinking");
     expect(container.querySelector(".chat-pen")).toBeNull();
   });
@@ -731,8 +731,8 @@ describe("輸入紙與角色狀態", () => {
     mount();
     await screen.findByText("第一段。");
     const key = whoKey();
-    expect(key.getAttribute("aria-label")).toBe("讀伴:鬣狗");
-    expect(key.getAttribute("title")).toBe("讀伴:鬣狗");
+    expect(key.getAttribute("aria-label")).toBe("讀伴：鬣狗");
+    expect(key.getAttribute("title")).toBe("讀伴：鬣狗");
     expect(key.querySelector("svg.fig")).not.toBeNull();
     expect(key.textContent).toBe("");
     expect(document.querySelectorAll("form.composer svg.fig")).toHaveLength(1);
@@ -749,7 +749,7 @@ describe("輸入紙與角色狀態", () => {
     document.getSelection()!.removeAllRanges(); document.getSelection()!.addRange(range);
     act(() => { document.dispatchEvent(new Event("selectionchange")); });
     fireEvent.click(await screen.findByRole("button", { name: "引用至對話" }));
-    const drop = screen.getByRole("button", { name: "拿掉這段引文" });
+    const drop = screen.getByRole("button", { name: "移除引文" });
     expect(drop.querySelector("svg.ico")).not.toBeNull();
     expect(drop.textContent).toBe("");
   });
@@ -762,7 +762,7 @@ describe("輸入紙與角色狀態", () => {
     await screen.findByText("第一段。");
     fireEvent.change(await screen.findByLabelText("對話輸入"), { target: { value: "你好" } });
     fireEvent.click(screen.getByRole("button", { name: "送出" }));
-    fireEvent.click(await screen.findByRole("button", { name: "標記這則" }));
+    fireEvent.click(await screen.findByRole("button", { name: "標記此則" }));
     fireEvent.click(screen.getByRole("button", { name: "讀錯了" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u, i]: any) =>
       u === "/api/sessions/s1/turns/1/reaction" && i?.method === "PUT")).toBe(true));
@@ -774,9 +774,9 @@ describe("輸入紙與角色狀態", () => {
     session("s1", [{ ...u("看看"), seq: 0 },
       { ...a("我讀到「海很藍」。", "buffalo", [{ quote: "海很藍", start: 0, end: 3 }]), seq: 1 }]);
     const { container } = mount();
-    fireEvent.click(await (await findLog()).findByRole("button", { name: "標記這則" }));
+    fireEvent.click(await (await findLog()).findByRole("button", { name: "標記此則" }));
     fireEvent.click(screen.getByRole("button", { name: "讀錯了" }));
-    const pill = () => screen.queryByRole("button", { name: "標記:讀錯了" });
+    const pill = () => screen.queryByRole("button", { name: "標記：讀錯了" });
     expect(pill()).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "筆記" }));
     fireEvent.click(container.querySelector(".dash-mark")!);
@@ -789,7 +789,7 @@ describe("作品頁的附件入口", () => {
   it("work page has no attach entry", async () => {
     mount();
     await screen.findByLabelText("對話輸入");
-    expect(screen.queryByLabelText("丟一份稿進來", { selector: "input" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "丟一份稿進來" })).toBeNull();
+    expect(screen.queryByLabelText("附上稿", { selector: "input" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "附上稿" })).toBeNull();
   });
 });

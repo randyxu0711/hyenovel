@@ -718,12 +718,34 @@ def test_delete_discussion_removes_digests(conn):
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
+def test_digest_version_count_matches_versions(conn):
+    s, _ = _disc(conn)
+    old = _talked_disc(conn, s, "old", 1.0)
+    root = repo.add_digest(conn, old, "一", 3, 1.0)
+    repo.add_digest(conn, old, "二", 3, 2.0, root_id=root)
+    assert repo.digest_version_count(conn, root) == len(repo.digest_versions(conn, root))
+
+
 def test_delete_story_removes_digests(conn):
     s, _ = _disc(conn)
     _digest_web(conn, s)
     repo.delete_story(conn, s)
     for table in ("digest", "digest_thread", "thread_talked", "digest_failure"):
         assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+
+
+def test_delete_story_with_candidate_saved_as_work_memory(conn):
+    s, _ = _disc(conn)
+    d = _talked_disc(conn, s, "c1", 1.0)
+    cid = repo.add_candidate(conn, d, 0, "我想讓結尾留白", "想讓結尾留白", "work", 5.0)
+    mid = repo.add_memory(conn, "work", "想讓結尾留白", 6.0, story_id=s, quote="我想讓結尾留白", discussion_id=d, seq=0)
+    repo.resolve_candidate(conn, cid, "saved", 6.0, mid)
+    conn.commit()
+    with conn:
+        repo.delete_story(conn, s)
+    assert conn.execute("SELECT COUNT(*) FROM memory_candidate").fetchone()[0] == 0
+    assert repo.memory(conn, mid) is None
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 # ── memory candidate ──

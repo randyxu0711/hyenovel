@@ -27,7 +27,7 @@ let onSaved: (id?: string) => Promise<void>;
 
 const mount = () => render(<NewCharacter onClose={() => {}} onSaved={onSaved} />);
 const go = () => screen.getByRole("button", { name: "生成候選" }) as HTMLButtonElement;
-const formBox = () => screen.getByLabelText("陪你讀稿的,是什麼?") as HTMLInputElement;
+const formBox = () => screen.getByLabelText("陪你讀稿的是什麼？") as HTMLInputElement;
 const tab = (n: number | string) => screen.getByRole("tab", { name: new RegExp(`^門縫${n}`) });
 const tabs = () => screen.getAllByRole("tab");
 const panel = () => within(screen.getByRole("tabpanel"));
@@ -81,8 +81,8 @@ describe("作答", () => {
   it("兩題都空不能生成(會花額度);只寫第二題也能生成", async () => {
     mount();
     expect(go().disabled).toBe(true);
-    expect(screen.getByText("先寫一題,或按骰子")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("你想要它怎麼讀?"), { target: { value: "慢慢來" } });
+    expect(screen.getByText("請至少回答一題，或使用參考詞")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("希望它怎麼讀？"), { target: { value: "慢慢來" } });
     expect(go().disabled).toBe(false);
     fireEvent.click(go());
     await screen.findByRole("tab", { name: /^門縫1/ });
@@ -91,7 +91,7 @@ describe("作答", () => {
   it("送出兩題的答案,去掉前後空白", async () => {
     mount();
     fireEvent.change(formBox(), { target: { value: " 退潮 " } });
-    fireEvent.change(screen.getByLabelText("你想要它怎麼讀?"), { target: { value: " 慢慢來 " } });
+    fireEvent.change(screen.getByLabelText("希望它怎麼讀？"), { target: { value: " 慢慢來 " } });
     fireEvent.click(go());
     await screen.findByRole("tab", { name: /^門縫1/ });
     expect(bodies[0].answers).toEqual({ form: "退潮", wish: "慢慢來" });
@@ -99,7 +99,7 @@ describe("作答", () => {
   it("開放題不放例子", () => {
     mount();
     expect(formBox().getAttribute("placeholder")).toBeNull();
-    expect(screen.getByLabelText("你想要它怎麼讀?").getAttribute("placeholder")).toBeNull();
+    expect(screen.getByLabelText("希望它怎麼讀？").getAttribute("placeholder")).toBeNull();
   });
   it("詞卡要按了才出現,換詞不打 API,選了填進形體", () => {
     mount();
@@ -122,7 +122,7 @@ describe("陣容", () => {
     const status = screen.getByRole("status");
     expect(status.textContent).toContain("0:00");
     expect(status.closest(".nc-strip")?.textContent).toContain("門縫");
-    expect(screen.queryByLabelText("陪你讀稿的,是什麼?")).toBeNull();
+    expect(screen.queryByLabelText("陪你讀稿的是什麼？")).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
     await screen.findByRole("tab", { name: /^門縫1/ });
   });
@@ -204,16 +204,16 @@ describe("面板", () => {
     expect(p.getByText("菜脯1-1")).toBeTruthy();
     expect(p.getByText("菜脯1-3")).toBeTruthy();
     expect(screen.queryByRole("group", { name: "情境" })).toBeNull();
-    expect(p.getByText("對話範例:〈冰箱〉")).toBeTruthy();
+    expect(p.getByText("對話範例：〈冰箱〉")).toBeTruthy();
     expect(pick(2).getByText("菜脯2-3")).toBeTruthy();
   });
   it("改這張先摺著;展開後才有輸入和會花額度,選用收起;✕ 收回焦點回改這張", async () => {
     await toResults();
     const p = pick(1);
     expect(p.queryByLabelText("修改意見")).toBeNull();
-    expect(p.queryByText("會使用額度")).toBeNull();
+    expect(p.queryByText("使用額度")).toBeNull();
     box(p);
-    expect(p.getByText("會使用額度")).toBeTruthy();
+    expect(p.getByText("使用額度")).toBeTruthy();
     expect(p.queryByRole("button", { name: "選用" })).toBeNull();
     fireEvent.click(p.getByRole("button", { name: "收起" }));
     expect(p.queryByLabelText("修改意見")).toBeNull();
@@ -273,7 +273,7 @@ describe("面板", () => {
 });
 
 describe("答案條", () => {
-  const EXAMPLE = "第二張的讀法接近了,但說話再短一點、長相換成別的動物";
+  const EXAMPLE = "第二張的讀法接近了，但說話再短一點、長相換成別的動物";
   const reaction = () => screen.getByLabelText("對這批的意見") as HTMLInputElement;
 
   it("換一批先攤開反應列,收起後字還在", async () => {
@@ -358,11 +358,11 @@ describe("答案條", () => {
     expect(document.activeElement).toBe(formBox());
     expect(tabs()).toHaveLength(3);
     fireEvent.click(button("收起"));
-    expect(screen.queryByLabelText("陪你讀稿的,是什麼?")).toBeNull();
+    expect(screen.queryByLabelText("陪你讀稿的是什麼？")).toBeNull();
     expect(document.activeElement).toBe(button("修改條件"));
     fireEvent.click(button("修改條件"));
     fireEvent.keyDown(formBox(), { key: "Escape" });
-    expect(screen.queryByLabelText("陪你讀稿的,是什麼?")).toBeNull();
+    expect(screen.queryByLabelText("陪你讀稿的是什麼？")).toBeNull();
   });
   it("答案改到跟這批不同時陣容變淡,改回來就不淡", async () => {
     await toResults();
@@ -379,7 +379,7 @@ describe("答案條", () => {
     fireEvent.click(button("修改條件"));
     fireEvent.change(formBox(), { target: { value: "退潮" } });
     fireEvent.click(go());
-    expect(screen.queryByLabelText("陪你讀稿的,是什麼?")).toBeNull();
+    expect(screen.queryByLabelText("陪你讀稿的是什麼？")).toBeNull();
     expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
     await screen.findByRole("tab", { name: /^門縫4/ });
@@ -391,7 +391,7 @@ describe("答案條", () => {
     mount();
     fireEvent.change(formBox(), { target: { value: "門縫" } });
     fireEvent.click(go());
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("候選生成失敗,再試一次。"));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("候選生成失敗，請再試一次。"));
     expect(formBox().value).toBe("門縫");
     expect(screen.queryByRole("button", { name: "收起" })).toBeNull();
   });
@@ -551,7 +551,7 @@ describe("改候選與存卡", () => {
     expect(tabs()[0].querySelector(".nc-line")!.textContent).toBe("慢慢聽");
     fireEvent.change(screen.getByLabelText("讀法"), { target: { value: "我改的讀法" } });
     replies = [json({ created: true, character: { id: "new1" } }, 201)];
-    fireEvent.click(button("存"));
+    fireEvent.click(button("儲存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith("new1"));
     expect(urls[urls.length - 1]).toBe("/api/characters");
     expect(last().candidate.name).toEqual({ "zh-Hant": "我取的", en: "Crack 1" });
@@ -580,9 +580,9 @@ describe("改候選與存卡", () => {
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     const words = within(screen.getByRole("group", { name: "每輪提醒" }));
     expect(words.getByText("務實")).toBeTruthy();
-    fireEvent.click(words.getByRole("button", { name: "拿掉「務實」" }));
+    fireEvent.click(words.getByRole("button", { name: "移除「務實」" }));
     replies = [json({ created: true, character: { id: "new1" } }, 201)];
-    fireEvent.click(button("存"));
+    fireEvent.click(button("儲存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(last().depth).toBe("[{{char}}: 直率, 冷面幽默; 說話: 簡短, 乾脆, 口語]");
   });
@@ -591,7 +591,7 @@ describe("改候選與存卡", () => {
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     fireEvent.change(screen.getByLabelText("名字"), { target: { value: "我取的" } });
     replies = [json({ created: true, character: { id: "new1" } }, 201)];
-    fireEvent.click(button("存"));
+    fireEvent.click(button("儲存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect("depth" in last()).toBe(false);
   });
@@ -599,18 +599,18 @@ describe("改候選與存卡", () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     fireEvent.change(screen.getByLabelText("名字"), { target: { value: "  " } });
-    expect(button("存").disabled).toBe(true);
+    expect(button("儲存").disabled).toBe(true);
   });
   it("有警告時先列出,再按一次才帶 confirm", async () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     replies = [json({ created: false, warnings: ["looks-like-instructions"] })];
-    fireEvent.click(button("存"));
-    await screen.findByRole("button", { name: "仍要存" });
-    expect(within(document.querySelector("form.char-edit") as HTMLElement).getByText(/像指令/)).toBeTruthy();
+    fireEvent.click(button("儲存"));
+    await screen.findByRole("button", { name: "仍要儲存" });
+    expect(within(document.querySelector("form.char-edit") as HTMLElement).getByText(/類似指令/)).toBeTruthy();
     expect(onSaved).not.toHaveBeenCalled();
     replies = [json({ created: true, character: {} }, 201)];
-    fireEvent.click(button("仍要存"));
+    fireEvent.click(button("仍要儲存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(last().confirm).toBe(true);
   });
@@ -628,8 +628,8 @@ describe("改候選與存卡", () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     replies = [json({ code: "bad-card", params: { errors: ["too-large"] } }, 422)];
-    fireEvent.click(button("存"));
-    expect(await screen.findByText("角色卡太大。")).toBeTruthy();
+    fireEvent.click(button("儲存"));
+    expect(await screen.findByText("角色卡過大。")).toBeTruthy();
     expect(screen.getByLabelText("名字")).toBeTruthy();
     expect(onSaved).not.toHaveBeenCalled();
   });
@@ -645,7 +645,7 @@ describe("離開再回來", () => {
     mount();
     expect(tabs()).toHaveLength(3);
     expect(tab(2).getAttribute("aria-selected")).toBe("true");
-    expect(panel().getByText("對話範例:〈冰箱〉")).toBeTruthy();
+    expect(panel().getByText("對話範例：〈冰箱〉")).toBeTruthy();
     expect((screen.getByLabelText("對這批的意見") as HTMLInputElement).value).toBe("短一點");
     expect(bodies).toHaveLength(1);
   });
@@ -656,7 +656,7 @@ describe("離開再回來", () => {
     view.unmount();
     mount();
     expect(tabs()).toHaveLength(3);
-    expect(screen.queryByLabelText("陪你讀稿的,是什麼?")).toBeNull();
+    expect(screen.queryByLabelText("陪你讀稿的是什麼？")).toBeNull();
     expect(document.querySelector(".nc-strip")?.textContent).toContain("退潮");
     expect(document.querySelector(".nc-lineup")!.hasAttribute("data-stale")).toBe(true);
     fireEvent.click(button("修改條件"));
@@ -755,7 +755,7 @@ describe("離開再回來", () => {
     release(json({ code: "candidates-failed", params: { reason: "timeout" } }, 502));
     await new Promise(r => setTimeout(r, 0));
     mount();
-    expect(screen.getByRole("alert").textContent).toBe("候選生成失敗,再試一次。");
+    expect(screen.getByRole("alert").textContent).toBe("候選生成失敗，請再試一次。");
     expect(formBox().value).toBe("門縫");
   });
   it("有那批時不在頁上換一批失敗,回來是舊那批,錯誤在答案條", async () => {
@@ -806,7 +806,7 @@ describe("離開再回來", () => {
     await toResults();
     fireEvent.click(pick(1).getByRole("button", { name: "選用" }));
     replies = [json({ created: true, character: {} }, 201)];
-    fireEvent.click(button("存"));
+    fireEvent.click(button("儲存"));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(sessionStorage.getItem(DRAFT_KEY)).toBeNull();
     cleanup();

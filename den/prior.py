@@ -56,7 +56,7 @@ def gather(conn, story_id: int, exclude: int | None, latest_source: str) -> dict
 def overview(conn, story_id: int, latest_source: str) -> dict:
     digests, threads = _collect(conn, story_id, None, latest_source, all_threads=True)
     for d in digests:
-        d["versions"] = len(repo.digest_versions(conn, d.pop("root_id")))
+        d["versions"] = repo.digest_version_count(conn, d.pop("root_id"))
     return {"digests": digests, "threads": threads}
 
 

@@ -62,19 +62,19 @@ describe("筆記分頁", () => {
     expect(on).not.toHaveBeenCalled();
   });
   it.each([
-    ["notes-running", "筆記還在寫。"],
-    ["running", "筆記還在寫。"],
-    ["notes-stopped", "筆記停住了。"],
-    ["stopped", "筆記停住了。"],
+    ["notes-running", "筆記撰寫中。"],
+    ["running", "筆記撰寫中。"],
+    ["notes-stopped", "筆記已中斷。"],
+    ["stopped", "筆記已中斷。"],
     ["ready", "沒有筆記"],
-    ["none", "還沒分析"],
+    ["none", "尚未分析"],
   ])("沒有筆記、作品 %s → %s", (state, text) => {
     mount(map(), state);
     expect(screen.getByText(text)).toBeTruthy();
   });
   it("對位資料抓不到:顯示錯誤,不停在載入中", () => {
     mount(null, "ready", vi.fn(), "den-down");
-    expect(screen.getByText("連不上本機的 den,請確認它有在跑。")).toBeTruthy();
+    expect(screen.getByText("無法連線至本機 den，請確認是否在執行。")).toBeTruthy();
     expect(screen.queryByText("載入中……")).toBeNull();
   });
   it("對位資料還沒到:載入中", () => {

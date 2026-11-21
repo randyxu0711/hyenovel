@@ -64,7 +64,7 @@ function mount() {
 const log = async () => within(await screen.findByRole("log"));
 const sessionGets = () => vi.mocked(fetch).mock.calls.filter(([u, i]: any) => u.split("?")[0] === "/api/sessions/s1" && !i?.method).length;
 const last = <X,>(xs: X[]): X => xs[xs.length - 1];
-const REDO = "重說(花一次額度)";
+const REDO = "重說（使用額度）";
 
 beforeEach(() => {
   setLang("zh-Hant"); localStorage.clear();
@@ -170,7 +170,7 @@ describe("重說的結果", () => {
     const l = await log();
     await l.findByText("舊的");
     fireEvent.click(l.getByRole("button", { name: REDO }));
-    expect(await screen.findByText("讀伴這輪沒讀成,沒有存下。稍後再試。")).toBeTruthy();
+    expect(await screen.findByText("讀伴未能完成本輪，未儲存，請稍後再試。")).toBeTruthy();
     expect(l.getByText("舊的")).toBeTruthy();
     expect(l.queryByText("半")).toBeNull();
   });
@@ -211,11 +211,11 @@ describe("翻版器", () => {
     };
     mount();
     const l = await log();
-    await l.findByRole("button", { name: "標記:讀錯了" });
+    await l.findByRole("button", { name: "標記：讀錯了" });
     fireEvent.click(l.getByRole("button", { name: "上一版" }));
     await l.findByText("第一版");
-    expect(l.queryByRole("button", { name: "標記:讀錯了" })).toBeNull();
-    expect(l.getByRole("button", { name: "標記這則" })).toBeTruthy();
+    expect(l.queryByRole("button", { name: "標記：讀錯了" })).toBeNull();
+    expect(l.getByRole("button", { name: "標記此則" })).toBeTruthy();
   });
 });
 
@@ -223,9 +223,9 @@ describe("編輯", () => {
   const open = async () => {
     const l = await log();
     await l.findByText("舊的");
-    const keys = l.getAllByRole("button", { name: "改這則" });
+    const keys = l.getAllByRole("button", { name: "編輯此則" });
     fireEvent.click(keys[keys.length - 1]);
-    return { l, box: l.getByRole("textbox", { name: "改讀伴的回覆" }) as HTMLTextAreaElement };
+    return { l, box: l.getByRole("textbox", { name: "編輯讀伴回覆" }) as HTMLTextAreaElement };
   };
 
   it("原地變文字框,沿用回覆的字樣,內容是現有全文;沒改 Esc 直接離開", async () => {
@@ -234,7 +234,7 @@ describe("編輯", () => {
     expect(box.value).toBe("舊的");
     expect(box.classList.contains("chat-text")).toBe(true);
     fireEvent.keyDown(box, { key: "Escape" });
-    expect(l.queryByRole("textbox", { name: "改讀伴的回覆" })).toBeNull();
+    expect(l.queryByRole("textbox", { name: "編輯讀伴回覆" })).toBeNull();
     expect(writes).toEqual([]);
   });
 
@@ -243,12 +243,12 @@ describe("編輯", () => {
     const { l, box } = await open();
     fireEvent.change(box, { target: { value: "改掉" } });
     fireEvent.keyDown(box, { key: "Escape" });
-    expect(l.getByRole("alert").textContent).toBe("放棄修改?");
-    fireEvent.click(l.getByRole("button", { name: "繼續改" }));
-    expect((l.getByRole("textbox", { name: "改讀伴的回覆" }) as HTMLTextAreaElement).value).toBe("改掉");
+    expect(l.getByRole("alert").textContent).toBe("放棄修改？");
+    fireEvent.click(l.getByRole("button", { name: "繼續編輯" }));
+    expect((l.getByRole("textbox", { name: "編輯讀伴回覆" }) as HTMLTextAreaElement).value).toBe("改掉");
     fireEvent.click(l.getByRole("button", { name: "取消" }));
     fireEvent.click(l.getByRole("button", { name: "放棄" }));
-    expect(l.queryByRole("textbox", { name: "改讀伴的回覆" })).toBeNull();
+    expect(l.queryByRole("textbox", { name: "編輯讀伴回覆" })).toBeNull();
     expect(l.getByText("舊的")).toBeTruthy();
     expect(writes).toEqual([]);
   });
@@ -258,20 +258,20 @@ describe("編輯", () => {
     const { l, box } = await open();
     fireEvent.keyDown(box, { key: "Escape", isComposing: true });
     fireEvent.keyDown(box, { key: "Escape", keyCode: 229 });
-    expect(l.getByRole("textbox", { name: "改讀伴的回覆" })).toBeTruthy();
+    expect(l.getByRole("textbox", { name: "編輯讀伴回覆" })).toBeTruthy();
   });
 
   it("改的時候別則的改這則鎖住", async () => {
     mount();
     const { l } = await open();
-    for (const key of l.queryAllByRole("button", { name: "改這則" })) expect((key as HTMLButtonElement).disabled).toBe(true);
+    for (const key of l.queryAllByRole("button", { name: "編輯此則" })) expect((key as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("沒改就存 = 取消,不送", async () => {
     mount();
     const { l, box } = await open();
     fireEvent.keyDown(box, { key: "Enter", ctrlKey: true });
-    expect(l.queryByRole("textbox", { name: "改讀伴的回覆" })).toBeNull();
+    expect(l.queryByRole("textbox", { name: "編輯讀伴回覆" })).toBeNull();
     expect(writes).toEqual([]);
   });
 
@@ -281,12 +281,12 @@ describe("編輯", () => {
     };
     mount();
     const { l, box } = await open();
-    expect(l.queryByText("改過")).toBeNull();
+    expect(l.queryByText("已編輯")).toBeNull();
     fireEvent.change(box, { target: { value: "它該這樣說" } });
     fireEvent.keyDown(box, { key: "Enter", metaKey: true });
     await l.findByText("它該這樣說");
     expect(writes).toContainEqual({ url: "/api/sessions/s1/turns/3/text", method: "PUT", body: { text: "它該這樣說" } });
-    expect(l.getByText("改過")).toBeTruthy();
+    expect(l.getByText("已編輯")).toBeTruthy();
     expect(last(l.getAllByRole("button", { name: "像它" }))).toHaveAttribute("aria-pressed", "true");
   });
 });
@@ -297,16 +297,16 @@ describe("像它", () => {
     const l = await log();
     await l.findByText("舊的");
     const key = last(l.getAllByRole("button", { name: "像它" }));
-    expect(key).toHaveAttribute("title", "像它:留作它說話的樣子,之後的局會帶著");
+    expect(key).toHaveAttribute("title", "像它：作為說話範例，之後的對話會參考");
     fireEvent.click(key);
     expect(key).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(writes).toContainEqual({ url: "/api/sessions/s1/turns/3/voice", method: "PUT", body: null }));
     fireEvent.click(key);
     expect(key).toHaveAttribute("aria-pressed", "false");
     await waitFor(() => expect(writes).toContainEqual({ url: "/api/sessions/s1/turns/3/voice", method: "DELETE", body: null }));
-    const flags = l.getAllByRole("button", { name: "標記這則" });
+    const flags = l.getAllByRole("button", { name: "標記此則" });
     fireEvent.click(flags[flags.length - 1]);
-    expect(within(screen.getByRole("group", { name: "標記這則" })).queryByText("像它")).toBeNull();
+    expect(within(screen.getByRole("group", { name: "標記此則" })).queryByText("像它")).toBeNull();
   });
 
   it("存不下就還原並顯示錯誤", async () => {

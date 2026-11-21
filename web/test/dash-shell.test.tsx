@@ -99,7 +99,7 @@ describe("Dash 殼與路由", () => {
   });
   it("交新稿鈕回到 /", async () => {
     mount("/w/d2");
-    fireEvent.click(within(await nav()).getByRole("button", { name: "開一局聊天" }));
+    fireEvent.click(within(await nav()).getByRole("button", { name: "新聊天" }));
     expect(screen.getByTestId("loc").textContent).toBe("/");
     expect(dash().dataset.view).toBe("home");
   });
