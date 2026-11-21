@@ -202,7 +202,7 @@ describe("純聊天的附件", () => {
     mount();
     const me = await screen.findByText("嗨");
     fireEvent.click(within(me.closest(".chat-me") as HTMLElement).getByRole("button", { name: "記住" }));
-    expect(screen.queryByRole("button", { name: "這篇" })).toBeNull();
-    expect(screen.getByRole("button", { name: "每篇" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "本篇" })).toBeNull();
+    expect(screen.getByRole("button", { name: "所有作品" }).getAttribute("aria-pressed")).toBe("true");
   });
 });

@@ -315,3 +315,10 @@ def test_settings_suggest_roundtrip_and_off_hides(c, data):
 def test_new_codes_registered():
     for code in ("unknown-memory-candidate", "memory-candidate-resolved", "memory-candidate-pending"):
         assert code in den_app.ERROR_CODES
+
+
+def test_save_chat_only_candidate_as_work_rejected(c, data):
+    _storyless(c)
+    cid = _cand(data, session="free")
+    _assert_err(c.post(f"/api/memory/candidates/{cid}/save", json={"scope": "work"}), 422, "candidate-needs-work")
+    assert [x["id"] for x in c.get("/api/memory/candidates").json()["candidates"]] == [cid]

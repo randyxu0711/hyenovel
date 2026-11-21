@@ -5,7 +5,7 @@ import time
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from den import prior, suggest
+from den import prior, suggest, views, works
 from den.config import DIGEST_MAX_CHARS
 from den.routes.common import ApiError, slug_ok, unknown_work
 from marrow import repo
@@ -84,6 +84,44 @@ async def edit_digest(digest_id: int, body: DigestIn, request: Request):
         new = repo.add_digest(conn, d["discussion_id"], text, d["through_seq"], time.time(),
                               root_id=d["root_id"], edited=True)
     return {"id": new}
+
+
+def _digest(conn, digest_id: int) -> dict:
+    d = repo.digest_by_id(conn, digest_id)
+    if d is None:
+        raise _reject(404, "unknown-digest", "沒有這份摘要")
+    return d
+
+
+@router.get("/digests/{digest_id}/versions")
+async def digest_versions(digest_id: int, request: Request):
+    conn = request.app.state.mgr.conn
+    d = _digest(conn, digest_id)
+    return {"versions": [{"id": v["id"], "text": v["text"], "edited": bool(v["edited"]),
+                          "created_at": v["created_at"], "current": v["invalidated_at"] is None}
+                         for v in reversed(repo.digest_versions(conn, d["root_id"]))]}
+
+
+@router.post("/digests/{digest_id}/revert", status_code=201)
+async def revert_digest(digest_id: int, request: Request):
+    conn = request.app.state.mgr.conn
+    d = _digest(conn, digest_id)
+    cur = repo.current_digest(conn, d["discussion_id"])
+    if cur["id"] == digest_id:
+        raise _reject(409, "digest-is-current", "這份已經是現在的版本")
+    with conn:
+        new = repo.add_digest(conn, d["discussion_id"], d["text"], cur["through_seq"], time.time(),
+                              root_id=d["root_id"], edited=True)
+    return {"id": new}
+
+
+@router.get("/memory/works")
+async def memory_works(request: Request):
+    conn = request.app.state.mgr.conn
+    bodies = views._analysis_bodies(conn)
+    return {"works": [{"slug": w["slug"], "title": works.title_of(w, bodies.get(w["id"])),
+                       **prior.overview(conn, w["id"], w["latest_text"])}
+                      for w in repo.works(conn) if w["archived_at"] is None]}
 
 
 @router.put("/threads/{thread_id}", status_code=204)

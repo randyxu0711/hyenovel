@@ -260,3 +260,32 @@ describe("useTalk prior", () => {
     await waitFor(() => expect(h.result.current.prior).toEqual(snapshot));
   });
 });
+
+describe("Prior pending memories", () => {
+  it("shows pending memories footer while expanded", async () => {
+    prior.mockResolvedValue(data({ pending_memories: 2 }));
+    const onMemory = vi.fn();
+    render(<Prior mode="live" slug="d1" skipped={false} onSkip={vi.fn()} onGoto={onGoto} onMemory={onMemory} busy={false} />);
+    await cut();
+    expect(screen.getByText("另有 2 條記憶待確認")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "前往記憶" }));
+    expect(onMemory).toHaveBeenCalled();
+    fireEvent.click(await cut());
+    expect(screen.queryByText("另有 2 條記憶待確認")).toBeNull();
+  });
+
+  it("hides footer when none pending", async () => {
+    prior.mockResolvedValue(data({ pending_memories: 0 }));
+    render(<Prior mode="live" slug="d1" skipped={false} onSkip={vi.fn()} onGoto={onGoto} onMemory={vi.fn()} busy={false} />);
+    await cut();
+    expect(screen.queryByText(/條記憶待確認/)).toBeNull();
+  });
+
+  it("hides footer after first message", async () => {
+    const s: PriorSnapshot = { digests: data().digests, threads: [] };
+    render(<Prior mode="snapshot" session="s9" snapshot={s} onGoto={onGoto} busy={false} />);
+    fireEvent.click(await cut());
+    expect(screen.queryByText(/條記憶待確認/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "前往記憶" })).toBeNull();
+  });
+});

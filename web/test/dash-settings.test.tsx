@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
+import { SettingsNav } from "../src/dash/Settings";
 import Paper from "../src/dash/Paper";
 import { loadPaperFlow, setPaperFlow } from "../src/dash/paperFlow";
 import { en, setLang, zhHant } from "../src/dash/i18n";
@@ -31,14 +32,17 @@ const DETAIL = {
   ],
 };
 
+let pendingCands: unknown[] = [];
 function mount(path = "/settings") {
   setLang("zh-Hant");
   const f = vi.fn(async (u: string) => {
+    if (u === "/api/memory/candidates") return json({ candidates: pendingCands });
     if (u === "/api/themes") return json({ themes: [olive, grass], default: "olive" });
     if (u === "/api/characters") return json({ characters: [hyena, buffalo, deer], default: "hyena" });
     if (u === "/api/works") return json({ works: [{ slug: "d1", title: "舊的", version: 1, chars: 4, updated_at: 1, state: "ready" }] });
     if (u === "/api/works/d1") return json({ slug: "d1", title: "舊的", version: 1, versions: [1], text: "內文", state: "ready", job_id: null, notes_ready: false });
     if (u === "/api/memory") return json({ memories: [], caps: { author: 800, work: 600 } });
+    if (u === "/api/memory/works") return json({ works: [] });
     if (u.startsWith("/api/sessions/old1")) return json(DETAIL);
     if (u.startsWith("/api/sessions")) return json({ sessions: [row("old1", true), row("new1", false), row("old2", true)] });
     if (u === "/api/archived-works") return json({ works: [] });
@@ -68,12 +72,27 @@ describe("設定頁", () => {
     expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "封存"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
   });
+  it("有待確認的記憶:導覽的記憶鍵有小圓點;處理完最後一條就消失", async () => {
+    pendingCands = [{ id: 7, text: "甲", quote: "甲", scope: "author", session: "s1", seq: 0, slug: null, title: null, at: 1 }];
+    const f = mount();
+    const nav = await shelf();
+    const key = nav.getByRole("button", { name: "記憶" });
+    await waitFor(() => expect(key.querySelector(".dash-pend")).not.toBeNull());
+    f.mockImplementation(async (u: string) => (u.endsWith("/skip") ? new Response(null, { status: 204 })
+      : u === "/api/memory/candidates" ? json({ candidates: pendingCands })
+      : u === "/api/memory" ? json({ memories: [], caps: { author: 800, work: 600 } })
+      : json({ works: [], sessions: [] })));
+    fireEvent.click(key);
+    fireEvent.click(await screen.findByRole("button", { name: "略過" }));
+    await waitFor(() => expect(key.querySelector(".dash-pend")).toBeNull());
+    pendingCands = [];
+  });
   it("記憶分區畫出記憶頁,圖示是記憶專用的", async () => {
     mount();
     const nav = await shelf();
     const key = nav.getByRole("button", { name: "記憶" });
     fireEvent.click(key);
-    expect(await screen.findByRole("textbox", { name: "新增記憶" })).toBeTruthy();
+    expect(await screen.findByRole("group", { name: "關於我" })).toBeTruthy();
     expect(key.getAttribute("aria-current")).toBe("true");
     expect(document.querySelector(".dash-settings")!.getAttribute("data-section")).toBe("memory");
   });
@@ -423,13 +442,14 @@ describe("記憶頁跳回來源", () => {
         id: 1, root: 1, scope: "author", slug: "d1", title: "舊的", text: "記", quote: "那句", session: "s1", seq: 0,
         valid_from: 1, learned_at: 1, invalidated_at: null,
       }], caps: { author: 800, work: 600 } });
+      if (u === "/api/memory/works") return json({ works: [] });
       return json({ sessions: [] });
     }));
     render(<MemoryRouter initialEntries={["/settings"]}><Where />
       <Routes><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
     const nav = within(await screen.findByRole("navigation"));
     fireEvent.click(await nav.findByRole("button", { name: "記憶" }));
-    fireEvent.click(await screen.findByRole("link", { name: "那句" }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "關於我" })).findByRole("link", { name: "出自對話" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d1"));
     expect(await within(await screen.findByRole("log")).findByText("那句我說的話")).toBeTruthy();
   });
@@ -829,5 +849,18 @@ describe("設定頁:角色卡", () => {
       expect(zhHant[`card.warn.${code}` as keyof typeof zhHant]).toBeTruthy();
       expect(en[`card.warn.${code}` as keyof typeof en]).toBeTruthy();
     }
+  });
+});
+
+describe("設定導覽:窄螢幕橫排", () => {
+  it("目前那顆與有圓點那顆捲進可視範圍", () => {
+    setLang("zh-Hant");
+    const seen: string[] = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) { seen.push(this.getAttribute("aria-label") ?? ""); };
+    try {
+      render(<MemoryRouter><SettingsNav section="look" onPick={() => {}} back={{ label: "回去", to: "/" }} dots={{ memory: true }} /></MemoryRouter>);
+      expect(seen).toEqual(["外觀", "記憶"]);
+    } finally { Element.prototype.scrollIntoView = orig; }
   });
 });

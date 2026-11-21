@@ -517,6 +517,10 @@ def current_digest(conn, discussion_id: int) -> dict | None:
                              (discussion_id,)).fetchone())
 
 
+def digest_versions(conn, root_id: int) -> list[dict]:
+    return [_row(r) for r in conn.execute("SELECT * FROM digest WHERE root_id = ? ORDER BY id", (root_id,))]
+
+
 def digest_by_id(conn, digest_id: int) -> dict | None:
     return _row(conn.execute("SELECT g.*, d.external_id AS session, d.ended_at AS at FROM digest g "
                              "JOIN discussion d ON d.id = g.discussion_id WHERE g.id = ?", (digest_id,)).fetchone())

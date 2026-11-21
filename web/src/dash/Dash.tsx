@@ -116,7 +116,11 @@ function Shell({ chars }: { chars: Characters }) {
   const [last, setLast] = useState<string | null>(null);
   useEffect(() => { if (slug) setLast(slug); }, [slug]);
   const [section, setSection] = useState<SettingsSection>("look");
-  const setNav = <SettingsNav section={section} onPick={setSection}
+  const [pending, setPending] = useState(0);
+  const [toPending, setToPending] = useState(false);
+  useEffect(() => { if (view !== "settings") setToPending(false); }, [view]);
+  useEffect(() => { if (view === "settings") api.candidates().then(c => setPending(c?.length ?? 0), () => {}); }, [view]);
+  const setNav = <SettingsNav section={section} onPick={s => { setSection(s); setToPending(false); }} dots={{ memory: pending > 0 }}
     back={{ label: t("set.back.page"), to: last ? `/w/${encodeURIComponent(last)}` : "/" }} />;
   const shelf = useShelf();
   const split = useSplit(SHELF_W[shelf.mode]);
@@ -205,7 +209,7 @@ function Shell({ chars }: { chars: Characters }) {
           onFinished={() => { bump(); setMapRev(n => n + 1); }}
           onQuote={carry} />}
         {view === "home" && <Home works={loaded} error={worksErr} talk={talk} />}
-        {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} />}
+        {view === "settings" && <Settings section={section} nav={narrow ? setNav : null} onPending={setPending} toPending={toPending} />}
       </main>
       {notice && (
         <p className="dash-notice" role="status">
@@ -224,7 +228,8 @@ function Shell({ chars }: { chars: Characters }) {
             talk={talk} quotes={quotes} ob={cmpData ? null : ob} onOb={setOb} analyzing={analyzing}
             cmp={cmpData} onCompare={n => setCmp(p => p.set("cmp", String(n)))} onBring={cmpSend !== null ? carry : undefined}
             onDropQuote={i => setCarried({ slug: slug!, list: quotes.filter((_, j) => j !== i) })}
-            onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }} />
+            onSent={() => { setCarried({ slug: slug!, list: [] }); setNote(null); bump(); }}
+            onMemory={() => { setSection("memory"); setToPending(true); nav("/settings"); }} />
         </aside>
       )}
       {focused && (

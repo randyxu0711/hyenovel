@@ -96,11 +96,11 @@ export function useReaction(analyzing: boolean): boolean {
 
 /** 對話分頁:逐字稿(標說話者、換人有點線分隔、引文可點)→ 輸入。
  *  稿上的痕跡被點時,捲到說那句的訊息並閃一下(onReveal 讓右欄切回對話)。 */
-export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, inputRef, placeholder, whoSize = 72 }: {
+export default function Talk({ talk, version, quotes, analyzing, onDropQuote, onSent, onReveal, longText, inputRef, placeholder, whoSize = 72, onMemory }: {
   talk: TalkState; quotes: string[]; analyzing: boolean;
   /** 正在看的版本號(引文對不到時的說明用)。 */
   version: number;
-  onDropQuote: (i: number) => void; onSent: () => void; onReveal: () => void;
+  onDropQuote: (i: number) => void; onSent: () => void; onReveal: () => void; onMemory?: () => void;
   /** 進門用:超過門檻的文字(貼上或按 Enter)交給它,不當聊天送出。 */
   longText?: { min: number; take: (text: string) => void };
   inputRef?: RefObject<HTMLTextAreaElement>;
@@ -381,7 +381,7 @@ export default function Talk({ talk, version, quotes, analyzing, onDropQuote, on
   return (
     <div className="chat" onDragOver={free ? e => e.preventDefault() : undefined} onDrop={free ? onDrop : undefined}>
       <div className="chat-log" ref={log} role="log" aria-live="polite" aria-busy={streaming !== null}>
-        {bound && !session && <Prior mode="live" slug={bound} skipped={talk.skipPrior} onSkip={talk.setSkipPrior} onGoto={talk.open} busy={streaming !== null} />}
+        {bound && !session && <Prior mode="live" slug={bound} skipped={talk.skipPrior} onSkip={talk.setSkipPrior} onGoto={talk.open} onMemory={onMemory} busy={streaming !== null} />}
         {bound && session && <Prior key={session} mode="snapshot" session={session} snapshot={talk.prior} onGoto={talk.open} busy={streaming !== null || working} />}
         {rows}
         {pending && (

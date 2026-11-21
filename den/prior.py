@@ -28,22 +28,36 @@ def is_stale(thread: dict, latest_source: str) -> bool:
     return thread["source_quote"] is not None and gate.locate(thread["source_quote"], latest_source) is None
 
 
-def gather(conn, story_id: int, exclude: int | None, latest_source: str) -> dict:
-    digests, live, stale = [], [], []
+def _collect(conn, story_id: int, exclude: int | None, latest_source: str, *, all_threads: bool):
+    digests, threads = [], []
     for d in _recent(conn, story_id, exclude):
         cur = repo.current_digest(conn, d["id"])
         if cur is None:
             continue
-        digests.append({"id": cur["id"], "session": d["external_id"], "at": d["ended_at"],
+        digests.append({"id": cur["id"], "root_id": cur["root_id"], "session": d["external_id"], "at": d["ended_at"],
                         "text": cur["text"], "edited": bool(cur["edited"])})
         for t in repo.threads_of(conn, cur["root_id"]):
-            if t["ended_at"] is not None:
+            if t["ended_at"] is not None and not all_threads:
                 continue
-            row = {"id": t["id"], "root_id": cur["root_id"], "text": t["text"], "quote": t["quote"],
-                   "source_quote": t["source_quote"], "at": d["ended_at"], "session": d["external_id"],
-                   "stale": is_stale(t, latest_source)}
-            (stale if row["stale"] else live).append(row)
-    return {"digests": digests, "threads": live[:MAX_THREADS] + stale}
+            threads.append({"id": t["id"], "root_id": cur["root_id"], "text": t["text"], "quote": t["quote"],
+                            "source_quote": t["source_quote"], "at": d["ended_at"], "session": d["external_id"],
+                            "stale": is_stale(t, latest_source), "ended": t["ended_at"] is not None})
+    return digests, threads
+
+
+def gather(conn, story_id: int, exclude: int | None, latest_source: str) -> dict:
+    digests, threads = _collect(conn, story_id, exclude, latest_source, all_threads=False)
+    live = [{k: v for k, v in t.items() if k != "ended"} for t in threads if not t["stale"]]
+    stale = [{k: v for k, v in t.items() if k != "ended"} for t in threads if t["stale"]]
+    return {"digests": [{k: v for k, v in d.items() if k != "root_id"} for d in digests],
+            "threads": live[:MAX_THREADS] + stale}
+
+
+def overview(conn, story_id: int, latest_source: str) -> dict:
+    digests, threads = _collect(conn, story_id, None, latest_source, all_threads=True)
+    for d in digests:
+        d["versions"] = len(repo.digest_versions(conn, d.pop("root_id")))
+    return {"digests": digests, "threads": threads}
 
 
 class PriorQueue:

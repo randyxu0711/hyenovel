@@ -142,6 +142,9 @@ async def save_candidate(candidate_id: Seq, body: CandidateSaveIn, request: Requ
         raise _memory_reject(422, "bad-scope", "沒有這一層")
     text = None if body.text is None else _memory_text(body.text)
     conn = request.app.state.mgr.conn
+    c = repo.candidate(conn, candidate_id)
+    if c is not None and body.scope == "work" and c["story_id"] is None:
+        raise _memory_reject(422, "candidate-needs-work", "這條沒有綁作品")
     with _memory_errors():
         mid = suggest.save(conn, candidate_id, body.scope, text, time.time())
     return views.memory_row(conn, repo.memory(conn, mid))

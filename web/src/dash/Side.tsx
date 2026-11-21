@@ -30,7 +30,7 @@ export function marksFrom(turns: Turn[], chars: Characters): Mark[] {
 }
 
 /** 右欄:對話 | 筆記 | 結構圖。對話一直掛著(切走也不丟草稿、稿上痕跡點得回來),另兩頁切到才畫。 */
-export default function Side({ version, map, mapError, state, marks, talk, quotes, analyzing = false, onDropQuote, onSent, ob = null, onOb, cmp = null, onCompare, onBring }: {
+export default function Side({ version, map, mapError, state, marks, talk, quotes, analyzing = false, onDropQuote, onSent, ob = null, onOb, cmp = null, onCompare, onBring, onMemory }: {
   /** 正在看的版本號。 */
   version: number;
   map: WorkMap | null;
@@ -49,6 +49,7 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
   onCompare?: (n: number) => void;
   /** 去向卡上的舊版引文帶進對話。 */
   onBring?: (quote: string) => void;
+  onMemory?: () => void;
 }) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("talk");
@@ -77,7 +78,7 @@ export default function Side({ version, map, mapError, state, marks, talk, quote
         </div>
       </header>
       <div className="side-panel" role="tabpanel" id="side-panel-talk" aria-labelledby="side-tab-talk" hidden={tab !== "talk"}>
-        <Talk talk={talk} version={version} quotes={quotes} analyzing={analyzing} onDropQuote={onDropQuote} onSent={onSent} onReveal={reveal} />
+        <Talk talk={talk} version={version} quotes={quotes} analyzing={analyzing} onDropQuote={onDropQuote} onSent={onSent} onReveal={reveal} onMemory={onMemory} />
       </div>
       {tab !== "talk" && (
         <div className="side-panel side-scroll" role="tabpanel" id={`side-panel-${tab}`} aria-labelledby={`side-tab-${tab}`}>
