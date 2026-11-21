@@ -37,6 +37,7 @@ const names = () => [...document.querySelectorAll(".dash-mg-group")].map(g => g.
 const open = async (name: string) => { fireEvent.click(await header(name)); return screen.getByRole("group", { name }); };
 
 beforeEach(() => {
+  localStorage.clear();
   setLang("zh-Hant");
   memories = vi.spyOn(api, "memories").mockResolvedValue(list(
     mem({ id: 1, scope: "work", slug: "d1", title: "海", text: "括號是牠沒說的" }),
@@ -60,6 +61,10 @@ describe("MemoryGroups", () => {
     expect(within(h).getByLabelText("待續話題 1")).toBeTruthy();
     expect(within(h).getByLabelText("對話摘要 3")).toBeTruthy();
     expect(screen.queryByText("括號是牠沒說的")).toBeNull();
+    expect(names()).toEqual(["關於我", "海"]);
+    const rest = screen.getByRole("button", { name: "另 1 篇沒有記錄" });
+    expect(rest.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(rest);
     const quiet = await header("山");
     expect(within(quiet).queryByLabelText(/記憶 |待續話題 |對話摘要 /)).toBeNull();
     expect(names()).toEqual(["關於我", "海", "山"]);
@@ -124,13 +129,13 @@ describe("MemoryGroups", () => {
 
   it("manual add uses group scope", async () => {
     mount();
+    fireEvent.click(await screen.findByRole("button", { name: "另 1 篇沒有記錄" }));
     const g = await open("山");
     fireEvent.click(within(g).getByRole("button", { name: "手動新增" }));
     fireEvent.change(within(g).getByRole("textbox", { name: "新增記憶" }), { target: { value: "關於山" } });
     fireEvent.click(within(g).getByRole("button", { name: "新增" }));
     await waitFor(() => expect(remember).toHaveBeenCalledWith({ scope: "work", slug: "d2", text: "關於山" }));
-    const me = await open("關於我");
-    fireEvent.click(within(me).getByRole("button", { name: "手動新增" }));
+    const me = screen.getByRole("group", { name: "關於我" });
     fireEvent.change(within(me).getByRole("textbox", { name: "新增記憶" }), { target: { value: "我" } });
     fireEvent.click(within(me).getByRole("button", { name: "新增" }));
     await waitFor(() => expect(remember).toHaveBeenCalledWith({ scope: "author", text: "我" }));
@@ -143,6 +148,65 @@ describe("MemoryGroups", () => {
     expect(within(g).getByText("封存作品的記憶")).toBeTruthy();
     expect(within(g).queryByRole("button", { name: "手動新增" })).toBeNull();
     expect(names()[names().length - 1]).toBe("舊作");
+  });
+});
+
+describe("MemoryGroups layout", () => {
+  it("about me is always open with no toggle and shows its usage", async () => {
+    memories.mockResolvedValue(list(mem({ id: 1, text: "我的事" })));
+    mount();
+    const me = await screen.findByRole("group", { name: "關於我" });
+    expect(within(me).getByText("我的事")).toBeTruthy();
+    expect(within(me).queryByRole("button", { expanded: false })).toBeNull();
+    expect(within(me).getByText("3/800")).toBeTruthy();
+  });
+
+  it("empty about me opens the add box and writes no hint", async () => {
+    memories.mockResolvedValue(list());
+    mount();
+    const me = await screen.findByRole("group", { name: "關於我" });
+    expect(within(me).getByRole("textbox", { name: "新增記憶" })).toBeTruthy();
+    expect(within(me).queryByRole("button", { name: "手動新增" })).toBeNull();
+  });
+
+  it("open groups are remembered across mounts", async () => {
+    const r = mount();
+    await open("海");
+    r.unmount();
+    mount();
+    expect((await header("海")).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("long titles keep the full name as a tooltip", async () => {
+    mount();
+    const g = await screen.findByRole("group", { name: "海" });
+    expect(g.querySelector(".dash-mg-name")?.getAttribute("title")).toBe("海");
+  });
+
+  it("quote differing from text shows as a citation, the link is an icon", async () => {
+    memories.mockResolvedValue(list(mem({ id: 1, text: "結尾要空", quote: "我想最後那條繩子是空的", session: "s1", seq: 0 })));
+    mount();
+    const me = await screen.findByRole("group", { name: "關於我" });
+    const li = within(me).getByText("結尾要空").closest("li") as HTMLElement;
+    expect(li.querySelector("blockquote")?.textContent).toBe("我想最後那條繩子是空的");
+    expect(within(li).getByRole("link", { name: "出自對話" }).getAttribute("href")).toBe("/c/s1");
+  });
+
+  it("saved candidate: going to it opens the group and marks the new row", async () => {
+    vi.spyOn(api, "candidates").mockResolvedValue([{ id: 7, text: "新的一條", quote: "新的一條", scope: "work", session: "s1", seq: 0, slug: "d1", title: "海", at: now }]);
+    vi.spyOn(api, "saveCandidate").mockResolvedValue(mem({ id: 70 }));
+    mount();
+    const s = await screen.findByRole("region", { name: "待確認" });
+    memories.mockResolvedValue(list(mem({ id: 70, scope: "work", slug: "d1", title: "海", text: "新的一條" })));
+    fireEvent.click(within(s).getByRole("button", { name: "存入本篇" }));
+    fireEvent.click(await screen.findByRole("button", { name: "〈海〉" }));
+    expect((await header("海")).getAttribute("aria-expanded")).toBe("true");
+    const row = await waitFor(() => {
+      const el = document.querySelector('[data-mem="70"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    expect(row.hasAttribute("data-new")).toBe(true);
   });
 });
 

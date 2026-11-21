@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import Dash from "../src/dash/Dash";
+import { SettingsNav } from "../src/dash/Settings";
 import Paper from "../src/dash/Paper";
 import { loadPaperFlow, setPaperFlow } from "../src/dash/paperFlow";
 import { en, setLang, zhHant } from "../src/dash/i18n";
@@ -448,8 +449,7 @@ describe("記憶頁跳回來源", () => {
       <Routes><Route path="/w/:slug" element={<Dash />} /><Route path="/settings" element={<Dash />} /></Routes></MemoryRouter>);
     const nav = within(await screen.findByRole("navigation"));
     fireEvent.click(await nav.findByRole("button", { name: "記憶" }));
-    fireEvent.click(within(await screen.findByRole("group", { name: "關於我" })).getAllByRole("button")[0]);
-    fireEvent.click(await screen.findByRole("link", { name: "那句" }));
+    fireEvent.click(await within(await screen.findByRole("group", { name: "關於我" })).findByRole("link", { name: "出自對話" }));
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/w/d1"));
     expect(await within(await screen.findByRole("log")).findByText("那句我說的話")).toBeTruthy();
   });
@@ -849,5 +849,18 @@ describe("設定頁:角色卡", () => {
       expect(zhHant[`card.warn.${code}` as keyof typeof zhHant]).toBeTruthy();
       expect(en[`card.warn.${code}` as keyof typeof en]).toBeTruthy();
     }
+  });
+});
+
+describe("設定導覽:窄螢幕橫排", () => {
+  it("目前那顆與有圓點那顆捲進可視範圍", () => {
+    setLang("zh-Hant");
+    const seen: string[] = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) { seen.push(this.getAttribute("aria-label") ?? ""); };
+    try {
+      render(<MemoryRouter><SettingsNav section="look" onPick={() => {}} back={{ label: "回去", to: "/" }} dots={{ memory: true }} /></MemoryRouter>);
+      expect(seen).toEqual(["外觀", "記憶"]);
+    } finally { Element.prototype.scrollIntoView = orig; }
   });
 });

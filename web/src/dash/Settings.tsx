@@ -199,8 +199,14 @@ export function SettingsNav({ section, onPick, back, dots = {} }: {
 }) {
   const t = useT();
   const nav = useNavigate();
+  const box = useRef<HTMLDivElement>(null);
+  const dotted = Object.keys(dots).filter(k => dots[k as SettingsSection]).join();
+  useEffect(() => {
+    box.current?.querySelectorAll<HTMLElement>('[aria-current="true"], [data-dot]')
+      .forEach(b => b.scrollIntoView?.({ block: "nearest", inline: "nearest" }));
+  }, [section, dotted]);
   return (
-    <div className="set-nav" role="group" aria-label={t("set.sections")}>
+    <div className="set-nav" role="group" aria-label={t("set.sections")} ref={box}>
       <button type="button" className="set-back" aria-label={back.label} title={back.label} onClick={() => nav(back.to)}>
         <Icon name="back" /><span>{back.label}</span>
       </button>
@@ -209,7 +215,7 @@ export function SettingsNav({ section, onPick, back, dots = {} }: {
           <p className="set-nav-h" aria-hidden="true">{t(g.key)}</p>
           {SECTIONS.filter(x => g.ids.includes(x.id)).map(x => (
             <button key={x.id} type="button" aria-label={t(x.key)} title={t(x.key)} aria-current={section === x.id ? "true" : undefined}
-              onClick={() => onPick(x.id)}>
+              data-dot={dots[x.id] || undefined} onClick={() => onPick(x.id)}>
               <Icon name={x.icon} /><span>{t(x.key)}</span>{dots[x.id] && <span className="dash-pend" aria-hidden="true" />}
             </button>
           ))}
@@ -525,8 +531,8 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
 }
 
 /** 設定內容:只畫目前分區。分區導覽在書架(窄螢幕時 nav 由外面給,畫在內容上方)。 */
-export default function Settings({ section, nav, onPending }: {
-  section: SettingsSection; nav: ReactNode | null; onPending?: (n: number) => void;
+export default function Settings({ section, nav, onPending, toPending }: {
+  section: SettingsSection; nav: ReactNode | null; onPending?: (n: number) => void; toPending?: boolean;
 }) {
   const t = useT();
   const title = t(SECTIONS.find(x => x.id === section)!.key);
@@ -536,7 +542,7 @@ export default function Settings({ section, nav, onPending }: {
       <h1 className="dash-h">{title}</h1>
       {section === "look" && <Look />}
       {section === "companions" && <Companions />}
-      {section === "memory" && <MemoryPage onPending={onPending} />}
+      {section === "memory" && <MemoryPage onPending={onPending} toPending={toPending} />}
       {section === "archive" && <Archive />}
     </section>
   );

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, DashError, type MemoryList, type WorkOverview } from "./api";
 import { errorMessage, useT } from "./i18n";
-import MemoryGroups, { chainsOf, type Act, type Reload } from "./MemoryGroups";
-import MemoryPending from "./MemoryPending";
+import MemoryGroups, { chainsOf, type Act, type Reload, type Target } from "./MemoryGroups";
+import MemoryPending, { type Saved } from "./MemoryPending";
 
 function Switch({ label, on, onLabel, pick }: { label: string; on: boolean; onLabel: string; pick: (v: boolean) => void }) {
   const t = useT();
@@ -31,7 +31,7 @@ function useSetting(get: () => Promise<boolean>, set: (v: boolean) => Promise<vo
 
 const noop = () => {};
 
-export default function MemoryPage({ onPending = noop }: { onPending?: (n: number) => void }) {
+export default function MemoryPage({ onPending = noop, toPending = false }: { onPending?: (n: number) => void; toPending?: boolean }) {
   const t = useT();
   const [data, setData] = useState<MemoryList | null>(null);
   const [works, setWorks] = useState<WorkOverview[] | null>(null);
@@ -60,14 +60,18 @@ export default function MemoryPage({ onPending = noop }: { onPending?: (n: numbe
   };
 
   const [pendKey, setPendKey] = useState(0);
+  const [goto, setGoto] = useState<Target | null>(null);
+  const [bump, setBump] = useState<Target | null>(null);
+  const mark = (set: (t: Target | null) => void) => (s: Saved) => set({ ...s, n: Date.now() });
   const [prior, setPrior] = useSetting(api.priorEnabled, api.setPriorEnabled, fail);
   const [suggest, setSuggest] = useSetting(api.suggestEnabled, api.setSuggestEnabled, fail, () => setPendKey(k => k + 1));
   const archived = data ? chainsOf(data.memories).filter(c => !c.live) : [];
   return (
     <div className="dash-mem">
-      <MemoryPending key={pendKey} onChange={() => void reloadMemories().catch(fail)} onCount={onPending} />
+      <MemoryPending key={pendKey} onChange={() => void reloadMemories().catch(fail)} onCount={onPending}
+        onSaved={mark(setBump)} onGoto={mark(setGoto)} focus={toPending} />
       {code && <p role="alert">{t(errorMessage(code))}</p>}
-      {data && works && <MemoryGroups data={data} works={works} act={act} />}
+      {data && works && <MemoryGroups data={data} works={works} act={act} goto={goto} bump={bump} />}
       <footer className="dash-mem-foot">
         {prior !== null && <Switch label={t("memory.priorSwitch")} on={prior} onLabel={t("memory.on")} pick={v => void setPrior(v)} />}
         {suggest !== null && <Switch label={t("memory.suggestSwitch")} on={suggest} onLabel={t("memory.suggestOn")} pick={v => void setSuggest(v)} />}

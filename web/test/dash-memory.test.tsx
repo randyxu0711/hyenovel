@@ -24,13 +24,20 @@ const mount = async () => {
   const r = render(<MemoryRouter initialEntries={["/settings"]}><Where /><MemoryPage /></MemoryRouter>);
   await waitFor(() => expect(works).toHaveBeenCalled());
   await act(async () => {});
+  const rest = document.querySelector<HTMLButtonElement>(".dash-mg-rest");
+  if (rest) fireEvent.click(rest);
+  await act(async () => {});
   document.querySelectorAll<HTMLButtonElement>(".dash-mg-head[aria-expanded=false]").forEach(b => fireEvent.click(b));
   return r;
 };
-const addOpen = (group = "關於我") => fireEvent.click(within(screen.getByRole("group", { name: group })).getByRole("button", { name: "手動新增" }));
+const addOpen = (group = "關於我") => {
+  const btn = within(screen.getByRole("group", { name: group })).queryByRole("button", { name: "手動新增" });
+  if (btn) fireEvent.click(btn);
+};
 const groupOf = (name: string) => screen.findByRole("group", { name });
 
 beforeEach(() => {
+  localStorage.clear();
   setLang("zh-Hant");
   memories = vi.spyOn(api, "memories").mockResolvedValue(list());
   edit = vi.spyOn(api, "editMemory").mockResolvedValue(mem({ id: 2, root: 1 }));
@@ -94,7 +101,7 @@ describe("MemoryPage", () => {
   it("頁底開關:讀不到設定就不顯示", async () => {
     vi.spyOn(api, "priorEnabled").mockRejectedValue(new DashError(0, "den-down"));
     await mount();
-    await screen.findByText("可在對話中按「記住」，或於此手動新增。");
+    await screen.findByRole("textbox", { name: "新增記憶" });
     expect(screen.queryByRole("group", { name: "新對話帶入前次摘要" })).toBeNull();
   });
   it("生效中的記憶依作者、各篇分組,顯示已用字數/上限", async () => {
@@ -113,12 +120,12 @@ describe("MemoryPage", () => {
     expect(within(screen.getByRole("group", { name: "山" })).getByText("別篇")).toBeTruthy();
   });
 
-  it("有來源的顯示原話,點了跳到 /作品路由?s=<session>", async () => {
+  it("有來源的顯示原話引文,連結圖示跳到 /作品路由?s=<session>", async () => {
     memories.mockResolvedValue(list(mem({ text: "內容", quote: "原話", slug: "d 1", session: "s/1", seq: 0 })));
     await mount();
-    fireEvent.click(await screen.findByRole("link", { name: /原話/ }));
+    expect((await screen.findByText("原話")).tagName).toBe("BLOCKQUOTE");
+    fireEvent.click(screen.getByRole("link", { name: "出自對話" }));
     expect(screen.getByTestId("loc").textContent).toBe("/w/d%201?s=s%2F1");
-    expect(screen.queryByText("手動新增", { selector: ".dash-mem-source" })).toBeNull();
   });
 
   it("記的就是整句原話時不重複列,改標「出自對話」,一樣能跳回去", async () => {
@@ -134,14 +141,13 @@ describe("MemoryPage", () => {
     await mount();
     fireEvent.click(await screen.findByRole("link", { name: "出自對話" }));
     expect(screen.getByTestId("loc").textContent).toBe("/c/c%2F9");
-    expect(screen.queryByText("手動新增", { selector: ".dash-mem-source" })).toBeNull();
   });
 
-  it("沒有來源的顯示手寫標記", async () => {
+  it("沒有來源的沒有連結也沒有引文", async () => {
     memories.mockResolvedValue(list(mem({ text: "手打的" })));
     await mount();
-    await screen.findByText("手打的");
-    expect(screen.getByText("手動新增", { selector: ".dash-mem-source" })).toBeTruthy();
+    const li = (await screen.findByText("手打的")).closest("li") as HTMLElement;
+    expect(li.querySelector("blockquote")).toBeNull();
     expect(screen.queryByRole("link")).toBeNull();
   });
 
@@ -270,11 +276,10 @@ describe("MemoryPage", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("den");
   });
 
-  it("沒有任何記憶時:關於我仍在,顯示提示與手動新增", async () => {
+  it("沒有任何記憶時:關於我仍在,新增框直接打開", async () => {
     await mount();
     const me = screen.getByRole("group", { name: "關於我" });
-    expect(within(me).getByText("可在對話中按「記住」，或於此手動新增。")).toBeTruthy();
-    expect(within(me).getByRole("button", { name: "手動新增" })).toBeTruthy();
+    expect(within(me).getByRole("textbox", { name: "新增記憶" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /已封存/ })).toBeNull();
   });
 

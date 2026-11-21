@@ -16,14 +16,16 @@ let skip: MockInstance<typeof api.skipCandidate>;
 let undo: MockInstance<typeof api.undoCandidate>;
 let onChange: ReturnType<typeof vi.fn<() => void>>;
 let onCount: ReturnType<typeof vi.fn<(n: number) => void>>;
+let onSaved: ReturnType<typeof vi.fn>;
+let onGoto: ReturnType<typeof vi.fn>;
 
-const mount = () => render(<MemoryPending onChange={onChange} onCount={onCount} />);
+const mount = (focus = false) => render(<MemoryPending onChange={onChange} onCount={onCount} onSaved={onSaved} onGoto={onGoto} focus={focus} />);
 const section = () => screen.findByRole("region", { name: "待確認" });
 const item = async (text: string) => (await screen.findByText(text)).closest("li") as HTMLElement;
 
 beforeEach(() => {
   setLang("zh-Hant");
-  onChange = vi.fn(); onCount = vi.fn();
+  onChange = vi.fn(); onCount = vi.fn(); onSaved = vi.fn(); onGoto = vi.fn();
   candidates = vi.spyOn(api, "candidates").mockResolvedValue([cand({})]);
   save = vi.spyOn(api, "saveCandidate").mockResolvedValue(saved);
   skip = vi.spyOn(api, "skipCandidate").mockResolvedValue(undefined);
@@ -43,7 +45,9 @@ describe("MemoryPending", () => {
     mount();
     const s = await section();
     expect(within(s).getByRole("heading").textContent).toBe("待確認 1");
-    expect(within(s).getByText(/「我都是先有最後一句」/).textContent).toContain("〈海〉");
+    const li = within(s).getByText("寫作時先有最後一句").closest("li") as HTMLElement;
+    expect(within(li).getByText("〈海〉")).toBeTruthy();
+    expect(li.querySelector("blockquote")?.textContent).toBe("我都是先有最後一句");
   });
 
   it("suggested layer button comes first", async () => {
@@ -66,8 +70,10 @@ describe("MemoryPending", () => {
     mount();
     fireEvent.click(within(await item("寫作時先有最後一句")).getByRole("button", { name: "存入關於我" }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(1, "author", undefined));
-    expect(await screen.findByText("已存入關於我")).toBeTruthy();
+    const receipt = (await screen.findByRole("button", { name: "關於我" })).closest("li") as HTMLElement;
+    expect(receipt.textContent).toContain("寫作時先有最後一句");
     expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledWith({ group: "", memory: 50 });
     fireEvent.click(screen.getByRole("button", { name: "復原" }));
     await waitFor(() => expect(undo).toHaveBeenCalledWith(1));
     expect(await screen.findByRole("button", { name: "存入關於我" })).toBeTruthy();
@@ -106,7 +112,7 @@ describe("MemoryPending", () => {
     fireEvent.click(within(await item("寫作時先有最後一句")).getByRole("button", { name: "存入關於我" }));
     fireEvent.click(await screen.findByRole("button", { name: "復原" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByText("已存入關於我")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "關於我" })).toBeTruthy();
   });
 
   it("reports remaining count", async () => {
@@ -115,5 +121,54 @@ describe("MemoryPending", () => {
     await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(2));
     fireEvent.click(within(await item("甲")).getByRole("button", { name: "略過" }));
     await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(1));
+  });
+
+  it("quote equal to text is not repeated", async () => {
+    candidates.mockResolvedValue([cand({ quote: "寫作時先有最後一句 " })]);
+    mount();
+    const li = await item("寫作時先有最後一句");
+    expect(li.querySelector("blockquote")).toBeNull();
+  });
+
+  it("done slips leave the list and older ones fill in", async () => {
+    candidates.mockResolvedValue(Array.from({ length: 7 }, (_, i) => cand({ id: i + 1, text: `候選${i + 1}` })));
+    mount();
+    fireEvent.click(within(await item("候選1")).getByRole("button", { name: "略過" }));
+    expect(await screen.findByText("候選6")).toBeTruthy();
+    expect(screen.queryByText("候選7")).toBeNull();
+    expect(screen.getByRole("button", { name: /較早 1 條/ })).toBeTruthy();
+    const receipts = document.querySelector(".dash-pend-receipts") as HTMLElement;
+    expect(within(receipts).getByText("候選1")).toBeTruthy();
+    expect(within(receipts).getByText("已略過")).toBeTruthy();
+  });
+
+  it("receipt link goes to the work group", async () => {
+    candidates.mockResolvedValue([cand({ scope: "work" })]);
+    mount();
+    fireEvent.click(within(await item("寫作時先有最後一句")).getByRole("button", { name: "存入本篇" }));
+    fireEvent.click(await screen.findByRole("button", { name: "〈海〉" }));
+    expect(onGoto).toHaveBeenCalledWith({ group: "d1", memory: 50 });
+  });
+
+  it("editing: Enter saves to the first layer, Esc cancels", async () => {
+    candidates.mockResolvedValue([cand({ scope: "work" })]);
+    mount();
+    const li = await item("寫作時先有最後一句");
+    fireEvent.click(within(li).getByRole("button", { name: "編輯" }));
+    fireEvent.keyDown(within(li).getByRole("textbox"), { key: "Escape" });
+    expect(within(li).queryByRole("textbox")).toBeNull();
+    fireEvent.click(within(li).getByRole("button", { name: "編輯" }));
+    const box = within(li).getByRole("textbox");
+    fireEvent.change(box, { target: { value: "改過" } });
+    fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(save).toHaveBeenCalledWith(1, "work", "改過"));
+  });
+
+  it("focus puts the first slip's main button in focus", async () => {
+    mount(true);
+    const btn = within(await item("寫作時先有最後一句")).getByRole("button", { name: "存入關於我" });
+    await waitFor(() => expect(document.activeElement).toBe(btn));
   });
 });
