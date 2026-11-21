@@ -81,7 +81,7 @@ describe("進門只有一欄聊天", () => {
     expect(document.querySelector(".home-inner")).toBeNull();
     expect(calls.some(c => c.url.endsWith("/sessions"))).toBe(false);
   });
-  it("輸入框上的角色是預設讀伴,placeholder 說可以貼稿", async () => {
+  it("輸入框上的角色是首選讀伴,placeholder 說可以貼稿", async () => {
     serverDefault = "deer";
     mount();
     const b = await box();

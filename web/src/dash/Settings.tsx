@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, DashError, type ArchivedSession, type ArchivedWork, type CardDraft, type Character, type RecentSession, type SessionDetail } from "./api";
 import Figure from "./Figure";
@@ -402,10 +402,11 @@ function Companions() {
 }
 
 /** 讀伴卡:立體書的紙卡,角色立在摺線上;整張可點,打開資訊面板。 */
-function Stamp({ character: c, fresh = false }: { character: Character; fresh?: boolean }) {
+function Ribbon({ character: c, fresh = false }: { character: Character; fresh?: boolean }) {
   const t = useT();
   const { mode } = useThemeState();
-  return <span className="char-tag char-stamp" data-fresh={fresh || undefined} style={{ color: c.colors[mode].text }}>{t("set.default")}</span>;
+  return <span className="char-ribbon" role="img" aria-label={t("set.default")} title={t("set.default")} data-fresh={fresh || undefined}
+    style={{ "--rib": c.colors[mode].text } as CSSProperties} />;
 }
 
 function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on: boolean; fresh: boolean; onOpen: () => void }) {
@@ -425,12 +426,12 @@ function PopCard({ character: c, on, fresh, onOpen }: { character: Character; on
     e.currentTarget.style.removeProperty("--ry");
   };
   return (
-    <button type="button" ref={ref} className="char-pop" data-on={on} data-fresh={fresh || undefined} aria-haspopup="dialog" aria-label={t("set.card.open", { name })}
+    <button type="button" ref={ref} className="char-pop" data-on={on} data-fresh={fresh || undefined} aria-haspopup="dialog" aria-label={t(on ? "set.card.openDefault" : "set.card.open", { name })}
       onClick={onOpen} onPointerMove={tilt} onPointerLeave={flat}>
       <span className="char-stage" aria-hidden="true"><Figure character={c} size={96} /></span>
       <b className="char-name">{name}</b>
       <span className="char-line">{localized(c.line, lang)}</span>
-      {on && <Stamp character={c} />}
+      {on && <Ribbon character={c} />}
     </button>
   );
 }
@@ -470,6 +471,7 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
             <button ref={closeRef} type="button" className="ib" aria-label={t("set.card.close")} title={t("set.card.close")} onClick={onClose}><Icon name="close" /></button>
           </span>
         )}
+        {on && <Ribbon character={c} fresh={stamped} />}
         <div className="char-sheet-stage" aria-hidden="true"><Figure character={c} size={168} /></div>
         {editing ? (
           <CardEditor sheet selectName={editing === "copy"} draft={{ ...c, depth: c.depth_prompt?.prompt ?? "" }} limits={SAVED_LIMITS} onSave={onSave} onCancel={() => onEdit(false)} />
@@ -508,8 +510,8 @@ function CharSheet({ character: c, on, onClose, onPick, editing, onEdit, onSave,
             </section>
           )}
           <div className="char-sheet-foot">
-            {on ? <Stamp character={c} fresh={stamped} />
-              : <button type="button" className="dash-key" onClick={() => { setStamped(true); onPick(); }}>{t("set.makeDefault")}</button>}
+            {on ? <span className="char-default">{t("set.defaultCompanion")}</span>
+              : <button type="button" className="dash-key" title={t("set.makeDefaultHint")} onClick={() => { setStamped(true); onPick(); }}>{t("set.makeDefault")}</button>}
             <span className="char-acts">
               <a className="ib" href={api.characterCardUrl(c.id)} download={`${c.id}.json`}
                 aria-label={t("set.card.export", { name })} title={t("set.card.export", { name })}><Icon name="down" /></a>
