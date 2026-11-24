@@ -217,3 +217,37 @@ def test_prompt_fp_uses_what_the_worker_was_given(monkeypatch):
     story = meter.prompt_fp("candidates")
     monkeypatch.setattr(meter.candidates, "STORY", "另一篇")
     assert meter.prompt_fp("candidates") != story
+
+
+class BrokenConn:
+    def __enter__(self):
+        raise RuntimeError("database is locked")
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_ledger_failure_never_reaches_caller():
+    async def inner(system, user, schema, *, config, sink):
+        return _ok()
+    r = go(meter.wrap_run(inner, BrokenConn())("s", "u", {}, config=RUN, meter=Meter("analyst")))
+    assert r.outcome == "ok" and r.call_id is None
+
+    async def drive():
+        return [e async for e in meter.wrap_chat(_chat_ok, BrokenConn())("s", "u", config=RUN, meter=Meter("chat"))]
+    assert [k for k, _ in go(drive())] == ["delta", "delta", "result"]
+
+
+def test_finish_failure_keeps_result(conn, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("locked")
+    monkeypatch.setattr(repo, "finish_call", boom)
+
+    async def inner(system, user, schema, *, config, sink):
+        return _ok()
+    r = go(meter.wrap_run(inner, conn)("s", "u", {}, config=RUN, meter=Meter("analyst")))
+    assert r.outcome == "ok" and r.call_id == _rows(conn)[0]["id"]
+
+    async def drive():
+        return [e async for e in meter.wrap_chat(_chat_ok, conn)("s", "u", config=RUN, meter=Meter("chat"))]
+    assert [k for k, _ in go(drive())] == ["delta", "delta", "result"]

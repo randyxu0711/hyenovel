@@ -1,5 +1,6 @@
 """用量帳本的計量包裝:呼叫前寫一列、結束補結局。只存數字、id、列舉值,不存文字。"""
 import asyncio
+import logging
 import os
 import time
 from contextlib import aclosing
@@ -8,6 +9,8 @@ from dataclasses import dataclass, field
 from den import candidates, companion
 from den.runner import RunResult, UsageSink
 from marrow import repo, workpacks
+
+log = logging.getLogger("hyenovel")
 
 PROMPT_FILES: dict[str, tuple[str, ...]] = {
     "analyst": ("analyst.md",),
@@ -41,16 +44,30 @@ def prompt_fp(kind: str) -> str:
     return repo.sha256_text("\0".join(_text(rel) for rel in PROMPT_FILES[kind]))[:12]
 
 
-def _start(conn, meter: Meter, clock) -> tuple[int, float]:
+def _start(conn, meter: Meter, clock) -> tuple[int | None, float]:
     t0 = clock()
-    with conn:
-        cid = repo.start_call(conn, meter.kind, t0, prompt_fp(meter.kind),
-                              tag=os.environ.get("HYENOVEL_TAG") or None, sizes=meter.sizes, **meter.keys)
+    try:
+        with conn:
+            cid = repo.start_call(conn, meter.kind, t0, prompt_fp(meter.kind),
+                                  tag=os.environ.get("HYENOVEL_TAG") or None, sizes=meter.sizes, **meter.keys)
+    except Exception:
+        log.exception("event=ledger-start-failed kind=%s", meter.kind)
+        return None, t0
     return cid, t0
 
 
-def _finish(conn, cid: int, t0: float, clock, sink: UsageSink, r: RunResult | None = None,
+def _finish(conn, cid: int | None, t0: float, clock, sink: UsageSink, r: RunResult | None = None,
             outcome: str | None = None) -> None:
+    if cid is None:
+        return
+    try:
+        _write_finish(conn, cid, t0, clock, sink, r, outcome)
+    except Exception:
+        log.exception("event=ledger-finish-failed call=%s", cid)
+
+
+def _write_finish(conn, cid: int, t0: float, clock, sink: UsageSink, r: RunResult | None,
+                  outcome: str | None) -> None:
     tokens = cost = model = None
     if r is not None:
         outcome, model = r.outcome, r.model

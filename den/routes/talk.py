@@ -308,7 +308,8 @@ async def compact_session(session: str, request: Request):
             made = repo.source_versions(conn, d["story_id"]) if d["story_id"] is not None else []
             text, usage, cid = await compact.summarize(
                 state.chat, compact.transcript(rows, made),
-                meter.Meter("compact", sizes=prompt.sizes(compact.system()), keys={"discussion_id": d["id"]}))
+                meter.Meter("compact", sizes=prompt.sizes(compact.system()), keys={"discussion_id": d["id"],
+                                         **({"story_id": d["story_id"]} if d["story_id"] is not None else {})}))
         except Exception as e:
             if isinstance(e, compact.CompactFailed) and e.reason == "ok":
                 discuss.discard(conn, e.call_id)

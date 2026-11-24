@@ -127,8 +127,8 @@ def _digest_signals(conn, r: dict, sig: Counter) -> None:
         return
     if _edited_copies(conn, r["digest_id"]):
         sig["digest_edited"] += 1
-    for (res,) in conn.execute("SELECT resolution FROM memory_candidate WHERE discussion_id = ? AND created_at = ? "
-                               "AND resolution IS NOT NULL", (g[0], g[1])):
+    for (res,) in conn.execute("SELECT DISTINCT resolution FROM memory_candidate WHERE discussion_id = ? "
+                               "AND created_at = ? AND resolution IS NOT NULL", (g[0], g[1])):
         sig[res] += 1
 
 

@@ -164,6 +164,7 @@ def test_compact_links_seq(c):
     d = in_loop(c, lambda conn: repo.discussion_by_session(conn, sid))
     assert (row["kind"], row["outcome"], row["discussion_id"], row["seq"]) == ("compact", "ok", d["id"], seq)
     assert set(row["sizes"]) == {"compact"}
+    assert row["story_id"] == d["story_id"] is not None
 
 
 def test_compact_empty_is_discarded(c, fake_chat):

@@ -158,8 +158,10 @@ def test_effects_counts_digest_signals(conn, disc):
     _digest(conn, disc, "改", root=root, edited=True, at=6.0)
     a = repo.add_candidate(conn, disc, 0, "問", "記這個", "author", 5.0)
     b = repo.add_candidate(conn, disc, 0, "問", "記那個", "author", 5.0)
+    a2 = repo.add_candidate(conn, disc, 0, "問", "也記", "author", 5.0)
     repo.add_candidate(conn, disc, 0, "問", "還沒處理", "author", 5.0)
     repo.resolve_candidate(conn, a, "saved", 7.0)
+    repo.resolve_candidate(conn, a2, "saved", 7.0)
     repo.resolve_candidate(conn, b, "skipped", 7.0)
     plain = _digest(conn, disc, "另一份", at=8.0)
     rows = [call(conn, kind="digest", digest_id=g), call(conn, kind="digest", digest_id=12345),
