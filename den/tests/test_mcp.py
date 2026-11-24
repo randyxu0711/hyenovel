@@ -977,9 +977,9 @@ def test_create_character_passes_answers_and_language(char_den, monkeypatch):
     seen = {}
     real = candidates.generate
 
-    async def spy(run, answers, passage, lang, seed, again=None):
+    async def spy(run, conn, answers, passage, lang, seed, again=None):
         seen.update(answers=answers, lang=lang)
-        return await real(run, answers, passage, lang, seed, again)
+        return await real(run, conn, answers, passage, lang, seed, again)
     monkeypatch.setattr(candidates, "generate", spy)
     d = char_den(_batch())
     r = _call(d.client(), "create_character", {"wish": "慢慢來", "lang": "en"})

@@ -151,3 +151,31 @@ def test_transcript_marks_between_assistant_only_turns():
 def test_transcript_without_versions_is_plain():
     rows = [{"seq": 0, "role": "user", "text": "a", "ts": 1.0, "recipe": None}]
     assert compact.transcript(rows) == "作者:a"
+
+
+def _ledger(c):
+    return in_loop(c, lambda conn: repo.calls_since(conn, 0))
+
+
+def test_compact_links_seq(c):
+    sid = first_turn(c)
+    seq = squash(c, sid).json()["seq"]
+    row = _ledger(c)[-1]
+    d = in_loop(c, lambda conn: repo.discussion_by_session(conn, sid))
+    assert (row["kind"], row["outcome"], row["discussion_id"], row["seq"]) == ("compact", "ok", d["id"], seq)
+    assert set(row["sizes"]) == {"compact"}
+
+
+def test_compact_empty_is_discarded(c, fake_chat):
+    sid = first_turn(c)
+    fake_chat.deltas = []
+    assert squash(c, sid).status_code == 502
+    row = _ledger(c)[-1]
+    assert (row["kind"], row["outcome"], row["seq"]) == ("compact", "discarded", None)
+
+
+def test_compact_error_outcome_kept(c, fake_chat):
+    sid = first_turn(c)
+    fake_chat.outcome = "timeout"
+    assert squash(c, sid).status_code == 502
+    assert _ledger(c)[-1]["outcome"] == "timeout"

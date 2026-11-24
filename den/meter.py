@@ -80,6 +80,7 @@ def wrap_run(run, conn, clock=time.time):
         _finish(conn, cid, t0, clock, sink, r)
         r.call_id = cid
         return r
+    metered.inner = run
     return metered
 
 
@@ -106,6 +107,7 @@ def wrap_chat(chat, conn, clock=time.time):
             raise
         if not done:
             _finish(conn, cid, t0, clock, sink, outcome="crash")
+    metered.inner = chat
     return metered
 
 

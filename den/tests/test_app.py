@@ -352,10 +352,10 @@ def test_default_factory_uses_found_claude(data, monkeypatch):
     with TestClient(den_app.create_app(url, d), base_url=BASE) as c:
         mgr = c.app.state.mgr
         assert mgr._cli_version == "1.2.3"
-        fn = mgr._run_factory(None)
+        fn = mgr._run_factory(None).inner
         assert fn.args[0].exe == "/fake/claude"
         assert fn.keywords["timeout"] == den_app.PHASE_TIMEOUT
-        chat = c.app.state.chat                             # 討論共用同一個 claude
+        chat = c.app.state.chat.inner                       # 討論共用同一個 claude
         assert chat.func is den_app.stream_chat and chat.args[0].exe == "/fake/claude"
         assert chat.keywords == {"timeout": den_app.CHAT_TIMEOUT}
 

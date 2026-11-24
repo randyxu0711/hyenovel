@@ -3,7 +3,7 @@ import logging
 import time
 from contextlib import aclosing
 
-from den import compact, suggest
+from den import compact, discuss, meter, suggest
 from den.companion import _read
 from den.config import CANDIDATES_PER_DIGEST, DIGEST_MAX_CHARS, MIN_QUOTE_CHARS, THREADS_PER_DIGEST
 from den.discuss import since_clear
@@ -109,7 +109,10 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
     sources = [v["text"] for v in versions]
     result = None
     try:
-        async with aclosing(chat(sys_prompt.text, user, config=DIGEST_RUN)) as stream:
+        usage_meter = meter.Meter("digest", sizes=prompt.sizes(sys_prompt),
+                                  keys={k: v for k, v in (("story_id", story_id), ("discussion_id", discussion_id))
+                                        if v is not None})
+        async with aclosing(chat(sys_prompt.text, user, config=DIGEST_RUN, meter=usage_meter)) as stream:
             async for kind, val in stream:
                 if kind == "result":
                     result = val
@@ -118,9 +121,13 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
     after = repo.current_digest(conn, discussion_id)
     if (after and after["id"]) != (cur and cur["id"]) or not repo.utterances(conn, discussion_id):
         log.info("event=digest-dropped discussion=%s reason=changed-while-running", discussion_id)
+        discuss.discard(conn, getattr(result, "call_id", None))
         return None
     parsed = parse(result.text, said, sources) if result is not None and result.outcome == "ok" else None
     if parsed is None:
+        if result is not None and result.outcome == "ok" and result.call_id is not None:
+            with conn:
+                repo.mark_call(conn, result.call_id, "gate_rejected")
         log.warning("event=digest-failed discussion=%s outcome=%s", discussion_id,
                     getattr(result, "outcome", "no-result"))
         if result is not None and result.outcome not in RETRYABLE:
@@ -135,6 +142,8 @@ async def make(conn, chat, discussion_id: int, story_id: int | None, now=time.ti
         did = repo.add_digest(conn, discussion_id, summary, last_seq, at, root_id=cur["root_id"] if cur else None,
                               usage=usage, recipe=prompt.recipe(sys_prompt, DIGEST_RUN.as_dict()))
         repo.replace_threads(conn, repo.digest_by_id(conn, did)["root_id"], threads, at)
+        if result.call_id is not None:
+            repo.link_call(conn, result.call_id, digest_id=did)
         kept = (suggest.store(conn, discussion_id, story_id, suggest.parse(result.text, turns), at)
                 if suggesting and suggest.enabled(conn) else 0)
     log.info("event=digest-made discussion=%s threads=%s memories=%s", discussion_id, len(threads), kept)
