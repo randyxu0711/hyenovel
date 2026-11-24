@@ -199,8 +199,6 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
         raw = out.decode("utf-8", "replace")
         outcome, obj, msg = classify(proc.returncode, raw)
         msg = explain(outcome, obj, err.decode("utf-8", "replace"), msg)
-        if sink is not None and obj is not None and "rate_limit_info" in obj:
-            sink.rate_limit = rate_limit_of(obj["rate_limit_info"])
         log.info("event=run_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
         return make_result(outcome, obj, raw, msg, ms())
 

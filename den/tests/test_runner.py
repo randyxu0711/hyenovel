@@ -394,12 +394,3 @@ def test_rate_limit_of_tolerates_shapes():
     assert runner.rate_limit_of({"status": "allowed"}) == {"status": "allowed"}
     assert runner.rate_limit_of({"unifiedWindows": {"five_hour": 1}}) == {"status": None}
 
-
-def test_run_job_rate_limit_info_into_sink(fake, tmp_path):
-    exe = fake("ok")
-    ok = json.loads((tmp_path / "claude_ok.json").read_text())
-    ok["rate_limit_info"] = {"status": "allowed", "unifiedWindows": {"five_hour": {"utilization": 0.1}}}
-    (tmp_path / "claude_ok.json").write_text(json.dumps(ok))
-    sink = runner.UsageSink()
-    r = asyncio.run(runner.run_job(ClaudePreset(exe), "s", "u", SCHEMA, config=RunConfig(), timeout=10, sink=sink))
-    assert r.outcome == "ok" and sink.rate_limit["five_hour"]["utilization"] == 0.1
