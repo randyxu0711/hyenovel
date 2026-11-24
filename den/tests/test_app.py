@@ -31,7 +31,7 @@ class Run:
             self.release.set()
 
     def __call__(self, on_proc):
-        async def run(system_prompt, user_prompt, schema, *, config):
+        async def run(system_prompt, user_prompt, schema, *, config, **_):
             while not self.release.is_set():
                 await asyncio.sleep(0.01)
             return ok(_analysis() if schema is WORKPACKS["analyst"].schema else _notes())

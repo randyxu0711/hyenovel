@@ -15,7 +15,7 @@ class Chat:
         self.text, self.outcome, self.boom = text, outcome, boom
         self.calls = []
 
-    async def __call__(self, system, user, *, config):
+    async def __call__(self, system, user, *, config, **_):
         self.calls.append((system, user))
         if self.boom:
             raise RuntimeError("x")
@@ -148,7 +148,7 @@ class Racing(Chat):
         super().__init__(out("模型的"))
         self.conn, self.d, self.act = conn, d, act
 
-    async def __call__(self, system, user, *, config):
+    async def __call__(self, system, user, *, config, **_):
         self.act(self.conn, self.d)
         async for ev in super().__call__(system, user, config=config):
             yield ev

@@ -30,5 +30,9 @@ class Prompt:
                 "material": {x.name: _sha(x.text) for x in self.layers if x.material}}
 
 
+def sizes(prompt: Prompt) -> dict[str, int]:
+    return {x.name: len(x.text) for x in prompt.layers}
+
+
 def recipe(prompt: Prompt, run: dict) -> dict:
     return {"prompt": prompt.fingerprint(), "run": run}

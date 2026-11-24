@@ -33,3 +33,8 @@ def test_recipe_bundles_prompt_and_run():
     p = Prompt((Layer("base", "規則"),))
     run = {"model": "sonnet", "effort": "medium"}
     assert recipe(p, run) == {"prompt": p.fingerprint(), "run": run}
+
+
+def test_sizes_counts_each_layer():
+    from marrow.prompt import Layer, Prompt, sizes
+    assert sizes(Prompt((Layer("a", "xx"), Layer("b", "yyy", material=True)))) == {"a": 2, "b": 3}

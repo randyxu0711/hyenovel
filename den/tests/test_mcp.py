@@ -910,7 +910,7 @@ class CandidateRun:
         self.calls = 0
 
     def __call__(self, on_proc):
-        async def run(system, user, schema, *, config, timeout):
+        async def run(system, user, schema, *, config, timeout, **_):
             self.calls += 1
             return self.results.pop(0)
         return run

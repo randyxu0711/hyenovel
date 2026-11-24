@@ -73,7 +73,7 @@ class Script:
         self.results = list(results)
         self.calls = []
 
-    async def __call__(self, system_prompt, user_prompt, schema, *, config, timeout):
+    async def __call__(self, system_prompt, user_prompt, schema, *, config, timeout, **_):
         self.calls.append((system_prompt, user_prompt))
         self.timeout = timeout
         result = self.results.pop(0)
@@ -83,7 +83,7 @@ class Script:
 
 
 def _generate(script, seed=7, answers=None, lang="zh-Hant", passage=DRAFT):
-    return asyncio.run(candidates.generate(script, {"form": "貓"} if answers is None else answers, passage, lang, seed))
+    return asyncio.run(candidates.generate(script, None, {"form": "貓"} if answers is None else answers, passage, lang, seed))
 
 
 @pytest.mark.parametrize("seed", range(50))
@@ -505,7 +505,7 @@ def _shown(n=1, **kw):
 
 
 def _revise(script, candidate=None, feedback="名字換一個", lang="zh-Hant", passage=DRAFT):
-    return asyncio.run(candidates.revise(script, candidate or _shown(), feedback, passage, lang))
+    return asyncio.run(candidates.revise(script, None, candidate or _shown(), feedback, passage, lang))
 
 
 def test_revise_sends_one_candidate_with_feedback_and_keeps_axes():
@@ -942,7 +942,7 @@ def test_main_pen_outside_the_family_goes_to_repair():
 
 def test_revise_ignores_the_batch_palettes():
     script = Script(ok(_one(1, figure=_fig(1, main="rust"))))
-    out = asyncio.run(candidates.revise(script, _one(1), "換紅色", DRAFT, "zh-Hant"))
+    out = asyncio.run(candidates.revise(script, None, _one(1), "換紅色", DRAFT, "zh-Hant"))
     assert out["figure"]["main"] == "rust" and len(script.calls) == 1
 
 
@@ -956,7 +956,7 @@ def test_again_lists_previous_batch_and_reaction():
     script = Script(ok(_body()))
     again = {"reaction": "第二張接近了,說話再短一點", "previous": [{"name": "門縫", "line": "先聽聲音"},
                                                                 {"name": "井", "line": "往下看"}]}
-    asyncio.run(candidates.generate(script, {}, DRAFT, "zh-Hant", 7, again))
+    asyncio.run(candidates.generate(script, None, {}, DRAFT, "zh-Hant", 7, again))
     user = script.calls[0][1]
     assert "<previous>\n1. 門縫:先聽聲音\n2. 井:往下看\n</previous>" in user
     assert "<reaction>\n第二張接近了,說話再短一點\n</reaction>" in user
@@ -965,13 +965,13 @@ def test_again_lists_previous_batch_and_reaction():
 def test_again_with_a_given_form_lists_only_lines_since_names_are_the_form():
     script = Script(ok(_body()))
     again = {"reaction": "", "previous": [{"name": "貓", "line": "先聽聲音"}, {"name": "貓", "line": "往下看"}]}
-    asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, again))
+    asyncio.run(candidates.generate(script, None, {"form": "貓"}, DRAFT, "zh-Hant", 7, again))
     assert "<previous>\n1. 先聽聲音\n2. 往下看\n</previous>" in script.calls[0][1]
 
 
 def test_blank_reaction_still_lists_previous():
     script = Script(ok(_body()))
-    asyncio.run(candidates.generate(script, {}, DRAFT, "zh-Hant", 7,
+    asyncio.run(candidates.generate(script, None, {}, DRAFT, "zh-Hant", 7,
                                     {"reaction": "  ", "previous": [{"name": "門縫", "line": ""}]}))
     assert "<previous>" in script.calls[0][1] and "<reaction>" not in script.calls[0][1]
 
@@ -1054,7 +1054,7 @@ class Sleeps(list):
 def test_transient_backs_off_like_the_pipeline_then_recovers():
     sleeps = Sleeps()
     script = Script(_failed("transient"), _failed("transient"), ok(_body()))
-    out = asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
+    out = asyncio.run(candidates.generate(script, None, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
     assert len(out["candidates"]) == 3
     assert sleeps == [den_config.BACKOFF_BASE * 2, den_config.BACKOFF_BASE * 4]
     assert len(script.calls) == 3
@@ -1065,7 +1065,7 @@ def test_transient_exhausted_is_overload_with_a_bounded_spend():
     sleeps = Sleeps()
     script = Script(*[_failed("transient")] * (den_config.TRANSIENT_MAX_RETRIES + 2))
     with pytest.raises(candidates.Failed) as e:
-        asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
+        asyncio.run(candidates.generate(script, None, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
     assert e.value.reason == "overload"
     assert len(script.calls) == den_config.TRANSIENT_MAX_RETRIES + 1
     assert len(sleeps) == den_config.TRANSIENT_MAX_RETRIES
@@ -1075,20 +1075,20 @@ def test_transient_does_not_use_up_the_repair_and_shares_one_budget_with_it():
     sleeps = Sleeps()
     bad = ok(_body(_one(1), _one(2)))
     script = Script(_failed("transient"), bad, _failed("transient"), ok(_body()))
-    out = asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
+    out = asyncio.run(candidates.generate(script, None, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=sleeps))
     assert len(out["candidates"]) == 3 and len(script.calls) == 4
     assert "<previous_output>" in script.calls[3][1] and script.calls[3] == script.calls[2]
     assert sleeps == [den_config.BACKOFF_BASE * 2, den_config.BACKOFF_BASE * 4]
     script = Script(_failed("transient"), bad, _failed("transient"), _failed("transient"), ok(_body()))
     with pytest.raises(candidates.Failed) as e:
-        asyncio.run(candidates.generate(script, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=Sleeps()))
+        asyncio.run(candidates.generate(script, None, {"form": "貓"}, DRAFT, "zh-Hant", 7, sleep=Sleeps()))
     assert e.value.reason == "overload" and len(script.calls) == 4
 
 
 def test_revise_retries_transient_too():
     sleeps = Sleeps()
     script = Script(_failed("transient"), ok(_one(9)))
-    out = asyncio.run(candidates.revise(script, _shown(), "名字換一個", DRAFT, "zh-Hant", sleep=sleeps))
+    out = asyncio.run(candidates.revise(script, None, _shown(), "名字換一個", DRAFT, "zh-Hant", sleep=sleeps))
     assert out["name"]["zh-Hant"] == "讀者9" and len(sleeps) == 1
 
 
@@ -1100,7 +1100,7 @@ class Hang:
         self.cancelled = False
         self.calls = 0
 
-    async def __call__(self, system_prompt, user_prompt, schema, *, config, timeout):
+    async def __call__(self, system_prompt, user_prompt, schema, *, config, timeout, **_):
         self.calls += 1
         self.started.set()
         try:
@@ -1154,3 +1154,63 @@ def test_author_leaving_stops_the_worker_and_frees_the_slot(data, path, body):
         assert hang.cancelled and hang.calls == 1
         assert c.app.state.candidates_busy is False
         assert c.get("/api/health", headers=_auth(d)).json()["busy"] is False
+
+
+def _calls(client):
+    conn = db.connect(client.db_url)
+    try:
+        return repo.calls_since(conn, 0)
+    finally:
+        conn.close()
+
+
+def test_generate_records_call_and_returns_its_id(api):
+    with api(ok(_body())) as c:
+        out = _post(c, seed=7).json()
+        [row] = _calls(c)
+        assert (row["kind"], row["outcome"]) == ("candidates", "ok")
+        assert [x["calls"] for x in out["candidates"]] == [[row["id"]]] * 3
+
+
+def test_repair_marks_first_call_rejected(api):
+    with api(ok(_body(_one(1), _one(1), _one(3))), ok(_body())) as c:
+        out = _post(c, seed=7).json()
+        first, second = _calls(c)
+        assert (first["outcome"], second["outcome"]) == ("gate_rejected", "ok")
+        assert out["candidates"][0]["calls"] == [second["id"]]
+
+
+def test_gate_failure_after_repair_marks_both(api):
+    bad = ok(_body(_one(1), _one(1), _one(3)))
+    with api(bad, bad) as c:
+        assert _post(c, seed=7).status_code == 502
+        assert [x["outcome"] for x in _calls(c)] == ["gate_rejected", "gate_rejected"]
+
+
+def test_revise_appends_its_call(api):
+    with api(ok(_one())) as c:
+        out = _revise_post(c, candidate={**_shown(), "calls": [7, "x", True]}).json()
+        [row] = _calls(c)
+        assert row["kind"] == "candidate_revise" and out["calls"] == [7, row["id"]]
+
+
+def test_save_links_generating_and_revising_calls(api):
+    with api(ok(_body()), ok(_one())) as c:
+        picked = _post(c, seed=7).json()["candidates"][0]
+        revised = _revise_post(c, candidate=picked).json()
+        got = _save(c, revised).json()["character"]
+        assert [x["character_id"] for x in _calls(c)] == [got["id"], got["id"]]
+
+
+def test_save_ignores_forged_calls(api):
+    with api(ok(_body())) as c:
+        first = _post(c, seed=7).json()["candidates"]
+        taken = _save(c, first[0]).json()["character"]["id"]
+        conn = db.connect(c.db_url)
+        with conn:
+            chat = repo.start_call(conn, "chat", 1.0, "fp")
+        conn.close()
+        r = _save(c, {**first[1], "calls": ["x", 99999, first[0]["calls"][0], chat]}, confirm=True)
+        assert r.status_code == 201
+        rows = {x["id"]: x for x in _calls(c)}
+        assert rows[first[0]["calls"][0]]["character_id"] == taken and rows[chat]["character_id"] is None

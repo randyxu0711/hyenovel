@@ -9,7 +9,9 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from den import cards, config, figure, pipeline
+from den import cards, config, figure, meter, pipeline
+from marrow import prompt as prompts
+from marrow import repo
 from marrow.repo import canonical_json
 from marrow.workpacks import MAX_PREVIOUS_CHARS, RunConfig, assemble
 
@@ -269,13 +271,24 @@ def _judge(r, check):
     return r.parsed, canonical_json(r.parsed), check(r.parsed)
 
 
-async def _gated(run, system: str, schema: dict, check, first: str, sleep) -> dict:
+def _calls(values) -> list[int]:
+    return [c for c in values if type(c) is int] if isinstance(values, list) else []
+
+
+def own_calls(conn, candidate: dict) -> list[int]:
+    rows = (repo.get_call(conn, c) for c in _calls(candidate.get("calls")))
+    return [r["id"] for r in rows if r is not None and r["kind"] in ("candidates", "candidate_revise")
+            and r["character_id"] is None]
+
+
+async def _gated(run, conn, kind: str, system, schema: dict, check, first: str, sleep) -> tuple[dict, int | None]:
     retries = 0
+    usage = meter.Meter(kind, sizes=prompts.sizes(system))
 
     async def call(prompt: str):
         nonlocal retries
         while True:
-            r = await run(system, prompt, schema, config=RUN, timeout=TIMEOUT)
+            r = await run(system.text, prompt, schema, config=RUN, timeout=TIMEOUT, meter=usage)
             pipeline.check_anomaly(None, "candidates", r)
             if r.outcome != "transient" or retries >= config.TRANSIENT_MAX_RETRIES:
                 return r
@@ -283,14 +296,23 @@ async def _gated(run, system: str, schema: dict, check, first: str, sleep) -> di
             log.info("event=candidates-retry reason=transient n=%d", retries)
             await sleep(pipeline.backoff(retries))
 
-    body, previous, errors = _judge(await call(first), check)
+    def rejected(r) -> None:
+        if r.call_id is not None:
+            with conn:
+                repo.mark_call(conn, r.call_id, "gate_rejected")
+
+    r = await call(first)
+    body, previous, errors = _judge(r, check)
     if errors:
+        rejected(r)
         log.info("event=candidates-repair errors=%d", len(errors))
-        body, _, errors = _judge(await call(_repair(first, previous, errors, body is not None)), check)
+        r = await call(_repair(first, previous, errors, body is not None))
+        body, _, errors = _judge(r, check)
     if errors:
+        rejected(r)
         log.info("event=candidates-failed reason=gate errors=%d", len(errors))
         raise Failed("gate")
-    return body
+    return body, r.call_id
 
 
 def _shown(candidate: dict, pos) -> dict:
@@ -300,22 +322,23 @@ def _shown(candidate: dict, pos) -> dict:
             "warnings": cards.scan(card)["warnings"]}
 
 
-async def generate(run, answers: dict, passage: str | None, lang: str, seed: int, again: dict | None = None,
+async def generate(run, conn, answers: dict, passage: str | None, lang: str, seed: int, again: dict | None = None,
                    *, sleep=asyncio.sleep) -> dict:
     picked, picked_palettes = positions(seed), palettes(seed)
     named = bool((answers.get("form") or "").strip())
     check = lambda body: _errors(body, passage, picked_palettes, named)
     first = _input(brief_from(answers), picked, picked_palettes, passage, lang, again, named)
-    body = await _gated(run, _prompt().text, SCHEMA, check, first, sleep)
+    body, cid = await _gated(run, conn, "candidates", _prompt(), SCHEMA, check, first, sleep)
     items = [{**c, "name": dict(c["form"])} if named else c for c in body["candidates"]]
-    return {"seed": seed, "story": STORY, "candidates": [_shown(c, pos) for c, pos in zip(items, picked, strict=True)]}
+    return {"seed": seed, "story": STORY, "candidates": [{**_shown(c, pos), "calls": _calls([cid])}
+                                                         for c, pos in zip(items, picked, strict=True)]}
 
 
-async def revise(run, candidate: dict, feedback: str, passage: str | None, lang: str, *, sleep=asyncio.sleep) -> dict:
+async def revise(run, conn, candidate: dict, feedback: str, passage: str | None, lang: str, *, sleep=asyncio.sleep) -> dict:
     axes = candidate.get("axes")
     first = _revise_input(core(candidate), feedback, passage, lang)
     check = lambda body: _one_errors(body, passage)
-    body = await _gated(run, _revise_prompt().text, ONE, check, first, sleep)
+    body, cid = await _gated(run, conn, "candidate_revise", _revise_prompt(), ONE, check, first, sleep)
     if candidate.get("name") == candidate.get("form") and body["name"] == candidate.get("name"):
         body = {**body, "name": dict(body["form"])}
-    return _shown(body, axes if isinstance(axes, list) else ())
+    return {**_shown(body, axes if isinstance(axes, list) else ()), "calls": _calls(candidate.get("calls")) + _calls([cid])}

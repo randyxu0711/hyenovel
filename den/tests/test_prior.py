@@ -15,7 +15,7 @@ class Chat:
         self.text, self.gate, self.boom_first = text, gate, boom_first
         self.calls = 0
 
-    async def __call__(self, system, user, *, config):
+    async def __call__(self, system, user, *, config, **_):
         self.calls += 1
         if self.boom_first and self.calls == 1:
             raise RuntimeError("x")

@@ -73,7 +73,7 @@ import filelock
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
-from den import characters, discuss, version  # noqa: F401
+from den import characters, discuss, meter, version  # noqa: F401
 from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, PHASE_TIMEOUT, PORT,
                         SESSION_MAX_AGE)
 from den.jobs import JobManager
@@ -267,8 +267,11 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 factory, default_chat, ver = run_factory, None, None
             else:
                 factory, default_chat, ver = _default_factory()
+            conn = db.connect(conn_url)
+            db.migrate(conn, db.sqlite_path(conn_url))
+            factory = meter.wrap_factory(factory, conn)
             chat_f = chat_factory or default_chat
-            app.state.chat = chat_f() if chat_f else None
+            app.state.chat = meter.wrap_chat(chat_f(), conn) if chat_f else None
             app.state.chat_locks = {}
             app.state.run_once = factory(None)
             app.state.candidates_busy = False
@@ -277,8 +280,6 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
             app.state.available = ("claude",)           # 目前唯一 preset;其他家在 backlog
             app.state.last_seen = clock()
             app.state.streams = 0                       # 開著的 SSE 數;閒置退場不能砍到它
-            conn = db.connect(conn_url)
-            db.migrate(conn, db.sqlite_path(conn_url))
             with conn:
                 characters.sync_builtins(conn, time.time())
             mgr = JobManager(conn, factory, runner_name=ClaudePreset.runner_name, cli_version=ver)

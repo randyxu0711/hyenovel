@@ -50,7 +50,7 @@ class FakeChat:
     def __call__(self):
         return self.chat
 
-    async def chat(self, system_prompt, user_prompt, *, config):
+    async def chat(self, system_prompt, user_prompt, *, config, **_):
         self.calls.append((system_prompt, user_prompt))
         self.configs.append(config)
         if self.override:

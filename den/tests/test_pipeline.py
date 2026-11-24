@@ -62,7 +62,7 @@ class FakeRun:
         self.script = list(script)
         self.calls = []
 
-    async def __call__(self, system_prompt, user_prompt, schema_, *, config):
+    async def __call__(self, system_prompt, user_prompt, schema_, *, config, **_):
         self.calls.append((system_prompt, user_prompt, schema_))
         item = self.script.pop(0)
         if isinstance(item, BaseException):
@@ -214,7 +214,7 @@ def test_analysis_current_before_reviewer_runs(conn):
     seen = {}
 
     class Peek(FakeRun):
-        async def __call__(self, system_prompt, user_prompt, schema_, *, config):
+        async def __call__(self, system_prompt, user_prompt, schema_, *, config, **_):
             if system_prompt == WORKPACKS["reviewer"].system_prompt:
                 seen["analysis"] = _current(conn, job, "analysis")["body"]
             return await super().__call__(system_prompt, user_prompt, schema_, config=config)
@@ -494,3 +494,20 @@ def test_missing_required_key_still_reads_as_missing(conn):
     gate_att = repo.attempts(conn, job["id"])[0]
     assert any("'label' is a required property" in e for e in gate_att["gate_verdict"]["errors"])
     assert f"<previous_output>\n{canonical_json(body)}\n</previous_output>" in run.calls[1][1]
+
+
+def test_ledger_rows_match_attempts_and_gate_rejected(conn):
+    from den import meter
+    job = _job(conn)
+    inner = FakeRun(ok(_bad_analysis()), ok(_analysis()), ok(_notes()))
+
+    async def run(system, user, schema_, *, config, sink, **_):
+        return await inner(system, user, schema_, config=config)
+    _drive(conn, job, meter.wrap_run(run, conn))
+    calls = repo.calls_since(conn, 0)
+    assert [(c["kind"], c["n"], c["outcome"]) for c in calls] == [
+        ("analyst", 0, "gate_rejected"), ("analyst", 1, "ok"), ("reviewer", 0, "ok")]
+    atts = repo.attempts(conn, job["id"])
+    assert [(c["job_id"], c["step"], c["n"], c["story_id"]) for c in calls] == [
+        (job["id"], a["step"], a["n"], job["story_id"]) for a in atts]
+    assert calls[0]["sizes"] == {x.name: len(x.text) for x in WORKPACKS["analyst"].prompt.layers}
