@@ -14,7 +14,8 @@ import re
 import sqlite3
 
 _JSON_COLS = {"card", "recipe", "body", "provenance", "anchors", "refs", "quotes",
-              "params", "detail", "parsed", "gate_verdict", "tokens", "usage"}
+              "params", "detail", "parsed", "gate_verdict", "tokens", "usage",
+              "sizes", "rate_limit"}
 
 
 def canonical_json(obj) -> str:
@@ -933,3 +934,52 @@ def get_setting(conn, key: str) -> str | None:
 def set_setting(conn, key: str, value: str) -> None:
     conn.execute("INSERT INTO setting (key, value) VALUES (?, ?) "
                  "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
+
+
+LINK_KEYS = ("story_id", "job_id", "step", "n", "discussion_id", "seq", "variant", "digest_id", "character_id")
+
+
+def _link_keys(keys: dict) -> dict:
+    bad = set(keys) - set(LINK_KEYS)
+    if bad:
+        raise ValueError(f"未知的關聯鍵:{','.join(sorted(bad))}")
+    return keys
+
+
+def start_call(conn, kind: str, started_at: float, prompt_fp: str, *, tag: str | None = None,
+               sizes: dict | None = None, **keys) -> int:
+    keys = _link_keys(keys)
+    cols = ["kind", "started_at", "prompt_fp", "tag", "sizes", *keys]
+    vals = [kind, started_at, prompt_fp, tag, None if sizes is None else canonical_json(sizes), *keys.values()]
+    cur = conn.execute(f"INSERT INTO llm_call ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", vals)
+    return cur.lastrowid
+
+
+def finish_call(conn, call_id: int, *, outcome: str, ended_at: float, duration_ms: int | None,
+                tokens: dict | None, tokens_partial: bool, cost_usd: float | None, model: str | None,
+                rate_limit: dict | None) -> None:
+    conn.execute("UPDATE llm_call SET outcome = ?, ended_at = ?, duration_ms = ?, tokens = ?, tokens_partial = ?, "
+                 "cost_usd = ?, model = ?, rate_limit = ? WHERE id = ?",
+                 (outcome, ended_at, duration_ms, None if tokens is None else canonical_json(tokens),
+                  int(tokens_partial), cost_usd, model,
+                  None if rate_limit is None else canonical_json(rate_limit), call_id))
+
+
+def link_call(conn, call_id: int, **keys) -> None:
+    for col, val in _link_keys(keys).items():
+        conn.execute(f"UPDATE llm_call SET {col} = ? WHERE id = ?", (val, call_id))
+
+
+def mark_call(conn, call_id: int, outcome: str) -> None:
+    if outcome not in ("gate_rejected", "discarded"):
+        raise ValueError(outcome)
+    conn.execute("UPDATE llm_call SET outcome = ? WHERE id = ? AND outcome = 'ok'", (outcome, call_id))
+
+
+def get_call(conn, call_id: int) -> dict | None:
+    return _row(conn.execute("SELECT * FROM llm_call WHERE id = ?", (call_id,)).fetchone())
+
+
+def calls_since(conn, since: float) -> list[dict]:
+    return [_row(r) for r in conn.execute("SELECT * FROM llm_call WHERE started_at >= ? ORDER BY started_at, id",
+                                          (since,))]
