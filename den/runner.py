@@ -43,6 +43,30 @@ class RunResult:
     text: str | None = None  # 模型的原始文字輸出(CLI 的 result);parsed 抽不出時拿它當修補的 previous
     thinking: str | None = None
     first_delta_ms: int | None = None
+    call_id: int | None = None
+
+
+@dataclass
+class UsageSink:
+    tokens: dict | None = None
+    rate_limit: dict | None = None
+
+
+def tokens_of(usage: dict) -> dict:
+    return {"input": usage.get("input_tokens"),
+            "output": usage.get("output_tokens"),
+            "cache_read": usage.get("cache_read_input_tokens"),
+            "cache_creation": usage.get("cache_creation_input_tokens"),
+            "thinking": (usage.get("output_tokens_details") or {}).get("thinking_tokens")}
+
+
+def rate_limit_of(info) -> dict | None:
+    if not isinstance(info, dict):
+        return None
+    windows = info.get("unifiedWindows")
+    out = {w: {k: v.get(k) for k in ("utilization", "resetsAt", "status")}
+           for w, v in (windows.items() if isinstance(windows, dict) else ()) if isinstance(v, dict)}
+    return {**out, "status": info.get("status")}
 
 
 def build_argv(preset: ClaudePreset, config: RunConfig, system_prompt_file: Path, schema: dict) -> list[str]:
@@ -114,11 +138,7 @@ def make_result(outcome: str, obj: dict | None, raw: str, message: str | None,
         turns = obj.get("num_turns")
         usage = obj.get("usage")
         if isinstance(usage, dict):
-            tokens = {"input": usage.get("input_tokens"),
-                      "output": usage.get("output_tokens"),
-                      "cache_read": usage.get("cache_read_input_tokens"),
-                      "cache_creation": usage.get("cache_creation_input_tokens"),
-                      "thinking": (usage.get("output_tokens_details") or {}).get("thinking_tokens"),
+            tokens = {**tokens_of(usage),
                       # 每個行程只跑一次,total_cost_usd 就是單次成本(非 SDK 的 client 累計值)
                       "cost_usd": obj.get("total_cost_usd")}
         mu = obj.get("modelUsage")
@@ -139,8 +159,8 @@ def kill_tree(proc) -> None:
 
 async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, schema: dict,
                   *, config: RunConfig, timeout: float,
-                  on_proc: Callable[[asyncio.subprocess.Process | None], None] | None = None
-                  ) -> RunResult:
+                  on_proc: Callable[[asyncio.subprocess.Process | None], None] | None = None,
+                  sink: UsageSink | None = None) -> RunResult:
     """schema 不傳給 CLI(見 build_argv);保留在簽名上是因 RunFn 介面不變,非 CLI runner 與測試假體會用。
 
     ok 只代表工人正常結束且有 result 文字;parsed 可能是 None(抽不出 JSON 物件),由流水線處理。
@@ -179,12 +199,15 @@ async def run_job(preset: ClaudePreset, system_prompt: str, user_prompt: str, sc
         raw = out.decode("utf-8", "replace")
         outcome, obj, msg = classify(proc.returncode, raw)
         msg = explain(outcome, obj, err.decode("utf-8", "replace"), msg)
+        if sink is not None and obj is not None and "rate_limit_info" in obj:
+            sink.rate_limit = rate_limit_of(obj["rate_limit_info"])
         log.info("event=run_done outcome=%s rc=%s ms=%s", outcome, proc.returncode, ms())
         return make_result(outcome, obj, raw, msg, ms())
 
 
 async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str,
-                      *, config: RunConfig, timeout: float) -> AsyncIterator[tuple[str, str | RunResult]]:
+                      *, config: RunConfig, timeout: float,
+                      sink: UsageSink | None = None) -> AsyncIterator[tuple[str, str | RunResult]]:
     """逐個 yield ("delta", 文字),最後恰好一次 ("result", RunResult)。
 
     只 yield text_delta(見 #13);thinking_delta 收進結果,不給消費端。消費端中途 aclose / 取消 / 逾時,finally 一律殺整個行程群組。
@@ -239,9 +262,17 @@ async def stream_chat(preset: ClaudePreset, system_prompt: str, user_prompt: str
                     continue
                 if ev.get("type") == "result":
                     result_line = raw_line.decode("utf-8", "replace")
+                elif ev.get("type") == "rate_limit_event":
+                    if sink is not None:
+                        sink.rate_limit = rate_limit_of(ev.get("rate_limit_info"))
                 elif ev.get("type") == "stream_event":
                     inner = ev.get("event") or {}
                     delta = inner.get("delta") or {}
+                    if sink is not None:
+                        usage = ((inner.get("message") or {}).get("usage") if inner.get("type") == "message_start"
+                                 else inner.get("usage") if inner.get("type") == "message_delta" else None)
+                        if isinstance(usage, dict):
+                            sink.tokens = tokens_of(usage)
                     if (inner.get("type") == "content_block_start"
                             and (inner.get("content_block") or {}).get("type") == "thinking"):
                         thinking.append("")

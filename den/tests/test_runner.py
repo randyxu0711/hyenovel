@@ -358,3 +358,48 @@ def test_pick_runner_none_client():
 def test_pick_runner_nothing_available():
     assert runner.pick_runner("claude-code", ()) is None
     assert runner.pick_runner(None, ()) is None
+
+
+def test_stream_fills_sink_tokens_and_rate_limit(fake):
+    sink = runner.UsageSink()
+
+    async def go():
+        return [e async for e in runner.stream_chat(ClaudePreset(fake("stream")), "s", "u", config=RunConfig(),
+                                                    timeout=10, sink=sink)]
+    asyncio.run(go())
+    assert sink.tokens == {"input": 2, "output": 28, "cache_read": 649, "cache_creation": 1512, "thinking": 0}
+    assert sink.rate_limit["five_hour"] == {"utilization": 0.22, "resetsAt": 1793296800, "status": "allowed"}
+    assert sink.rate_limit["seven_day"] == {"utilization": 0.92, "resetsAt": 1793336400, "status": "allowed_warning"}
+    assert sink.rate_limit["status"] == "allowed_warning"
+
+
+def test_aclose_after_first_delta_keeps_message_start_usage(fake):
+    sink = runner.UsageSink()
+
+    async def go():
+        gen = runner.stream_chat(ClaudePreset(fake("stream")), "s", "u", config=RunConfig(), timeout=10, sink=sink)
+        assert (await gen.__anext__())[0] == "delta"
+        await gen.aclose()
+    asyncio.run(go())
+    assert sink.tokens["output"] == 4 and sink.tokens["cache_creation"] == 1512 and sink.rate_limit is None
+
+
+def test_result_tokens_keep_cost(fake):
+    *_, (_, res) = _chat(fake("stream"))
+    assert res.tokens["cost_usd"] > 0 and res.tokens["output"] == 28
+
+
+def test_rate_limit_of_tolerates_shapes():
+    assert runner.rate_limit_of(None) is None
+    assert runner.rate_limit_of({"status": "allowed"}) == {"status": "allowed"}
+    assert runner.rate_limit_of({"unifiedWindows": {"five_hour": 1}}) == {"status": None}
+
+
+def test_run_job_rate_limit_info_into_sink(fake, tmp_path):
+    exe = fake("ok")
+    ok = json.loads((tmp_path / "claude_ok.json").read_text())
+    ok["rate_limit_info"] = {"status": "allowed", "unifiedWindows": {"five_hour": {"utilization": 0.1}}}
+    (tmp_path / "claude_ok.json").write_text(json.dumps(ok))
+    sink = runner.UsageSink()
+    r = asyncio.run(runner.run_job(ClaudePreset(exe), "s", "u", SCHEMA, config=RunConfig(), timeout=10, sink=sink))
+    assert r.outcome == "ok" and sink.rate_limit["five_hour"]["utilization"] == 0.1
