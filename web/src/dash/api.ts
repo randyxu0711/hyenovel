@@ -58,6 +58,35 @@ export type Candidate = {
 export type ThemeTokens = Record<string, string>;
 export type Theme = { id: string; name: LText; source: string; light: ThemeTokens; dark: ThemeTokens };
 
+export type UsageSince = "7" | "30" | "all";
+export type UsageCategory = "analysis" | "chat" | "upkeep" | "character" | "other";
+export type QuotaWindow = { utilization: number | null; resets_at: number | null };
+export type UsageBucket = { tokens: number; partial: boolean; by_category: Partial<Record<UsageCategory, number>> };
+export type UsageDelta = { avg: number | null; thinking: number | null; ms: number | null };
+type UsageGroup = {
+  first_at: number; last_at: number; n: number; avg: number | null; thinking: number | null;
+  ms_median: number | null; current: boolean; delta: UsageDelta | null; recorded: boolean;
+};
+export type UsageConfigRow = UsageGroup & {
+  kind: string; prompt_fp: string; runner: string | null; model: string | null; effort: string | null;
+};
+export type UsageCharacterRow = UsageGroup & { character_id: string | null; character_v: number | null; name: LText | null };
+export type UsageWork = UsageBucket & {
+  story_id: number; slug: string; title: string; archived: boolean;
+  versions: { n: number; tokens: number; partial: boolean; analyzed: boolean }[];
+};
+export type UsageReport = {
+  as_of: number;
+  quota: { at: number; five_hour: QuotaWindow | null; seven_day: QuotaWindow | null } | null;
+  total: { tokens: number; partial: boolean };
+  categories: { id: UsageCategory; n: number; tokens: number; partial: boolean; avg: number | null; share: number }[];
+  unused_share: number | null;
+  works: UsageWork[];
+  unbound: UsageBucket | null;
+  compare: { config: UsageConfigRow[]; character: UsageCharacterRow[] };
+  completeness: { partial: number; unknown: number };
+};
+
 export type Span = { quote: string; start: number | null; end: number | null };
 export type Work = {
   slug: string; title: string; version: number; chars: number; updated_at: number; state: string;
@@ -212,6 +241,7 @@ const turnUrl = (session: string, seq: number, what: string) => `${sessionUrl(se
 const vq = (v?: number) => (v === undefined ? "" : `?v=${v}`);
 
 export const api = {
+  usage: (since: UsageSince, signal?: AbortSignal) => request<UsageReport>(`/api/usage?since=${since}`, { signal }),
   works: async () => (await request<{ works: Work[] }>("/api/works")).works,
   work: (slug: string, v?: number) => request<WorkDetail>(`/api/works/${encodeURIComponent(slug)}${vq(v)}`),
   map: (slug: string, v?: number) => request<WorkMap>(`/api/works/${encodeURIComponent(slug)}/map${vq(v)}`),

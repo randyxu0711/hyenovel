@@ -69,7 +69,7 @@ describe("設定頁", () => {
     expect(nav.queryByText("舊的")).toBeNull();
     expect(nav.queryByRole("searchbox")).toBeNull();
     const names = within(nav.getByRole("group", { name: "設定分區" })).getAllByRole("button").map(b => b.getAttribute("aria-label"));
-    expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "封存"]);
+    expect(names).toEqual(["返回", "外觀", "讀伴", "記憶", "用量", "封存"]);
     expect(nav.getByRole("button", { name: "外觀" }).getAttribute("aria-current")).toBe("true");
   });
   it("有待確認的記憶:導覽的記憶鍵有小圓點;處理完最後一條就消失", async () => {

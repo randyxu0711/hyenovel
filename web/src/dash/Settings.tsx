@@ -9,6 +9,7 @@ import { parseExamples } from "./examplesFormat";
 import Icon, { type IconName } from "./Icon";
 import { errorMessage, localized, setLang, useLang, useT, type Lang, type MsgKey } from "./i18n";
 import MemoryPage from "./MemoryPage";
+import UsagePage from "./UsagePage";
 import NewCharacter, { NewSlot } from "./NewCharacter";
 import { setPaperFlow, usePaperFlow } from "./paperFlow";
 import { loadPaperSize, PAPER_SIZE_KEY, type PaperSize } from "./Paper";
@@ -183,13 +184,14 @@ function Archive() {
   );
 }
 
-export type SettingsSection = "look" | "companions" | "memory" | "archive";
+export type SettingsSection = "look" | "companions" | "memory" | "usage" | "archive";
 const SECTIONS: { id: SettingsSection; key: MsgKey; icon: IconName }[] = [
   { id: "look", key: "set.look", icon: "look" }, { id: "companions", key: "set.companions", icon: "pal" },
-  { id: "memory", key: "set.memory", icon: "memory" }, { id: "archive", key: "set.archive", icon: "box" },
+  { id: "memory", key: "set.memory", icon: "memory" }, { id: "usage", key: "set.usage", icon: "usage" },
+  { id: "archive", key: "set.archive", icon: "box" },
 ];
 const NAV_GROUPS: { key: MsgKey; ids: SettingsSection[] }[] = [
-  { key: "set.nav.pref", ids: ["look", "companions"] }, { key: "set.nav.data", ids: ["memory", "archive"] },
+  { key: "set.nav.pref", ids: ["look", "companions"] }, { key: "set.nav.data", ids: ["memory", "usage", "archive"] },
 ];
 
 /** 設定分區:回去鍵 + 各分區。書架在設定頁時畫它;窄螢幕由 Settings 畫在內容上方(橫排)。 */
@@ -545,6 +547,7 @@ export default function Settings({ section, nav, onPending, toPending }: {
       {section === "look" && <Look />}
       {section === "companions" && <Companions />}
       {section === "memory" && <MemoryPage onPending={onPending} toPending={toPending} />}
+      {section === "usage" && <UsagePage />}
       {section === "archive" && <Archive />}
     </section>
   );
