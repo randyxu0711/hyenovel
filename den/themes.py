@@ -7,7 +7,7 @@ _DIR = Path(__file__).resolve().parent.parent / "marrow" / "themes"
 
 DEFAULT_THEME = "olive"
 KEYS = ("desk", "desk-2", "paper", "paper-ink", "paper-ink-2", "ink", "ink-2",
-        "line", "accent", "accent-ink", "spot", "sheen")
+        "line", "accent", "accent-ink", "spot", "sheen", "warn")
 
 
 def _lum(h: str) -> float:
@@ -42,6 +42,7 @@ def check_theme(theme: dict) -> list[str]:
         need("paper-ink", "paper", 9.5)
         need("paper-ink-2", "paper", 4.5)
         need("accent-ink", "accent", 4.5)
+        need("warn", "paper", 4.5)
     return bad
 
 

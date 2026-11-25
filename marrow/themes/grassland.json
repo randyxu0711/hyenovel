@@ -17,7 +17,8 @@
     "accent": "#5f616b",
     "accent-ink": "#f4f1ea",
     "spot": "rgba(70,60,30,.075)",
-    "sheen": "rgba(255,255,255,.35)"
+    "sheen": "rgba(255,255,255,.35)",
+    "warn": "#a4522a"
   },
   "dark": {
     "desk": "#1f1f25",
@@ -31,6 +32,7 @@
     "accent": "#a3a6b3",
     "accent-ink": "#1f1f25",
     "spot": "rgba(220,200,150,.06)",
-    "sheen": "rgba(255,255,255,.025)"
+    "sheen": "rgba(255,255,255,.025)",
+    "warn": "#e0956a"
   }
 }

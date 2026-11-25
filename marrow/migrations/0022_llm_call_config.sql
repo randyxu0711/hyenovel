@@ -1,0 +1,3 @@
+ALTER TABLE llm_call ADD COLUMN runner TEXT;
+ALTER TABLE llm_call ADD COLUMN effort TEXT;
+ALTER TABLE llm_call ADD COLUMN character_v INTEGER;

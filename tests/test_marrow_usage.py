@@ -9,11 +9,11 @@ TOK = {"input": 2, "output": 28, "cache_read": 649, "cache_creation": 1512, "thi
 
 
 def call(conn, kind="chat", outcome="ok", tokens=TOK, partial=False, started=10.0, ms=100, fp="fp1", tag=None,
-         rate=None, ended=None, **keys):
+         rate=None, ended=None, model="m", **keys):
     cid = repo.start_call(conn, kind, started, fp, tag=tag, **keys)
     if outcome is not None:
         repo.finish_call(conn, cid, outcome=outcome, ended_at=ended or started + 1, duration_ms=ms, tokens=tokens,
-                         tokens_partial=partial, cost_usd=0.01 if tokens else None, model="m", rate_limit=rate)
+                         tokens_partial=partial, cost_usd=0.01 if tokens else None, model=model, rate_limit=rate)
     return repo.get_call(conn, cid)
 
 
@@ -235,3 +235,40 @@ def test_main_reports_missing_table(tmp_path):
     err = io.StringIO()
     assert usage.main(["--db", u], err=err) == 1
     assert "讀不到用量帳本" in err.getvalue()
+
+
+def _kinds_in_schema(tmp_path) -> list[str]:
+    import re
+    c = db.connect(f"sqlite:///{tmp_path}/k.db")
+    db.migrate(c, tmp_path / "k.db")
+    sql = c.execute("SELECT sql FROM sqlite_master WHERE name = 'llm_call'").fetchone()[0]
+    c.close()
+    m = re.search(r"kind IN \(([^)]*)\)", sql)
+    return re.findall(r"'([^']+)'", m.group(1)) if m else []
+
+
+def test_every_kind_has_category(tmp_path):
+    found = _kinds_in_schema(tmp_path)
+    assert len(found) >= 8
+    assert [k for k in found if usage.category(k) == "other"] == []
+
+
+def test_unknown_kind_is_other():
+    assert usage.category("future_kind") == "other"
+    assert usage.CATEGORY_ORDER[-1] == "other" and set(usage.CATEGORIES.values()) < set(usage.CATEGORY_ORDER)
+
+
+def test_by_character_work_model_groups(conn):
+    rows = [call(conn, character_id="hyena", character_v=3, story_id=1, effort="high"),
+            call(conn, character_id="hyena", character_v=4, story_id=1, model="m2"),
+            call(conn, kind="analyst", model=None)]
+    assert [g["group"] for g in usage.summarize(conn, rows, by="character")] == ["-", "hyena@3", "hyena@4"]
+    assert [g["group"] for g in usage.summarize(conn, rows, by="work")] == ["-", "1"]
+    assert [g["group"] for g in usage.summarize(conn, rows, by="model")] == ["-/-", "m/high", "m2/-"]
+
+
+@pytest.mark.parametrize("by,head", [("character", "讀伴@卡版"), ("work", "作品"), ("model", "模型/effort")])
+def test_cli_by_new_keys_text(url, by, head):
+    out = io.StringIO()
+    assert usage.main(["--db", url, "--by", by], out=out, now=lambda: 1000.0) == 0
+    assert head in out.getvalue()

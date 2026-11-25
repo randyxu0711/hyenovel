@@ -1,4 +1,4 @@
-import type { IndexFile, IndexEntry, VizData, UsageAggregate, UsageAll, Conclusion, Turn } from "../types";
+import type { IndexFile, IndexEntry, VizData, Conclusion, Turn } from "../types";
 
 // ── den 的領域形狀 → 畫面要的 IndexFile(adapter 在 client 這側,den 不綁前端) ──
 
@@ -50,8 +50,6 @@ export const getConclusions = (slug: string) =>
 /** 這篇的討論逐字歷史。F5 之後畫面靠它接回來 —— 正本一直在 DB 裡。 */
 export const getTranscript = (slug: string) =>
   getJSON<{ turns: Turn[] }>(`/api/stories/${slug}/transcript`);
-export const getUsage = (slug: string) => getJSON<UsageAggregate>(`/api/usage/${slug}`);
-export const getUsageAll = () => getJSON<UsageAll>("/api/usage");
 export async function getStory(slug: string): Promise<{ viz: VizData; source: string }> {
   const [viz, source] = await Promise.all([
     getViz(slug),

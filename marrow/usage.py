@@ -1,4 +1,4 @@
-"""用量帳本的唯讀報表:`python -m marrow.usage [--since DAYS] [--by kind|prompt|tag] [--json]`。"""
+"""用量帳本的唯讀報表:`python -m marrow.usage [--since DAYS] [--by kind|prompt|tag|character|work|model] [--json]`。"""
 import argparse
 import json
 import sqlite3
@@ -17,6 +17,9 @@ TOKEN_LABELS = ("輸入", "輸出", "cache讀", "cache寫", "thinking")
 MARKS = {"stopped": "停下", "misread": "讀錯"}
 SIGNALS = {"voice": "像它", "edited": "編輯", "remembered": "記住", "digest_edited": "摘要改過",
            "saved": "建議記憶存入", "skipped": "建議記憶略過"}
+CATEGORIES = {"analyst": "analysis", "reviewer": "analysis", "chat": "chat", "redo": "chat",
+              "digest": "upkeep", "compact": "upkeep", "candidates": "character", "candidate_revise": "character"}
+CATEGORY_ORDER = ("analysis", "chat", "upkeep", "character", "other")
 _OUTCOME = {"gate_rejected": "rejected", "discarded": "unsaved", "cancelled": "cancelled"}
 
 
@@ -73,11 +76,21 @@ def unknown(row: dict) -> bool:
     return row["tokens"] is None
 
 
+def category(kind: str) -> str:
+    return CATEGORIES.get(kind, "other")
+
+
 def _key(row: dict, by: str) -> str:
     if by == "prompt":
         return f"{row['kind']}@{row['prompt_fp']}"
     if by == "tag":
         return row["tag"] or "-"
+    if by == "character":
+        return f"{row['character_id']}@{row['character_v']}" if row["character_id"] is not None else "-"
+    if by == "work":
+        return str(row["story_id"]) if row["story_id"] is not None else "-"
+    if by == "model":
+        return f"{row['model'] or '-'}/{row['effort'] or '-'}"
     return row["kind"]
 
 
@@ -104,6 +117,151 @@ def summarize(conn, rows: list[dict], by: str = "kind") -> list[dict]:
                     "cache_hit": tokens["cache_read"] / denom if denom else None,
                     "ms_median": statistics.median(ms) if ms else None})
     return out
+
+
+USED = ("input", "output", "cache_read", "cache_creation")
+UNBOUND_KINDS = ("chat", "redo", "digest", "compact")
+_KIND_ORDER = {k: i for i, k in enumerate(CATEGORIES)}
+
+
+def used(row: dict) -> int:
+    t = row["tokens"] or {}
+    return sum(t.get(k) or 0 for k in USED)
+
+
+def complete(row: dict) -> bool:
+    return row["outcome"] == "ok" and not row["tokens_partial"] and row["tokens"] is not None
+
+
+def _mean(xs) -> int | None:
+    xs = [x for x in xs if x is not None]
+    return round(statistics.mean(xs)) if xs else None
+
+
+def _bucket() -> dict:
+    return {"tokens": 0, "partial": False, "by_category": {}}
+
+
+def _add(b: dict, r: dict) -> None:
+    b["tokens"] += used(r)
+    b["partial"] |= bool(r["tokens_partial"])
+    cat = category(r["kind"])
+    b["by_category"][cat] = b["by_category"].get(cat, 0) + used(r)
+
+
+def _quota(all_rows: list[dict]) -> dict | None:
+    windows = ("five_hour", "seven_day")
+    seen = [r for r in all_rows if r["ended_at"] is not None and r["rate_limit"]
+            and any(isinstance(r["rate_limit"].get(w), dict) for w in windows)]
+    if not seen:
+        return None
+    r = max(seen, key=lambda x: x["ended_at"])
+    rl = r["rate_limit"]
+    return {"at": r["ended_at"], **{w: {"utilization": rl[w].get("utilization"), "resets_at": rl[w].get("resetsAt")}
+                                    if isinstance(rl.get(w), dict) else None for w in windows}}
+
+
+def _categories(rows: list[dict], total: int) -> list[dict]:
+    if not total:
+        return []
+    out = []
+    for cat in CATEGORY_ORDER:
+        rs = [r for r in rows if category(r["kind"]) == cat]
+        if rs:
+            tokens = sum(used(r) for r in rs)
+            out.append({"id": cat, "n": len(rs), "tokens": tokens, "partial": any(r["tokens_partial"] for r in rs),
+                        "avg": _mean(used(r) for r in rs if complete(r)), "share": tokens / total})
+    return out
+
+
+def _works(conn, rows: list[dict]) -> tuple[list[dict], dict | None]:
+    stories = repo.story_rows(conn, [r["story_id"] for r in rows if r["story_id"] is not None])
+    mine = [r for r in rows if r["story_id"] in stories and r["started_at"] >= stories[r["story_id"]]["created_at"]]
+    jobs = repo.call_versions(conn, [r["job_id"] for r in mine if r["job_id"] is not None])
+    versions = repo.version_numbers(conn, {r["story_id"] for r in mine})
+    works: dict[int, dict] = {}
+    for r in mine:
+        sid = r["story_id"]
+        w = works.setdefault(sid, {"story_id": sid, "slug": stories[sid]["slug"], "archived": stories[sid]["archived"],
+                                   **_bucket(), "versions": {n: {"n": n, "tokens": 0, "partial": False,
+                                                                 "analyzed": done} for n, done in versions[sid]}})
+        _add(w, r)
+        j = jobs.get(r["job_id"])
+        if j and j[0] == sid and j[2] <= r["started_at"] and j[1] in w["versions"]:
+            v = w["versions"][j[1]]
+            v["tokens"] += used(r)
+            v["partial"] |= bool(r["tokens_partial"])
+    out = sorted(works.values(), key=lambda w: (-w["tokens"], w["story_id"]))
+    for w in out:
+        w["versions"] = list(w["versions"].values())
+    loose = [r for r in rows if r["story_id"] is None and r["kind"] in UNBOUND_KINDS]
+    unbound = None
+    if loose:
+        unbound = _bucket()
+        for r in loose:
+            _add(unbound, r)
+    return out, unbound
+
+
+def _ratio(cur, prev) -> float | None:
+    return (cur - prev) / prev if cur is not None and prev else None
+
+
+def _ranked(groups: dict[tuple, list[dict]], family, recorded, fields) -> list[dict]:
+    rows = []
+    for key, rs in groups.items():
+        ms = [r["duration_ms"] for r in rs if r["duration_ms"] is not None]
+        rows.append({**fields(key), "first_at": min(r["started_at"] for r in rs),
+                     "last_at": max(r["started_at"] for r in rs), "n": len(rs), "avg": _mean(used(r) for r in rs),
+                     "thinking": _mean((r["tokens"] or {}).get("thinking") for r in rs),
+                     "ms_median": statistics.median(ms) if ms else None, "current": False, "delta": None,
+                     "recorded": recorded(key), "_family": family(key)})
+    for fam in {r["_family"] for r in rows}:
+        live = sorted((r for r in rows if r["_family"] == fam and r["recorded"]), key=lambda r: -r["last_at"])
+        if live:
+            live[0]["current"] = True
+            if len(live) > 1:
+                cur, prev = live[0], live[1]
+                cur["delta"] = {"avg": _ratio(cur["avg"], prev["avg"]),
+                                "thinking": _ratio(cur["thinking"], prev["thinking"]),
+                                "ms": _ratio(cur["ms_median"], prev["ms_median"])}
+    rows.sort(key=lambda r: (r["_family"], -r["first_at"]))
+    for r in rows:
+        del r["_family"]
+    return rows
+
+
+def _compare(all_rows: list[dict]) -> dict:
+    full = [r for r in all_rows if complete(r)]
+    cfg: dict[tuple, list[dict]] = {}
+    for r in full:
+        key = (r["kind"], r["prompt_fp"], *((r["runner"], r["model"], r["effort"]) if r["runner"] is not None
+                                           else (None, None, None)))
+        cfg.setdefault(key, []).append(r)
+    chr_: dict[tuple, list[dict]] = {}
+    for r in full:
+        if r["kind"] in ("chat", "redo"):
+            key = (r["character_id"], r["character_v"]) if r["character_id"] is not None else (None, None)
+            chr_.setdefault(key, []).append(r)
+    return {"config": _ranked(cfg, lambda k: (_KIND_ORDER.get(k[0], len(_KIND_ORDER)), k[0]),
+                              lambda k: k[2] is not None,
+                              lambda k: dict(zip(("kind", "prompt_fp", "runner", "model", "effort"), k))),
+            "character": _ranked(chr_, lambda k: (k[0] is None, k[0] or ""), lambda k: k[0] is not None,
+                                 lambda k: {"character_id": k[0], "character_v": k[1]})}
+
+
+def page(conn, rows: list[dict], all_rows: list[dict], now: float) -> dict:
+    total = sum(used(r) for r in rows)
+    brought = injected(conn)
+    unused = sum(used(r) for r in rows if classify(conn, r, brought) != "adopted")
+    works, unbound = _works(conn, rows)
+    return {"as_of": now, "quota": _quota(all_rows),
+            "total": {"tokens": total, "partial": any(r["tokens_partial"] for r in rows)},
+            "categories": _categories(rows, total),
+            "unused_share": unused / total if total else None,
+            "works": works, "unbound": unbound, "compare": _compare(all_rows),
+            "completeness": {"partial": sum(bool(r["tokens_partial"]) for r in rows),
+                             "unknown": sum(unknown(r) for r in rows)}}
 
 
 def _chat_signals(conn, r: dict, sig: Counter) -> None:
@@ -176,7 +334,8 @@ def _signal_label(name: str) -> str:
 
 def render(groups: list[dict], fx: list[dict], latest, by: str) -> str:
     lines = [_rate_line(latest), ""] if latest else []
-    head = {"kind": "種類", "prompt": "種類@prompt", "tag": "標籤"}[by]
+    head = {"kind": "種類", "prompt": "種類@prompt", "tag": "標籤", "character": "讀伴@卡版", "work": "作品",
+            "model": "模型/effort"}[by]
     cols = [head, "次數", *TOKEN_LABELS, "美元(參考)", *(LABELS[c] for c in CLASSES), "用量不明", "cache命中", "延遲中位"]
     lines.append("\t".join(cols))
     for g in groups:
@@ -199,7 +358,7 @@ def main(argv=None, out=sys.stdout, err=sys.stderr, now=time.time) -> int:
     ap = argparse.ArgumentParser(prog="python -m marrow.usage")
     ap.add_argument("--db", default=None)
     ap.add_argument("--since", type=float, default=7, metavar="DAYS")
-    ap.add_argument("--by", choices=("kind", "prompt", "tag"), default="kind")
+    ap.add_argument("--by", choices=("kind", "prompt", "tag", "character", "work", "model"), default="kind")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     try:

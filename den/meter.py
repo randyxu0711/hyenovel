@@ -44,12 +44,13 @@ def prompt_fp(kind: str) -> str:
     return repo.sha256_text("\0".join(_text(rel) for rel in PROMPT_FILES[kind]))[:12]
 
 
-def _start(conn, meter: Meter, clock) -> tuple[int | None, float]:
+def _start(conn, meter: Meter, clock, runner: str | None, config) -> tuple[int | None, float]:
     t0 = clock()
     try:
         with conn:
             cid = repo.start_call(conn, meter.kind, t0, prompt_fp(meter.kind),
-                                  tag=os.environ.get("HYENOVEL_TAG") or None, sizes=meter.sizes, **meter.keys)
+                                  tag=os.environ.get("HYENOVEL_TAG") or None, sizes=meter.sizes, runner=runner,
+                                  effort=getattr(config, "effort", None), **meter.keys)
     except Exception:
         log.exception("event=ledger-start-failed kind=%s", meter.kind)
         return None, t0
@@ -82,9 +83,9 @@ def _write_finish(conn, cid: int, t0: float, clock, sink: UsageSink, r: RunResul
                          model=model, rate_limit=sink.rate_limit)
 
 
-def wrap_run(run, conn, clock=time.time):
+def wrap_run(run, conn, clock=time.time, runner: str | None = None):
     async def metered(system, user, schema, *, meter: Meter, **kw) -> RunResult:
-        cid, t0 = _start(conn, meter, clock)
+        cid, t0 = _start(conn, meter, clock, runner, kw.get("config"))
         sink = UsageSink()
         try:
             r = await run(system, user, schema, sink=sink, **kw)
@@ -101,9 +102,9 @@ def wrap_run(run, conn, clock=time.time):
     return metered
 
 
-def wrap_chat(chat, conn, clock=time.time):
+def wrap_chat(chat, conn, clock=time.time, runner: str | None = None):
     async def metered(system, user, *, meter: Meter, **kw):
-        cid, t0 = _start(conn, meter, clock)
+        cid, t0 = _start(conn, meter, clock, runner, kw.get("config"))
         sink = UsageSink()
         done = False
         try:
@@ -128,5 +129,5 @@ def wrap_chat(chat, conn, clock=time.time):
     return metered
 
 
-def wrap_factory(factory, conn):
-    return lambda on_proc: wrap_run(factory(on_proc), conn)
+def wrap_factory(factory, conn, runner: str | None = None):
+    return lambda on_proc: wrap_run(factory(on_proc), conn, runner=runner)

@@ -25,7 +25,7 @@ def test_every_builtin_theme_passes_check_theme():
 
 def test_keys_exact():
     assert themes.KEYS == ("desk", "desk-2", "paper", "paper-ink", "paper-ink-2", "ink", "ink-2",
-                           "line", "accent", "accent-ink", "spot", "sheen")
+                           "line", "accent", "accent-ink", "spot", "sheen", "warn")
     for t in themes.builtins():
         assert set(t["light"]) == set(t["dark"]) == set(themes.KEYS)
 
@@ -72,3 +72,9 @@ def test_load_rejects_broken_files(tmp_path, monkeypatch):
         with pytest.raises(ValueError, match=why):
             themes.builtins()
     themes._load.cache_clear()
+
+
+def test_low_contrast_warn_rejected():
+    t = copy.deepcopy(themes.builtins()[0])
+    t["light"]["warn"] = t["light"]["paper"]
+    assert any("warn/paper" in m for m in themes.check_theme(t))
