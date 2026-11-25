@@ -1,4 +1,4 @@
-"""用量帳本的唯讀報表:`python -m marrow.usage [--since DAYS] [--by kind|prompt|tag] [--json]`。"""
+"""用量帳本的唯讀報表:`python -m marrow.usage [--since DAYS] [--by kind|prompt|tag|character|work|model] [--json]`。"""
 import argparse
 import json
 import sqlite3
@@ -17,6 +17,9 @@ TOKEN_LABELS = ("輸入", "輸出", "cache讀", "cache寫", "thinking")
 MARKS = {"stopped": "停下", "misread": "讀錯"}
 SIGNALS = {"voice": "像它", "edited": "編輯", "remembered": "記住", "digest_edited": "摘要改過",
            "saved": "建議記憶存入", "skipped": "建議記憶略過"}
+CATEGORIES = {"analyst": "analysis", "reviewer": "analysis", "chat": "chat", "redo": "chat",
+              "digest": "upkeep", "compact": "upkeep", "candidates": "character", "candidate_revise": "character"}
+CATEGORY_ORDER = ("analysis", "chat", "upkeep", "character", "other")
 _OUTCOME = {"gate_rejected": "rejected", "discarded": "unsaved", "cancelled": "cancelled"}
 
 
@@ -73,11 +76,21 @@ def unknown(row: dict) -> bool:
     return row["tokens"] is None
 
 
+def category(kind: str) -> str:
+    return CATEGORIES.get(kind, "other")
+
+
 def _key(row: dict, by: str) -> str:
     if by == "prompt":
         return f"{row['kind']}@{row['prompt_fp']}"
     if by == "tag":
         return row["tag"] or "-"
+    if by == "character":
+        return f"{row['character_id']}@{row['character_v']}" if row["character_id"] is not None else "-"
+    if by == "work":
+        return str(row["story_id"]) if row["story_id"] is not None else "-"
+    if by == "model":
+        return f"{row['model'] or '-'}/{row['effort'] or '-'}"
     return row["kind"]
 
 
@@ -176,7 +189,8 @@ def _signal_label(name: str) -> str:
 
 def render(groups: list[dict], fx: list[dict], latest, by: str) -> str:
     lines = [_rate_line(latest), ""] if latest else []
-    head = {"kind": "種類", "prompt": "種類@prompt", "tag": "標籤"}[by]
+    head = {"kind": "種類", "prompt": "種類@prompt", "tag": "標籤", "character": "讀伴@卡版", "work": "作品",
+            "model": "模型/effort"}[by]
     cols = [head, "次數", *TOKEN_LABELS, "美元(參考)", *(LABELS[c] for c in CLASSES), "用量不明", "cache命中", "延遲中位"]
     lines.append("\t".join(cols))
     for g in groups:
@@ -199,7 +213,7 @@ def main(argv=None, out=sys.stdout, err=sys.stderr, now=time.time) -> int:
     ap = argparse.ArgumentParser(prog="python -m marrow.usage")
     ap.add_argument("--db", default=None)
     ap.add_argument("--since", type=float, default=7, metavar="DAYS")
-    ap.add_argument("--by", choices=("kind", "prompt", "tag"), default="kind")
+    ap.add_argument("--by", choices=("kind", "prompt", "tag", "character", "work", "model"), default="kind")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     try:
