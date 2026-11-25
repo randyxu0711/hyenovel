@@ -251,3 +251,34 @@ def test_finish_failure_keeps_result(conn, monkeypatch):
     async def drive():
         return [e async for e in meter.wrap_chat(_chat_ok, conn)("s", "u", config=RUN, meter=Meter("chat"))]
     assert [k for k, _ in go(drive())] == ["delta", "delta", "result"]
+
+
+def test_run_records_runner_and_effort(conn):
+    async def inner(system, user, schema, *, sink, **kw):
+        return _ok()
+    run = meter.wrap_run(inner, conn, runner="claude-cli")
+    go(run("s", "u", {}, config=RunConfig(effort="high"), meter=Meter("analyst")))
+    go(run("s", "u", {}, meter=Meter("analyst")))
+    a, b = _rows(conn)
+    assert (a["runner"], a["effort"]) == ("claude-cli", "high")
+    assert (b["runner"], b["effort"]) == ("claude-cli", None)
+
+
+def test_chat_records_runner_and_effort(conn):
+    async def inner(system, user, *, config, sink):
+        yield "result", _ok()
+
+    async def drive():
+        return [e async for e in meter.wrap_chat(inner, conn, runner="claude-cli")(
+            "s", "u", config=RunConfig(effort="low"), meter=Meter("chat"))]
+    go(drive())
+    row = _rows(conn)[0]
+    assert (row["runner"], row["effort"]) == ("claude-cli", "low")
+
+
+def test_factory_passes_runner(conn):
+    async def inner(system, user, schema, *, config, sink):
+        return _ok()
+    run = meter.wrap_factory(lambda on_proc: inner, conn, runner="claude-cli")(None)
+    go(run("s", "u", {}, config=RUN, meter=Meter("analyst")))
+    assert _rows(conn)[0]["runner"] == "claude-cli"

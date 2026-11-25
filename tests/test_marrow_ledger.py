@@ -67,3 +67,15 @@ def test_calls_since_filters_and_orders(conn):
 def test_kind_check_constraint(conn):
     with pytest.raises(sqlite3.IntegrityError):
         repo.start_call(conn, "other", 1.0, "fp")
+
+
+def test_start_call_records_runner_effort_and_character_v(conn):
+    cid = repo.start_call(conn, "chat", 10.0, "fp", runner="claude-cli", effort="medium",
+                          character_id="hyena", character_v=3)
+    row = repo.get_call(conn, cid)
+    assert (row["runner"], row["effort"], row["character_id"], row["character_v"]) == ("claude-cli", "medium", "hyena", 3)
+
+
+def test_start_call_defaults_runner_effort_none(conn):
+    row = repo.get_call(conn, repo.start_call(conn, "chat", 10.0, "fp"))
+    assert row["runner"] is None and row["effort"] is None and row["character_v"] is None

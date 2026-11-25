@@ -1127,6 +1127,16 @@ def test_redo_kind_and_variant(c):
     assert [(x["kind"], x["seq"], x["variant"]) for x in rows] == [("chat", seq, 1), ("redo", seq, 2)]
 
 
+def test_chat_and_redo_rows_carry_character_and_runner(c):
+    sid = first_turn(c)
+    seq = in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]["seq"]
+    assert c.post(f"/api/sessions/{sid}/turns/{seq}/regenerate").status_code == 200
+    who = in_loop(c, lambda conn: characters.get(conn, characters.default_id(conn)))
+    rows = _ledger(c)
+    assert [(x["character_id"], x["character_v"]) for x in rows] == [(who["id"], who["version"])] * 2
+    assert {x["runner"] for x in rows} == {"claude-cli"} and {x["effort"] for x in rows} == {companion.CHAT_RUN.effort}
+
+
 def test_commit_failure_marks_discarded(c, monkeypatch):
     import sqlite3
 

@@ -936,7 +936,7 @@ def set_setting(conn, key: str, value: str) -> None:
                  "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
 
 
-LINK_KEYS = ("story_id", "job_id", "step", "n", "discussion_id", "seq", "variant", "digest_id", "character_id")
+LINK_KEYS = ("story_id", "job_id", "step", "n", "discussion_id", "seq", "variant", "digest_id", "character_id", "character_v")
 
 
 def _link_keys(keys: dict) -> dict:
@@ -947,10 +947,11 @@ def _link_keys(keys: dict) -> dict:
 
 
 def start_call(conn, kind: str, started_at: float, prompt_fp: str, *, tag: str | None = None,
-               sizes: dict | None = None, **keys) -> int:
+               sizes: dict | None = None, runner: str | None = None, effort: str | None = None, **keys) -> int:
     keys = _link_keys(keys)
-    cols = ["kind", "started_at", "prompt_fp", "tag", "sizes", *keys]
-    vals = [kind, started_at, prompt_fp, tag, None if sizes is None else canonical_json(sizes), *keys.values()]
+    cols = ["kind", "started_at", "prompt_fp", "tag", "sizes", "runner", "effort", *keys]
+    vals = [kind, started_at, prompt_fp, tag, None if sizes is None else canonical_json(sizes), runner, effort,
+            *keys.values()]
     cur = conn.execute(f"INSERT INTO llm_call ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", vals)
     return cur.lastrowid
 

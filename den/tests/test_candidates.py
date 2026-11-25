@@ -1170,6 +1170,7 @@ def test_generate_records_call_and_returns_its_id(api):
         [row] = _calls(c)
         assert (row["kind"], row["outcome"]) == ("candidates", "ok")
         assert [x["calls"] for x in out["candidates"]] == [[row["id"]]] * 3
+        assert row["character_id"] is None and row["character_v"] is None and row["runner"] == "claude-cli"
 
 
 def test_repair_marks_first_call_rejected(api):

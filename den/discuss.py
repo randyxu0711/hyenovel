@@ -356,6 +356,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     sizes = {**prompt.sizes(system), "memory_n": len(ctx["memory"]["author"]) + len(ctx["memory"]["work"]),
              "prior_n": len(shown["digests"]) if shown else 0, "retrieved_n": len(picked)}
     keys = {k: v for k, v in (("story_id", turn["story_id"]), ("discussion_id", d)) if v is not None}
+    keys |= {"character_id": character["id"], "character_v": character["version"]}
     try:
         async with aclosing(chat(system.text,
                                  render_turn(history, message or (ATTACHED.format(name=attach["name"]) if attach
