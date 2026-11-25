@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Sequence
 from contextlib import aclosing
 
-from den import characters, companion, prior, retrieve, spans, stories, suggest
+from den import characters, companion, meter, prior, retrieve, spans, stories, suggest
 from den.config import (MAX_ATTACHMENT_CHARS, MAX_ATTACHMENTS, MAX_QUOTE_CHARS, MAX_QUOTES, MAX_SOURCE_BYTES,
                         PRIOR_WAIT_S)
 from marrow import gate, prompt, repo
@@ -290,6 +290,16 @@ def _others(conn, history: list[dict], me: str) -> dict[str, str]:
     return {cid: (found["name"]["zh-Hant"] if (found := characters.get(conn, cid)) else cid) for cid in ids}
 
 
+def discard(conn, call_id: int | None) -> None:
+    if call_id is None:
+        return
+    try:
+        with conn:
+            repo.mark_call(conn, call_id, "discarded")
+    except Exception:
+        log.exception("event=ledger-mark-failed call=%s", call_id)
+
+
 async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                    home: str = "web", client: dict | None = None, now=time.time,
                    quotes: Sequence[str] = (), prior_queue=None, use_prior: bool = True):
@@ -343,6 +353,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     last = history[-1] if history and history[-1]["role"] == "assistant" else {"text": "", "recipe": None}
     picked = retrieve.pick(analysis, turn["ctx"]["source"], quotes=quotes, message=message, last_reply=last["text"],
                            previous=(last["recipe"] or {}).get("retrieved", ()))
+    sizes = {**prompt.sizes(system), "memory_n": len(ctx["memory"]["author"]) + len(ctx["memory"]["work"]),
+             "prior_n": len(shown["digests"]) if shown else 0, "retrieved_n": len(picked)}
+    keys = {k: v for k, v in (("story_id", turn["story_id"]), ("discussion_id", d)) if v is not None}
     try:
         async with aclosing(chat(system.text,
                                  render_turn(history, message or (ATTACHED.format(name=attach["name"]) if attach
@@ -352,7 +365,9 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                                              _others(conn, history, character["id"]),
                                              companion.note_block(note) if note else "", at,
                                              ctx["version"], turn.get("cmp"), home_now, old_version),
-                                 config=companion.CHAT_RUN)) as stream:
+                                 config=companion.CHAT_RUN,
+                                 meter=meter.Meter("redo" if redo is not None else "chat", sizes=sizes,
+                                                   keys=keys))) as stream:
             async for kind, val in stream:
                 if kind == "delta":
                     yield {"event": "token", "data": {"text": val}}
@@ -384,7 +399,7 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
     recipe = {**prompt.recipe(system, companion.CHAT_RUN.as_dict()), "character_v": character["version"],
               "retrieved": [n["id"] for n in picked],
               "depth_prompt": {"sha": repo.sha256_text(note), "at": at} if note else None,
-              "v": ctx["version"], "cmp": turn.get("cmp"), "home": home_now, "prior": snap}
+              "v": ctx["version"], "cmp": turn.get("cmp"), "home": home_now, "prior": snap, "sizes": sizes}
     variant = None
     try:
         with conn:   # 不可在這裡 await:同一條連線 job worker 也在寫
@@ -408,12 +423,15 @@ async def run_turn(conn, chat, turn: dict, message: str, anchors: list[str],
                 repo.add_utterance(conn, d, seq, "assistant", result.text, end, "den", anchors, fp,
                                    usage=usage, character=character["id"], recipe=recipe,
                                    thinking=result.thinking)
+            if result.call_id is not None:
+                repo.link_call(conn, result.call_id, discussion_id=d, seq=seq, variant=variant or 1)
             prior.mark_talked(conn, shown, d, message + "\n" + result.text)
             repo.close_discussion(conn, d, end)   # ended_at = 最後活動時間
             v = (repo.latest_source_version(conn, turn["story_id"])["n"]   # 這輪(問與答)算在存下當時的最新版
                  if turn["story_id"] is not None else None)
     except Exception:
         log.exception("event=discuss-turn-failed slug=%s stage=commit", slug)
+        discard(conn, result.call_id)
         yield {"event": "error", "data": {"where": "discuss", "message": "存檔失敗,這輪沒有存下",
                                           "recoverable": False, "code": "commit-failed"}}
         return

@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from den import config
+from den import config, meter
 from den.runner import RunResult
 from marrow import prompt as prompts
 from marrow import repo, workpacks
@@ -89,7 +89,9 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
     while True:
         emit(_phase(step, "start", n))
         try:
-            r = await run(pack.system_prompt, prompt, pack.schema, config=pack.run)
+            r = await run(pack.system_prompt, prompt, pack.schema, config=pack.run,
+                          meter=meter.Meter(step, sizes=prompts.sizes(pack.prompt),
+                                      keys={"story_id": job["story_id"], "job_id": jid, "step": step, "n": n}))
         except asyncio.CancelledError:
             with conn:
                 record("cancelled", None)
@@ -115,6 +117,8 @@ async def _run_step(conn, job: dict, step: str, slug: str, source: str, inputs: 
                 return repo.artifact(conn, aid)
             with conn:
                 record("gate", r, gate_verdict={"errors": errs})
+                if r.call_id is not None:
+                    repo.mark_call(conn, r.call_id, "gate_rejected")
             # 不把錯誤明細入 log:可能夾帶引文
             log.info("event=gate-retry job=%s step=%s n=%s errors=%s", jid, step, n, len(errs))
             emit(_phase(step, "retry", n, "\n".join(errs)[:800]))

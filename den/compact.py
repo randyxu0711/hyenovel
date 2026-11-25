@@ -13,7 +13,10 @@ COMPACT_RUN = RunConfig()
 
 
 class CompactFailed(Exception):
-    pass
+    def __init__(self, reason: str, call_id: int | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.call_id = call_id
 
 
 def system() -> Prompt:
@@ -32,16 +35,16 @@ def transcript(rows: list[dict], versions: list[dict] = ()) -> str:
     return "\n".join(lines)
 
 
-async def summarize(chat, transcript: str) -> tuple[str, dict]:
+async def summarize(chat, transcript: str, meter) -> tuple[str, dict, int | None]:
     result = None
-    async with aclosing(chat(system().text, transcript, config=COMPACT_RUN)) as stream:
+    async with aclosing(chat(system().text, transcript, config=COMPACT_RUN, meter=meter)) as stream:
         async for kind, val in stream:
             if kind == "result":
                 result = val
     if result is None or result.outcome != "ok" or not (result.text or "").strip():
-        raise CompactFailed(getattr(result, "outcome", "no-result"))
+        raise CompactFailed(getattr(result, "outcome", "no-result"), getattr(result, "call_id", None))
     text = result.text.strip()
     if len(text) > COMPACT_MAX_CHARS:
         log.warning("event=compact-truncated chars=%s max=%s", len(text), COMPACT_MAX_CHARS)
         text = text[:COMPACT_MAX_CHARS]
-    return text, {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}
+    return text, {**(result.tokens or {}), "duration_ms": result.duration_ms, "model": result.model}, result.call_id

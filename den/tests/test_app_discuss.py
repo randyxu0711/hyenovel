@@ -50,7 +50,7 @@ class FakeChat:
     def __call__(self):
         return self.chat
 
-    async def chat(self, system_prompt, user_prompt, *, config):
+    async def chat(self, system_prompt, user_prompt, *, config, **_):
         self.calls.append((system_prompt, user_prompt))
         self.configs.append(config)
         if self.override:
@@ -1092,3 +1092,90 @@ def test_message_event_has_memory_pending(c, fake_chat):
         conn.commit()
     in_loop(c, seed)
     assert _message(post_discuss(c, "mini", None, "二"))["memory_pending"] == 1
+
+
+# ── 用量帳本 ──
+
+def _ledger(c):
+    return in_loop(c, lambda conn: repo.calls_since(conn, 0))
+
+
+def test_turn_links_discussion_seq_variant(c):
+    sid = first_turn(c)
+    [row] = _ledger(c)
+    d, us = in_loop(c, lambda conn: _session_rows(conn, sid))
+    assert (row["kind"], row["outcome"], row["discussion_id"], row["seq"], row["variant"]) == (
+        "chat", "ok", d["id"], us[-1]["seq"], 1)
+    assert row["story_id"] == d["story_id"] and row["tokens"] == {"output": 7} and row["cost_usd"] == 0.01
+    assert row["sizes"]["retrieved_n"] >= 0 and row["sizes"]["memory_n"] == 0 and "base" in row["sizes"]
+    assert us[-1]["recipe"]["sizes"] == row["sizes"]
+
+
+def test_failed_turn_keeps_ledger_row(c, fake_chat):
+    fake_chat.outcome = "timeout"
+    post_discuss(c, "mini", None, "x")
+    [row] = _ledger(c)
+    assert row["outcome"] == "timeout" and row["discussion_id"] is None and row["story_id"] is not None
+
+
+def test_redo_kind_and_variant(c):
+    sid = first_turn(c)
+    seq = in_loop(c, lambda conn: _session_rows(conn, sid))[1][-1]["seq"]
+    r = c.post(f"/api/sessions/{sid}/turns/{seq}/regenerate")
+    assert r.status_code == 200, r.text
+    rows = _ledger(c)
+    assert [(x["kind"], x["seq"], x["variant"]) for x in rows] == [("chat", seq, 1), ("redo", seq, 2)]
+
+
+def test_commit_failure_marks_discarded(c, monkeypatch):
+    import sqlite3
+
+    def busy(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(repo, "add_utterance", busy)
+    post_discuss(c, "mini", None, "q")
+    monkeypatch.undo()
+    [row] = _ledger(c)
+    assert row["outcome"] == "discarded" and row["seq"] is None
+
+
+def test_first_turn_abort_keeps_story_only(data):
+    url, d = data
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def chat(system, user, *, config, sink, **_):
+        sink.tokens = {"input": 3, "output": 1}
+        yield "delta", "A"
+        started.set()
+        await release.wait()
+
+    app = den_app.create_app(url, d, run_factory=Run(), chat_factory=lambda: chat)
+
+    async def main():
+        async with app.router.lifespan_context(app):
+            conn = app.state.mgr.conn
+            sent = []
+            body = json.dumps({"session_id": None, "message": "x", "anchors": []}).encode()
+
+            async def receive():
+                if not sent:
+                    sent.append(1)
+                    return {"type": "http.request", "body": body, "more_body": False}
+                await started.wait()
+                return {"type": "http.disconnect"}
+
+            async def send(msg):
+                pass
+            path = "/api/discuss/mini"
+            scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
+                     "http_version": "1.1", "method": "POST", "scheme": "http",
+                     "path": path, "raw_path": path.encode(), "query_string": b"", "root_path": "",
+                     "headers": [(b"host", b"127.0.0.1"), (b"authorization", f"Bearer {app.state.token}".encode()),
+                                 (b"content-type", b"application/json")],
+                     "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 8788)}
+            await asyncio.wait_for(app(scope, receive, send), 5)
+            [row] = repo.calls_since(conn, 0)
+            assert row["outcome"] == "cancelled" and row["tokens_partial"] == 1
+            assert row["tokens"] == {"input": 3, "output": 1}
+            assert row["story_id"] == repo.story_by_slug(conn, "mini")["id"] and row["discussion_id"] is None
+    asyncio.run(main())

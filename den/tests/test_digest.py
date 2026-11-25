@@ -15,7 +15,7 @@ class Chat:
         self.text, self.outcome, self.boom = text, outcome, boom
         self.calls = []
 
-    async def __call__(self, system, user, *, config):
+    async def __call__(self, system, user, *, config, **_):
         self.calls.append((system, user))
         if self.boom:
             raise RuntimeError("x")
@@ -148,7 +148,7 @@ class Racing(Chat):
         super().__init__(out("模型的"))
         self.conn, self.d, self.act = conn, d, act
 
-    async def __call__(self, system, user, *, config):
+    async def __call__(self, system, user, *, config, **_):
         self.act(self.conn, self.d)
         async for ev in super().__call__(system, user, config=config):
             yield ev
@@ -280,3 +280,40 @@ def test_suggest_off_prompt_has_no_memories(conn, disc):
     system, user = chat.calls[0]
     assert "memories" not in system and "記憶:" not in system and "<known>" not in user
     assert "memories" in digest.system(True).text and "memories" not in digest.system(False).text
+
+
+def _metered(conn, chat):
+    from den import meter
+    return meter.wrap_chat(chat, conn)
+
+
+def test_digest_ledger_links_id(conn, disc):
+    s, d = disc
+    did = run(digest.make(conn, _metered(conn, Chat(out())), d, s))
+    [row] = repo.calls_since(conn, 0)
+    assert (row["kind"], row["outcome"], row["digest_id"], row["discussion_id"], row["story_id"]) == (
+        "digest", "ok", did, d, s)
+    assert "digest" in row["sizes"]
+
+
+def test_digest_changed_while_running_discarded(conn, disc):
+    s, d = disc
+    run(digest.make(conn, Chat(out("第一版")), d, s))
+    repo.add_utterance(conn, d, 4, "user", "再聊一下", 3.0, "den", [], None)
+    cur = repo.current_digest(conn, d)
+    edit = lambda c, x: repo.add_digest(c, x, "作者改的", cur["through_seq"], 9.0, root_id=cur["root_id"], edited=True)
+    assert run(digest.make(conn, _metered(conn, Racing(conn, d, edit)), d, s)) is None
+    [row] = repo.calls_since(conn, 0)
+    assert row["outcome"] == "discarded" and row["digest_id"] is None
+
+
+def test_digest_parse_fail_gate_rejected(conn, disc):
+    s, d = disc
+    assert run(digest.make(conn, _metered(conn, Chat("不是 JSON")), d, s)) is None
+    assert repo.calls_since(conn, 0)[0]["outcome"] == "gate_rejected"
+
+
+def test_digest_error_outcome_kept(conn, disc):
+    s, d = disc
+    run(digest.make(conn, _metered(conn, Chat(outcome="timeout")), d, s))
+    assert repo.calls_since(conn, 0)[0]["outcome"] == "timeout"

@@ -158,7 +158,7 @@ async def character_candidates(body: CandidatesIn, request: Request):
     seed = secrets.randbelow(2**31) if body.seed is None else body.seed
     passage = candidates.opening(repo.works(state.mgr.conn))
     again = {"reaction": body.reaction, "previous": [p.model_dump() for p in body.previous]}
-    return await _spending(request, lambda: candidates.generate(state.run_once, body.answers.model_dump(), passage,
+    return await _spending(request, lambda: candidates.generate(state.run_once, state.mgr.conn, body.answers.model_dump(), passage,
                                                               body.lang, seed, again))
 
 
@@ -168,7 +168,7 @@ async def revise_candidate(body: ReviseIn, request: Request):
         raise _bad_card("candidate-revise", ["bad-schema"])
     state = request.app.state
     passage = candidates.opening(repo.works(state.mgr.conn))
-    return await _spending(request, lambda: candidates.revise(state.run_once, body.candidate, body.feedback, passage, body.lang))
+    return await _spending(request, lambda: candidates.revise(state.run_once, state.mgr.conn, body.candidate, body.feedback, passage, body.lang))
 
 
 def _name_taken(conn, name: dict) -> bool:
@@ -194,6 +194,8 @@ async def create_character(body: CandidateSaveIn, request: Request):
         return {"created": False, "warnings": warnings}
     with conn:
         character = characters.create(conn, card, time.time())
+        for cid in candidates.own_calls(conn, body.candidate):
+            repo.link_call(conn, cid, character_id=character["id"])
     return JSONResponse({"created": True, "character": character}, status_code=201)
 
 

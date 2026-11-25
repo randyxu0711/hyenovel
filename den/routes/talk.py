@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from den import characters, compact, discuss, stories, views
+from den import characters, compact, discuss, meter, stories, views
 from den.config import MAX_ANCHORS, MAX_CHAT_CHARS, MAX_QUOTES, MAX_REACTION_CHARS, REACTION_MARKS, valid_slug
 from den.routes.common import ApiError, ClientIn, Seq, slug_ok, sse_line, unknown_work
 from marrow import prompt, repo
@@ -306,14 +306,21 @@ async def compact_session(session: str, request: Request):
             raise ApiError(422, "nothing-to-compact", "這局沒有可以壓縮的對話")
         try:
             made = repo.source_versions(conn, d["story_id"]) if d["story_id"] is not None else []
-            text, usage = await compact.summarize(state.chat, compact.transcript(rows, made))
-        except Exception:
+            text, usage, cid = await compact.summarize(
+                state.chat, compact.transcript(rows, made),
+                meter.Meter("compact", sizes=prompt.sizes(compact.system()), keys={"discussion_id": d["id"],
+                                         **({"story_id": d["story_id"]} if d["story_id"] is not None else {})}))
+        except Exception as e:
+            if isinstance(e, compact.CompactFailed) and e.reason == "ok":
+                discuss.discard(conn, e.call_id)
             log.exception("event=compact-failed session=%s", session)
             raise ApiError(502, "compact-failed", "壓縮失敗,對話沒有改動") from None
         seq = us[-1]["seq"] + 1
         with conn:
             repo.add_utterance(conn, d["id"], seq, "compact", text, time.time(), "den", [], None, usage=usage,
                                recipe=prompt.recipe(compact.system(), compact.COMPACT_RUN.as_dict()))
+            if cid is not None:
+                repo.link_call(conn, cid, seq=seq)
     return {"seq": seq, "text": text}
 
 
