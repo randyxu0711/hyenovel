@@ -984,3 +984,31 @@ def get_call(conn, call_id: int) -> dict | None:
 def calls_since(conn, since: float) -> list[dict]:
     return [_row(r) for r in conn.execute("SELECT * FROM llm_call WHERE started_at >= ? ORDER BY started_at, id",
                                           (since,))]
+
+
+def _marks(ids) -> str:
+    return ", ".join("?" * len(ids))
+
+
+def story_rows(conn, ids) -> dict[int, dict]:
+    ids = sorted(set(ids))
+    return {r[0]: {"slug": r[1], "archived": r[2] is not None, "created_at": r[3]} for r in conn.execute(
+        f"SELECT id, slug, archived_at, created_at FROM story WHERE id IN ({_marks(ids)})", ids)}
+
+
+def call_versions(conn, job_ids) -> dict[int, tuple[int, int, float]]:
+    ids = sorted(set(job_ids))
+    return {r[0]: (r[1], r[2], r[3]) for r in conn.execute(
+        "SELECT j.id, j.story_id, v.n, j.created_at FROM job j JOIN source_version v ON v.id = j.source_version_id "
+        f"WHERE j.id IN ({_marks(ids)})", ids)}
+
+
+def version_numbers(conn, story_ids) -> dict[int, list[tuple[int, bool]]]:
+    ids = sorted(set(story_ids))
+    out: dict[int, list[tuple[int, bool]]] = {}
+    for sid, n, done in conn.execute(
+            "SELECT v.story_id, v.n, EXISTS (SELECT 1 FROM artifact a WHERE a.source_version_id = v.id "
+            f"AND a.kind = 'analysis') FROM source_version v WHERE v.story_id IN ({_marks(ids)}) ORDER BY v.story_id, v.n",
+            ids):
+        out.setdefault(sid, []).append((n, bool(done)))
+    return out
