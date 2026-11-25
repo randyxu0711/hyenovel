@@ -78,7 +78,7 @@ from den.config import (CHAT_TIMEOUT, HOST, IDLE_CHECK, IDLE_EXIT, LAUNCH_TTL, P
                         SESSION_MAX_AGE)
 from den.jobs import JobManager
 from den.prior import PriorQueue
-from den.routes import catalog, jobs, memory, prior, talk, works
+from den.routes import catalog, jobs, memory, prior, talk, usage, works
 from den.routes.common import ApiError
 from den.routes.talk import _chat_stream  # noqa: F401
 from den.runner import ClaudePreset, cli_version, find_claude, run_job, stream_chat
@@ -373,7 +373,7 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 "busy": (request.app.state.candidates_busy
                          or repo.has_pending_jobs(request.app.state.mgr.conn))}
 
-    for module in (catalog, memory, jobs, prior, talk, works):
+    for module in (catalog, memory, jobs, prior, talk, usage, works):
         api.include_router(module.router)
     app.include_router(api)
 
