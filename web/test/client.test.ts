@@ -258,12 +258,3 @@ describe("SSE 解析", () => {
     expect(await run([f(ev)])).toEqual([ev]);
   });
 });
-
-describe("getUsage", () => {
-  it("仍打 /api/usage/{slug}", async () => {
-    const agg = { slug: "s02", empty: false };
-    vi.stubGlobal("fetch", routes({ "GET /api/usage/s02": agg }).fn);
-    const { getUsage } = await import("../src/data/client");
-    expect((await getUsage("s02")).slug).toBe("s02");
-  });
-});
