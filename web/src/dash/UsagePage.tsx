@@ -184,12 +184,6 @@ function Stats({ r }: { r: UsageConfigRow | UsageCharacterRow }) {
   </>;
 }
 
-function groupBy<R>(rows: R[], key: (r: R) => string): R[][] {
-  const out = new Map<string, R[]>();
-  for (const r of rows) out.set(key(r), [...(out.get(key(r)) ?? []), r]);
-  return [...out.values()];
-}
-
 function Head({ first, model }: { first: string; model?: boolean }) {
   const { t } = useFmt();
   return (
@@ -222,7 +216,7 @@ function Compare({ compare }: { compare: UsageReport["compare"] }) {
           <table className="use-tbl">
             <caption>{t("usage.byPrompt")}</caption>
             <Head first={t("usage.byPrompt")} model />
-            {groupBy(compare.config, r => r.kind).map(rows => (
+            {[...Map.groupBy(compare.config, r => r.kind).values()].map(rows => (
               <tbody key={rows[0].kind}>
                 {rows.map(r => (
                   <tr key={`${r.prompt_fp}/${r.runner}/${r.model}/${r.effort}`} data-solo={rows.length === 1 || undefined}>
@@ -243,7 +237,7 @@ function Compare({ compare }: { compare: UsageReport["compare"] }) {
           <table className="use-tbl">
             <caption>{t("usage.byCompanion")}</caption>
             <Head first={t("usage.byCompanion")} />
-            {groupBy(compare.character, r => r.character_id ?? "").map(rows => (
+            {[...Map.groupBy(compare.character, r => r.character_id ?? "").values()].map(rows => (
               <tbody key={rows[0].character_id ?? ""}>
                 {rows.map(r => (
                   <tr key={`${r.character_id}@${r.character_v}`} data-solo={rows.length === 1 || undefined}>

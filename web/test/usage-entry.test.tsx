@@ -21,7 +21,7 @@ beforeEach(() => {
   }));
 });
 
-describe("用量入口(4a 期間隱藏;UsageMap 元件留待重設計)", () => {
+describe("舊 journey 沒有用量入口(用量在設定頁)", () => {
   it("目錄層不渲染用量入口,也不打 /api/usage", async () => {
     const r = render(
       <MemoryRouter initialEntries={["/"]}>
