@@ -72,6 +72,10 @@ def classify(conn, row: dict, brought: set[int] | None = None) -> str:
     return "adopted"
 
 
+def running(row: dict) -> bool:
+    return row["outcome"] is None and row["ended_at"] is None
+
+
 def unknown(row: dict) -> bool:
     return row["tokens"] is None
 
@@ -86,7 +90,9 @@ def _key(row: dict, by: str) -> str:
     if by == "tag":
         return row["tag"] or "-"
     if by == "character":
-        return f"{row['character_id']}@{row['character_v']}" if row["character_id"] is not None else "-"
+        if row["character_id"] is None:
+            return "-"
+        return f"{row['character_id']}@{row['character_v'] if row['character_v'] is not None else '-'}"
     if by == "work":
         return str(row["story_id"]) if row["story_id"] is not None else "-"
     if by == "model":
@@ -251,6 +257,8 @@ def _compare(all_rows: list[dict]) -> dict:
 
 
 def page(conn, rows: list[dict], all_rows: list[dict], now: float) -> dict:
+    n_running = sum(running(r) for r in rows)
+    rows = [r for r in rows if not running(r)]
     total = sum(used(r) for r in rows)
     brought = injected(conn)
     unused = sum(used(r) for r in rows if classify(conn, r, brought) != "adopted")
@@ -260,6 +268,7 @@ def page(conn, rows: list[dict], all_rows: list[dict], now: float) -> dict:
             "categories": _categories(rows, total),
             "unused_share": unused / total if total else None,
             "works": works, "unbound": unbound, "compare": _compare(all_rows),
+            "running": n_running,
             "completeness": {"partial": sum(bool(r["tokens_partial"]) for r in rows),
                              "unknown": sum(unknown(r) for r in rows)}}
 
@@ -332,8 +341,10 @@ def _signal_label(name: str) -> str:
     return MARKS.get(name[5:], name[5:]) if name.startswith("mark:") else SIGNALS.get(name, name)
 
 
-def render(groups: list[dict], fx: list[dict], latest, by: str) -> str:
+def render(groups: list[dict], fx: list[dict], latest, by: str, n_running: int = 0) -> str:
     lines = [_rate_line(latest), ""] if latest else []
+    if n_running:
+        lines += [f"進行中 {n_running} 次(不列入下表)", ""]
     head = {"kind": "種類", "prompt": "種類@prompt", "tag": "標籤", "character": "讀伴@卡版", "work": "作品",
             "model": "模型/effort"}[by]
     cols = [head, "次數", *TOKEN_LABELS, "美元(參考)", *(LABELS[c] for c in CLASSES), "用量不明", "cache命中", "延遲中位"]
@@ -365,6 +376,8 @@ def main(argv=None, out=sys.stdout, err=sys.stderr, now=time.time) -> int:
         conn = db.connect_readonly(args.db or db.database_url())
         try:
             rows = repo.calls_since(conn, now() - args.since * 86400)
+            n_running = sum(running(r) for r in rows)
+            rows = [r for r in rows if not running(r)]
             groups = summarize(conn, rows, args.by)
             fx = effects(conn, rows, "kind" if args.by == "tag" else args.by)
         finally:
@@ -375,9 +388,9 @@ def main(argv=None, out=sys.stdout, err=sys.stderr, now=time.time) -> int:
     latest = latest_rate_limit(rows)
     if args.json:
         rate = {"at": latest[0], **latest[1]} if latest else None
-        out.write(json.dumps({"rate_limit": rate, "groups": groups, "effects": fx}, ensure_ascii=False, indent=1) + "\n")
+        out.write(json.dumps({"rate_limit": rate, "running": n_running, "groups": groups, "effects": fx}, ensure_ascii=False, indent=1) + "\n")
     else:
-        out.write(render(groups, fx, latest, args.by))
+        out.write(render(groups, fx, latest, args.by, n_running))
     return 0
 
 

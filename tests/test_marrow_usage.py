@@ -272,3 +272,42 @@ def test_cli_by_new_keys_text(url, by, head):
     out = io.StringIO()
     assert usage.main(["--db", url, "--by", by], out=out, now=lambda: 1000.0) == 0
     assert head in out.getvalue()
+
+
+def test_close_open_calls_marks_only_unfinished(conn):
+    open_ = call(conn, outcome=None)
+    done = call(conn, ended=30.0)
+    assert repo.close_open_calls(conn, 99.0) == 1
+    assert repo.get_call(conn, open_["id"])["ended_at"] == 99.0 and repo.get_call(conn, open_["id"])["outcome"] is None
+    assert repo.get_call(conn, done["id"])["ended_at"] == 30.0
+    assert repo.close_open_calls(conn, 120.0) == 0
+
+
+def test_running_vs_interrupted(conn):
+    row = call(conn, outcome=None)
+    assert usage.running(row)
+    repo.close_open_calls(conn, 50.0)
+    closed = repo.get_call(conn, row["id"])
+    assert not usage.running(closed) and usage.classify(conn, closed) == "error" and usage.unknown(closed)
+
+
+def test_cli_leaves_running_out(conn, tmp_path):
+    path = tmp_path / "u.db"
+    c = db.connect(f"sqlite:///{path}")
+    db.migrate(c, path)
+    with c:
+        call(c, outcome=None, started=995.0)
+        call(c, started=996.0)
+    c.close()
+    out = io.StringIO()
+    assert usage.main(["--db", f"sqlite:///{path}", "--json"], out=out, now=lambda: 1000.0) == 0
+    body = json.loads(out.getvalue())
+    assert body["running"] == 1 and [g["n"] for g in body["groups"]] == [1]
+    out = io.StringIO()
+    usage.main(["--db", f"sqlite:///{path}"], out=out, now=lambda: 1000.0)
+    assert out.getvalue().startswith("進行中 1 次(不列入下表)\n")
+
+
+def test_candidate_rows_group_by_character_alone(conn):
+    rows = [call(conn, kind="candidates", character_id="c-1"), call(conn, character_id="hyena", character_v=2)]
+    assert [g["group"] for g in usage.summarize(conn, rows, by="character")] == ["c-1@-", "hyena@2"]

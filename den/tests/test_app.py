@@ -326,6 +326,20 @@ def test_events_unknown_job_404(data):
 
 # ── 單一實例 / 啟動失敗 ──
 
+def test_startup_closes_calls_left_open(data):
+    url, _ = data
+    c = db.connect(url)
+    with c:
+        cid = repo.start_call(c, "chat", 1.0, "fp")
+    c.close()
+    with _client(data, wall_clock=lambda: 500.0):
+        pass
+    c = db.connect(url)
+    row = repo.get_call(c, cid)
+    c.close()
+    assert row["outcome"] is None and row["ended_at"] == 500.0
+
+
 def test_second_instance_refused(data):
     with _client(data):
         with pytest.raises(RuntimeError, match="已在執行"):

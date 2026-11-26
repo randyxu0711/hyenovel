@@ -40,8 +40,15 @@ def _text(rel: str) -> str:
     return companion._read(rel)
 
 
+SYSTEMS = {"analyst": lambda: workpacks.WORKPACKS["analyst"].system_prompt,
+           "reviewer": lambda: workpacks.WORKPACKS["reviewer"].system_prompt,
+           "candidates": lambda: candidates._prompt().text,
+           "candidate_revise": lambda: candidates._revise_prompt().text}
+
+
 def prompt_fp(kind: str) -> str:
-    return repo.sha256_text("\0".join(_text(rel) for rel in PROMPT_FILES[kind]))[:12]
+    system = [SYSTEMS[kind]()] if kind in SYSTEMS else []
+    return repo.sha256_text("\0".join([*system, *(_text(rel) for rel in PROMPT_FILES[kind])]))[:12]
 
 
 def _start(conn, meter: Meter, clock, runner: str | None, config) -> tuple[int | None, float]:

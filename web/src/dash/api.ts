@@ -84,6 +84,7 @@ export type UsageReport = {
   works: UsageWork[];
   unbound: UsageBucket | null;
   compare: { config: UsageConfigRow[]; character: UsageCharacterRow[] };
+  running: number;
   completeness: { partial: number; unknown: number };
 };
 

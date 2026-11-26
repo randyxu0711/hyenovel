@@ -41,6 +41,7 @@ const report = (over: Partial<UsageReport> = {}): UsageReport => ({
       { ...group, character_id: null, character_v: null, name: null, recorded: false },
     ],
   },
+  running: 0,
   completeness: { partial: 2, unknown: 1 },
   ...over,
 });
@@ -156,6 +157,11 @@ describe("用量頁", () => {
     usage.mockRejectedValue(new DashError(404, "unknown"));
     render(<UsagePage />);
     expect(await screen.findByText("用量帳本尚未建立，重新啟動 den 後即可使用。")).toBeTruthy();
+  });
+  it("有呼叫進行中:另起一句說明", async () => {
+    usage.mockResolvedValue(report({ running: 2 }));
+    await mount();
+    expect(screen.getByText("另有 2 次呼叫進行中，未列入。")).toBeTruthy();
   });
   it("其他錯誤:無法讀取", async () => {
     usage.mockRejectedValue(new DashError(500, "unknown"));
