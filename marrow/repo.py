@@ -966,6 +966,11 @@ def finish_call(conn, call_id: int, *, outcome: str, ended_at: float, duration_m
                   None if rate_limit is None else canonical_json(rate_limit), call_id))
 
 
+def close_open_calls(conn, ended_at: float) -> int:
+    return conn.execute("UPDATE llm_call SET ended_at = ? WHERE outcome IS NULL AND ended_at IS NULL",
+                        (ended_at,)).rowcount
+
+
 def link_call(conn, call_id: int, **keys) -> None:
     for col, val in _link_keys(keys).items():
         conn.execute(f"UPDATE llm_call SET {col} = ? WHERE id = ?", (val, call_id))

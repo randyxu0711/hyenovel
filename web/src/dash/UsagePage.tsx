@@ -298,6 +298,7 @@ export default function UsagePage() {
         <Works works={report.works} unbound={report.unbound} />
         <Compare compare={report.compare} />
       </>}
+      {report.running > 0 && <p className="use-foot">{t("usage.running", { n: report.running })}</p>}
       {incomplete > 0 && <p className="use-foot">{t("usage.foot", { n: incomplete })}</p>}
     </div>
   );

@@ -71,9 +71,19 @@ def test_all_partial_avg_none(conn):
 
 
 def test_unknown_only_is_empty_period(conn):
-    rows = [call(conn, outcome=None)]
+    call(conn, outcome=None)
+    repo.close_open_calls(conn, 50.0)
+    rows = repo.calls_since(conn, 0)
     p = page(conn, rows)
     assert p["total"]["tokens"] == 0 and p["categories"] == [] and p["completeness"] == {"partial": 0, "unknown": 1}
+    assert p["running"] == 0
+
+
+def test_running_calls_are_counted_apart(conn):
+    rows = [call(conn, outcome=None), call(conn, kind="analyst", tokens=T(10))]
+    p = page(conn, rows)
+    assert p["running"] == 1 and p["total"]["tokens"] == 10 and p["completeness"] == {"partial": 0, "unknown": 0}
+    assert [c["n"] for c in p["categories"]] == [1] and p["unused_share"] == 0
 
 
 def test_unknown_kind_goes_to_other(conn):

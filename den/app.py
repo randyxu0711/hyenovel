@@ -269,6 +269,8 @@ def create_app(conn_url: str, data_dir: Path, *, run_factory=None, chat_factory=
                 factory, default_chat, ver = _default_factory()
             conn = db.connect(conn_url)
             db.migrate(conn, db.sqlite_path(conn_url))
+            with conn:
+                repo.close_open_calls(conn, wall_clock())
             factory = meter.wrap_factory(factory, conn, runner=ClaudePreset.runner_name)
             chat_f = chat_factory or default_chat
             app.state.chat = meter.wrap_chat(chat_f(), conn, runner=ClaudePreset.runner_name) if chat_f else None

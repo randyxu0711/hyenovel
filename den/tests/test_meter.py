@@ -1,4 +1,6 @@
 import asyncio
+import dataclasses
+
 import pytest
 
 from den import companion, meter, runner
@@ -217,6 +219,16 @@ def test_prompt_fp_uses_what_the_worker_was_given(monkeypatch):
     story = meter.prompt_fp("candidates")
     monkeypatch.setattr(meter.candidates, "STORY", "另一篇")
     assert meter.prompt_fp("candidates") != story
+
+
+def test_prompt_fp_covers_schema_in_system_prompt(monkeypatch):
+    before = {k: meter.prompt_fp(k) for k in meter.SYSTEMS}
+    pack = workpacks.WORKPACKS["reviewer"]
+    shown = workpacks.assemble("reviewer", {**pack.schema, "title": "換過"})
+    monkeypatch.setitem(workpacks.WORKPACKS, "reviewer", dataclasses.replace(pack, prompt=shown))
+    monkeypatch.setattr(meter.candidates, "_prompt", lambda: workpacks.assemble("candidates", {"type": "object"}))
+    after = {k: meter.prompt_fp(k) for k in meter.SYSTEMS}
+    assert [k for k in before if before[k] != after[k]] == ["reviewer", "candidates"]
 
 
 class BrokenConn:
