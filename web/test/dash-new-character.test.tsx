@@ -290,6 +290,18 @@ describe("答案條", () => {
     fireEvent.click(button("重新生成"));
     expect(reaction().value).toBe("短一點");
   });
+  it("答案清空後換一批也擋,說明要回答", async () => {
+    await toResults();
+    fireEvent.click(button("修改條件"));
+    fireEvent.change(formBox(), { target: { value: "  " } });
+    fireEvent.keyDown(formBox(), { key: "Escape" });
+    fireEvent.click(button("重新生成"));
+    const submit = button("重新生成") as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(screen.getByText("請先在「修改條件」回答至少一題")).toBeTruthy();
+    fireEvent.submit(reaction().form!);
+    expect(bodies).toHaveLength(1);
+  });
   it("換一批用同樣答案重打、不帶 seed", async () => {
     await toResults();
     again();

@@ -154,6 +154,9 @@ async def _spending(request: Request, work: Callable[[], Awaitable[dict]]) -> di
 
 @router.post("/characters/candidates")
 async def character_candidates(body: CandidatesIn, request: Request):
+    if not body.answers.form and not body.answers.wish:
+        log.info("event=reject where=character-candidates reason=blank-answers")
+        raise ApiError(422, "blank-answers", "作者兩題都沒回答")
     state = request.app.state
     seed = secrets.randbelow(2**31) if body.seed is None else body.seed
     passage = candidates.opening(repo.works(state.mgr.conn))

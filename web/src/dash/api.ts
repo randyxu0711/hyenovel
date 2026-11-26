@@ -18,7 +18,7 @@ export const DEN_ERROR_CODES = [
   "bad-scope", "blank-memory", "slug-required", "bad-source", "quote-not-in-turn", "memory-full",
   "unknown-memory", "memory-not-current", "memory-is-current",
   "unknown-memory-candidate", "memory-candidate-resolved", "memory-candidate-pending",
-  "bad-card", "builtin-character",
+  "bad-card", "builtin-character", "blank-answers",
   "not-last-turn", "unknown-variant", "blank-reply", "reply-too-long", "title-too-long",
   "unknown-digest", "unknown-thread", "blank-digest", "stale-digest", "digest-is-current", "candidate-needs-work",
   "den-down",

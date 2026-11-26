@@ -271,7 +271,7 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
 
   const regenerate = (e: FormEvent) => {
     e.preventDefault();
-    if (revising !== null || !batch) return;
+    if (revising !== null || !batch || blank) return;
     generate({ reaction: reaction.trim(), previous: batch.map(c => ({ name: localized(c.name, lang), line: localized(c.line, lang) })) });
   };
 
@@ -387,8 +387,8 @@ export default function NewCharacter({ onClose, onSaved }: { onClose: () => void
             {!reaction && <kbd aria-hidden="true">Tab</kbd>}
           </div>
           <div className="nc-again-foot">
-            <span className="nc-note">{t("nc.costs")}</span>
-            <button type="submit" className="dash-key" disabled={revising !== null}><Icon name="again" />{t("nc.again")}</button>
+            <span className="nc-note">{t(blank ? "nc.needAnswerAgain" : "nc.costs")}</span>
+            <button type="submit" className="dash-key" disabled={revising !== null || blank}><Icon name="again" />{t("nc.again")}</button>
           </div>
         </form>
       )}
