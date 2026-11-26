@@ -63,12 +63,14 @@ DESC_SET_CHARACTER = (
     "只有作者點名要換時才用,因為角色是作者的選擇,不要依語氣或內容自己判斷。")
 DESC_CREATE_CHARACTER = (
     "替作者生成三個陪讀角色候選。只有作者要建角色才用;作者想換現有角色時用 set_character。"
-    "呼叫前先用開放題問作者的想像,開放題不放例子。作者的話原樣填進參數,沒回答的留空,不要替作者答,因為這個角色是作者的想像。"
+    "呼叫前先用開放題問作者的想像,開放題不放例子。作者的話原樣填進參數,沒回答的留空,不要替作者答,因為這個角色是作者的想像;"
+    "至少要有一題是作者的話,作者兩題都沒想法時請作者至少回答一題,不要呼叫。"
     "form:陪作者讀稿的是什麼;wish:作者想要它怎麼讀;lang:zh-Hant 或 en,跟作者用的語言。"
     "會花作者的訂閱額度,可能要幾分鐘。回傳的候選照列給作者,選哪個由作者決定。改候選、複製、編輯角色請作者到網頁做。")
 DESC_SAVE_CHARACTER = (
     "把作者選定的候選存成陪讀角色。number 是 create_character 回傳的編號,只有作者選定後才用。"
     "name 只在作者自己取了名字時給。回覆說有警告時,把警告告訴作者,作者確認要存才帶 confirm=true 再呼叫一次。")
+_BLANK_ANSWERS = "作者兩題都沒回答。先用開放題問作者的想像,作者回答了再呼叫。"
 _PENDING_HINT = "\n\n另有 {n} 條記憶待確認，請至網頁「設定 · 記憶」處理。"
 _TALK_FAILED = "。請照實告訴作者這一輪沒有成功,不要自己代答。"
 _NO_SESSION = "這篇沒有這一局"   # den /discuss 的 404 detail(局不見了;拒絕在花錢前)
@@ -520,6 +522,8 @@ def build_server(den: DenClient) -> MCPServer:
     held: set[tuple] = set()        # 已回過警告的 (編號, 名字):第一次帶 confirm 也要先讓作者看到警告
 
     async def _create_character(answers: dict, lang: str) -> str:
+        if not any(v.strip() for v in answers.values()):
+            raise _reject("blank-answers", _BLANK_ANSWERS)
         drafts.clear()
         held.clear()
         out = await call("POST", "/api/characters/candidates", {"answers": answers, "lang": lang},

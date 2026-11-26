@@ -454,10 +454,23 @@ def test_endpoint_rejects_bad_input_without_spending(api, body):
 
 
 def test_endpoint_treats_whitespace_as_unanswered(api):
-    with api(ok(_body())) as c:
-        _post(c, answers={"form": "  ", "wish": "   "})
-        assert "作者想要" not in c.script.calls[0][1]
-        assert "不同類別" in c.script.calls[0][1]
+    with api(ok(_body()), ok(_body())) as c:
+        _post(c, answers={"form": "  ", "wish": "慢慢來"})
+        _post(c, answers={"form": "貓", "wish": "   "})
+        assert "不同類別" in c.script.calls[0][1] and "作者想要" in c.script.calls[0][1]
+        assert "作者想要" not in c.script.calls[1][1]
+
+
+@pytest.mark.parametrize("answers", [{}, {"form": "  ", "wish": "　\n"}])
+def test_endpoint_refuses_blank_answers_without_spending(api, answers, caplog):
+    with api() as c, caplog.at_level("INFO", logger="hyenovel"):
+        r = _post(c, answers=answers, reaction="換一批更兇的", previous=[{"name": "貓"}])
+        assert r.status_code == 422 and r.json()["code"] == "blank-answers"
+        assert c.script.calls == []
+        assert "reason=blank-answers" in caplog.text
+        conn = db.connect(c.db_url)
+        assert repo.calls_since(conn, 0) == []
+        conn.close()
 
 
 def test_endpoint_passes_answers_and_language_to_the_worker(api):
